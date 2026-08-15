@@ -12,7 +12,7 @@
     },
     "./skills/*": "./skills/*",
     "./deck-core": "./skills/dsh-ppt/scripts/deck-core.mjs",
-      "./build-deck": "./skills/dsh-ppt/scripts/build-deck.mjs",
+    "./build-deck": "./skills/dsh-ppt/scripts/build-deck.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
