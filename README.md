@@ -6,6 +6,8 @@
 
 ![npm version](https://img.shields.io/npm/v/dsh-ppt?label=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dm/dsh-ppt) ![license](https://img.shields.io/npm/l/dsh-ppt) ![stars](https://img.shields.io/github/stars/STARDUSTLC666/dsh-ppt?style=social)
 
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一段文字或一篇 Markdown 文档变成可直接放映的 **HTML 网页** 与可编辑的 **PPTX**。纯 Node 实现，**零运行时依赖**，Windows / macOS / Linux 同一份代码。
 
 ## 能力一览

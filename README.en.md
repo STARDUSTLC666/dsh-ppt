@@ -1,5 +1,7 @@
 # dsh-ppt
 
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 > **One sentence or one document → a complete presentation**: HTML web slideshow + PPTX export, 5 visual themes, bilingual Chinese/English.
 
 DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a paragraph, or a Markdown document into a ready-to-present **HTML slideshow** and an editable **PPTX**. Pure Node, **zero runtime dependencies**, one codebase for Windows / macOS / Linux.
