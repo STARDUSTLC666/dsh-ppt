@@ -125,7 +125,7 @@ pnpm test           # 构建 + node --test（注册/配置/引擎/CLI）
 pnpm run smoke:cli  # 裸 CLI 冒烟，生成 .smoke-deck
 ```
 
-## 已知限制（v0.1）
+## 已知限制
 
 - PPTX 采用空白版式 + 文本框实现：PowerPoint / WPS 中可正常编辑文字，但暂不生成智能母版占位符。
 - 一句话输入自动生成三页最小结构；更丰富的内容需要先扩写成 Markdown 大纲再调用 `ppt_create`。

@@ -121,7 +121,7 @@ pnpm test           # build + node --test (registration/config/engine/CLI)
 pnpm run smoke:cli  # bare CLI smoke test, generates .smoke-deck
 ```
 
-## Known limitations (v0.1)
+## Known limitations
 
 - The PPTX uses a blank layout plus text boxes: text is editable in PowerPoint / WPS, but no smart master placeholders yet.
 - A one-sentence input produces a minimal 3-slide structure; for richer decks, expand the content into a Markdown outline first.
