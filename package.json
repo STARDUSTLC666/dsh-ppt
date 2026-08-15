@@ -1,0 +1,71 @@
+{
+  "name": "dsh-ppt",
+  "version": "0.1.0",
+  "description": "DSH 演示文稿技能 + 工具插件：一句话或一篇 Markdown 文档 → 完整演示文稿（独立 HTML 网页放映 + 可编辑 PPTX 导出），内置 5 套视觉主题，中英双语，SKILL.md 双格式跨 harness。",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./skills/*": "./skills/*",
+    "./deck-core": "./skills/dsh-ppt/scripts/deck-core.mjs",
+      "./build-deck": "./skills/dsh-ppt/scripts/build-deck.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run build && node --test \"test/*.test.mjs\"",
+    "test:core": "node --test \"test/*.test.mjs\"",
+    "smoke:cli": "node skills/dsh-ppt/scripts/build-deck.mjs --title \"DSH PPT Smoke\" --content @smoke/sample-deck.md --theme data --lang zh --out .smoke-deck"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "plugin",
+    "skills",
+    "ppt",
+    "pptx",
+    "presentation",
+    "slides",
+    "html"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/STARDUSTLC666/dsh-ppt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/STARDUSTLC666/dsh-ppt/issues"
+  },
+  "homepage": "https://github.com/STARDUSTLC666/dsh-ppt#readme",
+  "author": "stardustlc",
+  "packageManager": "pnpm@11.7.0"
+}

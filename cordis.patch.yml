@@ -1,0 +1,17 @@
+# dsh-ppt：演示文稿技能 + 工具插件（DeepSeek Harness 插件）。
+#
+# 安装即同时注册：
+#   1. 技能 dsh-ppt（把一句话/一篇文档变成完整演示文稿的完整 SOP）
+#   2. 工具 ppt_create / ppt_themes（确定性生成 HTML 网页放映 + PPTX 导出）
+#
+# 插件自带空配置，绝不弄崩启动；无需任何账号或密钥。可选配置：
+#
+#   - id: dsh-ppt
+#     config:
+#       outputDir: E:\decks        # 可选：默认写入会话工作目录
+#       maxSlides: 40              # 可选：单次生成幻灯片上限，默认 60
+#
+- insert:
+    - id: dsh-ppt
+      name: dsh-ppt
+      config: {}

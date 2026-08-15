@@ -1,0 +1,13 @@
+# dsh-ppt 真实 profile 启动冒烟（SOP 第三步）。
+#
+# 用法（在仓库根目录）：
+#   dsh plugin --profile smoke add ../dsh-ppt
+#   dsh --profile smoke web
+# 或把本目录整体复制成新的临时 profile home 后启动，观察 stderr 无报错。
+#
+# 本补丁等价于插件附带的 cordis.patch.yml；单独保留是为了在临时 profile
+# 中不安装 npm 包也能 link 本地插件进行冒烟。
+- insert:
+    - id: dsh-ppt
+      name: dsh-ppt
+      config: {}
