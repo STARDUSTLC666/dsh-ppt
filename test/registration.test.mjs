@@ -135,6 +135,20 @@ test('ppt_create 生成 HTML 放映 + PPTX + manifest 三件套', async () => {
   }
 })
 
+test('defaultTheme / defaultLang 作为 ppt_create 缺省值', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, { defaultTheme: 'bold', defaultLang: 'en' })
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-defaults-'))
+  try {
+    const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
+    const out = await create.execute({ title: 'Defaults', content: '# Defaults\n\n- one', outputDir: dir })
+    assert.equal(out.theme, 'bold')
+    assert.equal(out.language, 'en')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('结构化 slides 走精确控制通道', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})
