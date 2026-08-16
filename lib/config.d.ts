@@ -4,6 +4,8 @@ export declare const DEFAULT_MAX_SLIDES = 60;
 export interface ResolvedPptConfig {
     outputDir: string;
     maxSlides: number;
+    defaultTheme: string;
+    defaultLang: string;
 }
 /** 解析并校验插件行配置。本插件无必填项，空配置永远可用。 */
 export declare function resolvePptConfig(config: PptConfig | undefined | null): ResolvedPptConfig;

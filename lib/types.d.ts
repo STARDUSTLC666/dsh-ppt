@@ -15,6 +15,10 @@ export interface PptConfig {
     outputDir?: string;
     /** 单次生成幻灯片上限，默认 60（3–120）。 */
     maxSlides?: number;
+    /** 默认视觉主题 id，调用 ppt_create 时可用 theme 覆盖。 */
+    defaultTheme?: string;
+    /** 默认播放器界面语言，调用 ppt_create 时可用 lang 覆盖。 */
+    defaultLang?: string;
 }
 export interface PptCreateArgs {
     title: string;
