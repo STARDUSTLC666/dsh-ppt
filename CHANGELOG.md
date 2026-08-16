@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- 新增 `defaultTheme` / `defaultLang` 配置，作为 `ppt_create` 未显式传参时的默认值。
+- 配置校验：`defaultLang` 仅接受 `zh` / `en` / `bilingual`。
+- 更新测试覆盖与双语文档。
+
 ## 0.1.0
 
 - 首发：`dsh-ppt` 技能 + 工具插件。
