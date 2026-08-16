@@ -95,9 +95,11 @@ No required configuration. Optional:
   config:
     outputDir: E:\decks   # optional; defaults to the session working directory
     maxSlides: 40         # optional; default 60 (3–120)
+    defaultTheme: data    # optional; used when ppt_create has no theme
+    defaultLang: en       # optional; used when ppt_create has no lang (zh/en/bilingual)
 ```
 
-The `DSH_PPT_OUTPUT_DIR` env var can also set the default output directory; the `ppt_create` `outputDir` argument has the highest priority.
+The `DSH_PPT_OUTPUT_DIR` env var can also set the default output directory; the `ppt_create` `outputDir`/`theme`/`lang` arguments have the highest priority.
 
 ## Bilingual support
 

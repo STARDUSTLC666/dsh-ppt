@@ -99,9 +99,11 @@ node <skill-dir>/scripts/build-deck.mjs \
   config:
     outputDir: E:\decks   # 可选；默认会话工作目录
     maxSlides: 40         # 可选；默认 60（3–120）
+    defaultTheme: data    # 可选；ppt_create 未指定 theme 时使用
+    defaultLang: zh       # 可选；ppt_create 未指定 lang 时使用（zh/en/bilingual）
 ```
 
-也可用环境变量 `DSH_PPT_OUTPUT_DIR` 指定默认输出目录；`ppt_create` 的 `outputDir` 参数优先级最高。
+也可用环境变量 `DSH_PPT_OUTPUT_DIR` 指定默认输出目录；`ppt_create` 的 `outputDir`/`theme`/`lang` 参数优先级最高。
 
 ## 中英双语
 

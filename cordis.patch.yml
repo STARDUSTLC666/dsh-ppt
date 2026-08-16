@@ -10,6 +10,8 @@
 #     config:
 #       outputDir: E:\decks        # 可选：默认写入会话工作目录
 #       maxSlides: 40              # 可选：单次生成幻灯片上限，默认 60
+#       defaultTheme: data         # 可选：默认视觉主题
+#       defaultLang: zh            # 可选：默认界面语言 zh/en/bilingual
 #
 - insert:
     - id: dsh-ppt
