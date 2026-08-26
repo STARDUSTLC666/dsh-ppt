@@ -22,6 +22,10 @@ Example:
 >
 > Turn `docs/quarterly-review.md` into a bilingual presentation and export PPTX.
 
+## Compatibility
+
+Verified against `@deepseek-ai/dsh@0.1.1-rc.2` on 2026-08-26. Built for the cordis patch-bundle plugin model (`cordis.patch.yml` + `dsh.bundle.patch`). No runtime imports of `@deepseek-ai/*` internals.
+
 ## Installation
 
 ```bash
@@ -29,6 +33,15 @@ dsh plugin --profile web add dsh-ppt
 ```
 
 After restart, the `ppt_create` / `ppt_themes` tools and the `dsh-ppt` skill are available. The plugin ships with an empty config and **won't crash startup**.
+
+## Uninstall
+
+```bash
+dsh plugin --profile web remove dsh-ppt
+```
+
+Then restart the web service. To clean up fully, also remove the plugin entry from your profile `cordis.patch.yml` if you overrode it.
+
 
 ## Quick start
 

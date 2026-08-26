@@ -26,6 +26,10 @@ DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一�
 >
 > 把 `docs/季度汇报.md` 做成双语演示文稿，导出 PPTX。
 
+## 兼容性
+
+在 `@deepseek-ai/dsh@0.1.1-rc.2` 上验证（2026-08-26）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
+
 ## 安装
 
 ```bash
@@ -104,6 +108,15 @@ node <skill-dir>/scripts/build-deck.mjs \
 ```
 
 也可用环境变量 `DSH_PPT_OUTPUT_DIR` 指定默认输出目录；`ppt_create` 的 `outputDir`/`theme`/`lang` 参数优先级最高。
+
+
+## 卸载
+
+```bash
+dsh plugin --profile web remove dsh-ppt
+```
+
+卸载后重启 Web 服务。如需彻底清理，可再手动删除自己 profile `cordis.patch.yml` 中的对应插件行。
 
 ## 中英双语
 
