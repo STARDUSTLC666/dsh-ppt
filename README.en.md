@@ -1,5 +1,7 @@
 # dsh-ppt
 
+![npm](https://img.shields.io/npm/v/dsh-ppt) ![downloads](https://img.shields.io/npm/dm/dsh-ppt) ![license](https://img.shields.io/github/license/STARDUSTLC666/dsh-ppt) ![stars](https://img.shields.io/github/stars/STARDUSTLC666/dsh-ppt?style=social)
+
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 > **One sentence or one document → a complete presentation**: HTML web slideshow + PPTX export, 5 visual themes, bilingual Chinese/English.
