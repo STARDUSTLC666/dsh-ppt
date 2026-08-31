@@ -28,7 +28,7 @@ DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一�
 
 ## 兼容性
 
-在 `@deepseek-ai/dsh@0.1.1-rc.2` 上验证（2026-08-26）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
+在 `@deepseek-ai/dsh@0.1.2-alpha.2` 上验证（2026-08-31）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
 
 ## 安装
 
