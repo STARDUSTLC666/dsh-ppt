@@ -18,7 +18,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 
-export const DECK_VERSION = '0.2.0'
+export const DECK_VERSION = '0.3.0'
 
 // ---------------------------------------------------------------------------
 // 主题
@@ -204,6 +204,13 @@ export function resolveLanguage(input) {
     throw new Error('dsh-ppt：未知语言 "' + id + '"，可选：zh / en / bilingual')
   }
   return language
+}
+
+export function resolveMotion(input) {
+  if (input === undefined || input === null || input === '') return true
+  if (input === true || input === 'on') return true
+  if (input === false || input === 'off') return false
+  throw new Error('dsh-ppt：未知 motion 值 "' + String(input) + '"，可选：on / off（默认 on）')
 }
 
 export function listThemes(lang = 'zh') {
@@ -626,6 +633,7 @@ export function normalizeBuildOptions(options = {}) {
   if (title === '') throw new Error('dsh-ppt：title 不能为空')
   const theme = resolveTheme(options.theme)
   const language = resolveLanguage(options.lang)
+  const motion = resolveMotion(options.motion)
   const maxSlides = clampInt(options.maxSlides, 60, 3, 120)
   let deck
   if (Array.isArray(options.slides) && options.slides.length > 0) {
@@ -646,12 +654,12 @@ export function normalizeBuildOptions(options = {}) {
   if (deck.slides.length < 1) throw new Error('dsh-ppt：没有可生成的幻灯片')
   const outputDir = resolvePath(String(options.outputDir ?? '.').trim() || '.')
   const fileName = sanitizeFileName(options.fileName ?? title)
-  return { title, theme, language, deck, outputDir, fileName }
+  return { title, theme, language, motion, deck, outputDir, fileName }
 }
 
 export function buildDeck(options = {}) {
   const normalized = normalizeBuildOptions(options)
-  const { title, theme, language, deck, outputDir, fileName } = normalized
+  const { title, theme, language, motion, deck, outputDir, fileName } = normalized
   mkdirSync(outputDir, { recursive: true })
 
   const manifest = {
@@ -659,6 +667,7 @@ export function buildDeck(options = {}) {
     title,
     theme: theme.id,
     language: language.id,
+    motion,
     slideCount: deck.slides.length,
     slides: deck.slides,
   }
@@ -696,6 +705,16 @@ export function renderHtml(manifest, theme, language) {
   const t = theme
   const lang = language
   const ui = lang.ui
+  const motion = manifest.motion !== false
+  const motionCss = motion
+    ? `body.motion .slide.is-active{animation:slide-in .45s cubic-bezier(.22,.8,.36,1)}
+@keyframes slide-in{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+body.motion .bullets li{
+  opacity:0;animation:bullet-in .55s cubic-bezier(.22,.8,.36,1) forwards;
+  animation-delay:calc(var(--i, 0)*90ms + .12s);
+}
+@keyframes bullet-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}`
+    : ''
   const slides = manifest.slides.map((slide, index) => renderHtmlSlide(slide, index, ui, lang.id)).join('\n')
   const themeLabel = t.name[lang.id] ?? t.name.en
   const total = manifest.slides.length
@@ -735,8 +754,8 @@ body{
     radial-gradient(36% 30% at 12% 86%, ${hexToRgba(t.palette.accent2, t.dark ? 0.16 : 0.12)}, transparent 70%),
     radial-gradient(70% 60% at 50% 50%, ${hexToRgba(t.palette.panel, 0.55)}, transparent 100%);
 }
-.slide.is-active{display:flex;animation:slide-in .45s cubic-bezier(.22,.8,.36,1)}
-@keyframes slide-in{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+.slide.is-active{display:flex}
+${motionCss}
 .kicker{
   color:var(--accent);font-weight:700;letter-spacing:.18em;text-transform:uppercase;
   font-size:clamp(12px,1.3vw,18px);margin-bottom:22px;
@@ -826,11 +845,12 @@ body.overview #notes-panel{display:none !important}
 @media print{
   html,body{height:auto;overflow:visible;background:#fff}
   .slide{position:relative;display:block !important;height:100vh;page-break-after:always;padding:48px}
+  ${motion ? 'body.motion .bullets li{opacity:1 !important;animation:none !important}' : ''}
   #progress,#hud,#notes-panel{display:none !important}
 }
 </style>
 </head>
-<body>
+<body class="${motion ? 'motion' : 'no-motion'}">
 <div id="progress" aria-hidden="true"></div>
 ${slides}
 <div id="hud" aria-live="polite">
@@ -979,7 +999,7 @@ function renderHtmlSlide(slide, index, ui, langId) {
     default:
       inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
         '<h2>' + escapeHtml(title) + '</h2>' +
-        '<ul>' + bullets.map((bullet) => '<li>' + escapeHtml(bullet) + '</li>').join('') + '</ul>'
+        '<ul>' + bullets.map((bullet, bulletIndex) => '<li style="--i:' + bulletIndex + '">' + escapeHtml(bullet) + '</li>').join('') + '</ul>'
       break
   }
   const notesAttr = typeof slide.notes === 'string' && slide.notes.trim() !== ''
@@ -1209,8 +1229,48 @@ function slideShapeList(slide, index, total, theme, langId) {
   return shapes.join('')
 }
 
-function slideXml(slide, index, total, theme, langId) {
+/**
+ * 原生逐条点击显现动画（PowerPoint「出现，按段落」的标准时序树）：
+ * bldP 把正文文本框标记为按段落构建，主序列里每条要点一个点击节点。
+ */
+function bulletTimingXml(spid, clicks) {
+  let id = 2
+  const nextId = () => { id += 1; return String(id) }
+  const clickPars = []
+  for (let i = 0; i < clicks; i += 1) {
+    clickPars.push(
+      '<p:par><p:cTn id="' + nextId() + '" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>' +
+      '<p:par><p:cTn id="' + nextId() + '" presetID="1" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect">' +
+      '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
+      '<p:set><p:cBhvr><p:cTn id="' + nextId() + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>' +
+      '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+      '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>' +
+      '<p:to><p:strVal val="visible"/></p:to></p:set>' +
+      '</p:childTnLst></p:cTn></p:par>' +
+      '</p:childTnLst></p:cTn></p:par>',
+    )
+  }
+  return '<p:timing><p:tnLst><p:par>' +
+    '<p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>' +
+    '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>' +
+    clickPars.join('') +
+    '</p:childTnLst></p:cTn>' +
+    '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>' +
+    '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>' +
+    '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>' +
+    '<p:bldLst><p:bldP spid="' + spid + '" grpId="0"/></p:bldLst></p:timing>'
+}
+
+function slideXml(slide, index, total, theme, langId, motion) {
   const p = theme.palette
+  let motionXml = ''
+  if (motion) {
+    motionXml = '<p:transition spd="med"><p:fade/></p:transition>'
+    const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
+    if (slide.layout === 'bullets' && bullets.length >= 2) {
+      motionXml += bulletTimingXml((index + 1) * 10 + 3, bullets.length)
+    }
+  }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
@@ -1221,6 +1281,7 @@ function slideXml(slide, index, total, theme, langId) {
     slideShapeList(slide, index, total, theme, langId) +
     '</p:spTree></p:cSld>' +
     '<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>' +
+    motionXml +
     '</p:sld>'
 }
 
@@ -1530,6 +1591,7 @@ function crc32(buffer) {
 export function buildPptx(manifest, themeInput, languageInput) {
   const theme = themeInput?.id ? themeInput : resolveTheme(themeInput)
   const language = languageInput?.id ? languageInput : resolveLanguage(languageInput)
+  const motion = manifest.motion !== false
   const slides = manifest.slides
   const noteIndexes = []
   slides.forEach((slide, index) => {
@@ -1555,7 +1617,7 @@ export function buildPptx(manifest, themeInput, languageInput) {
   }
   slides.forEach((slide, index) => {
     const hasNotes = noteIndexes.includes(index)
-    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.id) })
+    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.id, motion) })
     entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml(hasNotes, index + 1) })
     if (hasNotes) {
       entries.push({ name: 'ppt/notesSlides/notesSlide' + (index + 1) + '.xml', data: notesSlideXml(slide.notes) })

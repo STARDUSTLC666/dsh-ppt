@@ -1,5 +1,5 @@
 /**
- * dsh-ppt —— 演示文稿技能 + 工具插件（v0.1.0）。
+ * dsh-ppt —— 演示文稿技能 + 工具插件。
  *
  * 一句话或一篇 Markdown 文档 → 完整演示文稿三件套：
  *   deck.html  独立网页放映（无外链）
@@ -189,6 +189,7 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
       content: { type: 'string', required: true, description: 'Markdown content: one sentence, a paragraph, or a full document. First # heading becomes the cover title; ## headings become slides; -/* lists become bullets; | ... | tables become table slides; > blockquotes become quote slides; <!-- 备注: ... --> comments become speaker notes. Required unless slides is provided.' },
       theme: { type: 'string', description: 'Visual theme id: swiss / velvet / data / soft / bold. Default data. See ppt_themes.' },
       lang: { type: 'string', description: 'UI language of the generated player: zh (default), en, or bilingual. Content language is whatever you write.' },
+      motion: { type: 'string', enum: ['on', 'off'], description: 'Slide transitions plus bullet entrance animations: on (default) or off for a fully static deck.' },
       slides: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Optional structured slides: [{ layout: cover|section|bullets|statement|quote|table|closing, title, subtitle, kicker, bullets: [], rows: [][] (for table), notes: "speaker notes" }]. Use this for precise control instead of content.' },
       outputDir: { type: 'string', description: 'Directory to write the files into. Default: session working directory (or the plugin outputDir config).' },
       fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: sanitized deck title.' },
@@ -210,6 +211,7 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
         slides: hasSlides ? args.slides : undefined,
         theme: typeof args.theme === 'string' && args.theme.trim() !== '' ? args.theme.trim() : (resolved.defaultTheme || undefined),
         lang: typeof args.lang === 'string' && args.lang.trim() !== '' ? args.lang.trim() : (resolved.defaultLang || undefined),
+        motion: args.motion,
         outputDir: typeof args.outputDir === 'string' && args.outputDir.trim() !== '' ? args.outputDir.trim() : (resolved.outputDir || undefined),
         fileName: typeof args.fileName === 'string' && args.fileName.trim() !== '' ? args.fileName.trim() : undefined,
         maxSlides: resolved.maxSlides,

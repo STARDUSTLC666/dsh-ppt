@@ -136,3 +136,83 @@ test('buildDeck 端到端：表格 + 金句 + 备注三件套落盘', () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+// --- motion：页间转场 + 要点入场动画 -----------------------------------------
+
+import { inflateRawSync } from 'node:zlib'
+
+function zipEntries(buf) {
+  let eocd = -1
+  for (let i = buf.length - 22; i >= 0; i -= 1) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+  }
+  const count = buf.readUInt16LE(eocd + 10)
+  let ptr = buf.readUInt32LE(eocd + 16)
+  const entries = {}
+  for (let n = 0; n < count; n += 1) {
+    const nameLen = buf.readUInt16LE(ptr + 28)
+    const extraLen = buf.readUInt16LE(ptr + 30)
+    const commentLen = buf.readUInt16LE(ptr + 32)
+    const compressedSize = buf.readUInt32LE(ptr + 20)
+    const localOffset = buf.readUInt32LE(ptr + 42)
+    const name = buf.slice(ptr + 46, ptr + 46 + nameLen).toString('utf8')
+    const localNameLen = buf.readUInt16LE(localOffset + 26)
+    const localExtraLen = buf.readUInt16LE(localOffset + 28)
+    const dataStart = localOffset + 30 + localNameLen + localExtraLen
+    entries[name] = inflateRawSync(buf.slice(dataStart, dataStart + compressedSize)).toString('utf8')
+    ptr += 46 + nameLen + extraLen + commentLen
+  }
+  return entries
+}
+
+const motionManifest = {
+  title: '动效',
+  slides: [
+    { layout: 'cover', title: '封面' },
+    { layout: 'bullets', title: '三个要点', bullets: ['甲', '乙', '丙'] },
+    { layout: 'closing', title: '谢谢' },
+  ],
+}
+
+test('motion 默认开：每页 fade 转场，bullets 页带逐条点击显现时序', () => {
+  const entries = zipEntries(buildPptx(motionManifest, theme, language))
+  for (const name of ['ppt/slides/slide1.xml', 'ppt/slides/slide2.xml', 'ppt/slides/slide3.xml']) {
+    assert.match(entries[name], /<p:transition spd="med"><p:fade\/><\/p:transition>/, name + ' 应有转场')
+  }
+  const bullets = entries['ppt/slides/slide2.xml']
+  assert.match(bullets, /<p:bldP spid="23" grpId="0"\/>/, '正文框应按段落构建')
+  assert.match(bullets, /<p:timing>/)
+  assert.equal((bullets.match(/nodeType="clickEffect"/g) ?? []).length, 3, '三条要点三个点击节点')
+  assert.ok(!entries['ppt/slides/slide1.xml'].includes('<p:timing>'), '封面不需要时序树')
+})
+
+test('motion 关闭：PPTX 无转场无时序，HTML 落到 no-motion', () => {
+  const off = { ...motionManifest, motion: false }
+  const entries = zipEntries(buildPptx(off, theme, language))
+  assert.ok(!entries['ppt/slides/slide2.xml'].includes('<p:transition'))
+  assert.ok(!entries['ppt/slides/slide2.xml'].includes('<p:timing>'))
+  const html = renderHtml(off, theme, language)
+  assert.match(html, /<body class="no-motion">/)
+  assert.ok(!html.includes('bullet-in'))
+})
+
+test('motion 开启时 HTML 有 stagger 变量与打印兜底', () => {
+  const html = renderHtml({ ...motionManifest, motion: true }, theme, language)
+  assert.match(html, /<body class="motion">/)
+  assert.match(html, /<li style="--i:0">甲<\/li>/)
+  assert.match(html, /<li style="--i:2">丙<\/li>/)
+  assert.match(html, /@media print/)
+  assert.match(html, /body\.motion \.bullets li\{opacity:1 !important/)
+})
+
+test('buildDeck 把 motion 记入 manifest，非法值报错', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-motion-'))
+  try {
+    const result = buildDeck({ title: '动效开关', content: '# 动效开关\n- 一\n- 二', motion: 'off', outputDir: dir })
+    assert.equal(JSON.parse(readFileSync(result.jsonPath, 'utf8')).motion, false)
+    assert.match(readFileSync(result.htmlPath, 'utf8'), /<body class="no-motion">/)
+    assert.throws(() => buildDeck({ title: 'x', content: 'y', motion: 'maybe' }), /未知 motion 值/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

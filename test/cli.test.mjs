@@ -50,3 +50,23 @@ test('CLI --list-themes 不写文件', async () => {
   assert.equal(logs.length, 5)
   assert.match(logs.join('\n'), /data/)
 })
+
+test('CLI --motion off 产出纯静态放映页', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-cli-motion-'))
+  try {
+    const logs = []
+    const code = await main([
+      '--title', '静态',
+      '--content', '# 静态\n- 一\n- 二',
+      '--motion', 'off',
+      '--out', dir,
+      '--file', 'static-deck',
+    ], { log: (line) => logs.push(line), error: () => {} })
+    assert.equal(code, 0)
+    const html = readFileSync(join(dir, 'static-deck.html'), 'utf8')
+    assert.match(html, /<body class="no-motion">/)
+    assert.ok(!html.includes('bullet-in'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

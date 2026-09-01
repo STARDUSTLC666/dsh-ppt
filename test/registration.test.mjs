@@ -58,6 +58,7 @@ test('每个已注册工具的 parameters 都是编译好的 JSON Schema', () =>
   const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
   assert.deepEqual(create.parameters.required, ['title', 'content'])
   assert.equal(create.parameters.properties.slides.items.type, 'object')
+  assert.deepEqual(create.parameters.properties.motion.enum, ['on', 'off'])
 })
 
 test('output.schema 是纯 JSON（可无损序列化）', () => {
@@ -124,12 +125,33 @@ test('ppt_create 生成 HTML 放映 + PPTX + manifest 三件套', async () => {
     assert.ok(pptx.length > 2000)
 
     const manifest = JSON.parse(readFileSync(out.jsonPath, 'utf8'))
-    assert.equal(manifest.version, '0.2.0')
+    assert.equal(manifest.version, '0.3.0')
     assert.equal(manifest.slides.length, out.slideCount)
 
     const rendered = create.output.render({}, out)
     assert.match(rendered[0].text, /HTML 网页放映/)
     assert.match(rendered[0].text, /PPTX/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('ppt_create motion=off 产出纯静态三件套', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, {})
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-motion-off-'))
+  try {
+    const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
+    const out = await create.execute({
+      title: '静态汇报',
+      content: '# 静态汇报\n- 一\n- 二',
+      motion: 'off',
+      outputDir: dir,
+    })
+    assert.equal(out.ok, true)
+    const manifest = JSON.parse(readFileSync(out.jsonPath, 'utf8'))
+    assert.equal(manifest.motion, false)
+    assert.match(readFileSync(out.htmlPath, 'utf8'), /<body class="no-motion">/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

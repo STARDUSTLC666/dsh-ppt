@@ -16,7 +16,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildDeck, listThemes, THEME_IDS, DEFAULT_THEME } from './deck-core.mjs'
 
-const HELP = `dsh-ppt v0.1.0 —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
+const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
 用法：
   node build-deck.mjs --title <标题> --content <Markdown 或文件路径> [选项]
@@ -27,6 +27,7 @@ const HELP = `dsh-ppt v0.1.0 —— 一句话 / 一篇文档 → HTML 放映 + P
   --slides <json>     结构化 slides JSON（可选，与 --content 二选一）
   --theme <id>        视觉主题：${THEME_IDS.join(' / ')}（默认 ${DEFAULT_THEME}）
   --lang <id>         界面语言：zh / en / bilingual（默认 zh）
+  --motion <on|off>   页间转场与要点入场动画（默认 on；off 产出纯静态）
   --out <dir>         输出目录（默认当前目录）
   --file <name>       文件名前缀（默认取标题）
   --list-themes       列出内置主题
@@ -39,7 +40,7 @@ const HELP = `dsh-ppt v0.1.0 —— 一句话 / 一篇文档 → HTML 放映 + P
 `
 
 export function parseArgv(argv) {
-  const args = { content: '', slides: null, lang: 'zh', theme: DEFAULT_THEME, out: '.', file: '', title: '' }
+  const args = { content: '', slides: null, lang: 'zh', theme: DEFAULT_THEME, motion: undefined, out: '.', file: '', title: '' }
   const positional = []
   for (let i = 0; i < argv.length; i += 1) {
     const raw = String(argv[i])
@@ -59,6 +60,7 @@ export function parseArgv(argv) {
     else if (key === '--slides') args.slides = JSON.parse(nextValue())
     else if (key === '--theme') args.theme = nextValue()
     else if (key === '--lang') args.lang = nextValue()
+    else if (key === '--motion') args.motion = nextValue()
     else if (key === '--out') args.out = nextValue()
     else if (key === '--file') args.file = nextValue()
     else positional.push(raw)
@@ -105,6 +107,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     slides,
     theme: args.theme,
     lang: args.lang,
+    motion: args.motion,
     outputDir: resolvePath(args.out || '.'),
     fileName: args.file,
   }

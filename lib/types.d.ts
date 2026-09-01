@@ -28,6 +28,8 @@ export interface PptCreateArgs {
     slides?: PptSlideSpec[];
     theme?: string;
     lang?: string;
+    /** 页间转场与要点入场动画：on（默认）/ off。 */
+    motion?: 'on' | 'off';
     outputDir?: string;
     fileName?: string;
 }
