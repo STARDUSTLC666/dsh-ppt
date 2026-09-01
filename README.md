@@ -16,6 +16,9 @@ DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一�
 | --- | --- |
 | `ppt_create` 工具 | Markdown / 结构化 slides → `*.html` + `*.pptx` + `*.json` 三件套 |
 | `ppt_themes` 工具 | 列出 5 套内置主题与适用场景 |
+| 7 种页型 | 封面 / 章节 / 要点 / 核心观点 / **金句** / **表格** / 结束页 |
+| 演讲者备注 | `<!-- 备注: ... -->` 或 `notes` 字段：HTML 按 `S` 呼出，PPTX 原生备注页（演示者视图） |
+| Markdown 进阶 | 表格（`\| ... \|`）、引用金句（`>`）、备注注释自动识别成对应页型 |
 | `dsh-ppt` 技能 | 完整 SOP 注册进 DSH：从一句话到成品 deck 的六步流水线 |
 | 裸 SKILL.md | 把 `skills/dsh-ppt/` 复制到 Claude Code / Cursor / Gemini CLI / Codex 即可跨 harness 使用 |
 | 视觉引擎 | 复用 hyperframes 视觉风格库，5 套主题 HTML 与 PPTX 同源同色 |
@@ -28,7 +31,7 @@ DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一�
 
 ## 兼容性
 
-在 `@deepseek-ai/dsh@0.1.2-alpha.2` 上验证（2026-08-31）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
+在 `@deepseek-ai/dsh@0.1.2-alpha.3` 上验证（2026-09-01 全量冒烟通过）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
 
 ## 安装
 

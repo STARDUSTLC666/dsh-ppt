@@ -18,7 +18,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 
-export const DECK_VERSION = '0.1.0'
+export const DECK_VERSION = '0.2.0'
 
 // ---------------------------------------------------------------------------
 // 主题
@@ -133,10 +133,14 @@ export const LANGUAGES = {
       slide: '第',
       of: '/ 共',
       theme: '主题',
-      help: '← → 翻页 · F 全屏 · G 总览 · P 打印',
+      help: '← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印',
       coverKicker: '开场',
       pointKicker: '要点',
       statementKicker: '核心观点',
+      quoteKicker: '金句',
+      tableKicker: '数据',
+      notesLabel: '演讲者备注',
+      notesToggle: '备注',
       closingTitle: '谢谢',
       closingSubtitle: '讨论与问答',
       generatedBy: '由 dsh-ppt 生成',
@@ -149,10 +153,14 @@ export const LANGUAGES = {
       slide: 'Slide',
       of: '/',
       theme: 'Theme',
-      help: '← → navigate · F fullscreen · G overview · P print',
+      help: '← → navigate · F fullscreen · G overview · S notes · P print',
       coverKicker: 'Opening',
       pointKicker: 'Key point',
       statementKicker: 'Core idea',
+      quoteKicker: 'Quote',
+      tableKicker: 'Data',
+      notesLabel: 'Speaker notes',
+      notesToggle: 'Notes',
       closingTitle: 'Thank You',
       closingSubtitle: 'Discussion & Q&A',
       generatedBy: 'Generated with dsh-ppt',
@@ -165,10 +173,14 @@ export const LANGUAGES = {
       slide: '第',
       of: '/ 共',
       theme: '主题 · Theme',
-      help: '← → 翻页 · F 全屏 · G 总览 · P 打印',
+      help: '← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印',
       coverKicker: '开场 · Opening',
       pointKicker: '要点 · Key point',
       statementKicker: '核心观点 · Core Idea',
+      quoteKicker: '金句 · Quote',
+      tableKicker: '数据 · Data',
+      notesLabel: '演讲者备注 · Speaker notes',
+      notesToggle: '备注 · Notes',
       closingTitle: '谢谢 · Thank You',
       closingSubtitle: '讨论与问答 · Q&A',
       generatedBy: '由 dsh-ppt 生成 · Generated with dsh-ppt',
@@ -285,7 +297,49 @@ function chunk(items, size) {
 // ---------------------------------------------------------------------------
 
 function createSection(heading = '', level = 0, coverOnly = false) {
-  return { heading, level, coverOnly, bullets: [], paragraphs: [] }
+  return { heading, level, coverOnly, bullets: [], paragraphs: [], quote: [], table: null, notes: [] }
+}
+
+function splitTableRow(line) {
+  const trimmed = line.trim()
+  const match = /^\|(.+)\|$/.exec(trimmed)
+  if (match === null) return null
+  return match[1].split('|').map((cell) => cell.trim())
+}
+
+function isTableSeparator(cells) {
+  return cells.length > 0 && cells.every((cell) => /^:?-{2,}:?$/.test(cell) || /^:?-+:?$/.test(cell))
+}
+
+const NOTES_COMMENT = /^<!--\s*(?:notes?|备注)\s*[:：]\s*([\s\S]*?)\s*-->$/
+
+function quoteSlideFrom(section, ui) {
+  const lines = [...section.quote]
+  let attribution = ''
+  const attrMatch = /^(?:——|—|--|-)\s*(.+)$/.exec(lines[lines.length - 1] ?? '')
+  if (attrMatch !== null && lines.length > 1) {
+    attribution = attrMatch[1]
+    lines.pop()
+  }
+  return { layout: 'quote', kicker: ui.quoteKicker, title: truncate(lines.join(' '), 220), subtitle: attribution }
+}
+
+function tableSlideFrom(section, ui) {
+  const table = section.table
+  const rows = [table.header, ...table.rows]
+    .slice(0, 9)
+    .map((row) => row.slice(0, 8).map((cell) => truncate(cell, 60)))
+  const heading = section.heading || ui.tableKicker
+  return { layout: 'table', kicker: heading, title: heading, rows }
+}
+
+/** 把一个 section 里的金句/表格拆成独立页；备注附着到第一张产出页。 */
+function specialSlidesFor(section, ui) {
+  const out = []
+  if (section.quote.length > 0) out.push(quoteSlideFrom(section, ui))
+  if (section.table !== null) out.push(tableSlideFrom(section, ui))
+  if (out.length > 0 && section.notes.length > 0) out[0].notes = section.notes.join('\n')
+  return out
 }
 
 export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
@@ -347,6 +401,38 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
+    // 演讲者备注：`<!-- 备注: ... -->` / `<!-- note: ... -->` 附到当前页
+    const notesMatch = NOTES_COMMENT.exec(line)
+    if (notesMatch !== null && notesMatch[1].trim() !== '') {
+      if (current === null) current = createSection()
+      current.notes.push(notesMatch[1].trim())
+      continue
+    }
+
+    // Markdown 表格：连续的 | ... | 行，第二行是分隔线
+    const tableCells = splitTableRow(line)
+    if (tableCells !== null) {
+      if (current === null) current = createSection()
+      if (isTableSeparator(tableCells)) continue
+      if (current.table === null) {
+        current.table = { header: tableCells.map((cell) => stripInlineMarkdown(cell)), rows: [] }
+      } else if (current.table.rows.length < 12) {
+        current.table.rows.push(tableCells.map((cell) => stripInlineMarkdown(cell)))
+      }
+      continue
+    }
+
+    // 金句：`>` 引用块（最后一行 `—— 出处` 识别为署名）
+    const quoteMatch = /^>\s?(.*)$/.exec(line)
+    if (quoteMatch !== null) {
+      const quoted = stripInlineMarkdown(quoteMatch[1])
+      if (quoted !== '') {
+        if (current === null) current = createSection()
+        current.quote.push(quoted)
+      }
+      continue
+    }
+
     const paragraph = stripInlineMarkdown(line)
     if (paragraph === '') continue
     if (current === null) current = createSection()
@@ -404,24 +490,31 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     }))
     const firstSentence = ordered[0]?.sentences[0] ?? ''
     if (coverSubtitle === '') coverSubtitle = truncate(firstSentence, 180)
-    const rest = ordered.flatMap((group, groupIndex) => {
+    const bodySlides = []
+    let pointIndex = 0
+    ordered.forEach((group, groupIndex) => {
+      const specials = specialSlidesFor(group.section, ui)
+      bodySlides.push(...specials)
       const sentences = (groupIndex === 0 && !coverSubtitleConsumed) ? group.sentences.slice(1) : group.sentences
-      return chunk(sentences, 5)
+      for (const points of chunk(sentences, 5)) {
+        pointIndex += 1
+        const slide = {
+          layout: 'bullets',
+          kicker: ui.pointKicker + ' ' + pointIndex,
+          title: truncate(points[0], 40) || ui.pointKicker + ' ' + pointIndex,
+          bullets: points,
+        }
+        if (specials.length === 0 && group.section.notes.length > 0) slide.notes = group.section.notes.join('\n')
+        bodySlides.push(slide)
+      }
     })
     slides.push({ layout: 'cover', kicker: ui.coverKicker, title: coverTitle || 'Untitled', subtitle: coverSubtitle })
-    if (rest.length === 0) {
+    if (bodySlides.length === 0) {
       if (coverSubtitle !== '') {
         slides.push({ layout: 'statement', kicker: ui.statementKicker, title: coverSubtitle, subtitle: coverTitle || 'Untitled' })
       }
     } else {
-      rest.forEach((points, index) => {
-        slides.push({
-          layout: 'bullets',
-          kicker: ui.pointKicker + ' ' + (index + 1),
-          title: truncate(points[0], 40) || ui.pointKicker + ' ' + (index + 1),
-          bullets: points,
-        })
-      })
+      slides.push(...bodySlides)
     }
     slides.push({ layout: 'closing', title: ui.closingTitle, subtitle: coverTitle || 'Untitled' })
     return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
@@ -430,18 +523,23 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   slides.push({ layout: 'cover', kicker: ui.coverKicker, title: coverTitle || 'Untitled', subtitle: coverSubtitle })
   let pointIndex = 0
   for (const section of bodySections) {
+    const notes = section.notes.join('\n')
+    const specials = specialSlidesFor(section, ui)
+    slides.push(...specials)
     if (section.heading === '') {
       const points = [...section.bullets, ...section.paragraphs]
         .flatMap((part) => splitSentences(part))
         .slice(0, 8)
       if (points.length > 0) {
         pointIndex += 1
-        slides.push({
+        const slide = {
           layout: 'bullets',
           kicker: ui.pointKicker + ' ' + pointIndex,
           title: truncate(points[0], 40) || ui.pointKicker + ' ' + pointIndex,
           bullets: points,
-        })
+        }
+        if (specials.length === 0 && notes !== '') slide.notes = notes
+        slides.push(slide)
       }
       continue
     }
@@ -450,16 +548,20 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       ...section.paragraphs.flatMap((part) => splitSentences(part)),
     ].slice(0, 8)
     if (points.length > 0) {
-      slides.push({ layout: 'bullets', kicker: section.heading, title: section.heading, bullets: points })
-    } else {
-      slides.push({ layout: 'section', kicker: section.heading, title: section.heading })
+      const slide = { layout: 'bullets', kicker: section.heading, title: section.heading, bullets: points }
+      if (specials.length === 0 && notes !== '') slide.notes = notes
+      slides.push(slide)
+    } else if (specials.length === 0) {
+      const slide = { layout: 'section', kicker: section.heading, title: section.heading }
+      if (notes !== '') slide.notes = notes
+      slides.push(slide)
     }
   }
   slides.push({ layout: 'closing', title: ui.closingTitle, subtitle: coverTitle || 'Untitled' })
   return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
 }
 
-const SLIDE_LAYOUTS = new Set(['cover', 'section', 'bullets', 'statement', 'closing'])
+const SLIDE_LAYOUTS = new Set(['cover', 'section', 'bullets', 'statement', 'closing', 'quote', 'table'])
 
 function normalizeSlide(raw, index) {
   const source = (raw !== null && typeof raw === 'object') ? raw : {}
@@ -468,6 +570,8 @@ function normalizeSlide(raw, index) {
   const subtitle = stripInlineMarkdown(source.subtitle ?? '')
   const kicker = stripInlineMarkdown(source.kicker ?? '')
   const text = stripInlineMarkdown(source.text ?? '')
+  // 备注保留换行（放映面板与备注页都按原文显示），只做转义，不做 Markdown 清洗
+  const notes = String(source.notes ?? '').trim()
   let bullets = []
   if (Array.isArray(source.bullets)) {
     bullets = source.bullets.map((item) => stripInlineMarkdown(String(item))).filter(Boolean)
@@ -475,9 +579,29 @@ function normalizeSlide(raw, index) {
     bullets = splitSentences(source.bullets)
   }
   if (layout === 'statement' && title === '' && text !== '') {
-    return { layout, kicker, title: text, subtitle: subtitle || '', bullets }
+    return { layout, kicker, title: text, subtitle: subtitle || '', bullets, ...(notes !== '' ? { notes } : {}) }
   }
-  return { layout, kicker, title, subtitle, text, bullets }
+  if (layout === 'quote') {
+    const quoteText = title !== '' ? title : text
+    if (quoteText === '') return { layout: 'statement', kicker, title: subtitle, subtitle: '', bullets, ...(notes !== '' ? { notes } : {}) }
+    return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...(notes !== '' ? { notes } : {}) }
+  }
+  if (layout === 'table') {
+    let rows = []
+    if (Array.isArray(source.rows)) {
+      rows = source.rows
+        .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => stripInlineMarkdown(String(cell))))
+        .filter((row) => row.some((cell) => cell !== ''))
+        .slice(0, 9)
+        .map((row) => row.slice(0, 8).map((cell) => truncate(cell, 60)))
+    }
+    if (rows.length === 0) {
+      // 没有表格数据的 table 页退化成要点页，避免产出空白版式
+      return { layout: 'bullets', kicker, title, subtitle, bullets, ...(notes !== '' ? { notes } : {}) }
+    }
+    return { layout, kicker: kicker || title, title, rows, ...(notes !== '' ? { notes } : {}) }
+  }
+  return { layout, kicker, title, subtitle, text, bullets, ...(notes !== '' ? { notes } : {}) }
 }
 
 export function normalizeSlides(rawSlides, maxSlides = 60) {
@@ -647,6 +771,28 @@ h2{font-size:clamp(34px,5vw,82px);max-width:20ch}
 .closing h1,.closing .statement-title{font-size:clamp(52px,9vw,148px)}
 .closing .subtitle{color:var(--accent);font-weight:700}
 .cover h1{font-weight:900}
+.quote-mark{
+  font-family:var(--font-heading);font-size:clamp(90px,13vw,210px);line-height:.62;
+  color:var(--accent);margin-bottom:clamp(14px,2vw,30px);
+}
+.quote-text{
+  font-family:var(--font-heading);font-size:clamp(26px,4.2vw,62px);line-height:1.28;
+  font-weight:700;max-width:22ch;margin:0;
+}
+.quote-attr{color:var(--muted);margin-top:clamp(18px,2.6vw,34px);font-size:clamp(15px,1.8vw,26px);letter-spacing:.04em}
+table.deck-table{
+  border-collapse:collapse;margin-top:clamp(20px,3vw,42px);width:100%;max-width:1120px;
+  font-size:clamp(13px,1.55vw,23px);
+}
+.deck-table th{
+  background:var(--accent);color:var(--bg);text-align:left;font-weight:700;
+  padding:.6em .9em;letter-spacing:.02em;
+}
+.deck-table td{
+  padding:.55em .9em;border-bottom:1px solid color-mix(in srgb, var(--muted) 34%, transparent);
+  color:var(--fg);
+}
+.deck-table tbody tr:nth-child(even){background:color-mix(in srgb, var(--panel) 62%, transparent)}
 #progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--accent);z-index:30;transition:width .25s}
 #hud{
   position:fixed;right:22px;bottom:18px;z-index:30;display:flex;gap:14px;align-items:center;
@@ -658,16 +804,29 @@ h2{font-size:clamp(34px,5vw,82px);max-width:20ch}
   padding:7px 13px;font:inherit;cursor:pointer;
 }
 #hud button:hover{border-color:var(--accent);color:var(--accent)}
+#notes-panel{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;
+  background:color-mix(in srgb, var(--panel) 96%, black 4%);
+  border-top:2px solid var(--accent);
+  padding:16px clamp(22px,4vw,64px) 20px;max-height:38vh;overflow:auto;
+}
+body.notes-open #notes-panel.has-notes{display:block}
+#notes-panel .notes-label{
+  color:var(--accent);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  font-size:12px;margin-bottom:8px;
+}
+#notes-text{white-space:pre-wrap;line-height:1.65;font-size:15px;color:var(--fg)}
 body.overview .slide{display:flex !important;position:relative;inset:auto;width:100%;height:100vh}
 body.overview{overflow:auto}
 body.overview #progress,body.overview #hud{position:fixed}
+body.overview #notes-panel{display:none !important}
 @media (max-width:640px){
   #hud{right:12px;bottom:10px;gap:8px;font-size:11px}
 }
 @media print{
   html,body{height:auto;overflow:visible;background:#fff}
   .slide{position:relative;display:block !important;height:100vh;page-break-after:always;padding:48px}
-  #progress,#hud{display:none !important}
+  #progress,#hud,#notes-panel{display:none !important}
 }
 </style>
 </head>
@@ -677,7 +836,12 @@ ${slides}
 <div id="hud" aria-live="polite">
   <span id="counter">${ui.slide} 1 ${ui.of} ${total}</span>
   <span id="theme-label">${ui.theme} · ${escapeHtml(themeLabel)}</span>
+  <button id="notes-toggle" title="S">${escapeHtml(ui.notesToggle)}</button>
   <button id="fullscreen" title="F">⛶</button>
+</div>
+<div id="notes-panel" aria-live="polite">
+  <div class="notes-label">${escapeHtml(ui.notesLabel)}</div>
+  <div id="notes-text"></div>
 </div>
 <script>
 (() => {
@@ -685,15 +849,25 @@ ${slides}
   const counter = document.getElementById('counter');
   const progress = document.getElementById('progress');
   const fullscreenBtn = document.getElementById('fullscreen');
+  const notesPanel = document.getElementById('notes-panel');
+  const notesText = document.getElementById('notes-text');
+  const notesBtn = document.getElementById('notes-toggle');
   let index = 0;
   const total = slides.length;
   const ui = ${JSON.stringify(ui).replace(/</g, '\\u003c')};
+
+  function refreshNotes() {
+    const notes = slides[index]?.dataset.notes || '';
+    notesPanel.classList.toggle('has-notes', notes !== '');
+    notesText.textContent = notes;
+  }
 
   function go(next) {
     index = (next + total) % total;
     slides.forEach((slide, i) => slide.classList.toggle('is-active', i === index));
     counter.textContent = ui.slide + ' ' + (index + 1) + ' ' + ui.of + ' ' + total;
     progress.style.width = ((index + 1) / total * 100) + '%';
+    refreshNotes();
     document.title = (index + 1) + ' / ' + total + ' · ' + ${JSON.stringify(manifest.title).replace(/</g, '\\u003c')};
     try { history.replaceState?.(null, '', '#slide-' + (index + 1)); } catch { /* file:// 下个别浏览器可能拒绝 */ }
   }
@@ -713,6 +887,8 @@ ${slides}
     } else if (event.key.toLowerCase() === 'g') {
       document.body.classList.toggle('overview');
       go(index);
+    } else if (event.key.toLowerCase() === 's') {
+      document.body.classList.toggle('notes-open');
     } else if (event.key.toLowerCase() === 'p') {
       window.print();
     }
@@ -736,6 +912,10 @@ ${slides}
   fullscreenBtn.addEventListener('click', () => {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
     else document.exitFullscreen?.();
+  });
+
+  notesBtn.addEventListener('click', () => {
+    document.body.classList.toggle('notes-open');
   });
 
   const start = Number.parseInt(location.hash?.replace('#slide-', ''), 10);
@@ -771,6 +951,25 @@ function renderHtmlSlide(slide, index, ui, langId) {
         '<div class="statement-title">' + escapeHtml(title || slide.text || '') + '</div>' +
         (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '')
       break
+    case 'quote':
+      inner = '<div class="kicker">' + escapeHtml(kicker || ui.quoteKicker) + '</div>' +
+        '<div class="quote-mark" aria-hidden="true">\u201C</div>' +
+        '<blockquote class="quote-text">' + escapeHtml(title || slide.text || '') + '</blockquote>' +
+        (subtitle !== '' ? '<div class="quote-attr">\u2014\u2014 ' + escapeHtml(subtitle) + '</div>' : '')
+      break
+    case 'table': {
+      const rows = Array.isArray(slide.rows) ? slide.rows : []
+      const head = rows[0] ?? []
+      const body = rows.slice(1)
+      inner = '<div class="kicker">' + escapeHtml(kicker || ui.tableKicker) + '</div>' +
+        (title !== '' && title !== kicker ? '<h2>' + escapeHtml(title) + '</h2>' : '') +
+        '<table class="deck-table"><thead><tr>' +
+        head.map((cell) => '<th>' + escapeHtml(cell) + '</th>').join('') +
+        '</tr></thead><tbody>' +
+        body.map((row) => '<tr>' + row.map((cell) => '<td>' + escapeHtml(cell) + '</td>').join('') + '</tr>').join('') +
+        '</tbody></table>'
+      break
+    }
     case 'closing':
       inner = '<h1>' + escapeHtml(title || ui.closingTitle) + '</h1>' +
         (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '') +
@@ -783,7 +982,10 @@ function renderHtmlSlide(slide, index, ui, langId) {
         '<ul>' + bullets.map((bullet) => '<li>' + escapeHtml(bullet) + '</li>').join('') + '</ul>'
       break
   }
-  return '<section class="slide slide--' + escapeHtml(slide.layout || 'bullets') + '" data-index="' + number + '">' +
+  const notesAttr = typeof slide.notes === 'string' && slide.notes.trim() !== ''
+    ? ' data-notes="' + escapeHtml(slide.notes) + '"'
+    : ''
+  return '<section class="slide slide--' + escapeHtml(slide.layout || 'bullets') + '" data-index="' + number + '"' + notesAttr + '>' +
     '<div class="slide-inner">' + inner + '</div></section>'
 }
 
@@ -862,6 +1064,42 @@ function accentBarXml(id, name, box, color) {
     '<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>'
 }
 
+/** 原生 OOXML 表格（graphicFrame + a:tbl）：首行主题色表头，隔行面板色。 */
+function tableGraphicXml(id, name, box, rows, theme) {
+  const p = theme.palette
+  const font = pptxFontName(theme.fonts.body)
+  const safeRows = rows.length > 0 ? rows : [['']]
+  const cols = Math.max(1, safeRows[0].length)
+  const colW = Math.floor(box.w / cols)
+  const grid = Array.from({ length: cols }, () => '<a:gridCol w="' + colW + '"/>').join('')
+  const rowH = 420000
+  const cellXml = (text, fill, color, bold) =>
+    '<a:tc><a:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr>' +
+    '<a:r><a:rPr lang="zh-CN" sz="1400" b="' + (bold ? 1 : 0) + '" dirty="0">' +
+    '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
+    '<a:latin typeface="' + escapeXml(font) + '"/><a:ea typeface="' + escapeXml(font) + '"/></a:rPr>' +
+    '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p></a:txBody>' +
+    '<a:tcPr marL="91440" marR="91440" anchor="ctr">' +
+    (fill !== '' ? '<a:solidFill><a:srgbClr val="' + hex(fill) + '"/></a:solidFill>' : '<a:noFill/>') +
+    '</a:tcPr></a:tc>'
+  const trs = safeRows.map((row, rowIndex) => {
+    const padded = Array.from({ length: cols }, (_, i) => row[i] ?? '')
+    const cells = rowIndex === 0
+      ? padded.map((c) => cellXml(c, p.accent, p.bg, true)).join('')
+      : padded.map((c) => cellXml(c, rowIndex % 2 === 1 ? p.panel : '', p.fg, false)).join('')
+    return '<a:tr h="' + rowH + '">' + cells + '</a:tr>'
+  }).join('')
+  const height = Math.max(1, safeRows.length) * rowH
+  return '<p:graphicFrame>' +
+    '<p:nvGraphicFramePr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/>' +
+    '<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>' +
+    '<p:xfrm><a:off x="' + box.x + '" y="' + box.y + '"/><a:ext cx="' + box.w + '" cy="' + height + '"/></p:xfrm>' +
+    '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">' +
+    '<a:tbl><a:tblPr firstRow="1" bandRow="1"/>' +
+    '<a:tblGrid>' + grid + '</a:tblGrid>' + trs + '</a:tbl>' +
+    '</a:graphicData></a:graphic></p:graphicFrame>'
+}
+
 function slideShapeList(slide, index, total, theme, langId) {
   const p = theme.palette
   const font = pptxFontName(theme.fonts.heading)
@@ -914,6 +1152,31 @@ function slideShapeList(slide, index, total, theme, langId) {
         paragraphXml(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
       ]))
     }
+  } else if (slide.layout === 'quote') {
+    shapes.push(textShapeXml(idBase + 1, 'Quote mark', { x: 900000, y: 1050000, w: 1700000, h: 1900000 }, [
+      paragraphXml('\u201C', { size: 9600, color: p.accent, bold: true, font }),
+    ]))
+    shapes.push(textShapeXml(idBase + 2, 'Quote', { x: 1050000, y: 2550000, w: 10100000, h: 2600000 }, [
+      paragraphXml(title || slide.text || '', { size: 3000, color: p.fg, bold: true, font }),
+    ]))
+    if (subtitle !== '') {
+      shapes.push(textShapeXml(idBase + 3, 'Attribution', { x: 1070000, y: 5300000, w: 9000000, h: 600000 }, [
+        paragraphXml('\u2014\u2014 ' + subtitle, { size: 1600, color: p.muted, font: theme.fonts.body }),
+      ]))
+    }
+  } else if (slide.layout === 'table') {
+    const hasTitle = title !== '' && title !== kicker
+    if (kicker !== '') {
+      shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 900000, y: 420000, w: 10000000, h: 420000 }, [
+        paragraphXml(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
+      ]))
+    }
+    if (hasTitle) {
+      shapes.push(textShapeXml(idBase + 2, 'Title', { x: 900000, y: 920000, w: 10300000, h: 800000 }, [
+        paragraphXml(title, { size: 3400, color: p.fg, bold: true, font }),
+      ]))
+    }
+    shapes.push(tableGraphicXml(idBase + 3, 'Table', { x: 900000, y: hasTitle ? 1950000 : 900000, w: 10300000 }, Array.isArray(slide.rows) ? slide.rows : [], theme))
   } else if (slide.layout === 'closing') {
     shapes.push(textShapeXml(idBase + 1, 'Title', { x: 1050000, y: 2300000, w: 10200000, h: 1700000 }, [
       paragraphXml(title || '谢谢', { size: 5200, color: p.fg, bold: true, align: 'ctr', font }),
@@ -961,34 +1224,93 @@ function slideXml(slide, index, total, theme, langId) {
     '</p:sld>'
 }
 
-function slideRelXml() {
+function slideRelXml(hasNotes, slideIndex) {
+  const notesRel = hasNotes
+    ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide' + slideIndex + '.xml"/>'
+    : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' +
+    notesRel +
     '</Relationships>'
 }
 
-function presentationXml(slideCount) {
+function presentationXml(slideCount, hasNotesMaster) {
   const slideIds = Array.from({ length: slideCount }, (_, i) =>
     '<p:sldId id="' + (256 + i) + '" r:id="rId' + (i + 2) + '"/>').join('')
+  const notesMasterId = hasNotesMaster
+    ? '<p:notesMasterIdLst><p:notesMasterId id="2147483649" r:id="rId' + (slideCount + 2) + '"/></p:notesMasterIdLst>'
+    : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
     'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
     '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
     '<p:sldIdLst>' + slideIds + '</p:sldIdLst>' +
+    notesMasterId +
     '<p:sldSz cx="' + EMU_W + '" cy="' + EMU_H + '" type="screen16x9"/>' +
     '<p:notesSz cx="6858000" cy="9144000"/>' +
     '</p:presentation>'
 }
 
-function presentationRelXml(slideCount) {
+function presentationRelXml(slideCount, hasNotesMaster) {
   const slideRels = Array.from({ length: slideCount }, (_, i) =>
     '<Relationship Id="rId' + (i + 2) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide' + (i + 1) + '.xml"/>').join('')
+  const notesMasterRel = hasNotesMaster
+    ? '<Relationship Id="rId' + (slideCount + 2) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>'
+    : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>' +
     slideRels +
+    notesMasterRel +
+    '</Relationships>'
+}
+
+function notesMasterXml() {
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+    'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+    '<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
+    '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
+    '</p:spTree></p:cSld>' +
+    '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' +
+    '<p:notesStyle><a:lvl1pPr><a:defRPr sz="1200"/></a:lvl1pPr></p:notesStyle>' +
+    '</p:notesMaster>'
+}
+
+function notesMasterRelXml() {
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>' +
+    '</Relationships>'
+}
+
+function notesSlideXml(notes) {
+  const paragraphs = String(notes ?? '').split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => '<a:p><a:r><a:rPr lang="zh-CN" sz="1200" dirty="0"/><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>')
+    .join('')
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+    'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+    '<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
+    '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
+    '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr/><p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>' +
+    '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/>' +
+    '<p:txBody><a:bodyPr/><a:lstStyle/>' + paragraphs + '</p:txBody></p:sp>' +
+    '</p:spTree></p:cSld>' +
+    '<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>' +
+    '</p:notes>'
+}
+
+function notesSlideRelXml(slideIndex) {
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide' + slideIndex + '.xml"/>' +
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>' +
     '</Relationships>'
 }
 
@@ -1070,9 +1392,14 @@ function themeXml(theme) {
     '</a:theme>'
 }
 
-function contentTypesXml(slideCount) {
+function contentTypesXml(slideCount, noteIndexes) {
   const overrides = Array.from({ length: slideCount }, (_, i) =>
     '<Override PartName="/ppt/slides/slide' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>').join('')
+  const notesOverrides = noteIndexes.map((index) =>
+    '<Override PartName="/ppt/notesSlides/notesSlide' + (index + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>').join('')
+  const notesMasterOverride = noteIndexes.length > 0
+    ? '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>'
+    : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -1083,7 +1410,9 @@ function contentTypesXml(slideCount) {
     '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
     '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
     '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
+    notesMasterOverride +
     overrides +
+    notesOverrides +
     '</Types>'
 }
 
@@ -1106,12 +1435,12 @@ function coreXml(title) {
     '</cp:coreProperties>'
 }
 
-function appXml(slideCount) {
+function appXml(slideCount, notesCount) {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" ' +
     'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">' +
     '<Application>dsh-ppt</Application><PresentationFormat>Widescreen</PresentationFormat>' +
-    '<Slides>' + slideCount + '</Slides><Notes>0</Notes><HiddenSlides>0</HiddenSlides>' +
+    '<Slides>' + slideCount + '</Slides><Notes>' + notesCount + '</Notes><HiddenSlides>0</HiddenSlides>' +
     '</Properties>'
 }
 
@@ -1202,22 +1531,36 @@ export function buildPptx(manifest, themeInput, languageInput) {
   const theme = themeInput?.id ? themeInput : resolveTheme(themeInput)
   const language = languageInput?.id ? languageInput : resolveLanguage(languageInput)
   const slides = manifest.slides
+  const noteIndexes = []
+  slides.forEach((slide, index) => {
+    if (typeof slide.notes === 'string' && slide.notes.trim() !== '') noteIndexes.push(index)
+  })
+  const hasNotesMaster = noteIndexes.length > 0
   const entries = [
-    { name: '[Content_Types].xml', data: contentTypesXml(slides.length) },
+    { name: '[Content_Types].xml', data: contentTypesXml(slides.length, noteIndexes) },
     { name: '_rels/.rels', data: rootRelXml() },
-    { name: 'docProps/app.xml', data: appXml(slides.length) },
+    { name: 'docProps/app.xml', data: appXml(slides.length, noteIndexes.length) },
     { name: 'docProps/core.xml', data: coreXml(manifest.title) },
-    { name: 'ppt/presentation.xml', data: presentationXml(slides.length) },
-    { name: 'ppt/_rels/presentation.xml.rels', data: presentationRelXml(slides.length) },
+    { name: 'ppt/presentation.xml', data: presentationXml(slides.length, hasNotesMaster) },
+    { name: 'ppt/_rels/presentation.xml.rels', data: presentationRelXml(slides.length, hasNotesMaster) },
     { name: 'ppt/slideMasters/slideMaster1.xml', data: slideMasterXml(theme) },
     { name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: slideMasterRelXml() },
     { name: 'ppt/slideLayouts/slideLayout1.xml', data: slideLayoutXml(theme) },
     { name: 'ppt/slideLayouts/_rels/slideLayout1.xml.rels', data: slideLayoutRelXml() },
     { name: 'ppt/theme/theme1.xml', data: themeXml(theme) },
   ]
+  if (hasNotesMaster) {
+    entries.push({ name: 'ppt/notesMasters/notesMaster1.xml', data: notesMasterXml() })
+    entries.push({ name: 'ppt/notesMasters/_rels/notesMaster1.xml.rels', data: notesMasterRelXml() })
+  }
   slides.forEach((slide, index) => {
+    const hasNotes = noteIndexes.includes(index)
     entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.id) })
-    entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml() })
+    entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml(hasNotes, index + 1) })
+    if (hasNotes) {
+      entries.push({ name: 'ppt/notesSlides/notesSlide' + (index + 1) + '.xml', data: notesSlideXml(slide.notes) })
+      entries.push({ name: 'ppt/notesSlides/_rels/notesSlide' + (index + 1) + '.xml.rels', data: notesSlideRelXml(index + 1) })
+    }
   })
   return buildZip(entries)
 }

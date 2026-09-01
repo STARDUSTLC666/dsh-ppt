@@ -186,10 +186,10 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
     description: 'Build a complete presentation deck from one sentence or a Markdown document and write three artifacts to outputDir: a standalone HTML web slideshow, an editable 16:9 PPTX, and a deck.json manifest. Five built-in visual themes are available (see ppt_themes). content is Markdown text (recommended); advanced callers may pass structured slides instead. 中文：把一句话或一篇 Markdown 文档生成完整演示文稿，写入 outputDir 三个文件：独立 HTML 网页放映、可编辑 16:9 PPTX、deck.json manifest；内置 5 套视觉主题。',
     parameters: compileParameters({
       title: { type: 'string', required: true, description: 'Deck title (used for the cover and file names).' },
-      content: { type: 'string', required: true, description: 'Markdown content: one sentence, a paragraph, or a full document. First # heading becomes the cover title; ## headings become slides; -/* lists become bullets. Required unless slides is provided.' },
+      content: { type: 'string', required: true, description: 'Markdown content: one sentence, a paragraph, or a full document. First # heading becomes the cover title; ## headings become slides; -/* lists become bullets; | ... | tables become table slides; > blockquotes become quote slides; <!-- 备注: ... --> comments become speaker notes. Required unless slides is provided.' },
       theme: { type: 'string', description: 'Visual theme id: swiss / velvet / data / soft / bold. Default data. See ppt_themes.' },
       lang: { type: 'string', description: 'UI language of the generated player: zh (default), en, or bilingual. Content language is whatever you write.' },
-      slides: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Optional structured slides: [{ layout: cover|section|bullets|statement|closing, title, subtitle, kicker, bullets: [] }]. Use this for precise control instead of content.' },
+      slides: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Optional structured slides: [{ layout: cover|section|bullets|statement|quote|table|closing, title, subtitle, kicker, bullets: [], rows: [][] (for table), notes: "speaker notes" }]. Use this for precise control instead of content.' },
       outputDir: { type: 'string', description: 'Directory to write the files into. Default: session working directory (or the plugin outputDir config).' },
       fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: sanitized deck title.' },
     }),

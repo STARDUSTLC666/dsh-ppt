@@ -14,6 +14,9 @@ DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a par
 | --- | --- |
 | `ppt_create` tool | Markdown / structured slides → `*.html` + `*.pptx` + `*.json` |
 | `ppt_themes` tool | Lists the 5 built-in themes and their best use cases |
+| 7 layouts | cover / section / bullets / statement / **quote** / **table** / closing |
+| Speaker notes | `<!-- note: ... -->` comments or the `notes` field: press `S` in the HTML player; native PPTX notes slides (presenter view) |
+| Markdown extras | Tables (`\| ... \|`), blockquotes (`>`), and note comments are auto-detected into matching layouts |
 | `dsh-ppt` skill | A complete six-step SOP registered into DSH |
 | Standalone SKILL.md | Copy `skills/dsh-ppt/` into Claude Code / Cursor / Gemini CLI / Codex for cross-harness use |
 | Visual engine | Reuses the hyperframes visual style library; HTML and PPTX share the same theme source |
@@ -26,7 +29,7 @@ Example:
 
 ## Compatibility
 
-Verified against `@deepseek-ai/dsh@0.1.2-alpha.2` on 2026-08-31. Built for the cordis patch-bundle plugin model (`cordis.patch.yml` + `dsh.bundle.patch`). No runtime imports of `@deepseek-ai/*` internals.
+Verified against `@deepseek-ai/dsh@0.1.2-alpha.3` on 2026-09-01. Built for the cordis patch-bundle plugin model (`cordis.patch.yml` + `dsh.bundle.patch`). No runtime imports of `@deepseek-ai/*` internals.
 
 ## Installation
 

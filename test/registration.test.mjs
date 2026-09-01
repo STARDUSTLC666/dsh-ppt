@@ -124,7 +124,7 @@ test('ppt_create 生成 HTML 放映 + PPTX + manifest 三件套', async () => {
     assert.ok(pptx.length > 2000)
 
     const manifest = JSON.parse(readFileSync(out.jsonPath, 'utf8'))
-    assert.equal(manifest.version, '0.1.0')
+    assert.equal(manifest.version, '0.2.0')
     assert.equal(manifest.slides.length, out.slideCount)
 
     const rendered = create.output.render({}, out)

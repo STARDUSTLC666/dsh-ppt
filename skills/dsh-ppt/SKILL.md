@@ -25,7 +25,7 @@ allowed-tools: "Bash, Read, Write, Edit"
    - 跨 harness：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --content deck.md --theme data --lang zh --out dist`
    - 输出三件套：`*.html`（双击即放映）、`*.pptx`（可编辑）、`*.json`（manifest）。
 5. **Verify 校验**：确认 HTML 页数与大纲一致、标题/要点无截断；PPTX 文件头为 `PK`（zip）。DSH 内用文件工具读取确认；跨 harness 用 `unzip -l deck.pptx | grep presentation.xml` 或 PowerShell `Expand-Archive` 抽查。
-6. **Deliver 交付**：给用户三个绝对路径，并说明：HTML 浏览器直接打开（方向键翻页、F 全屏、G 总览、P 打印/另存 PDF）；PPTX 用 PowerPoint / WPS / Keynote 打开。
+6. **Deliver 交付**：给用户三个绝对路径，并说明：HTML 浏览器直接打开（方向键翻页、F 全屏、G 总览、S 演讲者备注、P 打印/另存 PDF）；PPTX 用 PowerPoint / WPS / Keynote 打开（备注在演示者视图可见）。
 
 ## 内容写作规则
 
@@ -34,6 +34,12 @@ allowed-tools: "Bash, Read, Write, Edit"
 - 正文用短句；先结论后理由；数字和对比比形容词更有说服力。
 - 中英双语：`lang` 只决定界面文字（页码/主题标签/结束页），**内容语言由你撰写**。要求双语时，优先每页中文标题 + 英文副标题，或直接生成两份 deck（`--lang zh` 与 `--lang en`）。
 - 更多规则见 `references/copywriting.md`。
+
+## Markdown 进阶语法（自动识别）
+
+- **表格**：`| 列 | 列 |` 连续行（第二行 `| --- | --- |` 分隔线）→ 独立 `table` 页（主题色表头，限 9 行 8 列）。数据对比优先用表格，别堆要点。
+- **金句**：`>` 引用块 → 独立 `quote` 页；最后一行写 `—— 出处` 会成为署名。
+- **演讲者备注**：`<!-- 备注: 这页要讲的内容 -->`（或 `<!-- note: ... -->`）附着到该页。备注不进正文：HTML 放映按 `S` 呼出备注面板，PPTX 写入原生备注（演示者视图可见）。为汇报/演讲类 deck 主动写备注（口径、数据出处、应答预案）。
 
 ## 主题选择
 
@@ -59,15 +65,17 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 ```json
 [
-  { "layout": "cover", "title": "标题", "subtitle": "副标题", "kicker": "开场" },
+  { "layout": "cover", "title": "标题", "subtitle": "副标题", "kicker": "开场", "notes": "开场先自我介绍 30 秒" },
   { "layout": "section", "kicker": "01", "title": "背景" },
   { "layout": "bullets", "title": "三个论点", "bullets": ["论点一", "论点二", "论点三"] },
+  { "layout": "table", "title": "业绩对比", "rows": [["大区", "营收"], ["华东", "1.2 亿"]], "notes": "强调华东增速" },
+  { "layout": "quote", "title": "慢就是快。", "subtitle": "创始人" },
   { "layout": "statement", "title": "核心观点一句话", "subtitle": "支撑说明" },
   { "layout": "closing", "title": "谢谢", "subtitle": "行动号召" }
 ]
 ```
 
-`layout` 仅限 `cover | section | bullets | statement | closing`。Markdown 输入不够精确时，用结构化 slides 重写。
+`layout` 仅限 `cover | section | bullets | statement | quote | table | closing`；每页可选 `notes`（演讲者备注），`table` 页用 `rows`（首行为表头）。Markdown 输入不够精确时，用结构化 slides 重写。
 
 ## 质量门禁（交付前逐项确认）
 
