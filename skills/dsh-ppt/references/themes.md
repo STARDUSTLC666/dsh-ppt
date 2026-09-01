@@ -53,3 +53,7 @@
 5. 情绪是大音量/发布会 → `bold`
 
 无法判断时用 `data`，不要自造主题 ID。
+
+## 视觉引擎复用（hyperframes）
+
+如果 `hyperframes` 技能已安装，生成前先读它的 `visual-styles.md` / `house-style.md` 作为视觉判断依据；本技能的 5 套主题就是把其中 Swiss Pulse / Velvet Standard / Data Drift / Soft Signal / Maximalist Type 五套风格落成确定性 HTML+PPTX 实现。需要高级动画视频版时，才转用 hyperframes；普通演示不要上视频引擎。

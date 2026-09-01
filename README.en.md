@@ -4,7 +4,7 @@
 
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
-> **One sentence or one document → a complete presentation**: HTML web slideshow + PPTX export, 5 visual themes, bilingual Chinese/English.
+> **One sentence or one document → a complete presentation**: HTML web slideshow + PPTX export, 5 visual themes, slide transitions + bullet entrance animations, bilingual Chinese/English.
 
 DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a paragraph, or a Markdown document into a ready-to-present **HTML slideshow** and an editable **PPTX**. Pure Node, **zero runtime dependencies**, one codebase for Windows / macOS / Linux.
 
@@ -16,6 +16,7 @@ DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a par
 | `ppt_themes` tool | Lists the 5 built-in themes and their best use cases |
 | 7 layouts | cover / section / bullets / statement / **quote** / **table** / closing |
 | Speaker notes | `<!-- note: ... -->` comments or the `notes` field: press `S` in the HTML player; native PPTX notes slides (presenter view) |
+| Motion | On by default: HTML slide-in transitions + staggered bullet entrances; native PPTX fade transitions + click-to-reveal bullets. `motion: 'off'` / `--motion off` for a fully static deck |
 | Markdown extras | Tables (`\| ... \|`), blockquotes (`>`), and note comments are auto-detected into matching layouts |
 | `dsh-ppt` skill | A complete six-step SOP registered into DSH |
 | Standalone SKILL.md | Copy `skills/dsh-ppt/` into Claude Code / Cursor / Gemini CLI / Codex for cross-harness use |
