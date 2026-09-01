@@ -1121,6 +1121,7 @@ function buildZip(entries) {
   let offset = 0
 
   for (const entry of entries) {
+    const entryOffset = offset
     const name = Buffer.from(entry.name, 'utf8')
     const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data), 'utf8')
     const crc = crc32(data)
@@ -1160,7 +1161,7 @@ function buildZip(entries) {
     centralHeader.writeUInt16LE(0, 34)
     centralHeader.writeUInt16LE(0, 36)
     centralHeader.writeUInt32LE(0, 38)
-    centralHeader.writeUInt32LE(0, 42)
+    centralHeader.writeUInt32LE(entryOffset, 42)
     central.push(centralHeader, name)
   }
 
