@@ -56,9 +56,10 @@ test('每个已注册工具的 parameters 都是编译好的 JSON Schema', () =>
     assert.deepEqual(JSON.parse(JSON.stringify(def.parameters)), def.parameters)
   }
   const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
-  assert.deepEqual(create.parameters.required, ['title', 'content'])
+  assert.deepEqual(create.parameters.required, ['title'])
   assert.equal(create.parameters.properties.slides.items.type, 'object')
   assert.deepEqual(create.parameters.properties.motion.enum, ['on', 'off'])
+  assert.equal(create.parameters.properties.overwrite.type, 'boolean')
 })
 
 test('output.schema 是纯 JSON（可无损序列化）', () => {
@@ -85,6 +86,7 @@ test('ppt_themes 返回 5 套内置主题并给出可读文本', async () => {
   apply(ctx, {})
   const themes = ctx.tools.defs.find((def) => def.name === 'ppt_themes')
   const out = await themes.execute({})
+  assert.deepEqual(JSON.parse(JSON.stringify(out)), out)
   assert.equal(out.ok, true)
   assert.equal(out.themes.length, 5)
   assert.deepEqual(out.themes.map((theme) => theme.id).sort(), ['bold', 'data', 'soft', 'swiss', 'velvet'])
@@ -107,6 +109,7 @@ test('ppt_create 生成 HTML 放映 + PPTX + manifest 三件套', async () => {
       outputDir: dir,
       fileName: 'meeting-less',
     })
+    assert.deepEqual(JSON.parse(JSON.stringify(out)), out)
     assert.equal(out.ok, true)
     assert.equal(out.theme, 'swiss')
     assert.equal(out.slideCount, 4)
@@ -171,7 +174,7 @@ test('defaultTheme / defaultLang 作为 ppt_create 缺省值', async () => {
   }
 })
 
-test('结构化 slides 走精确控制通道', async () => {
+test('结构化 slides 可在不传 content 时走精确控制通道', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})
   const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-slides-'))
@@ -179,7 +182,6 @@ test('结构化 slides 走精确控制通道', async () => {
     const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
     const out = await create.execute({
       title: '双语 Deck',
-      content: '',
       slides: [
         { layout: 'cover', title: '双语 Deck', subtitle: 'Bilingual subtitle' },
         { layout: 'statement', title: '核心观点', subtitle: 'Core idea' },

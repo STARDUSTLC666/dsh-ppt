@@ -32,7 +32,7 @@ DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一�
 
 ## 兼容性
 
-在 `@deepseek-ai/dsh@0.1.2-alpha.3` 上验证（2026-09-01 全量冒烟通过）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
+已按 `@deepseek-ai/dsh@0.1.2-rc.1` 的工具与技能注册契约验证（2026-09-04；相较 alpha.5 无相关 API / 文档变化）。遵循 cordis 组合包补丁模型（`cordis.patch.yml` + `dsh.bundle.patch`），运行时不 import 任何 `@deepseek-ai/*` 内部模块。
 
 ## 安装
 
@@ -72,6 +72,8 @@ node <skill-dir>/scripts/build-deck.mjs \
 
 输出三件套：
 
+默认不会覆盖已有同名产物：三件套中任一文件存在时会整组追加 `-1`、`-2`… 后缀；只有显式传 `overwrite: true`（CLI 为 `--overwrite`）才会覆盖。
+
 | 文件 | 用途 |
 | --- | --- |
 | `*.html` | 独立网页放映：方向键/滚轮/触屏翻页，F 全屏，G 总览，P 打印或另存 PDF |
@@ -96,7 +98,7 @@ node <skill-dir>/scripts/build-deck.mjs \
 - 每个 `## 小节` → 一页：有列表生成 `bullets` 页，无内容生成 `section` 过渡页。
 - 没有标题的纯文本 → 第一段作封面，后续每 5 句一页。
 - 只有一句话 → 自动生成「封面 → 核心观点 → 结束页」三页完整结构。
-- 需要精确控制时用结构化 `slides`（`cover | section | bullets | statement | closing`）。
+- 需要精确控制时用结构化 `slides`（`cover | section | bullets | statement | quote | table | closing`），表格使用 `rows`，备注使用 `notes`。
 
 ## 配置
 
@@ -112,6 +114,8 @@ node <skill-dir>/scripts/build-deck.mjs \
 ```
 
 也可用环境变量 `DSH_PPT_OUTPUT_DIR` 指定默认输出目录；`ppt_create` 的 `outputDir`/`theme`/`lang` 参数优先级最高。
+
+输出目录按每次工具调用的 `exec.agent.session.header.cwd` 解析：不指定目录时写入当前会话工作目录，相对目录（包括插件配置）相对此目录解析，绝对目录保持原意。直接调用工具而未提供会话时，回退到进程工作目录；并行会话不会修改进程 cwd。工具在加载引擎前和加载完成后检查 `exec.signal`，取消的调用不会继续生成文件；生成和写入阶段为同步操作，开始后会完成本次三件套。
 
 
 ## 卸载
@@ -149,7 +153,7 @@ pnpm run smoke:cli  # 裸 CLI 冒烟，生成 .smoke-deck
 - PPTX 采用空白版式 + 文本框实现：PowerPoint / WPS 中可正常编辑文字，但暂不生成智能母版占位符。
 - 一句话输入自动生成三页最小结构；更丰富的内容需要先扩写成 Markdown 大纲再调用 `ppt_create`。
 - `bilingual` 只双语化播放器界面，不自动翻译内容。
-- 暂不支持图表、图片、演讲者备注与 PPT 动画；这些在 v0.2+ 规划。
+- 暂不支持图表与图片；演讲者备注及 HTML/PPTX 动效已经支持。
 
 ## 协议
 

@@ -1,7 +1,7 @@
 /** dsh-ppt 的公共类型。 */
 export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'closing';
+export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'quote' | 'table' | 'closing';
 export interface PptSlideSpec {
     layout?: PptSlideLayout;
     title?: string;
@@ -9,9 +9,13 @@ export interface PptSlideSpec {
     kicker?: string;
     text?: string;
     bullets?: string[];
+    /** 表格页数据；第一行作为表头。 */
+    rows?: Array<Array<string | number>>;
+    /** 演讲者备注；写入 HTML 备注面板与 PPTX 原生备注页。 */
+    notes?: string;
 }
 export interface PptConfig {
-    /** 默认输出目录；调用 ppt_create 时可用 outputDir 覆盖。默认当前工作目录。 */
+    /** 默认输出目录；调用 ppt_create 时可用 outputDir 覆盖。相对路径按会话工作目录解析。 */
     outputDir?: string;
     /** 单次生成幻灯片上限，默认 60（3–120）。 */
     maxSlides?: number;
@@ -32,6 +36,8 @@ export interface PptCreateArgs {
     motion?: 'on' | 'off';
     outputDir?: string;
     fileName?: string;
+    /** 是否覆盖同名三件套；默认 false，同名时自动选择唯一后缀。 */
+    overwrite?: boolean;
 }
 export interface PptThemeInfo {
     id: string;

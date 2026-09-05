@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "DSH 演示文稿技能 + 工具插件：一句话或一篇 Markdown 文档 → 完整演示文稿（独立 HTML 网页放映 + 可编辑 PPTX 导出），内置 5 套视觉主题与页间转场/要点入场动画（motion 可关），可配置默认主题/语言，中英双语，SKILL.md 薄路由 + references 按需装载，跨 harness。",
   "type": "module",
   "main": "lib/index.js",

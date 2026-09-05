@@ -30,6 +30,7 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --motion <on|off>   页间转场与要点入场动画（默认 on；off 产出纯静态）
   --out <dir>         输出目录（默认当前目录）
   --file <name>       文件名前缀（默认取标题）
+  --overwrite         显式覆盖同名三件套（默认自动追加 -1/-2…）
   --list-themes       列出内置主题
   --help              显示本帮助
 
@@ -40,7 +41,7 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
 `
 
 export function parseArgv(argv) {
-  const args = { content: '', slides: null, lang: 'zh', theme: DEFAULT_THEME, motion: undefined, out: '.', file: '', title: '' }
+  const args = { content: '', slides: null, lang: 'zh', theme: DEFAULT_THEME, motion: undefined, out: '.', file: '', title: '', overwrite: false }
   const positional = []
   for (let i = 0; i < argv.length; i += 1) {
     const raw = String(argv[i])
@@ -55,6 +56,7 @@ export function parseArgv(argv) {
     }
     if (key === '--help' || key === '-h') args.help = true
     else if (key === '--list-themes') args.listThemes = true
+    else if (key === '--overwrite') args.overwrite = true
     else if (key === '--title') args.title = nextValue()
     else if (key === '--content') args.content = nextValue()
     else if (key === '--slides') args.slides = JSON.parse(nextValue())
@@ -110,6 +112,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     motion: args.motion,
     outputDir: resolvePath(args.out || '.'),
     fileName: args.file,
+    overwrite: args.overwrite,
   }
   const result = buildDeck(options)
   log('dsh-ppt 已生成 ' + result.slideCount + ' 页演示文稿：')

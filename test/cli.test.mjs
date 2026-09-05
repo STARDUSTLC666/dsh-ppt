@@ -5,14 +5,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { main, parseArgv } from '../skills/dsh-ppt/scripts/build-deck.mjs'
 
-test('parseArgv 解析长选项与 @file 内容', () => {
-  const args = parseArgv(['--title=测试', '--content', '@deck.md', '--theme', 'data', '--lang=bilingual', '--out', 'dist', '--file', 'pitch'])
+test('parseArgv 解析长选项、@file 内容与显式覆写开关', () => {
+  const args = parseArgv(['--title=测试', '--content', '@deck.md', '--theme', 'data', '--lang=bilingual', '--out', 'dist', '--file', 'pitch', '--overwrite'])
   assert.equal(args.title, '测试')
   assert.equal(args.content, '@deck.md')
   assert.equal(args.theme, 'data')
   assert.equal(args.lang, 'bilingual')
   assert.equal(args.out, 'dist')
   assert.equal(args.file, 'pitch')
+  assert.equal(args.overwrite, true)
 })
 
 test('parseArgv 缺失参数时抛中文错误', () => {

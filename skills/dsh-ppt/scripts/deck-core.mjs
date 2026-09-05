@@ -14,7 +14,7 @@
  * 零运行时依赖，仅使用 node:fs / node:path / node:zlib。
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 
@@ -247,6 +247,22 @@ export function sanitizeFileName(input) {
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
   return cleaned.slice(0, 120) || 'deck'
+}
+
+const DECK_ARTIFACT_EXTENSIONS = ['.html', '.pptx', '.json']
+
+/**
+ * 为三件套选择同一个可用文件名前缀。默认不覆盖：任一产物已存在时，
+ * 整组改用 -1/-2… 后缀，避免新旧 deck 被静默混写。
+ */
+function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
+  const isAvailable = (candidate) => DECK_ARTIFACT_EXTENSIONS.every((ext) => !existsSync(resolvePath(outputDir, candidate + ext)))
+  if (overwrite || isAvailable(requestedFileName)) return requestedFileName
+  for (let index = 1; index < 1000; index += 1) {
+    const candidate = requestedFileName + '-' + index
+    if (isAvailable(candidate)) return candidate
+  }
+  throw new Error('dsh-ppt：找不到可用的输出文件名（同名前缀超过 999 个），请更换 fileName 或显式允许 overwrite。')
 }
 
 export function escapeXml(value) {
@@ -654,13 +670,15 @@ export function normalizeBuildOptions(options = {}) {
   if (deck.slides.length < 1) throw new Error('dsh-ppt：没有可生成的幻灯片')
   const outputDir = resolvePath(String(options.outputDir ?? '.').trim() || '.')
   const fileName = sanitizeFileName(options.fileName ?? title)
-  return { title, theme, language, motion, deck, outputDir, fileName }
+  const overwrite = options.overwrite === true
+  return { title, theme, language, motion, deck, outputDir, fileName, overwrite }
 }
 
 export function buildDeck(options = {}) {
   const normalized = normalizeBuildOptions(options)
-  const { title, theme, language, motion, deck, outputDir, fileName } = normalized
+  const { title, theme, language, motion, deck, outputDir, overwrite } = normalized
   mkdirSync(outputDir, { recursive: true })
+  const fileName = resolveDeckFileName(outputDir, normalized.fileName, overwrite)
 
   const manifest = {
     version: DECK_VERSION,

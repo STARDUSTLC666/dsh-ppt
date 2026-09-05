@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -100,6 +100,31 @@ test('buildDeck 写入 HTML / PPTX / JSON 三件套', () => {
     assert.ok(pptx.includes(Buffer.from('ppt/slides/slide1.xml')))
     const manifest = JSON.parse(readFileSync(out.jsonPath, 'utf8'))
     assert.equal(manifest.slides.length, out.slideCount)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('buildDeck 默认不覆盖整组三件套，overwrite=true 才显式覆盖', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-overwrite-'))
+  try {
+    const first = buildDeck({ title: '第一版', content: '第一版内容。', outputDir: dir, fileName: 'deck' })
+    const firstJson = readFileSync(first.jsonPath, 'utf8')
+    const second = buildDeck({ title: '第二版', content: '第二版内容。', outputDir: dir, fileName: 'deck' })
+    assert.equal(first.jsonPath, join(dir, 'deck.json'))
+    assert.equal(second.jsonPath, join(dir, 'deck-1.json'))
+    assert.equal(readFileSync(first.jsonPath, 'utf8'), firstJson, '默认调用不能改写第一版')
+    for (const path of [second.htmlPath, second.pptxPath, second.jsonPath]) assert.equal(existsSync(path), true)
+
+    const partialPptx = join(dir, 'partial.pptx')
+    writeFileSync(partialPptx, 'user-owned')
+    const partial = buildDeck({ title: '部分冲突', content: '不能混写三件套。', outputDir: dir, fileName: 'partial' })
+    assert.equal(partial.htmlPath, join(dir, 'partial-1.html'))
+    assert.equal(readFileSync(partialPptx, 'utf8'), 'user-owned')
+
+    const replaced = buildDeck({ title: '显式覆盖', content: '覆盖后的内容。', outputDir: dir, fileName: 'deck', overwrite: true })
+    assert.equal(replaced.jsonPath, first.jsonPath)
+    assert.equal(JSON.parse(readFileSync(first.jsonPath, 'utf8')).title, '显式覆盖')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

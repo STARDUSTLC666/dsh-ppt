@@ -30,13 +30,16 @@ test('outputDir 优先显式配置，其次环境变量', () => {
 
 test('defaultTheme / defaultLang 解析与校验', () => {
   assert.deepEqual(resolvePptConfig({ defaultTheme: ' bold ', defaultLang: ' en ' }), { outputDir: '', maxSlides: 60, defaultTheme: 'bold', defaultLang: 'en' })
+  assert.throws(() => resolvePptConfig({ defaultTheme: 'neon' }), /defaultTheme/)
   assert.throws(() => resolvePptConfig({ defaultLang: 'jp' }), /defaultLang/)
 })
 
-test('maxSlides 夹取到 3–120，非法值兜底', () => {
-  assert.equal(resolvePptConfig({ maxSlides: 1 }).maxSlides, 3)
-  assert.equal(resolvePptConfig({ maxSlides: 999 }).maxSlides, 120)
-  assert.equal(resolvePptConfig({ maxSlides: 'x' }).maxSlides, 60)
+test('无效配置直接报错，不静默夹取或回退', () => {
+  assert.throws(() => resolvePptConfig({ maxSlides: 1 }), /maxSlides/)
+  assert.throws(() => resolvePptConfig({ maxSlides: 999 }), /maxSlides/)
+  assert.throws(() => resolvePptConfig({ maxSlides: 'x' }), /maxSlides/)
+  assert.throws(() => resolvePptConfig({ outputDir: 42 }), /outputDir/)
+  assert.throws(() => resolvePptConfig('bad'), /配置必须是对象/)
 })
 
 test('clampInt 边界与兜底', () => {

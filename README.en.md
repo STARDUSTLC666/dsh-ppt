@@ -30,7 +30,7 @@ Example:
 
 ## Compatibility
 
-Verified against `@deepseek-ai/dsh@0.1.2-alpha.3` on 2026-09-01. Built for the cordis patch-bundle plugin model (`cordis.patch.yml` + `dsh.bundle.patch`). No runtime imports of `@deepseek-ai/*` internals.
+Verified against the tool and skill registration contracts in `@deepseek-ai/dsh@0.1.2-rc.1` on 2026-09-04 (no relevant API or documentation changes from alpha.5). Built for the cordis patch-bundle plugin model (`cordis.patch.yml` + `dsh.bundle.patch`). No runtime imports of `@deepseek-ai/*` internals.
 
 ## Installation
 
@@ -79,6 +79,8 @@ node <skill-dir>/scripts/build-deck.mjs \
 
 Artifacts:
 
+Existing artifacts are not overwritten by default: if any member of the trio already exists, the whole set receives a shared `-1`, `-2`, ... suffix. Replacement requires explicit `overwrite: true` (or `--overwrite` in the CLI).
+
 | File | Purpose |
 | --- | --- |
 | `*.html` | Standalone web slideshow: arrow keys/wheel/touch navigation, F fullscreen, G overview, P print/save as PDF |
@@ -103,7 +105,7 @@ Themes are derived from [dsh-hyperframes](https://github.com/STARDUSTLC666/dsh-h
 - Each `## section` becomes one slide: lists produce `bullets` slides; empty sections produce `section` dividers.
 - Plain text without headings: the first paragraph is the cover, then every 5 sentences become one slide.
 - A single sentence automatically produces a complete 3-slide structure: cover → core idea → closing.
-- For precise control, use structured `slides` (`cover | section | bullets | statement | closing`).
+- For precise control, use structured `slides` (`cover | section | bullets | statement | quote | table | closing`), with `rows` for tables and `notes` for speaker notes.
 
 ## Configuration
 
@@ -119,6 +121,8 @@ No required configuration. Optional:
 ```
 
 The `DSH_PPT_OUTPUT_DIR` env var can also set the default output directory; the `ppt_create` `outputDir`/`theme`/`lang` arguments have the highest priority.
+
+Output paths resolve against each tool call's `exec.agent.session.header.cwd`: omitted paths use the session directory, relative paths (including plugin configuration) resolve within it, and absolute paths keep their meaning. Direct calls without a session fall back to the process working directory; concurrent sessions never change process cwd. Tools check `exec.signal` before and after loading the engine, so cancelled calls do not proceed to generation. Rendering and writing are synchronous and finish the artifact trio once started.
 
 ## Bilingual support
 
@@ -147,7 +151,7 @@ pnpm run smoke:cli  # bare CLI smoke test, generates .smoke-deck
 - The PPTX uses a blank layout plus text boxes: text is editable in PowerPoint / WPS, but no smart master placeholders yet.
 - A one-sentence input produces a minimal 3-slide structure; for richer decks, expand the content into a Markdown outline first.
 - `bilingual` only localizes the player UI; it does not translate content.
-- Charts, images, speaker notes, and PPT animations are planned for v0.2+.
+- Charts and images are not supported yet; speaker notes and HTML/PPTX motion are already supported.
 
 ## License
 
