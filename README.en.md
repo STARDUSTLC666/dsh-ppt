@@ -30,7 +30,7 @@ Example:
 
 ## Compatibility
 
-Verified against the tool and skill registration contracts in `@deepseek-ai/dsh@0.1.2-rc.1` on 2026-09-04 (no relevant API or documentation changes from alpha.5). Built for the cordis patch-bundle plugin model (`cordis.patch.yml` + `dsh.bundle.patch`). No runtime imports of `@deepseek-ai/*` internals.
+Verified with official `@deepseek-ai/dsh@0.1.5-rc.1` and Node `24.16.0` on 2026-09-11: all 18 components load alongside Modlens, with passing tool-schema, skill-registration and offline read-only invocation checks. Uses the `cordis.patch.yml` + `dsh.bundle.patch` bundle model. Node requirements match this Harness release: 22.19 or later within 22.x, or 24 or later. Live external-service workflows require separate configuration and validation.
 
 ## Installation
 
