@@ -15,4 +15,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # lib/ 是入库的发布产物：构建结果必须与提交内容一致，否则说明有人改了 lib 没改 src。
+      - run: pnpm run build
+      - run: git diff --exit-code -- lib
       - run: pnpm test
