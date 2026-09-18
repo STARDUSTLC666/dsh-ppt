@@ -14,11 +14,25 @@
  * 零运行时依赖，仅使用 node:fs / node:path / node:zlib。
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 
-export const DECK_VERSION = '0.3.0'
+/**
+ * manifest 版本跟随发布包 package.json；把 skills/dsh-ppt 独立复制到其他
+ * harness（没有 package.json）时回退为 0.0.0，避免版本号悄悄漂移。
+ */
+function readDeckVersion() {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))
+    const version = String(pkg.version ?? '').trim()
+    return version !== '' ? version : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
+export const DECK_VERSION = readDeckVersion()
 
 // ---------------------------------------------------------------------------
 // 主题
@@ -299,7 +313,7 @@ export function stripInlineMarkdown(value) {
 export function splitSentences(value) {
   const text = String(value ?? '').trim()
   if (text === '') return []
-  const parts = text.split(/(?<=[.!?。！？…])\s+/).map((part) => part.trim()).filter(Boolean)
+  const parts = text.split(/(?<=[。！？])|(?<=[.!?…])\s+/).map((part) => part.trim()).filter(Boolean)
   return parts.length > 0 ? parts : [text]
 }
 
@@ -552,16 +566,16 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     if (section.heading === '') {
       const points = [...section.bullets, ...section.paragraphs]
         .flatMap((part) => splitSentences(part))
-        .slice(0, 8)
-      if (points.length > 0) {
+      // 超过 8 条自动续页，不再静默丢弃；备注只挂在第一页
+      for (const [pageIndex, pagePoints] of chunk(points, 8).entries()) {
         pointIndex += 1
         const slide = {
           layout: 'bullets',
           kicker: ui.pointKicker + ' ' + pointIndex,
-          title: truncate(points[0], 40) || ui.pointKicker + ' ' + pointIndex,
-          bullets: points,
+          title: truncate(pagePoints[0], 40) || ui.pointKicker + ' ' + pointIndex,
+          bullets: pagePoints,
         }
-        if (specials.length === 0 && notes !== '') slide.notes = notes
+        if (pageIndex === 0 && specials.length === 0 && notes !== '') slide.notes = notes
         slides.push(slide)
       }
       continue
@@ -569,11 +583,16 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     const points = [
       ...section.bullets,
       ...section.paragraphs.flatMap((part) => splitSentences(part)),
-    ].slice(0, 8)
-    if (points.length > 0) {
-      const slide = { layout: 'bullets', kicker: section.heading, title: section.heading, bullets: points }
-      if (specials.length === 0 && notes !== '') slide.notes = notes
-      slides.push(slide)
+    ]
+    const pages = chunk(points, 8)
+    if (pages.length > 0) {
+      // 超过 8 条自动续页，不再静默丢弃；备注只挂在第一页
+      pages.forEach((pagePoints, pageIndex) => {
+        const label = pageIndex === 0 ? section.heading : section.heading + '（续）'
+        const slide = { layout: 'bullets', kicker: label, title: label, bullets: pagePoints }
+        if (pageIndex === 0 && specials.length === 0 && notes !== '') slide.notes = notes
+        slides.push(slide)
+      })
     } else if (specials.length === 0) {
       const slide = { layout: 'section', kicker: section.heading, title: section.heading }
       if (notes !== '') slide.notes = notes
@@ -1058,6 +1077,7 @@ function paragraphXml(text, options = {}) {
     size = 2000,
     color = 'FFFFFF',
     bold = false,
+    lang = 'zh-CN',
     align = 'l',
     bullet = false,
     font = 'Arial',
@@ -1076,7 +1096,7 @@ function paragraphXml(text, options = {}) {
     pPr = '<a:pPr' + (parts.length > 0 ? ' ' + parts.join(' ') : '') + '><a:buNone/></a:pPr>'
   }
   return '<a:p>' + pPr +
-    '<a:r><a:rPr lang="zh-CN" sz="' + size + '" b="' + (bold ? 1 : 0) + '" dirty="0">' +
+    '<a:r><a:rPr lang="' + lang + '" sz="' + size + '" b="' + (bold ? 1 : 0) + '" dirty="0">' +
     '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
     '<a:latin typeface="' + escapeXml(runFont) + '"/><a:ea typeface="' + escapeXml(runFont) + '"/></a:rPr>' +
     '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p>'
@@ -1103,8 +1123,9 @@ function accentBarXml(id, name, box, color) {
 }
 
 /** 原生 OOXML 表格（graphicFrame + a:tbl）：首行主题色表头，隔行面板色。 */
-function tableGraphicXml(id, name, box, rows, theme) {
+function tableGraphicXml(id, name, box, rows, theme, langId) {
   const p = theme.palette
+  const lang = langId || 'zh-CN'
   const font = pptxFontName(theme.fonts.body)
   const safeRows = rows.length > 0 ? rows : [['']]
   const cols = Math.max(1, safeRows[0].length)
@@ -1113,7 +1134,7 @@ function tableGraphicXml(id, name, box, rows, theme) {
   const rowH = 420000
   const cellXml = (text, fill, color, bold) =>
     '<a:tc><a:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr>' +
-    '<a:r><a:rPr lang="zh-CN" sz="1400" b="' + (bold ? 1 : 0) + '" dirty="0">' +
+    '<a:r><a:rPr lang="' + lang + '" sz="1400" b="' + (bold ? 1 : 0) + '" dirty="0">' +
     '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
     '<a:latin typeface="' + escapeXml(font) + '"/><a:ea typeface="' + escapeXml(font) + '"/></a:rPr>' +
     '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p></a:txBody>' +
@@ -1142,6 +1163,9 @@ function slideShapeList(slide, index, total, theme, langId) {
   const p = theme.palette
   const font = pptxFontName(theme.fonts.heading)
   const bodyFont = pptxFontName(theme.fonts.body) // 保留：v0.1 后续用于统一正文字体
+  const lang = langId || 'zh-CN'
+  // PPTX 每个文本 run 的语言跟随 deck.lang（zh-CN / en-US），不再写死中文
+  const para = (content, options = {}) => paragraphXml(content, { lang, ...options })
   const shapes = []
   const kicker = slide.kicker || ''
   const title = slide.title || ''
@@ -1153,95 +1177,95 @@ function slideShapeList(slide, index, total, theme, langId) {
   if (slide.layout === 'cover') {
     shapes.push(accentBarXml(idBase + 1, 'Accent bar', { x: 914400, y: 2250000, w: 240000, h: 1600000 }, p.accent))
     shapes.push(textShapeXml(idBase + 2, 'Title', { x: 1550000, y: 2160000, w: 9250000, h: 1800000 }, [
-      paragraphXml(title, { size: 4400, color: p.fg, bold: true, font }),
+      para(title, { size: 4400, color: p.fg, bold: true, font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 3, 'Subtitle', { x: 1570000, y: 4150000, w: 9000000, h: 1200000 }, [
-        paragraphXml(subtitle, { size: 2200, color: p.muted, font: theme.fonts.body }),
+        para(subtitle, { size: 2200, color: p.muted, font: theme.fonts.body }),
       ]))
     }
     if (kicker !== '') {
       shapes.push(textShapeXml(idBase + 4, 'Kicker', { x: 1570000, y: 5800000, w: 7000000, h: 500000 }, [
-        paragraphXml(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
+        para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
       ]))
     }
   } else if (slide.layout === 'section') {
     if (kicker !== '') {
       shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 1050000, y: 2250000, w: 9000000, h: 500000 }, [
-        paragraphXml(kicker, { size: 1600, color: p.accent, bold: true, font: theme.fonts.body }),
+        para(kicker, { size: 1600, color: p.accent, bold: true, font: theme.fonts.body }),
       ]))
     }
     shapes.push(accentBarXml(idBase + 2, 'Accent bar', { x: 1050000, y: 2850000, w: 1600000, h: 160000 }, p.accent2))
     shapes.push(textShapeXml(idBase + 3, 'Title', { x: 1050000, y: 3150000, w: 10200000, h: 1400000 }, [
-      paragraphXml(title, { size: 4000, color: p.fg, bold: true, font }),
+      para(title, { size: 4000, color: p.fg, bold: true, font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 4, 'Subtitle', { x: 1070000, y: 4750000, w: 9000000, h: 900000 }, [
-        paragraphXml(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
+        para(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
       ]))
     }
   } else if (slide.layout === 'statement') {
     shapes.push(accentBarXml(idBase + 1, 'Accent bar', { x: 914400, y: 1900000, w: 200000, h: 2800000 }, p.accent))
     shapes.push(textShapeXml(idBase + 2, 'Statement', { x: 1500000, y: 1950000, w: 9400000, h: 2700000 }, [
-      paragraphXml(title || slide.text || '', { size: 3600, color: p.fg, bold: true, font }),
+      para(title || slide.text || '', { size: 3600, color: p.fg, bold: true, font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 3, 'Subtitle', { x: 1520000, y: 4900000, w: 9000000, h: 800000 }, [
-        paragraphXml(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
+        para(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
       ]))
     }
   } else if (slide.layout === 'quote') {
     shapes.push(textShapeXml(idBase + 1, 'Quote mark', { x: 900000, y: 1050000, w: 1700000, h: 1900000 }, [
-      paragraphXml('\u201C', { size: 9600, color: p.accent, bold: true, font }),
+      para('\u201C', { size: 9600, color: p.accent, bold: true, font }),
     ]))
     shapes.push(textShapeXml(idBase + 2, 'Quote', { x: 1050000, y: 2550000, w: 10100000, h: 2600000 }, [
-      paragraphXml(title || slide.text || '', { size: 3000, color: p.fg, bold: true, font }),
+      para(title || slide.text || '', { size: 3000, color: p.fg, bold: true, font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 3, 'Attribution', { x: 1070000, y: 5300000, w: 9000000, h: 600000 }, [
-        paragraphXml('\u2014\u2014 ' + subtitle, { size: 1600, color: p.muted, font: theme.fonts.body }),
+        para('\u2014\u2014 ' + subtitle, { size: 1600, color: p.muted, font: theme.fonts.body }),
       ]))
     }
   } else if (slide.layout === 'table') {
     const hasTitle = title !== '' && title !== kicker
     if (kicker !== '') {
       shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 900000, y: 420000, w: 10000000, h: 420000 }, [
-        paragraphXml(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
+        para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
       ]))
     }
     if (hasTitle) {
       shapes.push(textShapeXml(idBase + 2, 'Title', { x: 900000, y: 920000, w: 10300000, h: 800000 }, [
-        paragraphXml(title, { size: 3400, color: p.fg, bold: true, font }),
+        para(title, { size: 3400, color: p.fg, bold: true, font }),
       ]))
     }
-    shapes.push(tableGraphicXml(idBase + 3, 'Table', { x: 900000, y: hasTitle ? 1950000 : 900000, w: 10300000 }, Array.isArray(slide.rows) ? slide.rows : [], theme))
+    shapes.push(tableGraphicXml(idBase + 3, 'Table', { x: 900000, y: hasTitle ? 1950000 : 900000, w: 10300000 }, Array.isArray(slide.rows) ? slide.rows : [], theme, lang))
   } else if (slide.layout === 'closing') {
     shapes.push(textShapeXml(idBase + 1, 'Title', { x: 1050000, y: 2300000, w: 10200000, h: 1700000 }, [
-      paragraphXml(title || '谢谢', { size: 5200, color: p.fg, bold: true, align: 'ctr', font }),
+      para(title || '谢谢', { size: 5200, color: p.fg, bold: true, align: 'ctr', font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 2, 'Subtitle', { x: 1050000, y: 4200000, w: 10200000, h: 900000 }, [
-        paragraphXml(subtitle, { size: 2000, color: p.accent, bold: true, align: 'ctr', font: theme.fonts.body }),
+        para(subtitle, { size: 2000, color: p.accent, bold: true, align: 'ctr', font: theme.fonts.body }),
       ]))
     }
   } else {
     // bullets（默认布局）
     if (kicker !== '') {
       shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 900000, y: 420000, w: 10000000, h: 420000 }, [
-        paragraphXml(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
+        para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
       ]))
     }
     shapes.push(textShapeXml(idBase + 2, 'Title', { x: 900000, y: 920000, w: 10300000, h: 800000 }, [
-      paragraphXml(title, { size: 3400, color: p.fg, bold: true, font }),
+      para(title, { size: 3400, color: p.fg, bold: true, font }),
     ]))
     const bodyParagraphs = bullets.length > 0
-      ? bullets.map((bullet) => paragraphXml(bullet, { size: 2000, color: p.fg, bullet: true, font: theme.fonts.body, spaceAfter: 600 }))
-      : [paragraphXml(subtitle || '', { size: 2000, color: p.fg, font: theme.fonts.body })]
+      ? bullets.map((bullet) => para(bullet, { size: 2000, color: p.fg, bullet: true, font: theme.fonts.body, spaceAfter: 600 }))
+      : [para(subtitle || '', { size: 2000, color: p.fg, font: theme.fonts.body })]
     shapes.push(textShapeXml(idBase + 3, 'Body', { x: 1050000, y: 1850000, w: 10100000, h: 4500000 }, bodyParagraphs))
   }
 
   shapes.push(textShapeXml(idBase + 9, 'Page number', { x: 10600000, y: 6250000, w: 1200000, h: 400000 }, [
-    paragraphXml(footer, { size: 1000, color: p.muted, align: 'r', font: theme.fonts.body }),
+    para(footer, { size: 1000, color: p.muted, align: 'r', font: theme.fonts.body }),
   ]))
 
   return shapes.join('')
@@ -1366,10 +1390,11 @@ function notesMasterRelXml() {
     '</Relationships>'
 }
 
-function notesSlideXml(notes) {
+function notesSlideXml(notes, langId) {
+  const lang = langId || 'zh-CN'
   const paragraphs = String(notes ?? '').split('\n')
     .filter((line) => line.trim() !== '')
-    .map((line) => '<a:p><a:r><a:rPr lang="zh-CN" sz="1200" dirty="0"/><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>')
+    .map((line) => '<a:p><a:r><a:rPr lang="' + lang + '" sz="1200" dirty="0"/><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>')
     .join('')
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
@@ -1635,10 +1660,10 @@ export function buildPptx(manifest, themeInput, languageInput) {
   }
   slides.forEach((slide, index) => {
     const hasNotes = noteIndexes.includes(index)
-    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.id, motion) })
+    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.attr, motion) })
     entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml(hasNotes, index + 1) })
     if (hasNotes) {
-      entries.push({ name: 'ppt/notesSlides/notesSlide' + (index + 1) + '.xml', data: notesSlideXml(slide.notes) })
+      entries.push({ name: 'ppt/notesSlides/notesSlide' + (index + 1) + '.xml', data: notesSlideXml(slide.notes, language.attr) })
       entries.push({ name: 'ppt/notesSlides/_rels/notesSlide' + (index + 1) + '.xml.rels', data: notesSlideRelXml(index + 1) })
     }
   })

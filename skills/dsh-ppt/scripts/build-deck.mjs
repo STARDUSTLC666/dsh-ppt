@@ -11,7 +11,7 @@
  *   node build-deck.mjs --list-themes
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildDeck, listThemes, THEME_IDS, DEFAULT_THEME } from './deck-core.mjs'
@@ -99,6 +99,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     content = await readStdin(io.stdin ?? process.stdin)
   } else if (content.startsWith('@')) {
     content = readFileSync(resolvePath(content.slice(1)), 'utf8')
+  } else if (content.trim() !== '' && existsSync(resolvePath(content.trim()))) {
+    // README / SKILL.md 的示例直接传文件路径（不带 @）时也按文件读取
+    content = readFileSync(resolvePath(content.trim()), 'utf8')
   } else if (content.trim() === '' && slides === null) {
     throw new Error('dsh-ppt CLI：--content 不能为空（或用 --slides 传结构化幻灯片）')
   }
