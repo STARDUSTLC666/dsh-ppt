@@ -14,7 +14,7 @@
  * 零运行时依赖，仅使用 node:fs / node:path / node:zlib。
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 
@@ -253,13 +253,17 @@ export function clampInt(value, fallback, min, max) {
   return Math.min(max, Math.max(min, n))
 }
 
+// Windows 保留设备名：首个点之前的主名命中即不可用（NUL、com1、aux.report.html 都算）。
+const WINDOWS_RESERVED_FILE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i
+
 export function sanitizeFileName(input) {
   const base = String(input ?? 'deck').trim().replace(/\.(html?|pptx|json)$/i, '')
-  const cleaned = base
+  let cleaned = base
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
+  if (WINDOWS_RESERVED_FILE_NAME.test(cleaned)) cleaned = 'deck-' + cleaned
   return cleaned.slice(0, 120) || 'deck'
 }
 
@@ -270,7 +274,10 @@ const DECK_ARTIFACT_EXTENSIONS = ['.html', '.pptx', '.json']
  * 整组改用 -1/-2… 后缀，避免新旧 deck 被静默混写。
  */
 function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
-  const isAvailable = (candidate) => DECK_ARTIFACT_EXTENSIONS.every((ext) => !existsSync(resolvePath(outputDir, candidate + ext)))
+  // 一次 readdir 建集，替代逐个候选 existsSync 探测（最坏 ~3000 次 stat）；
+  // 统一小写比较，避免 Windows 大小写不敏感文件系统把已占用的名字判成可用。
+  const existing = new Set(readdirSync(outputDir).map((name) => name.toLowerCase()))
+  const isAvailable = (candidate) => DECK_ARTIFACT_EXTENSIONS.every((ext) => !existing.has((candidate + ext).toLowerCase()))
   if (overwrite || isAvailable(requestedFileName)) return requestedFileName
   for (let index = 1; index < 1000; index += 1) {
     const candidate = requestedFileName + '-' + index
@@ -693,6 +700,64 @@ export function normalizeBuildOptions(options = {}) {
   return { title, theme, language, motion, deck, outputDir, fileName, overwrite }
 }
 
+/**
+ * 三件套落盘：三份内容全部先写同目录临时文件，再逐个 rename 提交。
+ * 任一步失败都清理临时文件，并把已提交的目标恢复为调用前的内容，
+ * 避免出现「json/html 已更新、pptx 还是旧的」这类混版状态。
+ */
+function commitDeckArtifacts(artifacts) {
+  const stamp = process.pid.toString(36) + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+  const items = artifacts.map((item, index) => ({ ...item, tempPath: item.path + '.' + stamp + '-' + index + '.tmp' }))
+  const removeTemp = (item) => {
+    try {
+      rmSync(item.tempPath, { force: true })
+    } catch {}
+  }
+
+  // 阶段 0：记下已有产物内容用于回滚；读不出来（如被同名目录占用）先报错，不碰任何文件。
+  const previous = new Map()
+  for (const item of items) {
+    if (!existsSync(item.path)) continue
+    try {
+      previous.set(item.path, readFileSync(item.path))
+    } catch (error) {
+      throw new Error('dsh-ppt：三件套写入失败（' + item.path + ' 已存在但无法读取），原文件未改动：' + error.message)
+    }
+  }
+
+  // 阶段 1：全部写临时文件；这一步失败时目标文件尚未被改动。
+  let written = 0
+  try {
+    for (const item of items) {
+      writeFileSync(item.tempPath, item.data, item.encoding)
+      written += 1
+    }
+  } catch (error) {
+    for (const item of items.slice(0, written + 1)) removeTemp(item)
+    throw new Error('dsh-ppt：写入临时文件失败（' + items[written].path + '），原三件套未改动：' + error.message)
+  }
+
+  // 阶段 2：逐个 rename 提交；中途失败则把已提交的目标回滚成旧内容。
+  const committed = []
+  try {
+    for (const item of items) {
+      renameSync(item.tempPath, item.path)
+      committed.push(item)
+    }
+  } catch (error) {
+    const failedPath = items[committed.length].path
+    for (const item of items) removeTemp(item)
+    for (const item of committed) {
+      try {
+        const previousData = previous.get(item.path)
+        if (previousData === undefined) rmSync(item.path, { force: true })
+        else writeFileSync(item.path, previousData)
+      } catch {}
+    }
+    throw new Error('dsh-ppt：提交三件套失败（' + failedPath + '），已回滚为原文件：' + error.message)
+  }
+}
+
 export function buildDeck(options = {}) {
   const normalized = normalizeBuildOptions(options)
   const { title, theme, language, motion, deck, outputDir, overwrite } = normalized
@@ -712,9 +777,12 @@ export function buildDeck(options = {}) {
   const htmlPath = resolvePath(outputDir, fileName + '.html')
   const pptxPath = resolvePath(outputDir, fileName + '.pptx')
 
-  writeFileSync(jsonPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8')
-  writeFileSync(htmlPath, renderHtml(manifest, theme, language), 'utf8')
-  writeFileSync(pptxPath, buildPptx(manifest, theme, language))
+  // 先生成三份内容再统一提交：生成阶段抛错时也不会留下半套文件。
+  commitDeckArtifacts([
+    { path: jsonPath, data: JSON.stringify(manifest, null, 2) + '\n', encoding: 'utf8' },
+    { path: htmlPath, data: renderHtml(manifest, theme, language), encoding: 'utf8' },
+    { path: pptxPath, data: buildPptx(manifest, theme, language) },
+  ])
 
   return {
     ok: true,

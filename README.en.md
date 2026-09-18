@@ -128,7 +128,7 @@ Output paths resolve against each tool call's `exec.agent.session.header.cwd`: o
 
 - `lang` argument: `zh` (default) / `en` / `bilingual` controls the player UI, page numbers, and closing defaults.
 - Content language is up to the author: for a bilingual deck, prefer "Chinese title + English subtitle" or generate two decks from the same outline.
-- Plugin docs, skill content, and error messages are bilingual.
+- Plugin docs come in Chinese (README.md) and English (this file); CLI and skill error messages are in Chinese.
 
 ## Engineering quality
 

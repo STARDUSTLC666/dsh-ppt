@@ -130,7 +130,7 @@ dsh plugin --profile web remove dsh-ppt
 
 - `lang` 参数：`zh`（默认）/ `en` / `bilingual`，控制播放器界面、页码与结束页默认文案。
 - 内容语言由你撰写：双语 deck 推荐「中文标题 + 英文副标题」，或同一大纲分别生成中英两份。
-- 插件自身文档、技能正文、错误提示均中英双语。
+- 插件文档提供中英两版（README.md / README.en.md）；CLI 与技能的报错提示为中文。
 
 ## 工程质量
 
