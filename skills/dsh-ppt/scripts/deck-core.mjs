@@ -153,6 +153,7 @@ export const LANGUAGES = {
       statementKicker: '核心观点',
       quoteKicker: '金句',
       tableKicker: '数据',
+      continuation: '（续）',
       notesLabel: '演讲者备注',
       notesToggle: '备注',
       closingTitle: '谢谢',
@@ -173,6 +174,7 @@ export const LANGUAGES = {
       statementKicker: 'Core idea',
       quoteKicker: 'Quote',
       tableKicker: 'Data',
+      continuation: ' (continued)',
       notesLabel: 'Speaker notes',
       notesToggle: 'Notes',
       closingTitle: 'Thank You',
@@ -193,6 +195,7 @@ export const LANGUAGES = {
       statementKicker: '核心观点 · Core Idea',
       quoteKicker: '金句 · Quote',
       tableKicker: '数据 · Data',
+      continuation: '（续 · continued）',
       notesLabel: '演讲者备注 · Speaker notes',
       notesToggle: '备注 · Notes',
       closingTitle: '谢谢 · Thank You',
@@ -368,20 +371,37 @@ function quoteSlideFrom(section, ui) {
   return { layout: 'quote', kicker: ui.quoteKicker, title: truncate(lines.join(' '), 220), subtitle: attribution }
 }
 
-function tableSlideFrom(section, ui) {
+function paginateTable(slide, continuation = '（续）') {
+  const rows = slide.rows
+  const columns = Math.max(...rows.map(row => row.length))
+  if (columns > 8) throw new Error('dsh-ppt：表格最多 8 列，请拆成多个表格后重试 / tables support up to 8 columns')
+  if (rows.some(row => row.some(cell => [...cell].length > 60))) {
+    throw new Error('dsh-ppt：表格单元格最多 60 个字符，请精简或拆分内容后重试 / cells support up to 60 characters')
+  }
+  const padded = rows.map(row => Array.from({ length: columns }, (_, i) => row[i] ?? ''))
+  const pages = chunk(padded.slice(1), 8)
+  if (pages.length === 0) pages.push([])
+  return pages.map((body, index) => {
+    const { notes, ...rest } = slide
+    const title = slide.title + (index === 0 ? '' : continuation)
+    // 同名 kicker/title 共用紧凑标题；续页不能凭空多出一行大标题挤压表格。
+    return { ...rest, title, kicker: slide.kicker === slide.title ? title : slide.kicker, rows: [padded[0], ...body],
+      ...(index === 0 && notes ? { notes } : {}) }
+  })
+}
+
+function tableSlidesFrom(section, ui) {
   const table = section.table
   const rows = [table.header, ...table.rows]
-    .slice(0, 9)
-    .map((row) => row.slice(0, 8).map((cell) => truncate(cell, 60)))
   const heading = section.heading || ui.tableKicker
-  return { layout: 'table', kicker: heading, title: heading, rows }
+  return paginateTable({ layout: 'table', kicker: heading, title: heading, rows }, ui.continuation)
 }
 
 /** 把一个 section 里的金句/表格拆成独立页；备注附着到第一张产出页。 */
 function specialSlidesFor(section, ui) {
   const out = []
   if (section.quote.length > 0) out.push(quoteSlideFrom(section, ui))
-  if (section.table !== null) out.push(tableSlideFrom(section, ui))
+  if (section.table !== null) out.push(...tableSlidesFrom(section, ui))
   if (out.length > 0 && section.notes.length > 0) out[0].notes = section.notes.join('\n')
   return out
 }
@@ -405,7 +425,8 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   let firstH1Seen = false
 
   const flush = () => {
-    if (current !== null && (current.heading !== '' || current.bullets.length > 0 || current.paragraphs.length > 0)) {
+    if (current !== null && (current.heading !== '' || current.bullets.length > 0 || current.paragraphs.length > 0
+      || current.table !== null || current.quote.length > 0)) {
       sections.push(current)
     }
     current = null
@@ -460,7 +481,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       if (isTableSeparator(tableCells)) continue
       if (current.table === null) {
         current.table = { header: tableCells.map((cell) => stripInlineMarkdown(cell)), rows: [] }
-      } else if (current.table.rows.length < 12) {
+      } else {
         current.table.rows.push(tableCells.map((cell) => stripInlineMarkdown(cell)))
       }
       continue
@@ -508,6 +529,15 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       synthetic.bullets = extras
       bodySections = [synthetic]
     }
+  }
+
+  // 表格和引用不能只挂在封面节上，否则首个 H1 后没有 H2 时会丢失。
+  if (coverSource && (coverSource.table !== null || coverSource.quote.length > 0)) {
+    const special = createSection()
+    special.table = coverSource.table
+    special.quote = coverSource.quote
+    special.notes = coverSource.notes
+    bodySections.unshift(special)
   }
 
   if (bodySections.length === 0) {
@@ -595,7 +625,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     if (pages.length > 0) {
       // 超过 8 条自动续页，不再静默丢弃；备注只挂在第一页
       pages.forEach((pagePoints, pageIndex) => {
-        const label = pageIndex === 0 ? section.heading : section.heading + '（续）'
+        const label = pageIndex === 0 ? section.heading : section.heading + ui.continuation
         const slide = { layout: 'bullets', kicker: label, title: label, bullets: pagePoints }
         if (pageIndex === 0 && specials.length === 0 && notes !== '') slide.notes = notes
         slides.push(slide)
@@ -641,8 +671,6 @@ function normalizeSlide(raw, index) {
       rows = source.rows
         .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => stripInlineMarkdown(String(cell))))
         .filter((row) => row.some((cell) => cell !== ''))
-        .slice(0, 9)
-        .map((row) => row.slice(0, 8).map((cell) => truncate(cell, 60)))
     }
     if (rows.length === 0) {
       // 没有表格数据的 table 页退化成要点页，避免产出空白版式
@@ -653,15 +681,22 @@ function normalizeSlide(raw, index) {
   return { layout, kicker, title, subtitle, text, bullets, ...(notes !== '' ? { notes } : {}) }
 }
 
-export function normalizeSlides(rawSlides, maxSlides = 60) {
+function checkSlideLimit(slides, limit) {
+  if (slides.length > limit) {
+    throw new Error('dsh-ppt：生成后共 ' + slides.length + ' 页，超过 maxSlides=' + limit
+      + '，请提高 maxSlides（最多 120）或拆分内容 / generated ' + slides.length + ' slides; raise maxSlides or split the deck')
+  }
+}
+
+export function normalizeSlides(rawSlides, maxSlides = 60, lang = 'zh') {
   if (!Array.isArray(rawSlides) || rawSlides.length === 0) {
     throw new Error('dsh-ppt：slides 必须是非空数组（每个元素是 { layout, title, subtitle, kicker, bullets } 对象）')
   }
   const limit = clampInt(maxSlides, 60, 1, 120)
-  const bounded = rawSlides.length > limit && limit >= 3
-    ? [rawSlides[0], ...rawSlides.slice(1, limit - 1), rawSlides[rawSlides.length - 1]]
-    : rawSlides.slice(0, limit)
-  const slides = bounded.map(normalizeSlide)
+  const ui = resolveLanguage(lang).ui
+  const slides = rawSlides.map(normalizeSlide).flatMap(slide => slide.layout === 'table'
+    ? paginateTable(slide, ui.continuation) : [slide])
+  checkSlideLimit(slides, limit)
   if (slides.length === 0) throw new Error('dsh-ppt：slides 规范化后为空')
   return slides
 }
@@ -682,16 +717,13 @@ export function normalizeBuildOptions(options = {}) {
     deck = {
       title,
       subtitle: stripInlineMarkdown(options.subtitle ?? ''),
-      slides: normalizeSlides(options.slides, maxSlides),
+      slides: normalizeSlides(options.slides, maxSlides, language.id),
     }
   } else {
     const content = String(options.content ?? '').trim()
     if (content === '') throw new Error('dsh-ppt：content 不能为空（或用 slides 传结构化幻灯片）')
     deck = parseMarkdownDeck(title, content, language.id)
-    const slideLimit = clampInt(maxSlides, 60, 3, 120)
-      if (deck.slides.length > slideLimit) {
-        deck.slides = [deck.slides[0], ...deck.slides.slice(1, slideLimit - 1), deck.slides[deck.slides.length - 1]]
-      }
+    checkSlideLimit(deck.slides, maxSlides)
   }
   if (deck.slides.length < 1) throw new Error('dsh-ppt：没有可生成的幻灯片')
   const outputDir = resolvePath(String(options.outputDir ?? '.').trim() || '.')

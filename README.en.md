@@ -30,6 +30,8 @@ Example:
 
 ## Compatibility
 
+2026-09-21: the current release package was installed through the official CLI in an isolated profile and co-loaded with the other two most-downloaded plugins on source-built Harness `0.1.6-alpha.2`. All 18 plugin tools registered; calendar/email configuration checks, PPT theme listing and 17-row table generation passed. The host is based on the official alpha.2 release plus the tool-scheduler `Symbol.for` fix (`93badd88`). This run did not connect to live mail or calendar services.
+
 Verified with official `@deepseek-ai/dsh@0.1.5-rc.1` and Node `24.16.0` on 2026-09-11: all 18 components load alongside Modlens, with passing tool-schema, skill-registration and offline read-only invocation checks. Uses the `cordis.patch.yml` + `dsh.bundle.patch` bundle model. Node requirements match this Harness release: 22.19 or later within 22.x, or 24 or later. Live external-service workflows require separate configuration and validation.
 
 ## Installation
@@ -105,6 +107,8 @@ Themes are derived from [dsh-hyperframes](https://github.com/STARDUSTLC666/dsh-h
 - Each `## section` becomes one slide: lists produce `bullets` slides; empty sections produce `section` dividers.
 - Plain text without headings: the first paragraph is the cover, then every 5 sentences become one slide.
 - A single sentence automatically produces a complete 3-slide structure: cover → core idea → closing.
+- Long tables paginate automatically with repeated headers and up to 8 data rows per page. Notes stay on the first page. Tables support 8 columns and 60 characters per cell; oversized input returns an actionable error. Short rows are padded consistently in all artifacts.
+- `maxSlides` counts pages after expansion. Exceeding it fails before writing files; raise the limit (up to 120) or split the deck. Middle slides are never silently discarded.
 - For precise control, use structured `slides` (`cover | section | bullets | statement | quote | table | closing`), with `rows` for tables and `notes` for speaker notes.
 
 ## Configuration
