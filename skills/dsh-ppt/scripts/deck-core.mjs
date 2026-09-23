@@ -1179,7 +1179,9 @@ body.overview .slide-frame::after{
 body.overview .slide{
   display:flex !important;position:absolute;inset:0;width:100vw;height:100vh;
   transform:scale(var(--deck-thumb-scale,.25));transform-origin:top left;pointer-events:none;
+  animation:none !important;
 }
+body.overview .bullets li{opacity:1 !important;animation:none !important}
 body.overview #notes-panel,body.presenting #notes-panel{display:none !important}
 body.presenting #notes-toggle{opacity:.55}
 body.presenting #hud{opacity:0;pointer-events:none;transition:opacity .25s}

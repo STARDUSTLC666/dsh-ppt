@@ -160,6 +160,7 @@ test('HTML 播放器：演讲者视图、缩略图总览、Esc 关闭与备注�
   assert.match(html, /id="notes-close"/)
   assert.match(html, /tabindex="-1"/)
   assert.match(html, /attr\(data-frame\)/)
+  assert.match(html, /body\.overview \.bullets li/)
   assert.match(html, /body\.presenting #hud/)
   assert.match(html, /jumped <= total/)
   assert.match(html, /ArrowDown/)
