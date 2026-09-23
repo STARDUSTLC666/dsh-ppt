@@ -8,6 +8,9 @@ import {
   THEME_IDS,
   buildDeck,
   buildPptx,
+  buildThemePreview,
+  renderThemePreviewHtml,
+  renderThemeSvg,
   listThemes,
   parseMarkdownDeck,
   renderHtml,
@@ -141,6 +144,45 @@ test('双语界面渲染中英标签', () => {
   assert.match(html, /主题 · Theme/)
   assert.match(html, /开场 · Opening/)
   assert.match(html, /#E63946/)
+})
+
+test('HTML 播放器：演讲者视图、缩略图总览、Esc 关闭与备注避让', () => {
+  const manifest = { title: 'Player', motion: true, slides: [
+    { layout: 'cover', title: '封' },
+    { layout: 'bullets', title: '页', bullets: ['一'], notes: '备注' },
+  ] }
+  const html = renderHtml(manifest, resolveTheme('data'), resolveLanguage('zh'))
+  assert.match(html, /id="presenter-toggle"/)
+  assert.match(html, /window\.__dshPpt/)
+  assert.match(html, /body\.overview #stage/)
+  assert.match(html, /key === 'Escape'/)
+  assert.match(html, /bottom:64px/)
+  assert.match(html, /id="notes-close"/)
+  assert.match(html, /tabindex="-1"/)
+  assert.match(html, /attr\(data-frame\)/)
+  assert.match(html, /body\.presenting #hud/)
+  assert.match(html, /jumped <= total/)
+  assert.match(html, /ArrowDown/)
+  assert.match(html, /wrapHint/)
+  assert.match(html, /frame\.tabIndex = on \? 0 : -1/)
+  assert.doesNotMatch(html, /max-width:1120px/)
+})
+
+test('主题预览：SVG 色板卡与对比页覆盖 5 套主题', () => {
+  const svg = renderThemeSvg('data', 'zh')
+  assert.ok(svg.startsWith('<svg'))
+  assert.match(svg, /#7C3AED/)
+  const preview = renderThemePreviewHtml('zh')
+  for (const id of THEME_IDS) assert.ok(preview.includes('theme-' + id), id + ' 缺失')
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-preview-'))
+  try {
+    const out = buildThemePreview({ outputDir: dir, lang: 'zh' })
+    assert.equal(out.themeCount, 5)
+    assert.ok(existsSync(out.htmlPath))
+    for (const item of out.svgs) assert.ok(existsSync(item.path))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('buildPptx 是纯 Buffer 且包含全部 OOXML 核心部件', () => {

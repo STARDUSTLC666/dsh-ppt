@@ -95,6 +95,25 @@ test('ppt_themes 返回 5 套内置主题并给出可读文本', async () => {
   assert.match(rendered[0].text, /data/)
 })
 
+test('ppt_themes preview=true 生成主题对比页与 5 张 SVG', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, {})
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-reg-preview-'))
+  try {
+    const themes = ctx.tools.defs.find((def) => def.name === 'ppt_themes')
+    const out = await themes.execute({ preview: true, outputDir: dir })
+    assert.equal(out.ok, true)
+    assert.equal(out.preview.themeCount, 5)
+    assert.ok(existsSync(out.preview.htmlPath))
+    assert.equal(out.preview.svgs.length, 5)
+    for (const svg of out.preview.svgs) assert.ok(existsSync(svg.path))
+    const rendered = themes.output.render({}, out)
+    assert.match(rendered[0].text, /themes-preview/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('ppt_create 生成 HTML 放映 + PPTX + manifest 三件套', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})

@@ -61,6 +61,7 @@ const themesResultSchema: Record<string, unknown> = {
   properties: {
     ok: { type: 'boolean' },
     themes: { type: 'array', items: themeInfoSchema },
+    preview: { type: 'object', additionalProperties: true },
   },
   additionalProperties: true,
 }
@@ -99,7 +100,11 @@ function renderThemes(value: PptThemesResult): TextBlock[] {
   if (value.themes.length === 0) return oneText('dsh-ppt 没有可用主题。')
   const lines = value.themes.map((theme) =>
     '- ' + theme.id + '：' + theme.name + '（' + theme.mood + '）｜适合：' + theme.bestFor + '｜' + (theme.dark ? '深色' : '浅色'))
-  return oneText('dsh-ppt 内置主题：\n\n' + lines.join('\n') + '\n\nppt_create 的 theme 参数填其中的 id（默认 data）。')
+  const summary = 'dsh-ppt 内置主题：\n\n' + lines.join('\n') + '\n\nppt_create 的 theme 参数填其中的 id（默认 data）。'
+  if (value.preview) {
+    return oneText(summary + '\n\n主题预览已写入：' + value.preview.htmlPath + '\nSVG 色板卡：' + value.preview.svgs.map((svg) => svg.path).join(' / '))
+  }
+  return oneText(summary + '\n\n想要并排对比：ppt_themes { preview: true, outputDir: "..." } 会生成 themes-preview.html 和每套主题的 SVG 色板卡。')
 }
 
 function renderCreate(value: PptCreateResult): TextBlock[] {
@@ -108,7 +113,7 @@ function renderCreate(value: PptCreateResult): TextBlock[] {
     'HTML 网页放映：' + value.htmlPath + '\n' +
     'PPTX 导出：' + value.pptxPath + '\n' +
     'Manifest：' + value.jsonPath + '\n' +
-    'HTML 双击即可放映（方向键翻页 / F 全屏 / G 总览 / P 打印）；PPTX 可用 PowerPoint / WPS / Keynote 打开。',
+    'HTML 双击即可放映（← → 翻页 / V 演讲者视图 / S 备注 / G 缩略图总览 / F 全屏 / P 打印 / ? 快捷键）；PPTX 可用 PowerPoint / WPS / Keynote 打开。',
   )
 }
 
@@ -118,9 +123,12 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
   return [
     {
       name: 'ppt_themes',
-      description: 'List the built-in visual themes of dsh-ppt (id, name, mood, best-for, light/dark palette) before building a deck. Use a theme id as the theme argument of ppt_create. 中文：列出 dsh-ppt 内置视觉主题（id、名称、情绪、适用场景、明暗色板），用于选择 ppt_create 的 theme 参数。',
+      description: 'List the built-in visual themes of dsh-ppt (id, name, mood, best-for, light/dark palette) before building a deck. Pass preview: true with outputDir to also write a self-contained theme gallery HTML plus one SVG palette card per theme (ready for README/npm screenshots). Use a theme id as the theme argument of ppt_create. 中文：列出 dsh-ppt 内置视觉主题（id、名称、情绪、适用场景、明暗色板）；传 preview: true + outputDir 会额外生成主题对比页和每套主题的 SVG 色板卡（可直接放 README/npm 首屏），用于选择 ppt_create 的 theme 参数。',
       parameters: compileParameters({
         lang: { type: 'string', description: 'Theme description language: zh (default), en, or bilingual.' },
+        preview: { type: 'boolean', description: 'Write a theme gallery HTML and one SVG palette card per theme into outputDir. Default false (list only).' },
+        outputDir: { type: 'string', description: 'Directory for preview files when preview is true. Default: session working directory (or the plugin outputDir config).' },
+        overwrite: { type: 'boolean', description: 'Overwrite existing preview files instead of adding a numeric suffix. Default false.' },
       }),
       output: {
         schema: themesResultSchema,

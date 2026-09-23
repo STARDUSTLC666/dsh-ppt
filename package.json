@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "DSH 演示文稿插件：Markdown 生成网页放映与可编辑 PPTX，长表格自动分页，内置 5 套主题、备注与转场动画。",
   "type": "module",
   "main": "lib/index.js",

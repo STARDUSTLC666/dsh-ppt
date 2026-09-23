@@ -48,9 +48,22 @@ export interface PptThemeInfo {
     palette: Record<string, string>;
     fonts: Record<string, string>;
 }
+export interface PptThemePreviewResult {
+    ok: boolean;
+    outputDir: string;
+    htmlPath: string;
+    svgs: Array<{
+        id: string;
+        path: string;
+    }>;
+    themeCount: number;
+    language: string;
+}
 export interface PptThemesResult {
     ok: boolean;
     themes: PptThemeInfo[];
+    /** 传 preview: true 时返回：主题对比页 + 每套主题的 SVG 色板卡。 */
+    preview?: PptThemePreviewResult;
 }
 export interface PptCreateResult {
     ok: boolean;
@@ -71,6 +84,7 @@ export interface PptCreateResult {
 /** deck-core.mjs 暴露给插件的最小面。 */
 export interface DeckEngine {
     buildDeck(options: Record<string, unknown>): PptCreateResult;
+    buildThemePreview(options: Record<string, unknown>): PptThemePreviewResult;
     listThemes(lang?: string): PptThemeInfo[];
     resolveTheme(input: unknown): Record<string, unknown>;
     resolveLanguage(input: unknown): Record<string, unknown>;

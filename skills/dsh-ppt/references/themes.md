@@ -2,6 +2,8 @@
 
 主题系统移植自 hyperframes 技能的 `visual-styles.md` 视觉风格库。每套主题在 HTML 与 PPTX 中使用同一色板、同一字体族、同一情绪规则。
 
+> 想先看效果：运行 `ppt_themes { preview: true, outputDir: "dist" }`，会生成 `themes-preview.html` 与每套主题一张 `theme-<id>.svg`；README/npm 首屏可以直接引用 SVG。
+
 ## 速查
 
 | ID | 中文名 | English | 明暗 | 底色 | 前景 | 主强调 | 次强调 | 情绪 | 适用 |

@@ -15,7 +15,7 @@ DSH（DeepSeek Harness）演示文稿技能 + 工具插件：把一句话、一�
 | 能力 | 说明 |
 | --- | --- |
 | `ppt_create` 工具 | Markdown / 结构化 slides → `*.html` + `*.pptx` + `*.json` 三件套 |
-| `ppt_themes` 工具 | 列出 5 套内置主题与适用场景 |
+| `ppt_themes` 工具 | 列出 5 套内置主题与适用场景；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套一张 SVG 色板卡（可直接进 README/npm 首屏） |
 | 7 种页型 | 封面 / 章节 / 要点 / 核心观点 / **金句** / **表格** / 结束页 |
 | 演讲者备注 | `<!-- 备注: ... -->` 或 `notes` 字段：HTML 按 `S` 呼出，PPTX 原生备注页（演示者视图） |
 | 动效（motion） | 默认开：HTML 页间淡入 + 要点逐条入场；PPTX 原生转场 + 要点逐条点击显现；`motion: 'off'` / `--motion off` 产出纯静态 |
@@ -49,7 +49,7 @@ dsh plugin --profile web add dsh-ppt
 ### DSH 内（推荐）
 
 ```
-1. ppt_themes                        # 看 5 套主题
+1. ppt_themes { preview: true, outputDir: "dist" }   # 看 5 套主题 + 生成对比页
 2. ppt_create {
      title: "把会议减半",
      content: "# 问题\n- 周会太多\n\n# 方案\n- 异步决策",
@@ -78,7 +78,7 @@ node <skill-dir>/scripts/build-deck.mjs \
 
 | 文件 | 用途 |
 | --- | --- |
-| `*.html` | 独立网页放映：方向键/滚轮/触屏翻页，F 全屏，G 总览，P 打印或另存 PDF |
+| `*.html` | 独立网页放映：← → 翻页，V 演讲者视图（独立窗口：备注/下一页/计时/进度），S 备注，G 缩略图总览，F 全屏，P 打印，? 快捷键，Esc 关闭 |
 | `*.pptx` | 16:9 可编辑演示文稿（OOXML 由插件手写，zip 用 node:zlib，无第三方依赖） |
 | `*.json` | 结构化 manifest（版本、主题、语言、每页内容） |
 
@@ -92,7 +92,7 @@ node <skill-dir>/scripts/build-deck.mjs \
 | `soft` | 柔和信号 | 温暖 / 人本 | 品牌故事、培训、个人分享 |
 | `bold` | 极繁大字 | 大声 / 动能 | 产品发布、活动、大事件 |
 
-主题灵感来自 [hyperframes](https://github.com/STARDUSTLC666/dsh-hyperframes) 的 `visual-styles.md`，完整色板见 `skills/dsh-ppt/references/themes.md`。
+主题灵感来自 [hyperframes](https://github.com/STARDUSTLC666/dsh-hyperframes) 的 `visual-styles.md`，完整色板见 `skills/dsh-ppt/references/themes.md`。也可运行 `ppt_themes { preview: true, outputDir: "dist" }` 生成并排对比页与 SVG 色板卡。
 
 ## Markdown 输入规则
 

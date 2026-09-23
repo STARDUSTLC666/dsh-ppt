@@ -13,7 +13,7 @@ DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a par
 | Capability | Description |
 | --- | --- |
 | `ppt_create` tool | Markdown / structured slides → `*.html` + `*.pptx` + `*.json` |
-| `ppt_themes` tool | Lists the 5 built-in themes and their best use cases |
+| `ppt_themes` tool | Lists the 5 built-in themes and their best use cases; pass `preview: true` with `outputDir` to write a side-by-side gallery plus one SVG palette card per theme |
 | 7 layouts | cover / section / bullets / statement / **quote** / **table** / closing |
 | Speaker notes | `<!-- note: ... -->` comments or the `notes` field: press `S` in the HTML player; native PPTX notes slides (presenter view) |
 | Motion | On by default: HTML slide-in transitions + staggered bullet entrances; native PPTX fade transitions + click-to-reveal bullets. `motion: 'off'` / `--motion off` for a fully static deck |
@@ -56,7 +56,7 @@ Then restart the web service. To clean up fully, also remove the plugin entry fr
 ### Inside DSH (recommended)
 
 ```
-1. ppt_themes                        # inspect the 5 themes
+1. ppt_themes { preview: true, outputDir: "dist" }   # themes + gallery
 2. ppt_create {
      title: "Fewer Meetings",
      content: "# Problem\n- Too many meetings\n\n# Solution\n- Async decisions",
@@ -85,7 +85,7 @@ Existing artifacts are not overwritten by default: if any member of the trio alr
 
 | File | Purpose |
 | --- | --- |
-| `*.html` | Standalone web slideshow: arrow keys/wheel/touch navigation, F fullscreen, G overview, P print/save as PDF |
+| `*.html` | Standalone slideshow: arrow keys, V presenter view (separate window with notes/next/timer/progress), S notes, G thumbnail overview, F fullscreen, P print, ? shortcuts, Esc close |
 | `*.pptx` | Editable 16:9 presentation (hand-written OOXML, zip via `node:zlib`, no third-party deps) |
 | `*.json` | Structured manifest (version, theme, language, slides) |
 
@@ -99,7 +99,7 @@ Existing artifacts are not overwritten by default: if any member of the trio alr
 | `soft` | Soft Signal | Warm / human | Brand stories, training, personal talks |
 | `bold` | Maximalist Type | Loud / kinetic | Product launches, events, big moments |
 
-Themes are derived from [dsh-hyperframes](https://github.com/STARDUSTLC666/dsh-hyperframes) `visual-styles.md`. Full palettes: `skills/dsh-ppt/references/themes.md`.
+Themes are derived from [dsh-hyperframes](https://github.com/STARDUSTLC666/dsh-hyperframes) `visual-styles.md`. Full palettes: `skills/dsh-ppt/references/themes.md`. Run `ppt_themes { preview: true, outputDir: "dist" }` for a side-by-side gallery and SVG palette cards.
 
 ## Markdown input rules
 
