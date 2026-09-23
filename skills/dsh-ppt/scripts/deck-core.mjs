@@ -1157,6 +1157,10 @@ body.notes-open #notes-panel{display:block}
   padding:9px 18px;font-size:13px;
 }
 #toast[hidden]{display:none}
+#blank{position:fixed;inset:0;z-index:80;display:none;pointer-events:none}
+body.blank-black #blank{display:block;background:#000}
+body.blank-white #blank{display:block;background:#fff}
+body.blank-black #hud,body.blank-white #hud{opacity:0;pointer-events:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 body.overview #stage{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;
@@ -1239,11 +1243,12 @@ ${slides}
 </div>
 <div id="help-panel" hidden>
   <div class="notes-label">${escapeHtml(ui.helpTitle)}</div>
-  <p><kbd>←</kbd> <kbd>→</kbd> / <kbd>Space</kbd> 翻页 · <kbd>Home</kbd> / <kbd>End</kbd> 首末页 · <kbd>S</kbd> ${escapeHtml(ui.notesToggle)} · <kbd>V</kbd> ${escapeHtml(ui.presenterToggle)} · <kbd>G</kbd> ${escapeHtml(ui.overviewToggle)} · <kbd>F</kbd> 全屏 · <kbd>P</kbd> 打印 · <kbd>Esc</kbd> ${escapeHtml(ui.closeLabel)} · <kbd>?</kbd> ${escapeHtml(ui.helpTitle)}</p>
+  <p><kbd>←</kbd> <kbd>→</kbd> / <kbd>Space</kbd> 翻页 · <kbd>Home</kbd> / <kbd>End</kbd> 首末页 · <kbd>S</kbd> ${escapeHtml(ui.notesToggle)} · <kbd>V</kbd> ${escapeHtml(ui.presenterToggle)} · <kbd>G</kbd> ${escapeHtml(ui.overviewToggle)} · <kbd>F</kbd> 全屏 · <kbd>P</kbd> 打印 · <kbd>B</kbd> 黑屏 · <kbd>W</kbd> 白屏 · <kbd>Esc</kbd> ${escapeHtml(ui.closeLabel)} · <kbd>?</kbd> ${escapeHtml(ui.helpTitle)}</p>
   <p>${escapeHtml(ui.presenterHint)}</p>
   <p>${escapeHtml(ui.overviewHint)}</p>
 </div>
 <div id="toast" role="status" hidden></div>
+<div id="blank" aria-hidden="true"></div>
 <script>
 (() => {
   const frames = Array.from(document.querySelectorAll('.slide-frame'));
@@ -1292,13 +1297,40 @@ ${slides}
     updatePresenter();
   }
 
-  function updatePresenter() {
-    if (presenterOpen() && typeof presenterWin.__deckPresenterUpdate === 'function') {
-      try { presenterWin.__deckPresenterUpdate(state()); } catch (_) { /* window closing */ }
-    }
+  function sendInit() {
+    if (!presenterOpen()) return;
+    try {
+      presenterWin.postMessage({
+        __dshPpt: 'init',
+        title: (document.title.split(' · ')[1] || document.title),
+        css: document.querySelector('style') ? document.querySelector('style').textContent : '',
+        total: total,
+        slides: slides.map(function (slide) { return slide.outerHTML; }),
+      }, '*');
+    } catch (_) { /* popup closing */ }
   }
 
+  function sendState() {
+    if (!presenterOpen()) return;
+    const next = (index + 1) % total;
+    try {
+      presenterWin.postMessage({
+        __dshPpt: 'state',
+        index: index,
+        total: total,
+        title: titleOf(index),
+        nextTitle: titleOf(next),
+        notes: notesOf(index),
+        nextNotes: notesOf(next),
+        blank: document.body.classList.contains('blank-black') ? 'black' : (document.body.classList.contains('blank-white') ? 'white' : null),
+      }, '*');
+    } catch (_) { /* popup closing */ }
+  }
+
+  function updatePresenter() { sendState(); }
+
   function go(next) {
+    if (document.body.classList.contains('blank-black') || document.body.classList.contains('blank-white')) setBlank(null);
     const wrapped = next < 0 || next >= total;
     index = (next + total) % total;
     slides.forEach(function (slide, i) {
@@ -1343,69 +1375,142 @@ ${slides}
   }
 
   function presenterHtml() {
+    const labelCurrent = ${JSON.stringify(ui.currentLabel)};
+    const labelNext = ${JSON.stringify(ui.nextLabel)};
+    const labelNotes = ${JSON.stringify(ui.notesLabel)};
+    const noNotes = ${JSON.stringify(ui.noNotes)};
+    const hintText = ${JSON.stringify('← → 翻页 · P 暂停 · T 重置 · +/- 字号 · B/W 黑/白屏 · Esc 结束')};
+    const deckTitle = ${JSON.stringify(manifest.title).replace(/</g, '\\u003c')};
+    const langAttr = ${JSON.stringify(lang.attr)};
     const cs = getComputedStyle(document.documentElement);
     const val = function (name, fallback) { const v = cs.getPropertyValue(name).trim(); return v || fallback; };
-    const css = ':root{--bg:' + val('--bg', '#070B14') + ';--panel:' + val('--panel', '#0D1424') + ';--fg:' + val('--fg', '#E8F1FF') + ';--muted:' + val('--muted', '#7E8BA8') + ';--accent:' + val('--accent', '#7C3AED') + ';--accent2:' + val('--accent2', '#06B6D4') + ';--font-heading:' + val('--font-heading', 'sans-serif') + ';--font-body:' + val('--font-body', 'sans-serif') + '}'
-      + 'body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);height:100vh;display:flex;flex-direction:column}'
-      + 'header{display:flex;justify-content:space-between;gap:16px;padding:14px 20px;border-bottom:1px solid color-mix(in srgb, var(--muted) 40%, transparent);font-size:14px;color:var(--muted)}'
-      + 'header #ptitle{color:var(--fg);font-weight:700}'
-      + 'main{flex:1;display:grid;grid-template-columns:1.05fr 1fr;gap:18px;padding:18px 20px;min-height:0}'
-      + 'section{background:var(--panel);border:1px solid color-mix(in srgb, var(--muted) 30%, transparent);border-radius:14px;padding:16px 18px;min-height:0;display:flex;flex-direction:column;gap:10px}'
-      + '.lbl{color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}'
-      + '#pcur{font-family:var(--font-heading);font-size:30px;font-weight:800;line-height:1.2}'
-      + '#pnext{font-size:20px;line-height:1.35}'
-      + '#pnotes{font-size:19px;line-height:1.65;white-space:pre-wrap;overflow:auto;flex:1}'
-      + '.hint{color:var(--muted);font-size:12px;margin-top:auto}'
-      + 'footer{display:flex;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid color-mix(in srgb, var(--muted) 40%, transparent)}'
-      + '#ptimer{font-variant-numeric:tabular-nums;font-size:22px;font-weight:700;color:var(--accent)}'
-      + '.bar{flex:1;height:8px;background:color-mix(in srgb, var(--muted) 28%, transparent);border-radius:99px;overflow:hidden}'
-      + '#pprog{height:100%;width:0;background:var(--accent);transition:width .2s}'
-      + 'body.big #pnotes{font-size:26px}'
-      + '@media (max-width:760px){main{grid-template-columns:1fr}}';
-    const js = 'var started=Date.now(),elapsed=0,paused=false,big=false;'
-      + 'function fmt(ms){var s=Math.max(0,Math.floor(ms/1000));var m=Math.floor(s/60);s=s%60;return (m<10?"0":"")+m+":"+(s<10?"0":"")+s}'
-      + 'function tick(){if(!paused)elapsed=Date.now()-started;document.getElementById("ptimer").textContent=fmt(elapsed);requestAnimationFrame(tick)}'
-      + 'window.__deckPresenterUpdate=function(st){document.getElementById("pcur").textContent=st.title||("Slide "+(st.index+1));document.getElementById("pnext").textContent=st.nextTitle||"\u2014";document.getElementById("pnotes").textContent=st.notes||"' + ui.noNotes.replace(/"/g, '\\"') + '";document.getElementById("pcounter").textContent=(st.index+1)+" / "+st.total;document.getElementById("pprog").style.width=((st.index+1)/st.total*100)+"%"}'
-      + ';document.addEventListener("keydown",function(e){var k=e.key;'
-      + 'if(k==="ArrowRight"||k===" "){e.preventDefault();try{opener.__dshPpt.go(1)}catch(_){}}'
-      + 'else if(k==="ArrowLeft"){e.preventDefault();try{opener.__dshPpt.go(-1)}catch(_){}}'
-      + 'else if(k==="Escape"){window.close()}'
-      + 'else if(k.toLowerCase()==="t"){started=Date.now();elapsed=0;paused=false}'
-      + 'else if(k.toLowerCase()==="p"){paused=!paused;if(!paused)started=Date.now()-elapsed}'
-      + 'else if(k==="+"||k==="="){big=true;document.body.classList.add("big")}'
-      + 'else if(k==="-"){big=false;document.body.classList.remove("big")}});'
-      + 'setInterval(function(){try{if(opener&&!opener.closed&&opener.__dshPpt)window.__deckPresenterUpdate(opener.__dshPpt.state())}catch(_){}},400);'
-      + 'tick();';
-    return '<!DOCTYPE html><html lang="' + ${JSON.stringify(lang.attr)} + '"><head><meta charset="UTF-8"><title>' + ${JSON.stringify(manifest.title + ' · ' + ui.presenterLabel).replace(/</g, '\\u003c')} + '</title><style>' + css + '</style></head><body>'
-      + '<header><div id="ptitle">' + ${JSON.stringify(manifest.title).replace(/</g, '\\u003c')} + '</div><div id="pcounter"></div></header>'
-      + '<main><section><div class="lbl">' + ${JSON.stringify(ui.currentLabel).replace(/</g, '\\u003c')} + '</div><div id="pcur"></div><div class="lbl">' + ${JSON.stringify(ui.nextLabel).replace(/</g, '\\u003c')} + '</div><div id="pnext"></div></section>'
-      + '<section><div class="lbl">' + ${JSON.stringify(ui.notesLabel).replace(/</g, '\\u003c')} + '</div><div id="pnotes"></div><div class="hint">+ / - 字号 · T 重置计时 · P 暂停 · ← → 翻页 · Esc 关闭</div></section></main>'
-      + '<footer><div id="ptimer">00:00</div><div class="bar"><div id="pprog"></div></div></footer>'
+    const css = [
+      ':root{--bg:' + val('--bg', '#070B14') + ';--panel:' + val('--panel', '#0D1424') + ';--fg:' + val('--fg', '#E8F1FF') + ';--muted:' + val('--muted', '#7E8BA8') + ';--accent:' + val('--accent', '#7C3AED') + ';--accent2:' + val('--accent2', '#06B6D4') + ';--font-heading:' + val('--font-heading', 'sans-serif') + ';--font-body:' + val('--font-body', 'sans-serif') + '}',
+      '*{box-sizing:border-box}',
+      'body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);height:100vh;display:flex;flex-direction:column;overflow:hidden}',
+      'header{display:flex;align-items:center;gap:14px;padding:9px 16px;border-bottom:1px solid color-mix(in srgb, var(--muted) 40%, transparent);font-size:13px;color:var(--muted)}',
+      'header #ptitle{color:var(--fg);font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      'header #pclock{font-variant-numeric:tabular-nums}',
+      'main{flex:1;display:grid;grid-template-columns:1.12fr .88fr;gap:12px;padding:12px 16px;min-height:0}',
+      '.col{display:flex;flex-direction:column;gap:10px;min-height:0}',
+      '.card{background:var(--panel);border:1px solid color-mix(in srgb, var(--muted) 30%, transparent);border-radius:12px;padding:10px 12px;min-height:0;display:flex;flex-direction:column;gap:6px}',
+      '.card-notes{flex:1}',
+      '.lbl{color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}',
+      '.pv{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:8px;background:var(--bg);border:1px solid color-mix(in srgb, var(--muted) 25%, transparent);--pv-scale:.3}',
+      '.pv-slide{position:absolute;inset:0;overflow:hidden}',
+      '.pv-slide .slide{display:flex !important;position:absolute;inset:0;width:100vw;height:100vh;transform:scale(var(--pv-scale,.25));transform-origin:top left;animation:none !important}',
+      '.pv-slide .bullets li{opacity:1 !important;animation:none !important}',
+      '#thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}',
+      '#thumbs .thumb{position:relative;flex:0 0 128px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:1px solid color-mix(in srgb, var(--muted) 35%, transparent);cursor:pointer;background:var(--bg);--pv-scale:.09}',
+      '#thumbs .thumb.is-current{outline:2px solid var(--accent);outline-offset:1px}',
+      '#pnotes{font-size:var(--notes-size,19px);line-height:1.6;white-space:pre-wrap;overflow:auto;flex:1}',
+      'footer{display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid color-mix(in srgb, var(--muted) 40%, transparent);flex-wrap:wrap}',
+      'button{background:color-mix(in srgb, var(--panel) 90%, transparent);color:var(--fg);border:1px solid color-mix(in srgb, var(--muted) 45%, transparent);border-radius:99px;padding:6px 12px;min-height:34px;font:inherit;font-size:13px;cursor:pointer}',
+      'button:hover{border-color:var(--accent);color:var(--accent)}',
+      'button[aria-pressed="true"]{background:var(--accent);color:var(--bg);border-color:var(--accent)}',
+      '#ptimer{font-variant-numeric:tabular-nums;font-size:20px;font-weight:700;color:var(--accent);margin-left:6px}',
+      '.bar{flex:1;min-width:100px;height:8px;background:color-mix(in srgb, var(--muted) 28%, transparent);border-radius:99px;overflow:hidden}',
+      '#pprog{height:100%;width:0;background:var(--accent);transition:width .2s}',
+      '.hint{color:var(--muted);font-size:11px;width:100%}',
+    ].join('');
+    const js = [
+      'var total=0,index=0,elapsed=0,started=Date.now(),paused=false,notesSize=19,slides=[],cssText="",curBlank=null;',
+      'function q(id){return document.getElementById(id)}',
+      'function post(m){try{if(window.opener)window.opener.postMessage(m,"*")}catch(e){}}',
+      'function fmt(ms){var s=Math.max(0,Math.floor(ms/1000)),m=Math.floor(s/60);s=s%60;var h=Math.floor(m/60);m=m%60;return (h>0?(h<10?"0":"")+h+":":"")+(m<10?"0":"")+m+":"+(s<10?"0":"")+s}',
+      'function clock(){var d=new Date();return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2)}',
+      'function tick(){if(!paused)elapsed=Date.now()-started;q("ptimer").textContent=fmt(elapsed);q("pclock").textContent=clock();if(window.requestAnimationFrame)requestAnimationFrame(tick);else setTimeout(tick,250)}',
+      'function fit(){var w=q("pv-cur").clientWidth||320;q("pv-cur").style.setProperty("--pv-scale",String(w/window.innerWidth));q("pv-next").style.setProperty("--pv-scale",String(w/window.innerWidth));var th=q("thumbs").children;for(var i=0;i<th.length;i++){th[i].style.setProperty("--pv-scale",String((th[i].clientWidth||128)/window.innerWidth))}}',
+      'function setSlide(box,html){box.innerHTML="";var f=document.createElement("div");f.className="pv-slide";f.innerHTML=html;box.appendChild(f)}',
+      'function buildThumbs(){var box=q("thumbs");box.innerHTML="";slides.forEach(function(html,i){var t=document.createElement("div");t.className="thumb";var f=document.createElement("div");f.className="pv-slide";f.innerHTML=html;t.appendChild(f);t.addEventListener("click",function(){post({__dshPpt:"cmd",kind:"go",index:i})});box.appendChild(t)});fit()}',
+      'function renderState(st){index=st.index;total=st.total||total;q("pcounter").textContent=(index+1)+" / "+total;setSlide(q("pv-cur"),slides[index]||"");setSlide(q("pv-next"),slides[(index+1)%total]||"");q("pnotes").textContent=st.notes||' + JSON.stringify(ui.noNotes) + ';q("pprog").style.width=((index+1)/total*100)+"%";curBlank=st.blank||null;var th=q("thumbs").children;for(var i=0;i<th.length;i++){th[i].classList.toggle("is-current",i===index)}fit()}',
+      'function togglePause(){paused=!paused;if(!paused)started=Date.now()-elapsed;var b=q("pause");b.setAttribute("aria-pressed",paused?"true":"false");b.textContent=paused?"继续":"暂停"}',
+      'function resetTimer(){started=Date.now();elapsed=0}',
+      'function applyNotesSize(){document.documentElement.style.setProperty("--notes-size",notesSize+"px")}',
+      'window.addEventListener("message",function(e){var d=e.data||{};if(d.__dshPpt==="init"){slides=d.slides||[];total=d.total||slides.length;cssText=d.css||"";var s=document.createElement("style");s.textContent=cssText;document.head.appendChild(s);q("ptitle").textContent=d.title||"";buildThumbs();post({__dshPpt:"ready"})}else if(d.__dshPpt==="state"){renderState(d)}else if(d.__dshPpt==="close"){window.close()}});',
+      'window.addEventListener("resize",fit);',
+      'window.addEventListener("beforeunload",function(){post({__dshPpt:"cmd",kind:"closed"})});',
+      'document.addEventListener("keydown",function(e){var k=e.key;if(k==="ArrowRight"||k===" "){e.preventDefault();post({__dshPpt:"cmd",kind:"go",delta:1})}else if(k==="ArrowLeft"){e.preventDefault();post({__dshPpt:"cmd",kind:"go",delta:-1})}else if(k==="Escape"){post({__dshPpt:"cmd",kind:"end"});window.close()}else if(k.toLowerCase()==="p"){togglePause()}else if(k.toLowerCase()==="t"){resetTimer()}else if(k==="+"||k==="="){notesSize=Math.min(34,notesSize+2);applyNotesSize()}else if(k==="-"){notesSize=Math.max(12,notesSize-2);applyNotesSize()}else if(k.toLowerCase()==="b"){post({__dshPpt:"cmd",kind:"blank",color:curBlank==="black"?null:"black"})}else if(k.toLowerCase()==="w"){post({__dshPpt:"cmd",kind:"blank",color:curBlank==="white"?null:"white"})}});',
+      'q("prev").addEventListener("click",function(){post({__dshPpt:"cmd",kind:"go",delta:-1})});',
+      'q("next").addEventListener("click",function(){post({__dshPpt:"cmd",kind:"go",delta:1})});',
+      'q("pause").addEventListener("click",togglePause);',
+      'q("reset").addEventListener("click",resetTimer);',
+      'q("font-plus").addEventListener("click",function(){notesSize=Math.min(34,notesSize+2);applyNotesSize()});',
+      'q("font-minus").addEventListener("click",function(){notesSize=Math.max(12,notesSize-2);applyNotesSize()});',
+      'q("blank").addEventListener("click",function(){post({__dshPpt:"cmd",kind:"blank",color:curBlank==="black"?null:"black"})});',
+      'q("white").addEventListener("click",function(){post({__dshPpt:"cmd",kind:"blank",color:curBlank==="white"?null:"white"})});',
+      'q("end").addEventListener("click",function(){post({__dshPpt:"cmd",kind:"end"});window.close()});',
+      'applyNotesSize();tick();setTimeout(function(){post({__dshPpt:"ready"})},250);',
+    ].join('');
+    return '<!DOCTYPE html><html lang="' + langAttr + '"><head><meta charset="UTF-8"><title>' + deckTitle + ' · 演讲者视图</title><style>' + css + '</style></head><body>'
+      + '<header><div id="ptitle"></div><div id="pcounter"></div><div id="pclock"></div></header>'
+      + '<main><div class="col">'
+      + '<div class="card"><div class="lbl">' + labelCurrent + '</div><div class="pv" id="pv-cur"></div></div>'
+      + '<div class="card"><div class="lbl">' + labelNext + '</div><div class="pv" id="pv-next"></div></div>'
+      + '<div class="card"><div class="lbl">SLIDES</div><div id="thumbs"></div></div>'
+      + '</div><div class="col"><div class="card card-notes"><div class="lbl">' + labelNotes + '</div><div id="pnotes"></div></div></div></main>'
+      + '<footer><button id="prev">◀</button><button id="next">▶</button><button id="pause" aria-pressed="false">暂停</button><button id="reset">重置计时</button><button id="font-minus">A−</button><button id="font-plus">A+</button><button id="blank">黑屏</button><button id="white">白屏</button><button id="end">结束放映</button><div id="ptimer">00:00</div><div class="bar"><div id="pprog"></div></div><div class="hint">' + hintText + '</div></footer>'
       + '<scr' + 'ipt>' + js + '</scr' + 'ipt></body></html>';
   }
 
   function openPresenter() {
-    if (presenterOpen()) { presenterWin.focus(); return; }
-    presenterWin = window.open('', 'dsh-ppt-presenter', 'width=1180,height=760');
-    if (!presenterWin) { toast(ui.popupBlocked); return; }
+    if (presenterOpen()) { try { presenterWin.focus(); } catch (_) { /* gone */ } return; }
+    let url = '';
     try {
-      presenterWin.document.open();
-      presenterWin.document.write(presenterHtml());
-      presenterWin.document.close();
+      url = URL.createObjectURL(new Blob([presenterHtml()], { type: 'text/html' }));
     } catch (_) { toast(ui.popupBlocked); return; }
+    presenterWin = window.open(url, 'dsh-ppt-presenter', 'width=1180,height=760');
+    if (!presenterWin) {
+      try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
+      toast(ui.popupBlocked);
+      return;
+    }
     document.body.classList.add('presenting');
     if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
-    setTimeout(updatePresenter, 150);
+    setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ } }, 5000);
   }
 
   function closePresenter() {
-    if (presenterOpen()) { try { presenterWin.close(); } catch (_) { /* already gone */ } }
+    if (presenterOpen()) {
+      try { presenterWin.postMessage({ __dshPpt: 'close' }, '*'); presenterWin.close(); } catch (_) { /* gone */ }
+    }
     document.body.classList.remove('presenting');
+    setBlank(null);
+  }
+
+  function setBlank(color) {
+    document.body.classList.remove('blank-black', 'blank-white');
+    if (color === 'black') document.body.classList.add('blank-black');
+    else if (color === 'white') document.body.classList.add('blank-white');
+    sendState();
   }
 
   setInterval(function () {
-    if (!presenterOpen() && document.body.classList.contains('presenting')) document.body.classList.remove('presenting');
+    if (!presenterOpen() && document.body.classList.contains('presenting')) {
+      document.body.classList.remove('presenting');
+      setBlank(null);
+    }
   }, 800);
+
+  window.addEventListener('message', function (event) {
+    if (!presenterOpen() || event.source !== presenterWin) return;
+    const data = event.data || {};
+    if (data.__dshPpt === 'ready') { sendInit(); sendState(); return; }
+    if (data.__dshPpt !== 'cmd') return;
+    if (data.kind === 'go') {
+      setBlank(null);
+      if (typeof data.index === 'number') go(data.index);
+      else go(index + (data.delta || 0));
+      sendState();
+    } else if (data.kind === 'blank') {
+      setBlank(data.color || null);
+    } else if (data.kind === 'end') {
+      closePresenter();
+    } else if (data.kind === 'closed') {
+      document.body.classList.remove('presenting');
+      setBlank(null);
+    }
+  });
 
   document.addEventListener('keydown', (event) => {
     const key = event.key;
@@ -1445,6 +1550,10 @@ ${slides}
     } else if (lower === 'v') {
       if (presenterOpen()) closePresenter();
       else openPresenter();
+    } else if (lower === 'b') {
+      setBlank(document.body.classList.contains('blank-black') ? null : 'black');
+    } else if (lower === 'w') {
+      setBlank(document.body.classList.contains('blank-white') ? null : 'white');
     } else if (lower === 'p') {
       window.print();
     } else if (key === '?') {

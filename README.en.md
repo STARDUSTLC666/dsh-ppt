@@ -85,7 +85,7 @@ Existing artifacts are not overwritten by default: if any member of the trio alr
 
 | File | Purpose |
 | --- | --- |
-| `*.html` | Standalone slideshow: arrow keys, V presenter view (separate window with notes/next/timer/progress), S notes, G thumbnail overview, F fullscreen, P print, ? shortcuts, Esc close |
+| `*.html` | Standalone slideshow: arrow keys, V presenter view (separate window with real current/next previews, thumbnail strip, notes, timer, progress, pause, font size, blank screen), S notes, G thumbnail overview, F fullscreen, P print, ? shortcuts, Esc close |
 | `*.pptx` | Editable 16:9 presentation (hand-written OOXML, zip via `node:zlib`, no third-party deps) |
 | `*.json` | Structured manifest (version, theme, language, slides) |
 
