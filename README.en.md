@@ -1,5 +1,11 @@
 # dsh-ppt
 
+## 0.5.0 update (2026-09-27)
+
+Includes presenter previews, thumbnails and timer controls. Unsupported or rejected fullscreen requests now show an actionable message instead of silently failing.
+
+Validation host: Harness 0.1.7-rc.2 built from official sources, retaining the local tool-scheduler fix. Build and automated checks pass; interactive coverage and external-service limits are recorded in this release round.
+
 ![npm](https://img.shields.io/npm/v/dsh-ppt) ![downloads](https://img.shields.io/npm/dm/dsh-ppt) ![license](https://img.shields.io/github/license/STARDUSTLC666/dsh-ppt) ![stars](https://img.shields.io/github/stars/STARDUSTLC666/dsh-ppt?style=social)
 
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)

@@ -2,6 +2,12 @@
 
 # dsh-ppt
 
+## 0.5.0 更新（2026-09-27）
+
+包含新的演讲者预览、缩略图和计时控件。浏览器不支持或拒绝全屏时显示操作提示，不再无声失败。
+
+验证宿主：官方源码构建的 Harness 0.1.7-rc.2（保留本地工具调度器修复）。构建与自动测试通过；实际操作和外部服务限制见本轮验收记录。
+
 > **一句话 / 一篇文档 → 完整演示文稿**：HTML 网页放映 + PPTX 导出，5 套视觉主题，页间转场 + 要点入场动画，中英双语。
 
 ![npm version](https://img.shields.io/npm/v/dsh-ppt?label=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dm/dsh-ppt) ![license](https://img.shields.io/npm/l/dsh-ppt) ![stars](https://img.shields.io/github/stars/STARDUSTLC666/dsh-ppt?style=social)

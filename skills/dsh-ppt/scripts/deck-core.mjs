@@ -171,6 +171,7 @@ export const LANGUAGES = {
       presenterHint: '备注：未开演讲者窗口时按 S 显示在顶部；打开后只在演讲者窗口显示，观众看不到',
       wrapHint: '已环绕到',
       popupBlocked: '浏览器拦截了演讲者窗口，请允许弹出窗口后按 V 重试',
+      fullscreenUnavailable: '当前窗口无法进入全屏，请在浏览器中独立打开演示文件后重试。',
       notesCloseLabel: '关闭备注',
       overviewHint: '点击缩略图跳页，方向键切换，Enter 进入，Esc 退出'
     },
@@ -206,6 +207,7 @@ export const LANGUAGES = {
       presenterHint: 'Notes: S shows them on top until a presenter window is open; afterwards only in the presenter window.',
       wrapHint: 'Wrapped to',
       popupBlocked: 'The presenter window was blocked. Allow pop-ups and press V to retry.',
+      fullscreenUnavailable: 'Fullscreen is unavailable here. Open the presentation in a browser tab and try again.',
       notesCloseLabel: 'Close notes',
       overviewHint: 'Click a thumbnail to jump; arrows move, Enter opens, Esc exits'
     },
@@ -241,6 +243,7 @@ export const LANGUAGES = {
       presenterHint: '备注：未开演讲者窗口时按 S 显示在顶部；打开后只在演讲者窗口显示 · Notes: S shows on top until a presenter window is open',
       wrapHint: '已环绕到 · Wrapped to',
       popupBlocked: '浏览器拦截了演讲者窗口 · Presenter window blocked; allow pop-ups and press V',
+      fullscreenUnavailable: '当前窗口无法全屏，请独立打开演示文件 · Open this presentation in a browser tab for fullscreen.',
       notesCloseLabel: '关闭备注 · Close notes',
       overviewHint: '点击缩略图跳页 · Click to jump, arrows move, Enter opens, Esc exits'
     },
@@ -1455,6 +1458,18 @@ ${slides}
       + '<scr' + 'ipt>' + js + '</scr' + 'ipt></body></html>';
   }
 
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen?.(); return; }
+      if (!document.documentElement.requestFullscreen || document.fullscreenEnabled === false) {
+        toast(ui.fullscreenUnavailable);
+        return;
+      }
+      await document.documentElement.requestFullscreen();
+      if (!document.fullscreenElement) toast(ui.fullscreenUnavailable);
+    } catch (_) { toast(ui.fullscreenUnavailable); }
+  }
+
   function openPresenter() {
     if (presenterOpen()) { try { presenterWin.focus(); } catch (_) { /* gone */ } return; }
     let url = '';
@@ -1553,8 +1568,7 @@ ${slides}
     } else if (key === 'Enter' && inOverview) {
       event.preventDefault(); setOverview(false);
     } else if (lower === 'f') {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-      else document.exitFullscreen?.();
+      void toggleFullscreen();
     } else if (lower === 'g') {
       setOverview(!inOverview);
     } else if (lower === 's') {
@@ -1589,10 +1603,7 @@ ${slides}
     if (Math.abs(delta) > 48 && !document.body.classList.contains('overview')) go(index + (delta < 0 ? 1 : -1));
   }, { passive: true });
 
-  fullscreenBtn.addEventListener('click', () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  });
+  fullscreenBtn.addEventListener('click', () => { void toggleFullscreen(); });
   notesBtn.addEventListener('click', () => {
     if (document.body.classList.contains('presenting')) { toast(ui.presenterHint); return; }
     setNotes(!notesOpen());
