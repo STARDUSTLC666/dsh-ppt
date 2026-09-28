@@ -36,10 +36,6 @@ Example:
 
 ## Compatibility
 
-2026-09-21: the current release package was installed through the official CLI in an isolated profile and co-loaded with the other two most-downloaded plugins on source-built Harness `0.1.6-alpha.2`. All 18 plugin tools registered; calendar/email configuration checks, PPT theme listing and 17-row table generation passed. The host is based on the official alpha.2 release plus the tool-scheduler `Symbol.for` fix (`93badd88`). This run did not connect to live mail or calendar services.
-
-Verified with official `@deepseek-ai/dsh@0.1.5-rc.1` and Node `24.16.0` on 2026-09-11: all 18 components load alongside Modlens, with passing tool-schema, skill-registration and offline read-only invocation checks. Uses the `cordis.patch.yml` + `dsh.bundle.patch` bundle model. Node requirements match this Harness release: 22.19 or later within 22.x, or 24 or later. Live external-service workflows require separate configuration and validation.
-
 ## Installation
 
 ```bash
