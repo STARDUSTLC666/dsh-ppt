@@ -4,7 +4,7 @@
 
 Includes presenter previews, thumbnails and timer controls. Unsupported or rejected fullscreen requests now show an actionable message instead of silently failing.
 
-Validation host: Harness 0.1.7-rc.2 built from official sources, retaining the local tool-scheduler fix. Build and automated checks pass; interactive coverage and external-service limits are recorded in this release round.
+Validation host: Harness `0.2.0-rc.1` built from official sources (commit `407e65c8`) with Node `24.16.0` on 2026-09-28. All 70 plugin tests pass in an isolated environment; all 18 plugins mount together in one host registering 1 skills and 2 tools, with tool schemas and health-check contracts passing. No live ports or external services were exercised in this round.
 
 ![npm](https://img.shields.io/npm/v/dsh-ppt) ![downloads](https://img.shields.io/npm/dm/dsh-ppt) ![license](https://img.shields.io/github/license/STARDUSTLC666/dsh-ppt) ![stars](https://img.shields.io/github/stars/STARDUSTLC666/dsh-ppt?style=social)
 
