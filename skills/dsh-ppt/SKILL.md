@@ -1,7 +1,7 @@
 ---
 name: dsh-ppt
 description: "Turn one sentence or a Markdown document into a complete, presentation-ready deck: a standalone HTML web slideshow plus an editable PPTX export, with 5 built-in visual themes (Swiss Pulse / Velvet Standard / Data Drift / Soft Signal / Maximalist Type), slide transitions + bullet entrance animations (motion, on by default), and bilingual Chinese/English support. Use when the user asks for a PPT, slides, deck, keynote, 演示文稿, 幻灯片, 汇报, 提案, 路演, 培训材料, or wants to turn a document into a presentation. 中文：把一句话或一篇文档变成完整演示文稿（HTML 网页放映 + PPTX 导出），内置 5 套视觉主题、页间转场与要点入场动画，中英双语。"
-compatibility: "DSH plugin runs in-process with zero runtime dependencies. The standalone CLI needs Node.js >= 20. Cross-harness: copy this skill directory into any Agent Skills directory."
+compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts use @office-kit/pptx@0.21.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.1.3. Cross-harness: copy the full directory and run npm install --ignore-scripts there."
 allowed-tools: "Bash, Read, Write, Edit"
 ---
 
@@ -19,6 +19,8 @@ allowed-tools: "Bash, Read, Write, Edit"
 - 内容语言由你撰写；`lang` 只决定界面文字。
 - 先选主题再构建；不确定就用默认 `data`。
 - 交付前逐项过一遍文末「质量门禁」。
+- 目标是可用成品：先组织真实内容，再调用生成器；未填模板必须标注草稿，不编造缺失事实。
+- 渲染报告缺失字体时，替换为环境和接收方机器可用字体，重新生成并逐页检查；未解决需标注字体问题，不能声称已验收。
 
 ## 核心流水线
 
@@ -32,7 +34,7 @@ allowed-tools: "Bash, Read, Write, Edit"
    - 跨 harness：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --content deck.md --theme data --lang zh --out dist`。
    - 动效默认开（页间转场 + 要点逐条入场）；严肃/打印场景传 `motion: 'off'`。
    → 用表格 / 金句 / 备注 / 结构化 slides 前读 `references/syntax.md`。
-5. **Verify 校验**：确认 HTML 页数与大纲一致、标题无截断、PPTX 文件头为 `PK`。
+5. **Verify 校验与修正**：调 `ppt_check` 检查具体页；在浏览器操作放映、总览和备注，查看图片/图表。若可选官方引擎可用，调 `ppt_render` 读取最终 PPTX 生成逐页 PNG/PDF，逐页看画面。修正用 `ppt_edit`，以 `expectedRevision` 防冲突；需要时 `ppt_undo`。修改后重新渲染，以收据复核当前文件。文件头/结构通过不等同于视觉验收，静态估算、渲染、视觉检查必须分开说明。
 6. **Deliver 交付**：给用户三个绝对路径，说明 HTML 直接放映（← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印），PPTX 用 PowerPoint / WPS / Keynote 打开（备注在演示者视图可见，bullets 页放映时逐条点击出现）。
 
 ## 按需装载索引
@@ -42,6 +44,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 | 写大纲 / 正文前 | `references/copywriting.md` | 叙事骨架、单页规则、双语规则 |
 | 选主题拿不准 | `references/themes.md` | 5 套主题色板 + 情绪决策树 |
 | 用表格/金句/备注/结构化 slides | `references/syntax.md` | Markdown 解析、进阶语法、slides JSON、motion 开关 |
+| 图片/图表/模板/品牌/编辑/渲染 | `references/advanced.md` | 参数、限制、草稿与成品、收据语义 |
 | 交付异常 | `references/troubleshooting.md` | 症状 → 处理对照表 |
 
 ## 质量门禁（交付前逐项确认）
@@ -53,10 +56,12 @@ allowed-tools: "Bash, Read, Write, Edit"
 - [ ] 中文内容无错别字；英文标题用 Title Case。
 - [ ] 最后一页有可执行的行动号召，不只是「谢谢」。
 - [ ] 文件已写到用户工作区，路径为绝对路径。
+- [ ] 没有未填模板；保留真实数据来源，检查每页画面而非只检查生成成功。
+- [ ] 图片嵌入成功，图表与原始数据一致；渲染收据匹配最终 PPTX，说明尚未验证的部分。
 
 ## 跨 harness 安装
 
-把整个 `dsh-ppt` 技能目录复制到目标 agent 的技能目录即可（只依赖 Node 20+）：
+把整个 `dsh-ppt` 技能目录复制到目标 agent 的技能目录，使用 Node `^22.19.0 || >=24.0.0`，在该目录运行 `npm install --ignore-scripts`。纯文本可直接运行；图片/图表/品牌导出需要 Office Kit，PNG/PDF 需另外安装可选官方引擎：
 
 | Agent | 技能目录 |
 | --- | --- |

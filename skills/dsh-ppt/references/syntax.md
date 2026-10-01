@@ -37,7 +37,7 @@
 ]
 ```
 
-`layout` 仅限 `cover | section | bullets | statement | quote | table | closing`；每页可选 `notes`（演讲者备注），`table` 页用 `rows`（首行为表头）。结构化表格同样自动分页，备注只放第一页。分页后总页数超过 maxSlides 时会报错，请提高配置上限（最多 120）或拆分文稿。Markdown 输入不够精确时，用结构化 slides 重写。
+`layout` 支持 `cover | section | bullets | statement | quote | table | closing | image | image-left | image-right | chart`；每页可选 `notes`，表格用 `rows`（首行为表头）。结构化表格自动分页，备注只放第一页。分页后超过 maxSlides 会报错，最多120页。图文、图表、品牌及按页编辑见 `advanced.md`。
 
 ## 动效（motion）
 

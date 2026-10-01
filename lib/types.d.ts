@@ -1,8 +1,99 @@
 /** dsh-ppt 的公共类型。 */
 export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'quote' | 'table' | 'closing';
+export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'quote' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart';
+export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch';
+export interface PptImageSpec {
+    src?: string;
+    assetId?: string;
+    alt?: string;
+    fit?: 'contain' | 'cover';
+    caption?: string;
+}
+export interface PptChartSpec {
+    kind?: 'column' | 'bar' | 'line' | 'pie';
+    categories?: Array<string | number>;
+    series?: Array<{
+        name: string;
+        values: Array<string | number>;
+    }>;
+    rows?: Array<Array<string | number>>;
+    unit?: string;
+    caption?: string;
+}
+export interface PptBrand {
+    name?: string;
+    primaryColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    fontFamily?: string;
+    logo?: string | null;
+    footer?: string;
+}
+export interface PptQualityIssue {
+    slide: number;
+    slideId?: string;
+    severity: 'warning' | 'error';
+    code: string;
+    message: string;
+    suggestion: string;
+}
+export interface PptQualityResult {
+    ok: boolean;
+    slideCount: number;
+    errorCount: number;
+    warningCount: number;
+    issues: PptQualityIssue[];
+    note: string;
+}
+export interface PptVerification {
+    static: 'checked';
+    pptxRender: 'not-verified' | 'rendered';
+    visual: 'not-verified';
+}
+export interface PptRenderArgs {
+    pptxPath: string;
+    outputDir?: string;
+    format?: 'png' | 'pdf' | 'both';
+    width?: number;
+    timeoutMs?: number;
+}
+export interface PptRenderResult {
+    ok: boolean;
+    status: 'unavailable' | 'not-verified' | 'rendered';
+    backend?: string;
+    rendererVersion?: string;
+    sourceSha256?: string;
+    outputDir?: string;
+    reason?: string;
+    slideCount?: number;
+    pngPaths?: string[];
+    pdfPath?: string;
+    receiptPath?: string;
+    missingFonts?: string[];
+    message?: string;
+    installationHint?: string;
+    visual?: 'not-verified';
+}
+export interface PptCheckResult extends PptQualityResult {
+    verification: PptVerification;
+    render?: PptRenderResult;
+}
+export interface PptEditArgs {
+    deckPath: string;
+    edits?: Array<{
+        slide: number | string;
+        patch: Partial<Omit<PptSlideSpec, 'id'>>;
+    }>;
+    brand?: PptBrand | null;
+    expectedRevision?: number;
+}
+export interface PptProjectArgs {
+    deckPath: string;
+    expectedRevision?: number;
+}
 export interface PptSlideSpec {
+    id?: string;
     layout?: PptSlideLayout;
     title?: string;
     subtitle?: string;
@@ -13,6 +104,8 @@ export interface PptSlideSpec {
     rows?: Array<Array<string | number>>;
     /** 演讲者备注；写入 HTML 备注面板与 PPTX 原生备注页。 */
     notes?: string;
+    image?: PptImageSpec | string | null;
+    chart?: PptChartSpec | null;
 }
 export interface PptConfig {
     /** 默认输出目录；调用 ppt_create 时可用 outputDir 覆盖。相对路径按会话工作目录解析。 */
@@ -38,6 +131,8 @@ export interface PptCreateArgs {
     fileName?: string;
     /** 是否覆盖同名三件套；默认 false，同名时自动选择唯一后缀。 */
     overwrite?: boolean;
+    template?: PptTemplateId;
+    brand?: PptBrand;
 }
 export interface PptThemeInfo {
     id: string;
@@ -80,9 +175,22 @@ export interface PptCreateResult {
     htmlPath: string;
     pptxPath: string;
     jsonPath: string;
+    deckId?: string;
+    revision?: number;
+    undoAvailable?: number;
+    deliveryStatus?: 'draft' | 'ready-for-review';
+    quality?: PptQualityResult;
+    verification?: PptVerification;
 }
-/** deck-core.mjs 暴露给插件的最小面。 */
+/** Shared generator and optional renderer exposed to the plugin. */
 export interface DeckEngine {
+    buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>;
+    listTemplates(lang?: string): unknown[];
+    editDeck(options: Record<string, unknown>): Promise<PptCreateResult>;
+    undoDeck(options: Record<string, unknown>): Promise<PptCreateResult>;
+    checkDeck(options: Record<string, unknown>): PptQualityResult;
+    checkDeckAsync?(options: Record<string, unknown>): Promise<PptCheckResult>;
+    renderDeck(options: Record<string, unknown>): Promise<PptRenderResult>;
     buildDeck(options: Record<string, unknown>): PptCreateResult;
     buildThemePreview(options: Record<string, unknown>): PptThemePreviewResult;
     listThemes(lang?: string): PptThemeInfo[];

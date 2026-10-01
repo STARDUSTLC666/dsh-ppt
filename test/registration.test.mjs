@@ -33,10 +33,10 @@ test('parseSkillFile 兼容 CRLF 与带引号的单行 frontmatter', () => {
   assert.match(parsed.content, /^# Body/)
 })
 
-test('apply 空配置即可注册 2 个工具与 1 个技能（加载不失败）', () => {
+test('apply 空配置即可注册 7 个工具与 1 个技能（加载不失败）', () => {
   const ctx = fakeCtx()
   apply(ctx, {})
-  assert.deepEqual(ctx.tools.defs.map((def) => def.name).sort(), ['ppt_create', 'ppt_themes'])
+  assert.deepEqual(ctx.tools.defs.map((def) => def.name).sort(), ['ppt_check', 'ppt_create', 'ppt_edit', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo'])
   assert.equal(ctx.skills.defs.length, 1)
   assert.equal(ctx.skills.defs[0].name, 'dsh-ppt')
   assert.ok(ctx.skills.defs[0].content.length > 500)
@@ -51,7 +51,7 @@ test('每个已注册工具的 parameters 都是编译好的 JSON Schema', () =>
     assert.equal(def.parameters.type, 'object', def.name + ' parameters 根必须是 object')
     assert.ok(def.parameters.properties && typeof def.parameters.properties === 'object', def.name + ' 必须有 properties')
     for (const [key, node] of Object.entries(def.parameters.properties)) {
-      assert.ok(typeof node.type === 'string', def.name + '.' + key + ' 必须声明 type')
+      assert.ok(typeof node.type === 'string' || Array.isArray(node.oneOf), def.name + '.' + key + ' 必须声明 type 或 oneOf')
     }
     assert.deepEqual(JSON.parse(JSON.stringify(def.parameters)), def.parameters)
   }
@@ -60,6 +60,14 @@ test('每个已注册工具的 parameters 都是编译好的 JSON Schema', () =>
   assert.equal(create.parameters.properties.slides.items.type, 'object')
   assert.deepEqual(create.parameters.properties.motion.enum, ['on', 'off'])
   assert.equal(create.parameters.properties.overwrite.type, 'boolean')
+  const walk = node => {
+    assert.equal(Array.isArray(node.type), false, 'Harness不接受type数组')
+    if (node.oneOf) node.oneOf.forEach(walk)
+    if (node.items) walk(node.items)
+    Object.values(node.properties ?? {}).forEach(walk)
+  }
+  for (const def of ctx.tools.defs) walk(def.parameters)
+  assert.deepEqual(create.parameters.properties.slides.items.properties.image.oneOf.map(n => n.type), ['object', 'string', 'null'])
 })
 
 test('output.schema 是纯 JSON（可无损序列化）', () => {

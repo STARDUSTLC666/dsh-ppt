@@ -17,19 +17,22 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve as resolvePath, join as joinPath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
+import { MEDIA_LAYOUTS, MEDIA_CSS, normalizeMediaSlide, renderMediaHtml, mediaBoxes } from './deck-media.mjs'
 
 /**
  * manifest 版本跟随发布包 package.json；把 skills/dsh-ppt 独立复制到其他
  * harness（没有 package.json）时回退为 0.0.0，避免版本号悄悄漂移。
  */
 function readDeckVersion() {
-  try {
-    const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))
-    const version = String(pkg.version ?? '').trim()
-    return version !== '' ? version : '0.0.0'
-  } catch {
-    return '0.0.0'
+  for (const file of ['../../../package.json', '../package.json']) {
+    try {
+      const pkg = JSON.parse(readFileSync(new URL(file, import.meta.url), 'utf8'))
+      if (!['dsh-ppt', 'dsh-ppt-skill'].includes(pkg.name)) continue
+      const version = String(pkg.version ?? '').trim()
+      if (version) return version
+    } catch { /* Copied skill may have no parent manifest. */ }
   }
+  return '0.0.0'
 }
 
 export const DECK_VERSION = readDeckVersion()
@@ -430,7 +433,7 @@ const DECK_ARTIFACT_EXTENSIONS = ['.html', '.pptx', '.json']
  * 为三件套选择同一个可用文件名前缀。默认不覆盖：任一产物已存在时，
  * 整组改用 -1/-2… 后缀，避免新旧 deck 被静默混写。
  */
-function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
+export function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
   // 一次 readdir 建集，替代逐个候选 existsSync 探测（最坏 ~3000 次 stat）；
   // 统一小写比较，避免 Windows 大小写不敏感文件系统把已占用的名字判成可用。
   const existing = new Set(readdirSync(outputDir).map((name) => name.toLowerCase()))
@@ -794,11 +797,11 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
 }
 
-const SLIDE_LAYOUTS = new Set(['cover', 'section', 'bullets', 'statement', 'closing', 'quote', 'table'])
+const SLIDE_LAYOUTS = new Set(['cover', 'section', 'bullets', 'statement', 'closing', 'quote', 'table', ...MEDIA_LAYOUTS])
 
 function normalizeSlide(raw, index) {
   const source = (raw !== null && typeof raw === 'object') ? raw : {}
-  const layout = SLIDE_LAYOUTS.has(source.layout) ? source.layout : 'bullets'
+  const layout = SLIDE_LAYOUTS.has(source.layout) ? source.layout : source.chart ? 'chart' : source.image ? 'image-right' : 'bullets'
   const title = stripInlineMarkdown(source.title ?? '')
   const subtitle = stripInlineMarkdown(source.subtitle ?? '')
   const kicker = stripInlineMarkdown(source.kicker ?? '')
@@ -811,6 +814,7 @@ function normalizeSlide(raw, index) {
   } else if (typeof source.bullets === 'string' && source.bullets.trim() !== '') {
     bullets = splitSentences(source.bullets)
   }
+  if (MEDIA_LAYOUTS.has(layout)) return normalizeMediaSlide(source, { layout, kicker, title, subtitle, text, bullets, ...(notes !== '' ? { notes } : {}) }, index)
   if (layout === 'statement' && title === '' && text !== '') {
     return { layout, kicker, title: text, subtitle: subtitle || '', bullets, ...(notes !== '' ? { notes } : {}) }
   }
@@ -891,7 +895,7 @@ export function normalizeBuildOptions(options = {}) {
  * 任一步失败都清理临时文件，并把已提交的目标恢复为调用前的内容，
  * 避免出现「json/html 已更新、pptx 还是旧的」这类混版状态。
  */
-function commitDeckArtifacts(artifacts) {
+export function commitDeckArtifacts(artifacts) {
   const stamp = process.pid.toString(36) + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
   const items = artifacts.map((item, index) => ({ ...item, tempPath: item.path + '.' + stamp + '-' + index + '.tmp' }))
   const removeTemp = (item) => {
@@ -945,6 +949,9 @@ function commitDeckArtifacts(artifacts) {
 }
 
 export function buildDeck(options = {}) {
+  if (options.brand || options.template || options.slides?.some(slide => MEDIA_LAYOUTS.has(slide.layout) || slide.image || slide.chart)) {
+    throw new Error('dsh-ppt：图片、图表、模板与品牌请使用异步 buildDeckAsync 或 ppt_create / CLI')
+  }
   const normalized = normalizeBuildOptions(options)
   const { title, theme, language, motion, deck, outputDir, overwrite } = normalized
   mkdirSync(outputDir, { recursive: true })
@@ -1009,7 +1016,7 @@ body.motion .bullets li{
   const slides = manifest.slides.map((slide, index) => {
     const label = slide.title || slide.kicker || (ui.slide + ' ' + (index + 1))
     return '<div class="slide-frame" data-frame="' + (index + 1) + '" tabindex="-1" role="button" aria-label="' + escapeHtml(String(label)) + '">' +
-      renderHtmlSlide(slide, index, ui, lang.id) + '</div>'
+      renderHtmlSlide(slide, index, ui, lang.id, manifest, theme) + '</div>'
   }).join('\n')
   const themeLabel = t.name[lang.id] ?? t.name.en
   const total = manifest.slides.length
@@ -1054,6 +1061,7 @@ body{
 }
 .slide.is-active{display:flex}
 ${motionCss}
+${MEDIA_CSS}
 .kicker{
   color:var(--accent);font-weight:700;letter-spacing:.18em;text-transform:uppercase;
   font-size:clamp(12px,1.3vw,18px);margin-bottom:22px;
@@ -1167,6 +1175,7 @@ body.blank-black #hud,body.blank-white #hud{visibility:hidden;pointer-events:non
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 body.overview #stage{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;
+  grid-auto-rows:var(--deck-thumb-height,180px);
   padding:18px 18px 92px;position:fixed;inset:0;overflow:auto;align-content:start;
 }
 body.overview .slide-frame{
@@ -1184,11 +1193,12 @@ body.overview .slide-frame::after{
   padding:1px 7px;font-variant-numeric:tabular-nums;
 }
 body.overview .slide{
-  display:flex !important;position:absolute;inset:0;width:100vw;height:100vh;
+  display:flex !important;position:absolute;inset:0;width:1280px;height:720px;
   transform:scale(var(--deck-thumb-scale,.25));transform-origin:top left;pointer-events:none;
   animation:none !important;
 }
 body.overview .bullets li{opacity:1 !important;animation:none !important}
+body.overview .media-canvas{width:1280px;height:720px}
 body.overview #notes-panel,body.presenting #notes-panel{display:none !important}
 body.presenting #notes-toggle{opacity:.55}
 body.presenting #hud{opacity:0;pointer-events:none;transition:opacity .25s}
@@ -1362,7 +1372,10 @@ ${slides}
     if (!document.body.classList.contains('overview')) return;
     requestAnimationFrame(function () {
       const width = frames[0] ? frames[0].getBoundingClientRect().width : 0;
-      if (width > 0) document.documentElement.style.setProperty('--deck-thumb-scale', String(width / window.innerWidth));
+      if (width > 0) {
+        document.documentElement.style.setProperty('--deck-thumb-scale', String(width / 1280));
+        document.documentElement.style.setProperty('--deck-thumb-height', String(width * 9 / 16) + 'px');
+      }
     });
   }
 
@@ -1630,7 +1643,7 @@ ${slides}
 </body>
 </html>`
 }
-function renderHtmlSlide(slide, index, ui, langId) {
+function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
   const kicker = slide.kicker || (slide.layout === 'cover' ? ui.coverKicker : '')
   const title = slide.title || ''
   const subtitle = slide.subtitle || ''
@@ -1638,6 +1651,12 @@ function renderHtmlSlide(slide, index, ui, langId) {
   const number = String(index + 1).padStart(2, '0')
   let inner = ''
   switch (slide.layout) {
+    case 'image':
+    case 'image-left':
+    case 'image-right':
+    case 'chart':
+      inner = renderMediaHtml(slide, manifest, theme)
+      break
     case 'cover':
       inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
         '<h1>' + escapeHtml(title) + '</h1>' +
@@ -1693,7 +1712,9 @@ function renderHtmlSlide(slide, index, ui, langId) {
     ? ' data-notes="' + escapeHtml(slide.notes) + '"'
     : ''
   return '<section class="slide slide--' + escapeHtml(slide.layout || 'bullets') + '" data-index="' + number + '"' + notesAttr + '>' +
-    '<div class="slide-inner">' + inner + '</div></section>'
+    '<div class="slide-inner">' + inner + '</div>' +
+    (manifest.brand?.logoAssetId ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
+    (manifest.brand?.footer ? '<div class="brand-footer">' + escapeHtml(manifest.brand.footer) + '</div>' : '') + '</section>'
 }
 
 function hexToRgba(hex, alpha) {
@@ -1717,9 +1738,28 @@ function hex(value) {
   return String(value).replace('#', '').toUpperCase()
 }
 
-function pptxFontName(value) {
-  const match = /"?([^",]+)"?/.exec(String(value ?? ''))
-  return match?.[1]?.trim() || 'Arial'
+export function pptxFontName(value) {
+  const names = String(value ?? '').split(',').map(name => name.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+  // A CSS stack may start with an optional web font. Office receives one actual
+  // family, so select a platform fallback instead of copying the first name.
+  if (names.length === 1 && !['serif', 'sans-serif', 'system-ui'].includes(names[0])) return names[0]
+  const available = process.platform === 'win32'
+    ? ['Segoe UI', 'Arial', 'Arial Black', 'Impact', 'Georgia', 'Times New Roman', 'Microsoft YaHei', 'SimSun']
+    : process.platform === 'darwin'
+      ? ['Helvetica Neue', 'Arial', 'Impact', 'Georgia', 'Times New Roman', 'Avenir Next', 'PingFang SC', 'Songti SC']
+      : ['Liberation Sans', 'Liberation Serif', 'Noto Sans', 'Noto Sans CJK SC', 'Noto Serif CJK SC']
+  return names.find(name => available.includes(name)) || (names.includes('serif')
+    ? process.platform === 'linux' ? 'Liberation Serif' : 'Georgia'
+    : process.platform === 'win32' ? 'Segoe UI' : process.platform === 'darwin' ? 'Helvetica Neue' : 'Liberation Sans')
+}
+
+export function pptxEastAsianFont(value) {
+  const font = pptxFontName(value)
+  if (/Microsoft YaHei|SimSun|SimHei|PingFang|Songti|Heiti|Noto (Sans|Serif) CJK|[\u3400-\u9fff]/i.test(font)) return font
+  const serif = /Georgia|Times New Roman|Cambria|Liberation Serif/i.test(font)
+  return process.platform === 'win32' ? serif ? 'SimSun' : 'Microsoft YaHei'
+    : process.platform === 'darwin' ? serif ? 'Songti SC' : 'PingFang SC'
+    : serif ? 'Noto Serif CJK SC' : 'Noto Sans CJK SC'
 }
 
 function paragraphXml(text, options = {}) {
@@ -1735,20 +1775,14 @@ function paragraphXml(text, options = {}) {
     spaceAfter = 0,
   } = options
   const runFont = pptxFontName(font)
-    let pPr = ''
-  if (bullet) {
-    pPr = '<a:pPr marL="285750" indent="-285750"><a:buFont typeface="Arial" panose="020B0604020202020204"/><a:buChar char="•"/></a:pPr>'
-  } else {
-    const parts = [] // align 与 spacing 二选一
-    if (align !== 'l') parts.push('algn="' + align + '"')
-    if (spaceBefore > 0) parts.push('<a:spcBef><a:spcPts val="' + (spaceBefore / 100) + '"/></a:spcBef>')
-    if (spaceAfter > 0) parts.push('<a:spcAft><a:spcPts val="' + (spaceAfter / 100) + '"/></a:spcAft>')
-    pPr = '<a:pPr' + (parts.length > 0 ? ' ' + parts.join(' ') : '') + '><a:buNone/></a:pPr>'
-  }
+  const spacing = (spaceBefore > 0 ? '<a:spcBef><a:spcPts val="' + spaceBefore + '"/></a:spcBef>' : '') +
+    (spaceAfter > 0 ? '<a:spcAft><a:spcPts val="' + spaceAfter + '"/></a:spcAft>' : '')
+  const pPr = '<a:pPr' + (bullet ? ' marL="285750" indent="-285750"' : align !== 'l' ? ' algn="' + align + '"' : '') + '>' + spacing +
+    (bullet ? '<a:buFont typeface="Arial" panose="020B0604020202020204"/><a:buChar char="•"/>' : '<a:buNone/>') + '</a:pPr>'
   return '<a:p>' + pPr +
     '<a:r><a:rPr lang="' + lang + '" sz="' + size + '" b="' + (bold ? 1 : 0) + '" dirty="0">' +
     '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
-    '<a:latin typeface="' + escapeXml(runFont) + '"/><a:ea typeface="' + escapeXml(runFont) + '"/></a:rPr>' +
+    '<a:latin typeface="' + escapeXml(runFont) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(font)) + '"/></a:rPr>' +
     '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p>'
 }
 
@@ -1779,14 +1813,15 @@ function tableGraphicXml(id, name, box, rows, theme, langId) {
   const font = pptxFontName(theme.fonts.body)
   const safeRows = rows.length > 0 ? rows : [['']]
   const cols = Math.max(1, safeRows[0].length)
+  const fontSize = cols <= 6 ? 1700 : 1400
   const colW = Math.floor(box.w / cols)
   const grid = Array.from({ length: cols }, () => '<a:gridCol w="' + colW + '"/>').join('')
   const rowH = 420000
   const cellXml = (text, fill, color, bold) =>
     '<a:tc><a:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr>' +
-    '<a:r><a:rPr lang="' + lang + '" sz="1400" b="' + (bold ? 1 : 0) + '" dirty="0">' +
+    '<a:r><a:rPr lang="' + lang + '" sz="' + fontSize + '" b="' + (bold ? 1 : 0) + '" dirty="0">' +
     '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
-    '<a:latin typeface="' + escapeXml(font) + '"/><a:ea typeface="' + escapeXml(font) + '"/></a:rPr>' +
+    '<a:latin typeface="' + escapeXml(font) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(theme.fonts.body)) + '"/></a:rPr>' +
     '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p></a:txBody>' +
     '<a:tcPr marL="91440" marR="91440" anchor="ctr">' +
     (fill !== '' ? '<a:solidFill><a:srgbClr val="' + hex(fill) + '"/></a:solidFill>' : '<a:noFill/>') +
@@ -1824,7 +1859,17 @@ function slideShapeList(slide, index, total, theme, langId) {
   const idBase = (index + 1) * 10
   const footer = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
 
-  if (slide.layout === 'cover') {
+  if (MEDIA_LAYOUTS.has(slide.layout)) {
+    const boxes = mediaBoxes(slide.layout)
+    const emu = box => Object.fromEntries(Object.entries(box).map(([key, value]) => [key, Math.round(value * 914400)]))
+    shapes.push(textShapeXml(idBase + 2, 'Title', emu(boxes.title), [para(title, { size: 3400, color: p.fg, bold: true, font })]))
+    if (boxes.body) shapes.push(textShapeXml(idBase + 3, 'Body', emu(boxes.body), [
+      ...(subtitle ? [para(subtitle, { size: 2000, color: p.fg, font: bodyFont })] : []),
+      ...bullets.map(bullet => para(bullet, { size: 2000, color: p.fg, bullet: true, font: bodyFont, spaceAfter: 600 })),
+    ]))
+    const caption = slide.chart?.caption || slide.image?.caption
+    if (caption) shapes.push(textShapeXml(idBase + 4, 'Caption', emu(boxes.caption), [para(caption, { size: 1400, color: p.muted, font: bodyFont })]))
+  } else if (slide.layout === 'cover') {
     shapes.push(accentBarXml(idBase + 1, 'Accent bar', { x: 914400, y: 2250000, w: 240000, h: 1600000 }, p.accent))
     shapes.push(textShapeXml(idBase + 2, 'Title', { x: 1550000, y: 2160000, w: 9250000, h: 1800000 }, [
       para(title, { size: 4400, color: p.fg, bold: true, font }),
@@ -1877,8 +1922,8 @@ function slideShapeList(slide, index, total, theme, langId) {
       ]))
     }
   } else if (slide.layout === 'table') {
-    const hasTitle = title !== '' && title !== kicker
-    if (kicker !== '') {
+    const hasTitle = title !== ''
+    if (kicker !== '' && kicker !== title) {
       shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 900000, y: 420000, w: 10000000, h: 420000 }, [
         para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
       ]))
@@ -2073,7 +2118,7 @@ function slideMasterXml(theme) {
   const levels = Array.from({ length: 9 }, (_, i) => {
     const sz = Math.max(1100, 2000 - i * 100)
     return '<a:lvl' + (i + 1) + 'pPr marL="' + (342900 + i * 342900) + '" indent="' + (-342900 - i * 0) + '">' +
-      '<a:defRPr sz="' + sz + '"><a:solidFill><a:srgbClr val="' + hex(p.fg) + '"/></a:solidFill><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.body)) + '"/></a:defRPr></a:lvl' + (i + 1) + 'pPr>'
+      '<a:defRPr sz="' + sz + '"><a:solidFill><a:srgbClr val="' + hex(p.fg) + '"/></a:solidFill><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.body)) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(theme.fonts.body)) + '"/></a:defRPr></a:lvl' + (i + 1) + 'pPr>'
   }).join('')
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
@@ -2128,8 +2173,8 @@ function themeXml(theme) {
     color('hlink', p.accent) + color('folHlink', p.accent2) +
     '</a:clrScheme>' +
     '<a:fontScheme name="dsh-ppt">' +
-    '<a:majorFont><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.heading)) + '"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
-    '<a:minorFont><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.body)) + '"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' +
+    '<a:majorFont><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.heading)) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(theme.fonts.heading)) + '"/><a:cs typeface=""/></a:majorFont>' +
+    '<a:minorFont><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.body)) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(theme.fonts.body)) + '"/><a:cs typeface=""/></a:minorFont>' +
     '</a:fontScheme>' +
     '<a:fmtScheme name="dsh-ppt">' +
     '<a:fillStyleLst>' +

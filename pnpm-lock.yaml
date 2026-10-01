@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@deepseek-ai/libreoffice-kit':
+        specifier: 0.1.3
+        version: 0.1.3
+      '@office-kit/pptx':
+        specifier: 0.21.0
+        version: 0.21.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -17,8 +24,90 @@ importers:
 
 packages:
 
+  '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.3':
+    resolution: {integrity: sha512-HinPGEyUNZUhBceN9kL9EeiFHo6bfhuY7D1uNBEdwJOzB+QJZVwWmbtc2A6Ds//bOukg9V+7FQEcOnjbqdRTUw==}
+    engines: {node: '>=22.19.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@deepseek-ai/libreoffice-kit-darwin-x64@0.1.3':
+    resolution: {integrity: sha512-uzIreqN3bTYJ9HzXDkVLeKCWAOlPd5WS2H64BJ8L8WsLmLIpAaaw9RGcPkor59fr4EPA8jPNQBmevVu/xTgpTQ==}
+    engines: {node: '>=22.19.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@deepseek-ai/libreoffice-kit-wasm@0.1.3':
+    resolution: {integrity: sha512-qWDpBBAcqSqeGd3dk2iucjcxUfbTUGka1n3WGvqgfmL4lqvFA2PY4itopMKW2/PuRpyfoA8ab07FVouCOouECA==}
+    engines: {node: '>=22.19.0'}
+    os: [linux]
+
+  '@deepseek-ai/libreoffice-kit-win32-arm64@0.1.3':
+    resolution: {integrity: sha512-y29v70ekrzDBGZVcwiY1DGWELjEEvY6bghpyBU5qvqGBZ8JmbS7wbyjor3w2nRUxQOGCkLCyqMefSWKFH7czWg==}
+    engines: {node: '>=22.19.0'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@deepseek-ai/libreoffice-kit-win32-x64@0.1.3':
+    resolution: {integrity: sha512-PrUb4ykkI6fJBJ6MX40XgctY0mOUfO4yPWdWB5QdQSw5seq3fulBv0BcrJMTGw2ZT81wwB181MQja4AfOMWg2A==}
+    engines: {node: '>=22.19.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@deepseek-ai/libreoffice-kit@0.1.3':
+    resolution: {integrity: sha512-i85Ll6DAvwI+YGOMtVvPwBSYZso8vz26JlZ+389jxcfoLfRHMXRcW5X/bqyy932GgVNrCUP1Jd7KU/Wy5A8o1g==}
+    engines: {node: '>=22.19.0'}
+    hasBin: true
+
+  '@office-kit/pptx@0.21.0':
+    resolution: {integrity: sha512-m3E+DUw4KmnK1IMh87huvm84DUISjS4nxRZsGq4mJvVoqHmkqloZcZcxbFncwC8eLfpyHyHGk5x8OjN0LXcmLA==}
+    engines: {node: '>=22.18.0'}
+
+  '@swc/helpers@0.5.23':
+    resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
+
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
+  base64-js@1.5.1:
+    resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+
+  brotli@1.3.3:
+    resolution: {integrity: sha512-oTKjJdShmDuGW94SyyaoQvAjf30dZaHnjJ8uAF+u2/vGJkJbJPJAT1gDiOJP5v1Zb6f9KEyW/1HpuaWIXtGHPg==}
+
+  clone@2.1.2:
+    resolution: {integrity: sha512-3Pe/CF1Nn94hyhIYpjtiLhdCoEoz0DqQ+988E9gmeEdQZlojxnOb74wctFyuwWQHzqyf9X7C7MG8juUpqBJT8w==}
+    engines: {node: '>=0.8'}
+
+  dfa@1.2.0:
+    resolution: {integrity: sha512-ED3jP8saaweFTjeGX8HQPjeC1YYyZs98jGNZx6IiBvxW7JG5v492kamAQB3m2wop07CvU/RQmzcKr6bgcC5D/Q==}
+
+  fast-deep-equal@3.1.3:
+    resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
+
+  fflate@0.8.2:
+    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
+  fontkit@2.0.4:
+    resolution: {integrity: sha512-syetQadaUEDNdxdugga9CpEYVaQIxOwk7GlwZWWZ19//qW4zE5bknOKeMBDYAASwnpaSHKJITRLMF9m1fp3s6g==}
+
+  pako@0.2.9:
+    resolution: {integrity: sha512-NUcwaKxUxWrZLpDG+z/xZaCgQITkA/Dv4V/T6bw7VON6l1Xz/VnrBqrYjZQ12TamKHzITTfOEIYUj48y2KXImA==}
+
+  restructure@3.0.2:
+    resolution: {integrity: sha512-gSfoiOEA0VPE6Tukkrr7I0RBdE0s7H1eFCDBk05l1KIQT1UIKNc5JZy6jdyW6eYH3aR3g5b3PuL77rq0hvwtAw==}
+
+  saxes@6.0.0:
+    resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
+    engines: {node: '>=v12.22.7'}
+
+  tiny-inflate@1.0.3:
+    resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
+
+  tslib@2.8.1:
+    resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -28,12 +117,108 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
+  unicode-properties@1.4.1:
+    resolution: {integrity: sha512-CLjCCLQ6UuMxWnbIylkisbRj31qxHPAurvena/0iwSVbQ2G1VY5/HjV0IRabOEbDHlzZlRdCrD4NhB0JtU40Pg==}
+
+  unicode-trie@2.0.0:
+    resolution: {integrity: sha512-x7bc76x0bm4prf1VLg79uhAzKw8DVboClSN5VxJuQ+LKDOVEW9CdH+VY7SP+vX7xCYQqzzgQpFqz15zeLvAtZQ==}
+
+  xmlchars@2.2.0:
+    resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
+
 snapshots:
+
+  '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.3':
+    optional: true
+
+  '@deepseek-ai/libreoffice-kit-darwin-x64@0.1.3':
+    optional: true
+
+  '@deepseek-ai/libreoffice-kit-wasm@0.1.3':
+    optional: true
+
+  '@deepseek-ai/libreoffice-kit-win32-arm64@0.1.3':
+    optional: true
+
+  '@deepseek-ai/libreoffice-kit-win32-x64@0.1.3':
+    optional: true
+
+  '@deepseek-ai/libreoffice-kit@0.1.3':
+    dependencies:
+      fflate: 0.8.2
+      fontkit: 2.0.4
+      saxes: 6.0.0
+    optionalDependencies:
+      '@deepseek-ai/libreoffice-kit-darwin-arm64': 0.1.3
+      '@deepseek-ai/libreoffice-kit-darwin-x64': 0.1.3
+      '@deepseek-ai/libreoffice-kit-wasm': 0.1.3
+      '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.3
+      '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.3
+
+  '@office-kit/pptx@0.21.0':
+    dependencies:
+      fflate: 0.8.3
+
+  '@swc/helpers@0.5.23':
+    dependencies:
+      tslib: 2.8.1
 
   '@types/node@24.13.3':
     dependencies:
       undici-types: 7.18.2
 
+  base64-js@1.5.1: {}
+
+  brotli@1.3.3:
+    dependencies:
+      base64-js: 1.5.1
+
+  clone@2.1.2: {}
+
+  dfa@1.2.0: {}
+
+  fast-deep-equal@3.1.3: {}
+
+  fflate@0.8.2: {}
+
+  fflate@0.8.3: {}
+
+  fontkit@2.0.4:
+    dependencies:
+      '@swc/helpers': 0.5.23
+      brotli: 1.3.3
+      clone: 2.1.2
+      dfa: 1.2.0
+      fast-deep-equal: 3.1.3
+      restructure: 3.0.2
+      tiny-inflate: 1.0.3
+      unicode-properties: 1.4.1
+      unicode-trie: 2.0.0
+
+  pako@0.2.9: {}
+
+  restructure@3.0.2: {}
+
+  saxes@6.0.0:
+    dependencies:
+      xmlchars: 2.2.0
+
+  tiny-inflate@1.0.3: {}
+
+  tslib@2.8.1: {}
+
   typescript@5.9.3: {}
 
   undici-types@7.18.2: {}
+
+  unicode-properties@1.4.1:
+    dependencies:
+      base64-js: 1.5.1
+      unicode-trie: 2.0.0
+
+  unicode-trie@2.0.0:
+    dependencies:
+      pako: 0.2.9
+      tiny-inflate: 1.0.3
+
+  xmlchars@2.2.0: {}

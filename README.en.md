@@ -1,5 +1,15 @@
 # dsh-ppt
 
+## 0.6.0 (2026-10-01)
+
+Adds image/text layouts, four native editable chart types, selected-page edits and undo, page-specific quality reports, four scenario outlines and shared branding. Optional official LibreOffice Kit rendering reads the final PPTX to produce PNG/PDF with font diagnostics. Fixes overlapping overview thumbnails, undersized table titles, image-caption spacing and chart labels.
+
+The goal remains a usable finished deck. The agent prepares actual facts and content; the deterministic generator does not research or invent missing facts. Template-only output is explicitly an unfilled **draft** and must not be delivered as a finished presentation.
+
+Default PPTX fonts use platform fallbacks and explicit East Asian families separately from HTML's CSS font stacks. Replace missing fonts, regenerate and review the pages; unresolved font problems must be disclosed instead of claiming acceptance.
+
+Validation: Windows / Node 24.16.0, 100 passing tests; 18 components mount together on official-source Harness 0.2.0-rc.2 (639ed01539) with 104 tools and 35 skills. Fifteen default-theme pages without brand overrides passed native PNG/PDF rendering and individual visual review; an eleven-page image/chart/brand sample was checked in the browser, Microsoft PowerPoint and the official Kit. This covers those samples, not automatic acceptance of arbitrary decks.
+
 ## 0.5.0 update (2026-09-27)
 
 Includes presenter previews, thumbnails and timer controls. Unsupported or rejected fullscreen requests now show an actionable message instead of silently failing.
@@ -12,7 +22,7 @@ Validation host: Harness `0.2.0-rc.1` built from official sources (commit `407e6
 
 > **One sentence or one document → a complete presentation**: HTML web slideshow + PPTX export, 5 visual themes, slide transitions + bullet entrance animations, bilingual Chinese/English.
 
-DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a paragraph, or a Markdown document into a ready-to-present **HTML slideshow** and an editable **PPTX**. Pure Node, **zero runtime dependencies**, one codebase for Windows / macOS / Linux.
+DeepSeek Harness (DSH) presentation skill and tools: the agent prepares content, then generates an offline **HTML slideshow**, editable **PPTX** and **JSON project**. Images/charts use exact-version `@office-kit/pptx@0.21.0`; the shared Node generator supports Windows/macOS/Linux.
 
 ## Capabilities
 
@@ -20,7 +30,7 @@ DeepSeek Harness (DSH) presentation skill + tool plugin: turns a sentence, a par
 | --- | --- |
 | `ppt_create` tool | Markdown / structured slides → `*.html` + `*.pptx` + `*.json` |
 | `ppt_themes` tool | Lists the 5 built-in themes and their best use cases; pass `preview: true` with `outputDir` to write a side-by-side gallery plus one SVG palette card per theme |
-| 7 layouts | cover / section / bullets / statement / **quote** / **table** / closing |
+| 11 layouts | cover / section / bullets / statement / quote / table / closing / image / image-left / image-right / chart |
 | Speaker notes | `<!-- note: ... -->` comments or the `notes` field: press `S` in the HTML player; native PPTX notes slides (presenter view) |
 | Motion | On by default: HTML slide-in transitions + staggered bullet entrances; native PPTX fade transitions + click-to-reveal bullets. `motion: 'off'` / `--motion off` for a fully static deck |
 | Markdown extras | Tables (`\| ... \|`), blockquotes (`>`), and note comments are auto-detected into matching layouts |
@@ -36,13 +46,15 @@ Example:
 
 ## Compatibility
 
+Plugin and standalone skill require Node `^22.19.0 || >=24.0.0`. No API key or mandatory configuration. The optional renderer is loaded on demand and its absence does not prevent startup or ordinary creation. Windows samples have been exercised in the browser, opened/exported in Microsoft PowerPoint, and rendered using the official Kit; review the actual pages for each new deck.
+
 ## Installation
 
 ```bash
 dsh plugin --profile web add dsh-ppt
 ```
 
-After restart, the `ppt_create` / `ppt_themes` tools and the `dsh-ppt` skill are available. The plugin ships with an empty config and **won't crash startup**.
+On desktop, install `dsh-ppt` through plugin management. Restart the host after updating to load seven tools and the skill. Ask naturally to include screenshots/charts, edit only slide three, or undo the last edit; users do not need to write JSON.
 
 ## Uninstall
 
@@ -91,7 +103,37 @@ Existing artifacts are not overwritten by default: if any member of the trio alr
 | `*.pptx` | Editable 16:9 presentation (hand-written OOXML, zip via `node:zlib`, no third-party deps) |
 | `*.json` | Structured manifest (version, theme, language, slides) |
 
-## Built-in themes
+## Images, charts, editing and review
+
+The additional tools are `ppt_templates`, `ppt_edit`, `ppt_undo`, `ppt_check`, and `ppt_render`. New layouts are `image`, `image-left`, `image-right` and `chart`, alongside the seven existing layouts.
+
+An image slide accepts `image: {src, alt, fit: "contain"|"cover", caption}`. Use local PNG/JPEG paths relative to session cwd or matching data URIs. Assets are embedded in all outputs and undo works after original files move. Limits: 5 MiB / 32 megapixels per image, 32 MiB total project assets. Remote links and SVG are not automatically downloaded or converted.
+
+A chart accepts `chart: {kind:"column"|"bar"|"line"|"pie", categories, series:[{name,values}], unit, caption}` or `rows` with a category/series header. Values must be finite with matching lengths. Pie requires one nonnegative series with a positive total. HTML uses accessible SVG and data tables; PPTX contains native charts and embedded editable workbooks.
+
+`brand` supports `name`, `primaryColor`, `backgroundColor`, `textColor`, `fontFamily`, `logo` and `footer`. Colors are `#RRGGBB`; select a font available on the recipient computer. `template` is `weekly|defense|project|pitch` and does not overwrite a supplied narrative.
+
+Edit example: `{deckPath:"report.json",expectedRevision:0,edits:[{slide:3,patch:{title:"A clearer conclusion",bullets:["Evidence","Next action"]}}]}`. Use `ppt_check` to obtain stable IDs and the revision; `ppt_undo` restores the latest edit including assets/brand. Keeps up to 20 edits and rejects stale revisions. The artifact trio is regenerated atomically with rollback on commit failure.
+
+`deliveryStatus: draft` means unfilled slots; `ready-for-review` means review can start. Static estimates, rendering and visual inspection are recorded separately. Generation/rendering never automatically certifies visual quality. Inspect HTML and every page image before delivery.
+
+## Optional PNG/PDF renderer
+
+Install in the plugin's project or standalone skill directory:
+
+```bash
+npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.3
+```
+
+The exact optional peer is not a mandatory engine download for ordinary consumers. Windows also needs the Microsoft Visual C++ v14 runtime matching Node's architecture. Missing dependency/engine returns `unavailable` with guidance.
+
+`ppt_render {pptxPath:"report.pptx",format:"both"}` reads the final PPTX without resaving it and returns page PNGs, PDF and `receiptPath`. Pass that path as `renderReceipt` to `ppt_check` to recheck the current PPTX and every output's digest. Editing the source or outputs invalidates the receipt. Static artifacts do not retain animation. LibreOffice/PowerPoint/WPS may lay out files differently; font diagnostics do not guarantee every glyph or install fonts. See [integration details](docs/LIBREOFFICE-INTEGRATION-2026-10-01.md).
+
+CLI supports `--slides @slides.json`, `--brand @brand.json`, `--template weekly`, `--edit report.json --edits @edits.json --revision 0`, `--undo report.json --revision 1`, `--check report.json`, and `--render report.pptx --format both`. Explicit receipt validation uses `--check report.json --render-receipt path/to/render-receipt.json`; failure returns a nonzero exit code.
+
+For standalone usage copy the entire skill directory and run `npm install --ignore-scripts` there. Plain text remains usable without Office Kit; image/chart/logo/footer PPTX export needs Office Kit 0.21.0. `dsh-ppt/deck-advanced` exports `buildDeckAsync`, `editDeck`, `undoDeck`, `checkDeckAsync` and `renderDeck`. The legacy synchronous `deck-core` API supports plain text and explicitly rejects unsupported media inputs.
+
+## Theme palette
 
 | ID | Name | Mood | Best for |
 | --- | --- | --- | --- |
@@ -128,7 +170,7 @@ No required configuration. Optional:
 
 The `DSH_PPT_OUTPUT_DIR` env var can also set the default output directory; the `ppt_create` `outputDir`/`theme`/`lang` arguments have the highest priority.
 
-Output paths resolve against each tool call's `exec.agent.session.header.cwd`: omitted paths use the session directory, relative paths (including plugin configuration) resolve within it, and absolute paths keep their meaning. Direct calls without a session fall back to the process working directory; concurrent sessions never change process cwd. Tools check `exec.signal` before and after loading the engine, so cancelled calls do not proceed to generation. Rendering and writing are synchronous and finish the artifact trio once started.
+Relative paths and configured output directories resolve per session cwd without changing process cwd. Cancellation is checked during generation and before atomic commit of the trio. Optional rendering defaults to a unique `<deck>-render` directory beside the PPTX.
 
 ## Bilingual support
 
@@ -138,8 +180,8 @@ Output paths resolve against each tool call's `exec.agent.session.header.cwd`: o
 
 ## Engineering quality
 
-- Pure Node, zero runtime dependencies: HTML template, OOXML, and zip are hand-written using only `node:fs` / `node:path` / `node:zlib`.
-- The skill and tools share one engine (`skills/dsh-ppt/scripts/deck-core.mjs`), so DSH and bare-skill output are identical.
+- Tools and the skill share an asynchronous generator. The legacy synchronous plain-text API remains available.
+- Images and native charts use MIT-licensed `@office-kit/pptx@0.21.0`; optional rendering is loaded on demand.
 - Unit tests cover registration contracts, JSON Schema, theme resolution, Markdown parsing, artifact generation, PPTX part integrity, and the CLI.
 - No `eval` / `child_process` / secrets; artifacts are only written to the user-specified local directory.
 
@@ -157,11 +199,12 @@ pnpm run smoke:cli  # bare CLI smoke test, generates .smoke-deck
 - The PPTX uses a blank layout plus text boxes: text is editable in PowerPoint / WPS, but no smart master placeholders yet.
 - A one-sentence input produces a minimal 3-slide structure; for richer decks, expand the content into a Markdown outline first.
 - `bilingual` only localizes the player UI; it does not translate content.
-- Charts and images are not supported yet; speaker notes and HTML/PPTX motion are already supported.
+- Selected-page editing supports this plugin's JSON project, not arbitrary external PPTX editing.
+- Text fit checks are static estimates; inspect actual rendered output for clipping and font substitution.
 
 ## License
 
-MIT. Community plugin, not affiliated with DeepSeek; `@deepseek-ai/*` is an officially reserved namespace.
+Plugin: MIT. Office Kit: MIT. Optional official LibreOffice Kit and its engine retain their own source/license/third-party notices. This community plugin is not officially maintained by DeepSeek.
 
 ## Related projects
 

@@ -15,4 +15,12 @@ export interface PptExecution {
 export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine?: () => Promise<DeckEngine>): {
     themes(rawArgs: unknown, exec?: PptExecution): Promise<PptThemesResult>;
     create(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptCreateResult>;
+    templates(rawArgs: unknown, exec?: PptExecution): Promise<{
+        ok: boolean;
+        templates: unknown[];
+    }>;
+    edit(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptCreateResult>;
+    undo(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptCreateResult>;
+    check(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptQualityResult | import("./types.js").PptCheckResult>;
+    render(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptRenderResult>;
 };

@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
-  "version": "0.5.1",
-  "description": "DSH 演示文稿插件：Markdown 生成网页放映与可编辑 PPTX，长表格自动分页，内置 5 套主题、备注与转场动画。",
+  "version": "0.6.0",
+  "description": "DSH 演示文稿插件：HTML 与可编辑 PPTX、图文排版、原生图表、按页编辑撤销、质量检查与可选官方 PNG/PDF 渲染。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -12,6 +12,8 @@
     },
     "./skills/*": "./skills/*",
     "./deck-core": "./skills/dsh-ppt/scripts/deck-core.mjs",
+    "./deck-advanced": "./skills/dsh-ppt/scripts/deck-advanced.mjs",
+    "./deck-render": "./skills/dsh-ppt/scripts/deck-render.mjs",
     "./build-deck": "./skills/dsh-ppt/scripts/build-deck.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
@@ -19,6 +21,7 @@
   "files": [
     "lib",
     "skills",
+    "docs",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
@@ -66,5 +69,16 @@
   },
   "homepage": "https://github.com/STARDUSTLC666/dsh-ppt#readme",
   "author": "stardustlc",
-  "packageManager": "pnpm@11.7.0"
+  "packageManager": "pnpm@11.7.0",
+  "dependencies": {
+    "@office-kit/pptx": "0.21.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/libreoffice-kit": "0.1.3"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/libreoffice-kit": {
+      "optional": true
+    }
+  }
 }
