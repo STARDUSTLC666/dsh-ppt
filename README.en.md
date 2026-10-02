@@ -1,5 +1,13 @@
 # dsh-ppt
 
+## 0.7.0 (2026-10-02)
+
+- Generated HTML decks now have previous/next buttons and page-number navigation, with keyboard, touch and a usable 390px layout.
+- A Review and export panel shows quality findings and the outline, links findings to their slides, and offers editable PPTX and project JSON downloads.
+- Incomplete drafts are clearly labeled. Static checks are guidance and require visual review before delivery; layout editing remains available through Agent project tools or PowerPoint/WPS.
+- Download links target the actual sibling files, including Unicode filenames and collision renaming. The existing three-file offline delivery format is preserved.
+- All 103 tests pass on Windows, with Chinese and English browser interaction checks. Native Office and the DSH desktop window were not verified in this round.
+
 ## 0.6.0 (2026-10-01)
 
 Adds image/text layouts, four native editable chart types, selected-page edits and undo, page-specific quality reports, four scenario outlines and shared branding. Optional official LibreOffice Kit rendering reads the final PPTX to produce PNG/PDF with font diagnostics. Fixes overlapping overview thumbnails, undersized table titles, image-caption spacing and chart labels.

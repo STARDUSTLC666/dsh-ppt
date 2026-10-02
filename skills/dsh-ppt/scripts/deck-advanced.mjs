@@ -312,13 +312,14 @@ async function generate(manifest, signal) {
   manifest.quality = checkManifest(manifest)
   if (manifest.quality.errorCount) fail(manifest.quality.issues.filter(i => i.severity === 'error').map(i => `第 ${i.slide} 页：${i.message}`).join('；'))
   const theme = brandedTheme(manifest), language = resolveLanguage(manifest.language)
-  const json = documentBytes(manifest), html = renderHtml(manifest, theme, language)
+  const json = documentBytes(manifest)
   const pptx = await exportPptx(manifest, theme, language, signal)
   abort(signal)
-  return { json, html, pptx }
+  return { json, pptx, manifest, theme, language }
 }
 function commit(paths, data) {
-  commitDeckArtifacts([{ path: paths.json, data: data.json, encoding: 'utf8' }, { path: paths.html, data: data.html, encoding: 'utf8' }, { path: paths.pptx, data: data.pptx }])
+  const html = renderHtml(data.manifest, data.theme, data.language, paths)
+  commitDeckArtifacts([{ path: paths.json, data: data.json, encoding: 'utf8' }, { path: paths.html, data: html, encoding: 'utf8' }, { path: paths.pptx, data: data.pptx }])
 }
 
 export async function buildDeckAsync(options = {}) {

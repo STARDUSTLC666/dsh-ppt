@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt-skill",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Standalone dsh-ppt skill dependencies for image/chart export",

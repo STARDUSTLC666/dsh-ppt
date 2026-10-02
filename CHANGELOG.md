@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0（2026-10-02）
+
+- Add offline delivery controls: editable PPTX/project downloads, previous/next buttons, page-number navigation, quality findings and a clickable outline.
+- Mark incomplete drafts, localize controls for Chinese/English/bilingual output, and support narrow viewports without requiring a DSH server.
+- Render HTML links after collision-resolved paths are selected, preserving the atomic three-file commit and project revision guard.
+- Escape display text and link only to encoded sibling filenames. Add delivery, revision-refresh and injection regression tests.
+- Windows: 103 tests passed; browser interaction covers navigation, review, draft labeling, English controls and 390px layout.
+
 ## 0.6.0（2026-10-01）
 
 - 新增离线嵌入图片的三种布局、四类原生可编辑图表及数据工作簿；精确使用 MIT Office Kit 0.21.0，保留备注和原有动效。

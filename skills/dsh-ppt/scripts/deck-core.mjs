@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { resolve as resolvePath, join as joinPath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 import { MEDIA_LAYOUTS, MEDIA_CSS, normalizeMediaSlide, renderMediaHtml, mediaBoxes } from './deck-media.mjs'
+import { renderDelivery } from './deck-delivery.mjs'
 
 /**
  * manifest 版本跟随发布包 package.json；把 skills/dsh-ppt 独立复制到其他
@@ -973,7 +974,7 @@ export function buildDeck(options = {}) {
   // 先生成三份内容再统一提交：生成阶段抛错时也不会留下半套文件。
   commitDeckArtifacts([
     { path: jsonPath, data: JSON.stringify(manifest, null, 2) + '\n', encoding: 'utf8' },
-    { path: htmlPath, data: renderHtml(manifest, theme, language), encoding: 'utf8' },
+    { path: htmlPath, data: renderHtml(manifest, theme, language, { pptx: pptxPath, json: jsonPath }), encoding: 'utf8' },
     { path: pptxPath, data: buildPptx(manifest, theme, language) },
   ])
 
@@ -999,7 +1000,7 @@ export function buildDeck(options = {}) {
 // HTML 网页放映
 // ---------------------------------------------------------------------------
 
-export function renderHtml(manifest, theme, language) {
+export function renderHtml(manifest, theme, language, files = {}) {
   const t = theme
   const lang = language
   const ui = lang.ui
@@ -1020,6 +1021,7 @@ body.motion .bullets li{
   }).join('\n')
   const themeLabel = t.name[lang.id] ?? t.name.en
   const total = manifest.slides.length
+  const delivery = renderDelivery(manifest, files, lang.id)
 
   return `<!DOCTYPE html>
 <html lang="${lang.attr}">
@@ -1122,7 +1124,7 @@ table.deck-table{
 .deck-table tbody tr:nth-child(even){background:color-mix(in srgb, var(--panel) 62%, transparent)}
 #progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--accent);z-index:30;transition:width .25s}
 #hud{
-  position:fixed;right:22px;bottom:18px;z-index:50;display:flex;gap:10px;align-items:center;
+  position:fixed;left:22px;right:22px;bottom:18px;z-index:50;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;align-items:center;
   color:var(--muted);font-size:13px;letter-spacing:.08em;font-variant-numeric:tabular-nums;
 }
 #hud button{
@@ -1213,7 +1215,7 @@ body.presenting #hud:hover{opacity:1;pointer-events:auto}
   .kicker{font-size:13px}
   .deck-table{font-size:14px}
   .deck-table th,.deck-table td{padding:.55em .6em}
-  #hud{right:10px;bottom:10px;gap:8px;font-size:12px}
+  #hud{left:10px;right:10px;bottom:10px;gap:6px;font-size:12px}
   #hud button{padding:10px 16px;min-height:44px}
   #notes-panel{bottom:68px;max-height:45vh}
   #help-panel{right:10px;bottom:68px;left:10px;max-width:none}
@@ -1231,15 +1233,18 @@ body.presenting #hud:hover{opacity:1;pointer-events:auto}
   ${motion ? 'body.motion .bullets li{opacity:1 !important;animation:none !important}' : ''}
   #progress,#hud,#notes-panel,#help-panel,#toast{display:none !important}
 }
+${delivery.css}
 </style>
 </head>
 <body class="${motion ? 'motion' : 'no-motion'}">
 <div id="progress" aria-hidden="true"></div>
+${delivery.body}
 <div id="stage">
 ${slides}
 </div>
 <div id="hud" aria-live="polite">
   <span id="counter">${ui.slide} 1 ${ui.of} ${total}</span>
+  ${delivery.navigation}
   <span id="theme-label">${ui.theme} · ${escapeHtml(themeLabel)}</span>
   <button id="notes-toggle" type="button" title="S · ${escapeHtml(ui.notesToggle)}" aria-controls="notes-panel" aria-expanded="false">${escapeHtml(ui.notesToggle)}</button>
   <button id="presenter-toggle" type="button" title="V · ${escapeHtml(ui.presenterToggle)}">${escapeHtml(ui.presenterToggle)}</button>
@@ -1279,6 +1284,7 @@ ${slides}
   const helpPanel = document.getElementById('help-panel');
   const toastEl = document.getElementById('toast');
   let index = 0;
+  let syncDelivery = () => {};
   let presenterWin = null;
   let presenterInitSent = false;
   let toastTimer = 0;
@@ -1352,6 +1358,7 @@ ${slides}
       if (frames[i]) frames[i].classList.toggle('is-current', i === index);
     });
     counter.textContent = ui.slide + ' ' + (index + 1) + ' ' + ui.of + ' ' + total;
+    syncDelivery(index);
     progress.style.width = ((index + 1) / total * 100) + '%';
     document.title = (index + 1) + ' / ' + total + ' · ' + ${JSON.stringify(manifest.title).replace(/</g, '\\u003c')};
     try { history.replaceState?.(null, '', '#slide-' + (index + 1)); } catch (_) { /* file:// 下个别浏览器可能拒绝 */ }
@@ -1556,6 +1563,8 @@ ${slides}
     const key = event.key;
     const lower = key.toLowerCase();
     const targetEl = event.target;
+    if (document.getElementById('review-panel').open || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (key !== 'Escape' && targetEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(targetEl.tagName) || targetEl.isContentEditable === true)) return;
     const interactive = targetEl && (targetEl.tagName === 'BUTTON' || targetEl.tagName === 'INPUT' || targetEl.tagName === 'SELECT' || targetEl.tagName === 'TEXTAREA' || targetEl.isContentEditable === true);
     if (key === ' ' && interactive) return;
     if (key === 'Escape') {
@@ -1603,6 +1612,7 @@ ${slides}
 
   let wheelLock = 0;
   document.addEventListener('wheel', (event) => {
+    if (document.getElementById('review-panel').open || event.target.closest?.('#hud,#delivery-bar,#notes-panel,#help-panel')) return;
     const now = Date.now();
     if (now - wheelLock < 550 || document.body.classList.contains('overview') || notesOpen()) return;
     wheelLock = now;
@@ -1610,10 +1620,11 @@ ${slides}
   }, { passive: true });
 
   let touchStartY = 0;
-  document.addEventListener('touchstart', (event) => { touchStartY = event.touches[0].clientY; }, { passive: true });
+  let touchOnStage = false;
+  document.addEventListener('touchstart', (event) => { touchOnStage = !document.getElementById('review-panel').open && !!event.target.closest?.('#stage'); touchStartY = event.touches[0].clientY; }, { passive: true });
   document.addEventListener('touchend', (event) => {
     const delta = event.changedTouches[0].clientY - touchStartY;
-    if (Math.abs(delta) > 48 && !document.body.classList.contains('overview')) go(index + (delta < 0 ? 1 : -1));
+    if (touchOnStage && Math.abs(delta) > 48 && !document.body.classList.contains('overview')) go(index + (delta < 0 ? 1 : -1));
   }, { passive: true });
 
   fullscreenBtn.addEventListener('click', () => { void toggleFullscreen(); });
@@ -1636,6 +1647,7 @@ ${slides}
   window.addEventListener('resize', updateThumbScale);
   window.addEventListener('beforeunload', closePresenter);
 
+  ${delivery.script}
   const start = Number.parseInt(location.hash?.replace('#slide-', ''), 10);
   go(Number.isInteger(start) ? start - 1 : 0);
 })();

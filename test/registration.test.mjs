@@ -159,7 +159,8 @@ test('ppt_create 生成 HTML 放映 + PPTX + manifest 三件套', async () => {
     assert.equal(manifest.slides.length, out.slideCount)
 
     const rendered = create.output.render({}, out)
-    assert.match(rendered[0].text, /HTML 网页放映/)
+    assert.match(rendered[0].text, /打开演示文稿/)
+    assert.match(rendered[0].text, /可继续编辑的项目/)
     assert.match(rendered[0].text, /PPTX/)
   } finally {
     rmSync(dir, { recursive: true, force: true })

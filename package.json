@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "DSH 演示文稿插件：HTML 与可编辑 PPTX、图文排版、原生图表、按页编辑撤销、质量检查与可选官方 PNG/PDF 渲染。",
   "type": "module",
   "main": "lib/index.js",
