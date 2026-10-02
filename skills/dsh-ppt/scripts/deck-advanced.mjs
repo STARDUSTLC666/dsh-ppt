@@ -370,6 +370,12 @@ function readDocument(pathInput, cwd = '.') {
   }
   return { manifest: document, path, fingerprint: hash(bytes) }
 }
+/** Validated project snapshot for the operator workbench; no file is modified. */
+export function readDeckProject(options = {}) {
+  abort(options.signal)
+  const { manifest, path } = readDocument(options.deckPath, options.cwd)
+  return { manifest: clone(manifest), path }
+}
 function expected(manifest, revision) {
   if (revision !== undefined && (!Number.isInteger(revision) || revision !== manifest.revision)) fail(`修订号冲突：当前 revision=${manifest.revision}，请重新读取工程后修改`)
 }
@@ -390,7 +396,7 @@ export async function editDeck(options = {}) {
   expected(current, options.expectedRevision)
   const next = clone(current)
   if (!Array.isArray(options.edits) || !options.edits.length) {
-    if (options.brand === undefined) fail('请提供 edits 或 brand')
+    if (options.brand === undefined && options.order === undefined) fail('请提供 edits、order 或 brand')
   }
   const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart'])
   for (const edit of options.edits ?? []) {
@@ -412,6 +418,12 @@ export async function editDeck(options = {}) {
     if (slides.length !== 1) fail(`第 ${index + 1} 页修改会产生分页，请减少表格行数或另建演示文稿`)
     const embedded = embedSlides(slides, next.assets, resolve(options.cwd || '.'))[0]
     next.slides[index] = { ...embedded, id: current.slides[index].id }
+  }
+  if (options.order !== undefined) {
+    if (!Array.isArray(options.order) || options.order.length !== next.slides.length || options.order.some(id => typeof id !== 'string') || new Set(options.order).size !== next.slides.length) fail('order 必须包含每个页面 ID，且各出现一次')
+    const byId = new Map(next.slides.map(slide => [slide.id, slide]))
+    if (options.order.some(id => !byId.has(id))) fail('order 含有不属于本工程的页面 ID')
+    next.slides = options.order.map(id => byId.get(id))
   }
   if (options.brand !== undefined) next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
     ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, resolve(options.cwd || '.'))

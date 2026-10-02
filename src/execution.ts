@@ -9,7 +9,7 @@ export interface PptExecution {
 }
 
 let enginePromise: Promise<DeckEngine> | null = null
-function getEngine(): Promise<DeckEngine> {
+export function getEngine(): Promise<DeckEngine> {
   if (enginePromise === null) {
     const engineUrl = new URL('../skills/dsh-ppt/scripts/deck-advanced.mjs', import.meta.url)
     enginePromise = import(engineUrl.href).then((module: Record<string, unknown>) => module as unknown as DeckEngine)

@@ -11,6 +11,7 @@ export interface PptExecution {
         };
     };
 }
+export declare function getEngine(): Promise<DeckEngine>;
 /** Build executors with a shared engine loader; resolve paths separately for each call. */
 export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine?: () => Promise<DeckEngine>): {
     themes(rawArgs: unknown, exec?: PptExecution): Promise<PptThemesResult>;

@@ -85,6 +85,7 @@ export interface PptEditArgs {
         slide: number | string;
         patch: Partial<Omit<PptSlideSpec, 'id'>>;
     }>;
+    order?: string[];
     brand?: PptBrand | null;
     expectedRevision?: number;
 }

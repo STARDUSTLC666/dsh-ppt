@@ -244,6 +244,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
       description: 'Modify selected slides in an existing dsh-ppt JSON project, preserving other pages and stable IDs. Each edit uses a 1-based slide number or ID and a patch of changed fields. Regenerates the HTML/PPTX/JSON trio atomically, embeds new images, stores undo history. Use ppt_check first and expectedRevision. 中文：按页码或 ID 修改指定页，其他页不变，支持撤销；可同步调整品牌。',
       parameters: compileParameters({ ...projectParameters,
         edits: { type: 'array', items: { type: 'object', properties: { slide: { type: ['integer', 'string'], description: '1-based page number or stable slide ID' }, patch: { type: 'object', properties: slideProperties, additionalProperties: false } }, required: ['slide', 'patch'], additionalProperties: false } },
+        order: { type: 'array', items: { type: 'string' }, description: 'Reorder pages using every stable slide ID exactly once. May be used alone or together with edits; one undo restores the previous content and order.' },
         brand: { type: ['object', 'null'], properties: brandProperties, additionalProperties: false, description: 'Merge shared branding. null clears all branding. Empty footer clears footer; logo:null clears logo.' },
       }),
       output: { schema: createResultSchema, render: (_args, value) => renderCreate(value as PptCreateResult) },
@@ -267,7 +268,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_render',
-      description: 'Read the final PPTX and render all pages to PNG, PDF, or both using optional official @deepseek-ai/libreoffice-kit@0.1.3. Returns unavailable plus installation guidance when absent; ordinary deck creation remains usable. Retains original editable PPTX and creates a separate unique output folder and integrity receipt. Reports missing fonts. Inspect actual pages before delivery. 中文：把最终 PPTX 渲染为逐页图片和 PDF，报告缺失字体；需安装可选官方引擎，渲染成功仍需检查画面。',
+      description: 'Read the final PPTX and render all pages to PNG, PDF, or both using optional official @deepseek-ai/libreoffice-kit@0.1.5. Returns unavailable plus installation guidance when absent; ordinary deck creation remains usable. Retains original editable PPTX and creates a separate unique output folder and integrity receipt. Reports missing fonts. Inspect actual pages before delivery. 中文：把最终 PPTX 渲染为逐页图片和 PDF，报告缺失字体；需安装可选官方引擎，渲染成功仍需检查画面。',
       parameters: compileParameters({
         pptxPath: { type: 'string', required: true, description: 'Final .pptx path, absolute or relative to session cwd.' },
         outputDir: { type: 'string', description: 'Base output folder. Existing folders are preserved; creates a unique sibling when needed. Default <deck>-render.' },

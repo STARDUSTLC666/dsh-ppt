@@ -14,8 +14,10 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # Native rendering has separate Windows acceptance; these are contract/unit checks.
+      - run: pnpm install --frozen-lockfile --ignore-scripts --no-optional
       # lib/ 是入库的发布产物：构建结果必须与提交内容一致，否则说明有人改了 lib 没改 src。
       - run: pnpm run build
       - run: git diff --exit-code -- lib
       - run: pnpm test
+      - run: node --check lib/client.js

@@ -35,7 +35,7 @@ allowed-tools: "Bash, Read, Write, Edit"
    - 动效默认开（页间转场 + 要点逐条入场）；严肃/打印场景传 `motion: 'off'`。
    → 用表格 / 金句 / 备注 / 结构化 slides 前读 `references/syntax.md`。
 5. **Verify 校验与修正**：调 `ppt_check` 检查具体页；在浏览器操作放映、总览和备注，查看图片/图表。若可选官方引擎可用，调 `ppt_render` 读取最终 PPTX 生成逐页 PNG/PDF，逐页看画面。修正用 `ppt_edit`，以 `expectedRevision` 防冲突；需要时 `ppt_undo`。修改后重新渲染，以收据复核当前文件。文件头/结构通过不等同于视觉验收，静态估算、渲染、视觉检查必须分开说明。
-6. **Deliver 交付**：给用户三个绝对路径，说明 HTML 直接放映（← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印），PPTX 用 PowerPoint / WPS / Keynote 打开（备注在演示者视图可见，bullets 页放映时逐条点击出现）。
+6. **Deliver 交付**：给用户三个绝对路径，说明 HTML 直接放映（← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印），PPTX 用 PowerPoint / WPS / Keynote 打开（备注在演示者视图可见，bullets 页放映时逐条点击出现）。DSH 用户也可在「设置 → 演示文稿」修改文字、替换 PNG/JPEG、移动页面、撤销和下载最新文件；已有 JSON 工程先 `ppt_check` 才会出现在项目列表。`ppt_edit.order` 使用每个稳定页面 ID 各一次，与正文修改合并成一次撤销。
 
 ## 按需装载索引
 

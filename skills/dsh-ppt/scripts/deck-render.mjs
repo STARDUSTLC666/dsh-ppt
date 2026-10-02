@@ -2,9 +2,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 
 export const RENDERER_PACKAGE = '@deepseek-ai/libreoffice-kit'
-export const RENDERER_VERSION = '0.1.3'
+export const RENDERER_VERSION = '0.1.5'
 const INPUT_LIMIT = 64 * 1024 * 1024
 const OUTPUT_LIMIT = 128 * 1024 * 1024
 const PAGE_LIMIT = 120
@@ -32,6 +34,17 @@ function readBounded(path, limit, name) {
   return bytes
 }
 
+function classicExtra(bytes, offset, size) {
+  const end = offset + size
+  while (offset < end) {
+    if (offset + 4 > end) fail('PPTX ZIP 扩展字段损坏', 'invalid-document')
+    const id = bytes.readUInt16LE(offset), length = bytes.readUInt16LE(offset + 2)
+    if (id === 1) fail('PPTX 渲染不支持 ZIP64，请用标准 PPTX 重新保存', 'invalid-document')
+    offset += 4 + length
+    if (offset > end) fail('PPTX ZIP 扩展字段越界', 'invalid-document')
+  }
+}
+
 // Read only the small presentation part to obtain slide geometry. The renderer
 // remains responsible for validating and importing the complete Office file.
 function presentationXml(bytes) {
@@ -42,7 +55,7 @@ function presentationXml(bytes) {
   if (end < 0 || bytes.readUInt16LE(end + 4) || bytes.readUInt16LE(end + 6)) fail('不支持的 PPTX ZIP 容器', 'invalid-document')
   const count = bytes.readUInt16LE(end + 10), length = bytes.readUInt32LE(end + 12), start = bytes.readUInt32LE(end + 16)
   if (count === 65535 || count > 20000 || start + length > end) fail('PPTX ZIP 目录无效或超过限制', 'invalid-document')
-  let offset = start
+  let offset = start, presentation
   for (let index = 0; index < count; index++) {
     if (offset + 46 > start + length || bytes.readUInt32LE(offset) !== 0x02014b50) fail('PPTX ZIP 目录损坏', 'invalid-document')
     const flags = bytes.readUInt16LE(offset + 8), method = bytes.readUInt16LE(offset + 10)
@@ -51,20 +64,26 @@ function presentationXml(bytes) {
     const next = offset + 46 + nameLength + extra + comment
     if (next > start + length) fail('PPTX ZIP 文件名无效', 'invalid-document')
     const name = bytes.toString('utf8', offset + 46, offset + 46 + nameLength)
+    const local = bytes.readUInt32LE(offset + 42)
+    if (compressed === 0xffffffff || expanded === 0xffffffff || local === 0xffffffff || local + 30 > start || bytes.readUInt32LE(local) !== 0x04034b50) fail('PPTX ZIP64 或文件偏移无效', 'invalid-document')
+    classicExtra(bytes, offset + 46 + nameLength, extra)
+    const localExtra = local + 30 + bytes.readUInt16LE(local + 26), localExtraSize = bytes.readUInt16LE(local + 28)
+    if (localExtra + localExtraSize + compressed > start) fail('PPTX ZIP 文件越界', 'invalid-document')
+    classicExtra(bytes, localExtra, localExtraSize)
     if (name === 'ppt/presentation.xml') {
       if (flags & 1 || expanded > RECEIPT_LIMIT || compressed > RECEIPT_LIMIT) fail('PPTX 页面信息加密或超过限制', 'invalid-document')
-      const local = bytes.readUInt32LE(offset + 42)
       if (local + 30 > start || bytes.readUInt32LE(local) !== 0x04034b50) fail('PPTX 页面信息偏移无效', 'invalid-document')
       const dataOffset = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28)
       if (dataOffset + compressed > start) fail('PPTX 页面信息越界', 'invalid-document')
       const data = bytes.subarray(dataOffset, dataOffset + compressed)
       const xml = method === 0 ? data : method === 8 ? inflateRawSync(data, { maxOutputLength: RECEIPT_LIMIT }) : fail('PPTX 压缩格式不支持', 'invalid-document')
       if (xml.length !== expanded) fail('PPTX 页面信息长度不匹配', 'invalid-document')
-      return xml.toString('utf8')
+      presentation = xml.toString('utf8')
     }
     offset = next
   }
-  fail('PPTX 缺少 ppt/presentation.xml', 'invalid-document')
+  if (presentation === undefined) fail('PPTX 缺少 ppt/presentation.xml', 'invalid-document')
+  return presentation
 }
 function geometry(bytes, width) {
   const xml = presentationXml(bytes), tag = xml.match(/<(?:[\w.-]+:)?sldSz\b[^>]*>/)?.[0]
@@ -83,6 +102,21 @@ function unavailable(error) {
     installationHint: `在 dsh-ppt 所在项目或独立技能目录安装：npm install --ignore-scripts ${RENDERER_PACKAGE}@${RENDERER_VERSION}。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。` }
 }
 function missingDependency(error) { return ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'unavailable'].includes(error?.code) }
+async function loadRenderer() {
+  const require = createRequire(import.meta.url)
+  // DSH redirects linked-package peer requests to its bundled version. Prefer
+  // an explicitly installed matching SDK using its physical entry; this Office
+  // helper has no Cordis services and must not share a stale host engine.
+  for (const directory of require.resolve.paths(RENDERER_PACKAGE) ?? []) {
+    const candidate = join(directory, RENDERER_PACKAGE, 'package.json')
+    let manifest
+    try { manifest = JSON.parse(readFileSync(candidate, 'utf8')) } catch (error) { if (error.code === 'ENOENT') continue; throw error }
+    if (manifest.name === RENDERER_PACKAGE && manifest.version === RENDERER_VERSION && typeof manifest.main === 'string') {
+      return import(pathToFileURL(require.resolve(join(dirname(candidate), manifest.main))).href)
+    }
+  }
+  return import(pathToFileURL(require.resolve(RENDERER_PACKAGE)).href)
+}
 function reserveDirectory(base) {
   mkdirSync(dirname(base), { recursive: true })
   for (let index = 0; index < 10000; index++) {
@@ -113,7 +147,7 @@ function fontNames(values) { return [...new Set(values.flat().filter(v => typeof
 /** Optional renderer; dependency/engine absence is a result, other errors throw.
  * The second argument is an internal loader seam for testing and isolated hosts.
  */
-export async function renderDeck(options = {}, loadKit = () => import('@deepseek-ai/libreoffice-kit')) {
+export async function renderDeck(options = {}, loadKit = loadRenderer) {
   abort(options.signal)
   const pptxPath = absolute(options.pptxPath, 'pptxPath')
   if (extname(pptxPath).toLowerCase() !== '.pptx') fail('pptxPath 需为 .pptx 文件')
@@ -125,7 +159,7 @@ export async function renderDeck(options = {}, loadKit = () => import('@deepseek
   let kit
   try { kit = await loadKit() } catch (error) { abort(options.signal); if (missingDependency(error)) return unavailable(error); throw error }
   abort(options.signal)
-  if (kit.ENGINE_VERSION !== RENDERER_VERSION || typeof kit.createConverter !== 'function') return unavailable(new Error(`需要 ${RENDERER_PACKAGE}@${RENDERER_VERSION}`))
+  if (kit.ENGINE_VERSION !== RENDERER_VERSION || typeof kit.createConverter !== 'function') return unavailable(new Error(`需要 ${RENDERER_PACKAGE}@${RENDERER_VERSION}，当前模块版本为 ${String(kit.ENGINE_VERSION ?? '未知')}`))
   const input = readBounded(pptxPath, INPUT_LIMIT, 'PPTX'), sourceSha256 = sha256(input), shape = geometry(input, width)
   let converter
   try { converter = await kit.createConverter({ timeoutMs, maxInputBytes: INPUT_LIMIT, maxOutputBytes: OUTPUT_LIMIT, maxArchiveEntries: 20000, maxUncompressedBytes: 512 * 1024 * 1024, fontMetadataCacheDirectory: false }) }

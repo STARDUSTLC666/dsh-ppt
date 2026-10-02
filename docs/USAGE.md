@@ -75,6 +75,14 @@ node <skill-dir>/scripts/build-deck.mjs \
 
 ## 图片、图表、编辑与交付
 
+### 设置页轻量编辑（0.8.0）
+
+打开「设置 → 演示文稿」，选择由 `ppt_create`、`ppt_edit` 或 `ppt_check` 登记的本插件工程。点击页码，修改标题、正文、要点和演讲备注；也可点击 HTML 预览中的文字定位字段。上传 PNG/JPEG 会嵌入工程并同步生成 PPTX。页面上移/下移与文字修改均可撤销。
+
+保存会同时更新 HTML、PPTX 和 JSON。未保存时先保存或取消，再切换页面、排序、下载或渲染。若助手同时修改了工程，旧修订不会覆盖新文件；点击「载入最新版本，保留我的输入」后检查重叠字段，再明确保存。
+
+「HTML 预览」用于检查放映效果；安装可选引擎后，「渲染当前 PPTX」生成实际 PPTX 的逐页图片。编辑后旧渲染自动失效。最终交付前逐页检查图片和缺失字体提示，随后下载最新 PPTX / HTML，或备份 JSON 工程。面板仅编辑自产 JSON 工程，不导入任意外部 PPTX；普通生成和编辑不需要可选渲染引擎。
+
 结构化 slides 新增 `image | image-left | image-right | chart`。图文页示例：
 
 ```json
@@ -102,12 +110,14 @@ node <skill-dir>/scripts/build-deck.mjs \
 在插件所在项目或独立技能目录安装：
 
 ```bash
-npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.3
+npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.5
 ```
 
 声明为精确版本可选 peer，普通消费者安装不要求引擎。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。缺失时 `ppt_render` 返回 `unavailable` 和安装提示。
 
-`ppt_render { pptxPath: "report.pptx", format: "both" }` 读取最终 PPTX，生成逐页 PNG、PDF 和 `render-receipt.json`，不重新保存可编辑源文稿。`ppt_check` 可携带返回的 `receiptPath` 作为 `renderReceipt`，核验源文件和每个输出的摘要；编辑源文稿或修改输出后旧收据失效。静态产物不保留动画；LibreOffice 与 PowerPoint/WPS 的排版可能不同。字体诊断不保证每个字符，也不自动安装字体。更多细节见 [渲染说明](LIBREOFFICE-INTEGRATION-2026-10-01.md)。
+本仓库的 pnpm 依赖覆盖不会传递到消费项目。安装引擎后如审计提示其 `fflate@0.8.2`，在消费项目根配置 `overrides: { "@deepseek-ai/libreoffice-kit": { "fflate": "0.8.3" } }`（npm），或在根 `pnpm-workspace.yaml` 配置 `overrides: { "@deepseek-ai/libreoffice-kit>fflate": "0.8.3" }`，然后重新安装。插件渲染前另有 PPTX/ZIP64 边界校验，但不替代底层依赖更新。
+
+`ppt_render { pptxPath: "report.pptx", format: "both" }` 读取最终 PPTX，生成逐页 PNG、PDF 和 `render-receipt.json`，不重新保存可编辑源文稿。`ppt_check` 可携带返回的 `receiptPath` 作为 `renderReceipt`，核验源文件和每个输出的摘要；编辑源文稿或修改输出后旧收据失效。静态产物不保留动画；LibreOffice 与 PowerPoint/WPS 的排版可能不同。字体诊断不保证每个字符，也不自动安装字体。更多细节见 [渲染说明](../docs/LIBREOFFICE-INTEGRATION-2026-10-01.md)。
 
 CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--template weekly`、`--edit report.json --edits @edits.json --revision 0`、`--undo report.json --revision 1`、`--check report.json`、`--render report.pptx --format both`。收据核验用 `--check report.json --render-receipt path/to/render-receipt.json`；失败返回非零退出码。
 

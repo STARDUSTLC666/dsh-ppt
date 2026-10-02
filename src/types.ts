@@ -13,7 +13,7 @@ export interface PptVerification { static: 'checked'; pptxRender: 'not-verified'
 export interface PptRenderArgs { pptxPath: string; outputDir?: string; format?: 'png' | 'pdf' | 'both'; width?: number; timeoutMs?: number }
 export interface PptRenderResult { ok: boolean; status: 'unavailable' | 'not-verified' | 'rendered'; backend?: string; rendererVersion?: string; sourceSha256?: string; outputDir?: string; reason?: string; slideCount?: number; pngPaths?: string[]; pdfPath?: string; receiptPath?: string; missingFonts?: string[]; message?: string; installationHint?: string; visual?: 'not-verified' }
 export interface PptCheckResult extends PptQualityResult { verification: PptVerification; render?: PptRenderResult }
-export interface PptEditArgs { deckPath: string; edits?: Array<{ slide: number | string; patch: Partial<Omit<PptSlideSpec, 'id'>> }>; brand?: PptBrand | null; expectedRevision?: number }
+export interface PptEditArgs { deckPath: string; edits?: Array<{ slide: number | string; patch: Partial<Omit<PptSlideSpec, 'id'>> }>; order?: string[]; brand?: PptBrand | null; expectedRevision?: number }
 export interface PptProjectArgs { deckPath: string; expectedRevision?: number }
 
 export interface PptSlideSpec {

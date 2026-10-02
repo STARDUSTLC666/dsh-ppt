@@ -22,7 +22,7 @@ Agent 先准备实际内容，再生成可放映 HTML 与可编辑 PPTX。用户
 
 `ppt_check` 定位页面问题，包括密度、估计溢出、7–8列表格14pt、图片缺失/损坏/分辨率、图表标签和对比度。6列以内原生表格17pt。静态估算不能保证字体或视觉布局。
 
-可选安装 `npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.3`。Windows还需相应架构的VC++v14运行库。`ppt_render {pptxPath:"report.pptx",format:"both"}` 读取最终PPTX，输出PNG/PDF/收据，不改源文件。默认png，width默认1440（320–3840），timeoutMs默认120000（1000–300000）；最多120页，输入64MiB、输出128MiB、单张16MP。缺失引擎返回unavailable及安装说明，普通创建仍可用。
+可选安装 `npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.5`。Windows还需相应架构的VC++v14运行库。`ppt_render {pptxPath:"report.pptx",format:"both"}` 读取最终PPTX，输出PNG/PDF/收据，不改源文件。默认png，width默认1440（320–3840），timeoutMs默认120000（1000–300000）；最多120页，输入64MiB、输出128MiB、单张16MP。缺失引擎返回unavailable及安装说明，普通创建仍可用。
 
 查看每页PNG及HTML，必要时在实际PowerPoint/WPS检查编辑、备注和动画。LibreOffice不保证与Office逐像素一致，PNG/PDF不保留动画。成功渲染仍为 `visual:not-verified`，不会自动声称视觉通过。
 

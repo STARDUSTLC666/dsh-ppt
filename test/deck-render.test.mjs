@@ -41,7 +41,7 @@ function loader(hooks = {}) {
 test('missing optional dependency does not create output or change source', async t => {
   const f = fixture(t), result = await renderDeck(f, async () => { throw Object.assign(new Error('not installed'), { code: 'ERR_MODULE_NOT_FOUND' }) })
   assert.equal(result.status, 'unavailable')
-  assert.match(result.installationHint, /0\.1\.3/)
+  assert.ok(result.installationHint.includes(RENDERER_VERSION))
   assert.equal(existsSync(f.outputDir), false)
   assert.deepEqual(readFileSync(f.pptxPath), f.original)
 })
@@ -50,6 +50,30 @@ test('native engine absence is unavailable and never publishes an empty render',
   const f = fixture(t), result = await renderDeck(f, async () => ({ ENGINE_VERSION: RENDERER_VERSION, createConverter: async () => { throw Object.assign(new Error('engine missing'), { code: 'unavailable' }) } }))
   assert.equal(result.status, 'unavailable')
   assert.equal(existsSync(f.outputDir), false)
+})
+
+test('ZIP64 and malformed extras outside presentation.xml are rejected before converter creation', async t => {
+  const f = fixture(t), original = f.original, end = original.length - 22
+  assert.equal(original.readUInt32LE(end), 0x06054b50)
+  let cursor = original.readUInt32LE(end + 16), target, presentation
+  for (let i = 0; i < original.readUInt16LE(end + 10); i++) {
+    const nameSize = original.readUInt16LE(cursor + 28), extraSize = original.readUInt16LE(cursor + 30), commentSize = original.readUInt16LE(cursor + 32)
+    const name = original.toString('utf8', cursor + 46, cursor + 46 + nameSize)
+    if (name === 'ppt/presentation.xml') presentation = cursor
+    else target = { cursor, insert: cursor + 46 + nameSize + extraSize, extraSize }
+    cursor += 46 + nameSize + extraSize + commentSize
+  }
+  assert.ok(target.cursor > presentation, 'Exercise entries after presentation.xml')
+  for (const extra of [Buffer.from([1, 0, 0, 0]), Buffer.from([0x34, 0x12, 0xff, 0xff])]) {
+    const changed = Buffer.concat([original.subarray(0, target.insert), extra, original.subarray(target.insert)])
+    changed.writeUInt16LE(target.extraSize + 4, target.cursor + 30)
+    changed.writeUInt32LE(original.readUInt32LE(end + 12) + 4, end + 4 + 12)
+    writeFileSync(f.pptxPath, changed)
+    const kit = loader()
+    await assert.rejects(renderDeck(f, kit.load), /ZIP64|扩展字段/)
+    assert.equal(kit.calls.config, undefined)
+    assert.equal(existsSync(f.outputDir), false)
+  }
 })
 
 test('PNG/PDF commit gives verifiable provenance, preserved source, and no visual-pass claim', async t => {

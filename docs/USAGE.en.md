@@ -78,6 +78,12 @@ Existing artifacts are not overwritten by default: if any member of the trio alr
 
 ## Images, charts, editing and review
 
+### Lightweight Settings editor (0.8.0)
+
+Open Settings → Presentations and choose a project registered by `ppt_create`, `ppt_edit` or `ppt_check`. Select a page to edit text, bullets and speaker notes; clicking text in the HTML preview focuses its field. Upload PNG/JPEG images, reorder pages and undo changes. Saving regenerates HTML, PPTX and JSON together.
+
+Save or cancel pending changes before switching pages, reordering, downloading or rendering. A stale revision cannot overwrite another writer's changes. Use “Load latest, keep my input”, review overlapping fields, then explicitly save. The HTML preview and actual PPTX rendering are separate; edits invalidate previous renders. Review every rendered page and font diagnostics before downloading the latest files. The editor works with this plugin's own JSON projects; it does not import arbitrary external PPTX files, and ordinary generation/editing does not need the optional renderer.
+
 The additional tools are `ppt_templates`, `ppt_edit`, `ppt_undo`, `ppt_check`, and `ppt_render`. New layouts are `image`, `image-left`, `image-right` and `chart`, alongside the seven existing layouts.
 
 An image slide accepts `image: {src, alt, fit: "contain"|"cover", caption}`. Use local PNG/JPEG paths relative to session cwd or matching data URIs. Assets are embedded in all outputs and undo works after original files move. Limits: 5 MiB / 32 megapixels per image, 32 MiB total project assets. Remote links and SVG are not automatically downloaded or converted.
@@ -95,12 +101,14 @@ Edit example: `{deckPath:"report.json",expectedRevision:0,edits:[{slide:3,patch:
 Install in the plugin's project or standalone skill directory:
 
 ```bash
-npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.3
+npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.5
 ```
 
 The exact optional peer is not a mandatory engine download for ordinary consumers. Windows also needs the Microsoft Visual C++ v14 runtime matching Node's architecture. Missing dependency/engine returns `unavailable` with guidance.
 
-`ppt_render {pptxPath:"report.pptx",format:"both"}` reads the final PPTX without resaving it and returns page PNGs, PDF and `receiptPath`. Pass that path as `renderReceipt` to `ppt_check` to recheck the current PPTX and every output's digest. Editing the source or outputs invalidates the receipt. Static artifacts do not retain animation. LibreOffice/PowerPoint/WPS may lay out files differently; font diagnostics do not guarantee every glyph or install fonts. See [integration details](LIBREOFFICE-INTEGRATION-2026-10-01.md).
+`ppt_render {pptxPath:"report.pptx",format:"both"}` reads the final PPTX without resaving it and returns page PNGs, PDF and `receiptPath`. Pass that path as `renderReceipt` to `ppt_check` to recheck the current PPTX and every output's digest. Editing the source or outputs invalidates the receipt. Static artifacts do not retain animation. LibreOffice/PowerPoint/WPS may lay out files differently; font diagnostics do not guarantee every glyph or install fonts. See [integration details](../docs/LIBREOFFICE-INTEGRATION-2026-10-01.md).
+
+This repository's pnpm overrides are not inherited by consumers. If an installed renderer's audit reports `fflate@0.8.2`, set `overrides: { "@deepseek-ai/libreoffice-kit": { "fflate": "0.8.3" } }` in the consumer's root package.json (npm), or `overrides: { "@deepseek-ai/libreoffice-kit>fflate": "0.8.3" }` in its root pnpm-workspace.yaml, then reinstall. The plugin also validates PPTX/ZIP64 bounds before rendering; that check does not replace updating the underlying dependency.
 
 CLI supports `--slides @slides.json`, `--brand @brand.json`, `--template weekly`, `--edit report.json --edits @edits.json --revision 0`, `--undo report.json --revision 1`, `--check report.json`, and `--render report.pptx --format both`. Explicit receipt validation uses `--check report.json --render-receipt path/to/render-receipt.json`; failure returns a nonzero exit code.
 

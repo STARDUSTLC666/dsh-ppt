@@ -16,6 +16,7 @@ export interface PptPluginContext {
         warn?(message: string): void;
     };
     on?(event: string, listener: () => void): () => void;
+    inject?(services: string[], callback: (ctx: any) => void): unknown;
 }
 export declare function apply(ctx: PptPluginContext, config?: Config): void;
 export { resolvePptConfig, PPT_OUTPUT_DIR_ENV, DEFAULT_MAX_SLIDES, clampInt } from './config.js';

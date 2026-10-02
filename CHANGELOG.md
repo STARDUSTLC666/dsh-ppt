@@ -4,6 +4,14 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.8.0 (2026-10-02)
+
+- Add an authenticated DSH presentation workbench: click-to-focus text, edit fields/notes, replace uploaded PNG/JPEG, reorder pages, undo and download regenerated artifacts.
+- Add `order` to `ppt_edit`, validating a complete permutation of stable slide IDs and combining text edits/order into one atomic undo record.
+- Track only tool-created/checked JSON projects in a bounded local catalog. Browser requests cannot supply arbitrary file paths or image paths.
+- Keep HTML playback separate from optional final PPTX rendering, display missing fonts and invalidate images after source/revision changes.
+- Preserve unsaved input after failed saves; prevent embedded player navigation from desynchronizing the selected slide.
+
 ## 0.7.0 (2026-10-02)
 
 - Add offline delivery controls: editable PPTX/project downloads, previous/next buttons, page-number navigation, quality findings and a clickable outline.

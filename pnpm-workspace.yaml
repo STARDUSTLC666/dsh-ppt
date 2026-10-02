@@ -1,0 +1,2 @@
+overrides:
+  '@deepseek-ai/libreoffice-kit>fflate': 0.8.3

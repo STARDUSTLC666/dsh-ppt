@@ -19,6 +19,7 @@ import { resolvePptConfig } from './config.js'
 import { registerPptSkill, type SkillsService } from './skill.js'
 import type { PptConfig } from './types.js'
 import { buildPptTools, type ToolDefinition } from './tools.js'
+import { PptWorkbench, installPptWorkbench } from './workbench.js'
 export type { ToolDefinition } from './tools.js'
 export type { PptExecution } from './execution.js'
 
@@ -32,12 +33,15 @@ export interface PptPluginContext {
   skills: SkillsService
   logger?: { warn?(message: string): void }
   on?(event: string, listener: () => void): () => void
+  inject?(services: string[], callback: (ctx: any) => void): unknown
 }
 
 export function apply(ctx: PptPluginContext, config: Config = {}): void {
   const resolved = resolvePptConfig(config)
   const warn = (message: string): void => { ctx.logger?.warn?.(message) }
   const disposers: Array<() => void> = []
+  const workbench = typeof ctx.inject === 'function' ? new PptWorkbench() : undefined
+  if (workbench) installPptWorkbench(ctx, workbench)
 
   // 技能注册：单个技能文件缺失只告警，不弄崩宿主启动。
   try {
@@ -47,7 +51,12 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
   }
 
   for (const definition of buildPptTools(resolved)) {
-    disposers.push(ctx.tools.register(definition))
+    const execute = definition.execute
+    disposers.push(ctx.tools.register({ ...definition, async execute(args, exec) {
+      const result = await execute(args, exec)
+      try { await workbench?.remember(result, args, exec) } catch (error) { warn('[dsh-ppt] 项目索引未更新：' + (error instanceof Error ? error.message : String(error))) }
+      return result
+    } }))
   }
 
   if (typeof ctx.on === 'function') {

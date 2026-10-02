@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
-  "version": "0.7.0",
-  "description": "把材料制作成 HTML 放映、可编辑 PPTX 和可继续修改的工程文件。",
+  "version": "0.8.0",
+  "description": "DSH 演示文稿插件：生成 HTML、可编辑 PPTX 和工程文件，支持图表、轻量编辑、撤销与质量检查。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -14,6 +14,7 @@
     "./deck-core": "./skills/dsh-ppt/scripts/deck-core.mjs",
     "./deck-advanced": "./skills/dsh-ppt/scripts/deck-advanced.mjs",
     "./deck-render": "./skills/dsh-ppt/scripts/deck-render.mjs",
+    "./client": "./lib/client.js",
     "./build-deck": "./skills/dsh-ppt/scripts/build-deck.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
@@ -38,6 +39,12 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "keywords": [
@@ -74,7 +81,7 @@
     "@office-kit/pptx": "0.21.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/libreoffice-kit": "0.1.3"
+    "@deepseek-ai/libreoffice-kit": "0.1.5"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/libreoffice-kit": {

@@ -12,7 +12,7 @@
 | 放映没有动画 | `motion` 被设为 `off`；默认 `on` 时 HTML 有转场、PPTX 要点逐条点击出现 |
 | HTML 打印要点缺失 | 打印样式已强制显示全部要点；若仍缺失检查浏览器是否屏蔽了动画样式 |
 | 图片、图表或品牌导出缺少依赖 | 插件重新安装；独立技能目录运行 npm install --ignore-scripts 安装 Office Kit 0.21.0 |
-| ppt_render 返回 unavailable | 在插件项目或技能目录安装可选官方 Kit 0.1.3；Windows检查相应VC++v14运行库 |
+| ppt_render 返回 unavailable | 在插件项目或技能目录安装可选官方 Kit 0.1.5；Windows检查相应VC++v14运行库 |
 | 收据 not-verified | 源PPTX或输出发生变化、缺失、版本不同；用当前PPTX重新渲染，不沿用旧结论 |
 | 修订号冲突 | 重新用ppt_check读取当前工程，再按新revision编辑 |
 | 模板还有待填写 | 补充实际事实/依据/行动；按草稿说明，不作为成品交付 |
