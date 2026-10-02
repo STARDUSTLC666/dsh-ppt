@@ -1,0 +1,75 @@
+name: Publish npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package.json version to verify or publish
+        required: true
+        type: string
+      publish:
+        description: Publish after verification (false only verifies OIDC and package)
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: node .github/scripts/npm-release.mjs check-input
+      - run: pnpm install --frozen-lockfile --ignore-scripts --no-optional
+      - run: pnpm test
+      - run: git diff --exit-code -- lib
+      - run: if [ -f lib/client.js ]; then node --check lib/client.js; fi
+      - run: node .github/scripts/npm-release.mjs pack
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-release
+          path: .release/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: npm-release
+          path: .release/
+      - run: node .github/scripts/npm-release.mjs verify-artifact
+      - name: Verify actual npm OIDC authorization without publishing
+        run: node .github/scripts/npm-release.mjs verify-oidc
+      - if: inputs.publish
+        run: npm install --global npm@11.21.0 --ignore-scripts --registry https://registry.npmjs.org
+      - name: Publish the tested tarball and verify registry integrity
+        if: inputs.publish
+        run: node .github/scripts/npm-release.mjs publish
