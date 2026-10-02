@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const README_ZH = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
-const README_EN = readFileSync(new URL('../README.en.md', import.meta.url), 'utf8')
+const README_ZH = readFileSync(new URL('../README.md', import.meta.url), 'utf8') + readFileSync(new URL('../docs/USAGE.md', import.meta.url), 'utf8')
+const README_EN = readFileSync(new URL('../README.en.md', import.meta.url), 'utf8') + readFileSync(new URL('../docs/USAGE.en.md', import.meta.url), 'utf8')
 
 test('README 不再承诺错误提示中英双语', () => {
   assert.doesNotMatch(README_ZH, /错误提示[^。\n]*中英双语/, 'README.md 仍承诺错误提示中英双语')
