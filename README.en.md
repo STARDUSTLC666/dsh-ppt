@@ -2,6 +2,8 @@
 
 [中文](README.md)
 
+![dsh-ppt whale girl plugin cover](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)
+
 Turn source material into an HTML slideshow, editable PPTX and a reusable project.
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://img.shields.io/npm/dm/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt)

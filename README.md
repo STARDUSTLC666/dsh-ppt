@@ -2,6 +2,8 @@
 
 [English](README.en.md)
 
+![dsh-ppt 鲸鱼娘插件封面](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)
+
 把材料制作成 HTML 放映、可编辑 PPTX 和可继续修改的工程文件。
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://img.shields.io/npm/dm/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt)
