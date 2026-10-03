@@ -10,6 +10,12 @@ test('browser entry registers the declared settings slot and confines generated 
   let definition
   plugin.apply({ slots: { inject(name, callback) { assert.equal(name, 'settings.section'); callback() }, register(meta, Component) { assert.equal(meta.name, 'settings.section'); assert.equal(typeof Component, 'function'); definition = meta } } })
   assert.equal(definition.id, 'dsh-ppt'); assert.equal(definition.label(), '演示文稿')
+  let active = 'en'
+  const locale = { getSnapshot() { return { active } } }
+  plugin.apply({ locale, slots: { inject(_name, callback) { callback() }, register(meta) { definition = meta } } })
+  assert.equal(definition.label(), 'Presentations')
+  assert.equal(definition.inject().locale, locale)
+  active = 'zh'; assert.equal(definition.label(), '演示文稿')
   const html = plugin.__internals.editorHtml('<html><head></head><body>preview</body></html>', 'nonce')
   assert.match(html, /Content-Security-Policy/); assert.match(html, /connect-src 'none'/)
   assert.match(html, /e.source!==parent/); assert.match(html, /#hud,#delivery-bar/)

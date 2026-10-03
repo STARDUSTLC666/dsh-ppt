@@ -14,6 +14,22 @@ async function fixture(run) {
 }
 const request = (body, headers = {}) => new Request('http://dsh.internal' + PPT_WORKBENCH_ROUTE, { method: 'POST', headers: { 'content-type': 'application/json', 'x-dsh-ppt-action': '1', origin: 'http://127.0.0.1:8181', host: '127.0.0.1:8181', ...headers }, body: JSON.stringify(body) })
 
+test('workbench returns both UI languages while preserving slide content and conflict recovery', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  await editDeck({ deckPath: created.jsonPath, expectedRevision: 0, edits: [{ slide: 1, patch: { title: '过长的中文标题'.repeat(15) } }] })
+  const opened = await wb.action({ operation: 'open', id })
+  assert.equal(opened.project.slides[0].title, '过长的中文标题'.repeat(15))
+  const finding = opened.project.quality.issues.find(issue => issue.code === 'title-overflow')
+  assert.match(finding.message, /标题/)
+  assert.match(finding.messageEn, /title/); assert.match(finding.suggestionEn, /Shorten/)
+  const response = await wb.fetch(request({ operation: 'edit', id, expectedRevision: 0, slide: opened.project.slides[0].id, patch: { title: '不能覆盖' } }))
+  assert.equal(response.status, 409)
+  const error = await response.json()
+  assert.match(error.message, /输入保留/); assert.match(error.messageEn, /input is preserved/)
+  assert.equal(readDeckProject({ deckPath: created.jsonPath }).manifest.slides[0].title, '过长的中文标题'.repeat(15))
+}))
+
 test('one atomic edit reorders stable pages and edits content; undo restores both', () => fixture(async ({ created }) => {
   const original = readDeckProject({ deckPath: created.jsonPath }).manifest
   const order = [original.slides[0].id, original.slides[2].id, original.slides[1].id]

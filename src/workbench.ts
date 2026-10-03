@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { getEngine, type PptExecution } from './execution.js'
 import type { DeckEngine } from './types.js'
+import { bilingualQuality, englishWorkbenchMessage } from './workbench-language.js'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
@@ -25,7 +26,7 @@ function pathsFor(path: string) { const base = path.slice(0, -5); return { json:
 function json(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
 }
-function fail(status: number, message: string): Response { return json(status, { ok: false, message }) }
+function fail(status: number, message: string): Response { return json(status, { ok: false, message, messageEn: englishWorkbenchMessage(message) }) }
 function originVerdict(request: Request): Response | undefined {
   const site = request.headers.get('sec-fetch-site'), origin = request.headers.get('origin')
   if (site && !['same-origin', 'none'].includes(site)) return fail(403, '拒绝跨站操作')
@@ -82,7 +83,7 @@ export class PptWorkbench {
   }
   private async view(id: unknown) {
     const { entry, engine, manifest, files } = await this.project(id)
-    const check = engine.checkDeck({ deckPath: entry.path })
+    const check = bilingualQuality(engine.checkDeck({ deckPath: entry.path }))
     let html = ''
     try { html = ordinaryFile(files.html).toString('utf8') } catch { /* A check can register an older JSON-only project. */ }
     const render = this.renders.get(entry.id)
@@ -138,7 +139,10 @@ export class PptWorkbench {
       if (result.ok) this.renders.set(entry.id, { revision: manifest.revision, pngPaths: result.pngPaths ?? [], pngHashes: (result.pngPaths ?? []).map(path => digest(ordinaryFile(path))), missingFonts: result.missingFonts, sourceSha256: result.sourceSha256! })
       const view = await this.view(entry.id)
       if (result.ok && !view.project.render) throw new Error('项目已被修改，请重新渲染')
-      return { ...result, project: view.project }
+      return { ...result, ...(result.ok ? {} : {
+        messageEn: englishWorkbenchMessage(result.message || 'PPTX rendering failed.'),
+        installationHintEn: 'Optional renderer: @deepseek-ai/libreoffice-kit@0.1.5. Install it in this DSH profile and restart DSH.',
+      }), project: view.project }
     }
     if (body.operation === 'edit') {
       if (body.slide !== undefined && (typeof body.slide !== 'string' || !manifest.slides.some((s: any) => s.id === body.slide))) throw new Error('页面不存在')

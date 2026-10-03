@@ -4,6 +4,11 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.8.1 (2026-10-03)
+
+- 演示文稿工作台、质量提醒和后台失败引导跟随宿主中文 / English 切换；正文、成品语言与工程内容保持原样。
+- 验收范围见 [中英文界面检查](docs/validation-language-2026-10-03.md)。
+
 ## 0.8.0 (2026-10-02)
 
 - Add an authenticated DSH presentation workbench: click-to-focus text, edit fields/notes, replace uploaded PNG/JPEG, reorder pages, undo and download regenerated artifacts.
