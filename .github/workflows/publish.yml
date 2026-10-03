@@ -35,6 +35,7 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - run: node .github/scripts/npm-release.mjs check-input
+      - run: node --test .github/scripts/npm-registry-verification.test.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts --no-optional
       - run: pnpm test
       - run: git diff --exit-code -- lib

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { waitForPublishedMetadata } from './npm-registry-verification.mjs'
 
 const config = JSON.parse(readFileSync('.github/npm-release.json', 'utf8'))
 const registry = 'https://registry.npmjs.org'
@@ -79,15 +80,8 @@ async function main() {
       console.log('Identical version is already published'); return
     }
     execFileSync('npm', ['publish', file, '--ignore-scripts', '--access', 'public', '--registry', registry, '--provenance'], { stdio: 'inherit' })
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const published = await metadata(manifest.version)
-      if (published !== null) {
-        assert.equal(published.dist?.integrity, manifest.integrity, 'Published artifact integrity mismatch')
-        console.log('Published registry integrity verified'); return
-      }
-      await new Promise(r => setTimeout(r, 2000))
-    }
-    throw new Error('Publish returned successfully but registry verification is still unavailable')
+    await waitForPublishedMetadata(() => metadata(manifest.version), manifest.integrity)
+    console.log('Published registry integrity verified'); return
   }
   throw new Error('Unknown release command')
 }
