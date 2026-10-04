@@ -6,7 +6,7 @@
 
 把材料制作成 HTML 放映、可编辑 PPTX 和可继续修改的工程文件。
 
-[![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://img.shields.io/npm/dm/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt)
+[![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
 ## 功能
 
