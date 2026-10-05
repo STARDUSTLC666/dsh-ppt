@@ -1,5 +1,7 @@
 /** UI messages are independent of the deck's language; slide content is never translated. */
 const messages: Record<string, string> = {
+  '成品文件不完整，请先保存一次再下载成品包': 'The delivery files are incomplete. Save this presentation before downloading the bundle.',
+  '成品包超过 128 MiB，请分别下载文件': 'The delivery bundle exceeds 128 MiB. Download the files separately.',
   '文件不是普通文件或超过 64 MiB': 'The file is not a regular file or exceeds 64 MiB.',
   '项目索引超过 8 MiB，请备份后整理 projects.jsonl': 'The project index exceeds 8 MiB. Back it up before reviewing projects.jsonl.',
   '项目索引已满，请备份后整理 projects.jsonl': 'The project index is full. Back it up before reviewing projects.jsonl.',

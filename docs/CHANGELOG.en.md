@@ -4,6 +4,10 @@
 
 These English notes preserve the earlier translations. The main changelog contains the consolidated version history.
 
+## 0.9.0 (2026-10-05)
+
+- Add a delivery ZIP containing HTML, editable PPTX, project JSON and usage notes. Only indexed files at the saved revision are included; missing or stale artifacts block delivery.
+
 ## 0.7.0 (2026-10-02)
 
 - Generated HTML decks now have previous/next buttons and page-number navigation, with keyboard, touch and a usable 390px layout.

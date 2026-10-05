@@ -17,6 +17,9 @@ importers:
       '@office-kit/pptx':
         specifier: 0.21.0
         version: 0.21.0
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

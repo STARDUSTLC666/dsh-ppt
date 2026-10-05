@@ -2,6 +2,10 @@
 
 [Overview](../README.en.md) · [Changelog](../CHANGELOG.md) · [Validation](VALIDATION.md)
 
+## Current improvements
+
+Save workbench edits, then choose Download delivery ZIP. Individual downloads remain available. The ZIP excludes configuration, secrets and other workspace files; each file is limited to 64 MiB and the total to 128 MiB.
+
 ## Capabilities
 
 | Capability | Description |

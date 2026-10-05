@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "DSH 演示文稿插件：生成 HTML、可编辑 PPTX 和工程文件，支持图表、轻量编辑、撤销与质量检查。",
   "type": "module",
   "main": "lib/index.js",
@@ -78,7 +78,8 @@
   "author": "stardustlc",
   "packageManager": "pnpm@11.7.0",
   "dependencies": {
-    "@office-kit/pptx": "0.21.0"
+    "@office-kit/pptx": "0.21.0",
+    "fflate": "0.8.3"
   },
   "peerDependencies": {
     "@deepseek-ai/libreoffice-kit": "0.1.5"

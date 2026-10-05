@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { buildDeckAsync, editDeck, undoDeck, readDeckProject } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import * as engine from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { PptWorkbench, installPptWorkbench, PPT_WORKBENCH_ROUTE, PPT_DOWNLOAD_ROUTE } from '../lib/workbench.js'
+import { unzipSync, strFromU8 } from 'fflate'
 const work = resolve('.test-output'); mkdirSync(work, { recursive: true })
 const slides = [{ layout: 'cover', title: '原始封面' }, { layout: 'bullets', title: '行动', bullets: ['保留资料'] }, { layout: 'closing', title: '下一步' }]
 async function fixture(run) {
@@ -81,6 +82,28 @@ test('attachment downloads return original bytes and refuse stale, unknown and c
   await editDeck({ deckPath: created.jsonPath, expectedRevision: 0, edits: [{ slide: 1, patch: { title: '新版本' } }] })
   assert.equal((await download('pptx')).status, 409)
   assert.equal((await download('pptx', 1)).status, 200)
+}))
+test('delivery ZIP preserves all three artifacts, Unicode names and revision guards', () => fixture(async ({ dir, created, wb }) => {
+  await wb.remember(created, {}); const id = (await wb.action({ operation: 'list' })).projects[0].id
+  writeFileSync(join(dir, 'private-config.json'), '{"password":"must-not-export"}')
+  const download = revision => wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=bundle&revision=${revision}`))
+  const response = await download(0)
+  assert.equal(response.status, 200); assert.equal(response.headers.get('content-type'), 'application/zip')
+  assert.match(decodeURIComponent(response.headers.get('content-disposition')), /工程-delivery.zip/)
+  const entries = unzipSync(new Uint8Array(await response.arrayBuffer()))
+  assert.equal(Object.keys(entries).length, 4)
+  for (const path of Object.values(created.files)) assert.deepEqual(Buffer.from(entries[path.split(/[\\/]/).pop()]), readFileSync(path))
+  assert.match(strFromU8(entries['README.txt']), /Revision: 0/)
+  assert.equal(entries['private-config.json'], undefined)
+  await editDeck({ deckPath: created.jsonPath, expectedRevision: 0, edits: [{ slide: 1, patch: { title: '最终成品' } }] })
+  assert.equal((await download(0)).status, 409)
+  const latest = unzipSync(new Uint8Array(await (await download(1)).arrayBuffer()))
+  assert.match(strFromU8(latest['README.txt']), /Revision: 1/)
+  assert.match(strFromU8(latest[created.files.html.split(/[\\/]/).pop()]), /最终成品/)
+  rmSync(created.files.pptx)
+  const incomplete = await download(1)
+  assert.equal(incomplete.status, 400)
+  assert.match((await incomplete.json()).messageEn, /incomplete/)
 }))
 test('stale operator save is refused without overwriting files; path patches cannot read files', () => fixture(async ({ created, wb }) => {
   await wb.remember(created, {}); const id = (await wb.action({ operation: 'list' })).projects[0].id

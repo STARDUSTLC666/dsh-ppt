@@ -6,11 +6,13 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { getEngine, type PptExecution } from './execution.js'
 import type { DeckEngine } from './types.js'
 import { bilingualQuality, englishWorkbenchMessage } from './workbench-language.js'
+import { zipSync, strToU8 } from 'fflate'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
 const REQUEST_LIMIT = 12 * 1024 * 1024
 const FILE_LIMIT = 64 * 1024 * 1024
+const BUNDLE_LIMIT = 128 * 1024 * 1024
 type Project = { id: string; path: string; title: string; updatedAt: string }
 type Render = { revision: number; pngPaths: string[]; pngHashes: string[]; missingFonts?: string[]; sourceSha256: string }
 type WorkbenchEngine = DeckEngine & { readDeckProject(options: Record<string, unknown>): { manifest: any; path: string } }
@@ -165,16 +167,38 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
-      const path = files[kind as keyof typeof files], bytes = ordinaryFile(path)
+      let name: string, bytes: Uint8Array
+      if (kind === 'bundle') {
+        const entries: Record<string, Uint8Array> = {}
+        let total = 0
+        for (const path of Object.values(files)) {
+          if (!existsSync(path)) return fail(400, '成品文件不完整，请先保存一次再下载成品包')
+          const content = ordinaryFile(path)
+          total += content.byteLength
+          if (total > BUNDLE_LIMIT) return fail(413, '成品包超过 128 MiB，请分别下载文件')
+          entries[basename(path)] = content
+        }
+        // Only the three known sibling artifacts are included. No directory walks,
+        // local configuration, attachment paths or journal files enter the archive.
+        entries['README.txt'] = strToU8('演示文稿成品包 / Presentation delivery bundle\n\nPPTX: 在 PowerPoint / WPS 中编辑。 / Edit in PowerPoint or WPS.\nHTML: 解压后用浏览器打开，支持离线放映。 / Extract and open in a browser for offline playback.\nJSON: 保留以便继续在 DSH 中编辑。 / Keep this project file for future DSH edits.\n\n修订 / Revision: ' + manifest.revision + '\n')
+        // PPTX and embedded images are already compressed; store to avoid a large
+        // synchronous recompression on the host's event loop.
+        bytes = zipSync(entries, { level: 0 })
+        name = basename(entry.path, '.json') + '-delivery.zip'
+      } else {
+        const path = files[kind as keyof typeof files]
+        bytes = ordinaryFile(path); name = basename(path)
+      }
+      request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const type = kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const type = kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${kind}"; filename*=UTF-8''${encodeURIComponent(basename(path))}`,
+        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }
