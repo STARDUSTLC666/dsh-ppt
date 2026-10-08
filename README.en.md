@@ -8,6 +8,8 @@ Turn source material into an HTML slideshow, editable PPTX and a reusable projec
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
+Feedback and contributions are welcome: report [issues](https://github.com/STARDUSTLC666/dsh-ppt/issues) or submit [pull requests](https://github.com/STARDUSTLC666/dsh-ppt/pulls).
+
 ## What it does
 
 - Create branded decks with text, images, tables and native charts.
