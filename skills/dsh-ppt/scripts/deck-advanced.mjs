@@ -396,7 +396,7 @@ export async function editDeck(options = {}) {
   expected(current, options.expectedRevision)
   const next = clone(current)
   if (!Array.isArray(options.edits) || !options.edits.length) {
-    if (options.brand === undefined && options.order === undefined) fail('请提供 edits、order 或 brand')
+    if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined) fail('请提供 edits、order、duplicate、remove 或 brand')
   }
   const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart'])
   for (const edit of options.edits ?? []) {
@@ -425,6 +425,24 @@ export async function editDeck(options = {}) {
     if (options.order.some(id => !byId.has(id))) fail('order 含有不属于本工程的页面 ID')
     next.slides = options.order.map(id => byId.get(id))
   }
+  function selectedIds(value, field) {
+    if (value === undefined) return new Set()
+    if (!Array.isArray(value) || value.length === 0 || value.length > 120) fail(field + ' 需为 1-120 个页码或页面 ID')
+    const ids = value.map(ref => {
+      const slide = typeof ref === 'number' && Number.isInteger(ref) ? current.slides[ref - 1] : current.slides.find(s => s.id === ref)
+      if (!slide) fail(field + ' 找不到页面：' + ref)
+      return slide.id
+    })
+    if (new Set(ids).size !== ids.length) fail(field + ' 不能重复指定同一页')
+    return new Set(ids)
+  }
+  const duplicate = selectedIds(options.duplicate, 'duplicate'), remove = selectedIds(options.remove, 'remove')
+  if ([...duplicate].some(id => remove.has(id))) fail('同一页不能同时复制和删除')
+  const count = next.slides.length + duplicate.size - remove.size
+  if (count < 1) fail('至少保留一页')
+  if (count > 120) fail('工程页数超过 120')
+  if (duplicate.size || remove.size) next.slides = next.slides.flatMap(slide => remove.has(slide.id) ? [] :
+    duplicate.has(slide.id) ? [slide, { ...clone(slide), id: randomUUID() }] : [slide])
   if (options.brand !== undefined) next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
     ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, resolve(options.cwd || '.'))
   if (JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }

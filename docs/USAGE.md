@@ -81,7 +81,7 @@ node <skill-dir>/scripts/build-deck.mjs \
 
 ### 设置页轻量编辑（0.8.0）
 
-打开「设置 → 演示文稿」，选择由 `ppt_create`、`ppt_edit` 或 `ppt_check` 登记的本插件工程。点击页码，修改标题、正文、要点和演讲备注；也可点击 HTML 预览中的文字定位字段。上传 PNG/JPEG 会嵌入工程并同步生成 PPTX。页面上移/下移与文字修改均可撤销。
+打开「设置 → 演示文稿」，选择由 `ppt_create`、`ppt_edit` 或 `ppt_check` 登记的本插件工程。点击页码，修改标题、正文、要点和演讲备注；也可点击 HTML 预览中的文字定位字段。上传 PNG/JPEG 会嵌入工程并同步生成 PPTX。页面可上移/下移、复制、删除，均支持撤销。复制会保留图片、图表和备注；最后一页不能删除，最多 120 页。有未保存输入时，先保存或取消再操作页面结构。
 
 保存会同时更新 HTML、PPTX 和 JSON。未保存时先保存或取消，再切换页面、排序、下载或渲染。若助手同时修改了工程，旧修订不会覆盖新文件；点击「载入最新版本，保留我的输入」后检查重叠字段，再明确保存。
 
@@ -106,6 +106,8 @@ node <skill-dir>/scripts/build-deck.mjs \
 `brand` 支持 `name`、`primaryColor`、`backgroundColor`、`textColor`、`fontFamily`、`logo`、`footer`。颜色用 `#RRGGBB`，字体选择接收方电脑可用的字体。`template` 为 `weekly | defense | project | pitch`，提供正文时不会替换原大纲。
 
 编辑示例：`ppt_edit { deckPath: "report.json", expectedRevision: 0, edits: [{ slide: 3, patch: { title: "新的结论", bullets: ["依据一", "下一步"] } }] }`。先用 `ppt_check` 获取页码/ID/修订号，再修改；`ppt_undo` 撤销最近一次修改，恢复图片、图表和品牌。编辑和撤销更新整套文件，失败会回滚。
+
+结构示例：`ppt_edit { deckPath: "report.json", expectedRevision: 0, duplicate: [2], remove: [3] }`。引用按修改前的页码或稳定 ID 解析；副本紧跟原页并获得新 ID，其他页面的 ID 保持不变。同一页不能同时复制和删除，最终须保留 1–120 页；可与文字修改、排序合并为一次可撤销操作。
 
 `deliveryStatus: draft` 表示模板未填完；`ready-for-review` 表示可开始检查。静态估算、PPTX 渲染和视觉检查分开记录。生成或渲染成功不会自动代表视觉验收通过，应查看 HTML 和每页图片，修正问题后交付。
 

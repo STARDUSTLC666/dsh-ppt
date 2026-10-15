@@ -16,7 +16,9 @@ Agent 先准备实际内容，再生成可放映 HTML 与可编辑 PPTX。用户
 
 先 `ppt_check {deckPath:"report.json"}` 取得当前revision和页面ID。修改：`ppt_edit {deckPath:"report.json",expectedRevision:0,edits:[{slide:3,patch:{title:"新标题",bullets:["事实一","行动"]}}]}`。slide为1起始页码或ID，其他页保留；重复指定页拒绝。可单独修改brand；brand:null清空品牌，logo:null清空Logo，空footer清空页脚。
 
-编辑会原子更新整套HTML/PPTX/JSON，失败回滚。历史最多20次。`ppt_undo {deckPath:"report.json",expectedRevision:1}` 恢复上次状态，包含图片/图表/品牌；revision继续增长，旧修改不可覆盖撤销。仅编辑本插件JSON工程，不导入任意外部PPTX进行修改。编辑不能新增/删除页；表格扩大到需要分页时会要求另建文稿。
+复制与删除：`ppt_edit {deckPath:"report.json",expectedRevision:0,duplicate:[2],remove:[3]}`。两组引用都按修改前的1起始页码或稳定ID解析；副本紧跟原页，获得新ID，并保留图片、图表和备注。同一页不能同时复制和删除，不能重复指定，最终保留1–120页。可与edits和order合为一次修改，先编辑/排序，再复制/删除；order仍需包含每个原始页面ID各一次。
+
+编辑会原子更新整套HTML/PPTX/JSON，失败回滚。历史最多20次。`ppt_undo {deckPath:"report.json",expectedRevision:1}` 恢复上次状态，包含页面结构、图片/图表/品牌；revision继续增长，旧修改不可覆盖撤销。仅编辑本插件JSON工程，不导入任意外部PPTX进行修改。表格扩大到需要分页时会要求另建文稿。
 
 ## 检查与渲染
 

@@ -84,7 +84,7 @@ Existing artifacts are not overwritten by default: if any member of the trio alr
 
 ### Lightweight Settings editor (0.8.0)
 
-Open Settings → Presentations and choose a project registered by `ppt_create`, `ppt_edit` or `ppt_check`. Select a page to edit text, bullets and speaker notes; clicking text in the HTML preview focuses its field. Upload PNG/JPEG images, reorder pages and undo changes. Saving regenerates HTML, PPTX and JSON together.
+Open Settings → Presentations and choose a project registered by `ppt_create`, `ppt_edit` or `ppt_check`. Select a page to edit text, bullets and speaker notes; clicking text in the HTML preview focuses its field. Upload PNG/JPEG images, reorder, duplicate or delete slides and undo changes. Copies preserve images, charts and notes. The last slide cannot be deleted; the limit is 120 slides. Save or cancel pending edits before changing slide structure. Saving regenerates HTML, PPTX and JSON together.
 
 Save or cancel pending changes before switching pages, reordering, downloading or rendering. A stale revision cannot overwrite another writer's changes. Use “Load latest, keep my input”, review overlapping fields, then explicitly save. The HTML preview and actual PPTX rendering are separate; edits invalidate previous renders. Review every rendered page and font diagnostics before downloading the latest files. The editor works with this plugin's own JSON projects; it does not import arbitrary external PPTX files, and ordinary generation/editing does not need the optional renderer.
 
@@ -97,6 +97,8 @@ A chart accepts `chart: {kind:"column"|"bar"|"line"|"pie", categories, series:[{
 `brand` supports `name`, `primaryColor`, `backgroundColor`, `textColor`, `fontFamily`, `logo` and `footer`. Colors are `#RRGGBB`; select a font available on the recipient computer. `template` is `weekly|defense|project|pitch` and does not overwrite a supplied narrative.
 
 Edit example: `{deckPath:"report.json",expectedRevision:0,edits:[{slide:3,patch:{title:"A clearer conclusion",bullets:["Evidence","Next action"]}}]}`. Use `ppt_check` to obtain stable IDs and the revision; `ppt_undo` restores the latest edit including assets/brand. Keeps up to 20 edits and rejects stale revisions. The artifact trio is regenerated atomically with rollback on commit failure.
+
+Structure example: `{deckPath:"report.json",expectedRevision:0,duplicate:[2],remove:[3]}`. References use the original 1-based slide numbers or stable IDs. Copies follow the source slide with new IDs; existing slides keep theirs. A slide cannot be copied and removed in the same request. Keep 1–120 slides. Text edits, reordering and structural changes can share one undo step.
 
 `deliveryStatus: draft` means unfilled slots; `ready-for-review` means review can start. Static estimates, rendering and visual inspection are recorded separately. Generation/rendering never automatically certifies visual quality. Inspect HTML and every page image before delivery.
 

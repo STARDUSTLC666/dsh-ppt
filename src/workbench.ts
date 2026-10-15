@@ -155,6 +155,16 @@ export class PptWorkbench {
       await this.remember(result, args)
       return { ...await this.view(entry.id), changed: (result as any).changed }
     }
+    if (body.operation === 'duplicate' || body.operation === 'remove') {
+      if (typeof body.slide !== 'string' || !manifest.slides.some((s: any) => s.id === body.slide)) throw new Error('页面不存在')
+      const args = { deckPath: entry.path, expectedRevision: body.expectedRevision, signal, [body.operation]: [body.slide] }
+      const result = await engine.editDeck(args)
+      await this.remember(result, args)
+      const view = await this.view(entry.id)
+      const originalIndex = manifest.slides.findIndex((s: any) => s.id === body.slide)
+      const selected = view.project.slides[Math.min(originalIndex + (body.operation === 'duplicate' ? 1 : 0), view.project.slides.length - 1)].id
+      return { ...view, selected }
+    }
     if (body.operation === 'undo') {
       await engine.undoDeck({ deckPath: entry.path, expectedRevision: body.expectedRevision, signal })
       return this.view(entry.id)
