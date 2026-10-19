@@ -15,6 +15,7 @@ Feedback and contributions are welcome: report [issues](https://github.com/STARD
 - Create branded decks with text, images, tables and native charts.
 - Edit text and images in Settings, reorder, duplicate or delete slides, and undo changes.
 - Check quality and optionally render the final PPTX as images or PDF.
+- Download Markdown speaker notes with each slide's current title and notes.
 
 ## Install
 

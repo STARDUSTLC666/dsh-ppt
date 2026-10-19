@@ -105,6 +105,42 @@ test('delivery ZIP preserves all three artifacts, Unicode names and revision gua
   assert.equal(incomplete.status, 400)
   assert.match((await incomplete.json()).messageEn, /incomplete/)
 }))
+
+test('speaker notes download contains every current slide and refuses stale revisions', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const download = revision => wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=notes&revision=${revision}`))
+  await editDeck({ deckPath: created.jsonPath, expectedRevision: 0, edits: [{ slide: 1, patch: { notes: '旧的开场讲稿' } }] })
+  await editDeck({ deckPath: created.jsonPath, expectedRevision: 1, edits: [{ slide: 1, patch: { notes: '现在的开场讲稿\n保留第二行与 emoji 🐳' } }, { slide: 2, patch: { notes: '逐项说明行动。' } }] })
+  const response = await download(2)
+  assert.equal(response.status, 200)
+  assert.match(response.headers.get('content-type'), /text\/markdown/)
+  assert.match(decodeURIComponent(response.headers.get('content-disposition')), /工程-speaker-notes\.md/)
+  const notes = await response.text()
+  assert.match(notes, /# 工程/)
+  assert.match(notes, /## 1\. 原始封面/)
+  assert.match(notes, /现在的开场讲稿\n保留第二行与 emoji 🐳/)
+  assert.match(notes, /## 2\. 行动[\s\S]*逐项说明行动。/)
+  assert.match(notes, /## 3\. 下一步/)
+  assert.doesNotMatch(notes, /旧的开场讲稿/)
+  assert.equal((await download(1)).status, 409)
+  assert.equal(readDeckProject({ deckPath: created.jsonPath }).manifest.revision, 2)
+}))
+
+test('empty speaker-note guidance follows the deck language without translating authored content', () => fixture(async ({ dir, wb }) => {
+  for (const lang of ['en', 'bilingual']) {
+    const deck = await buildDeckAsync({ title: 'Notes ' + lang, slides: [{ layout: 'cover', title: 'Original title', notes: '保留用户写的中文备注' }, { layout: 'closing', title: 'Next' }], lang, outputDir: dir })
+    await wb.remember(deck, {})
+    const id = (await wb.action({ operation: 'list' })).projects.find(row => row.title === 'Notes ' + lang).id
+    const response = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=notes&revision=0`))
+    assert.equal(response.status, 200)
+    const notes = await response.text()
+    assert.match(notes, /保留用户写的中文备注/)
+    assert.match(notes, /No speaker notes for this slide/)
+    if (lang === 'bilingual') assert.match(notes, /本页未填写演讲备注/)
+    else assert.doesNotMatch(notes, /本页未填写演讲备注/)
+  }
+}))
 test('stale operator save is refused without overwriting files; path patches cannot read files', () => fixture(async ({ created, wb }) => {
   await wb.remember(created, {}); const id = (await wb.action({ operation: 'list' })).projects[0].id
   const slide = (await wb.action({ operation: 'open', id })).project.slides[0].id

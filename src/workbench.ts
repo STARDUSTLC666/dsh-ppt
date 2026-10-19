@@ -25,6 +25,16 @@ function ordinaryFile(path: string): Buffer {
   return readFileSync(path)
 }
 function pathsFor(path: string) { const base = path.slice(0, -5); return { json: path, html: base + '.html', pptx: base + '.pptx' } }
+function speakerNotes(manifest: any): string {
+  const label = (zh: string, en: string): string => manifest.language === 'en' ? en : manifest.language === 'bilingual' ? zh + ' / ' + en : zh
+  const heading = (value: unknown): string => String(value ?? '').replace(/[\r\n]+/g, ' ').trim()
+  const sections = manifest.slides.map((slide: any, index: number) => {
+    const title = heading(slide.title) || label('第 ' + (index + 1) + ' 页', 'Slide ' + (index + 1))
+    const notes = typeof slide.notes === 'string' && slide.notes.trim() ? slide.notes : label('（本页未填写演讲备注。）', '(No speaker notes for this slide.)')
+    return '## ' + (index + 1) + '. ' + title + '\n\n' + notes
+  })
+  return '# ' + heading(manifest.title) + '\n\n' + sections.join('\n\n---\n\n') + '\n'
+}
 function json(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
 }
@@ -177,12 +187,15 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle', 'notes'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
       let name: string, bytes: Uint8Array
-      if (kind === 'bundle') {
+      if (kind === 'notes') {
+        bytes = strToU8(speakerNotes(manifest))
+        name = basename(entry.path, '.json') + '-speaker-notes.md'
+      } else if (kind === 'bundle') {
         const entries: Record<string, Uint8Array> = {}
         let total = 0
         for (const path of Object.values(files)) {
@@ -205,10 +218,10 @@ export class PptWorkbench {
       }
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const type = kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const type = kind === 'notes' ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind === 'notes' ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }
