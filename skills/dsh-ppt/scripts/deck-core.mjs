@@ -418,7 +418,7 @@ export function clampInt(value, fallback, min, max) {
 const WINDOWS_RESERVED_FILE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i
 
 export function sanitizeFileName(input) {
-  const base = String(input ?? 'deck').trim().replace(/\.(html?|pptx|json)$/i, '')
+  const base = String(input ?? 'deck').toWellFormed().trim().replace(/[\uFFFE\uFFFF]/g, '-').replace(/\.(html?|pptx|json)$/i, '')
   let cleaned = base
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
     .replace(/\s+/g, '-')
@@ -449,6 +449,8 @@ export function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
 
 export function escapeXml(value) {
   return String(value ?? '')
+    .replace(/[\u000B\u000C]/g, '\n')
+    .replace(/[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

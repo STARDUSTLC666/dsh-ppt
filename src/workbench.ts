@@ -159,11 +159,12 @@ export class PptWorkbench {
     if (body.operation === 'edit') {
       if (body.slide !== undefined && (typeof body.slide !== 'string' || !manifest.slides.some((s: any) => s.id === body.slide))) throw new Error('页面不存在')
       const args = { deckPath: entry.path, expectedRevision: body.expectedRevision, signal,
+        saveAs: body.saveAs === true,
         ...(body.slide === undefined ? {} : { edits: [{ slide: body.slide, patch: this.patch(body.patch) }] }),
         ...(body.order === undefined ? {} : { order: body.order }) }
       const result = await engine.editDeck(args)
       await this.remember(result, args)
-      return { ...await this.view(entry.id), changed: (result as any).changed }
+      return { ...await this.view(digest(result.jsonPath)), changed: (result as any).changed }
     }
     if (body.operation === 'duplicate' || body.operation === 'remove') {
       if (typeof body.slide !== 'string' || !manifest.slides.some((s: any) => s.id === body.slide)) throw new Error('页面不存在')

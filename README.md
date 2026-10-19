@@ -31,6 +31,8 @@ dsh plugin --profile desktop add dsh-ppt
 
 可说：“把这份材料做成可直接交付的演示文稿，生成 HTML、PPTX 和工程文件。”0.8.0 起可在「设置 → 演示文稿」轻量修改自产工程，也可在 PowerPoint / WPS 中继续编辑 PPTX。
 
+Office 中的修改不会同步回 JSON。插件检测到成品在外部修改，或旧工程没有校验记录时，会拒绝直接覆盖；可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 生成新文件，保留原成品。副本不包含 Office 手工修改。
+
 ## 依赖与配置
 
 普通生成不需要 Office。最终 PPTX 渲染使用可选的官方 LibreOffice Kit；依赖版本、字体环境和安装方法见使用说明。

@@ -88,6 +88,7 @@ export interface PptEditArgs {
     order?: string[];
     brand?: PptBrand | null;
     expectedRevision?: number;
+    saveAs?: boolean;
 }
 export interface PptProjectArgs {
     deckPath: string;

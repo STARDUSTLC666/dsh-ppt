@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, statSync, openSync, closeSync, rmSync } from 'node:fs'
-import { resolve, dirname, extname } from 'node:path'
+import { resolve, dirname, extname, basename } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveTheme, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, pptxEastAsianFont } from './deck-core.mjs'
@@ -307,6 +307,7 @@ function withLock(path, commit) {
 }
 async function generate(manifest, signal) {
   abort(signal)
+  validateSnapshot(manifest, manifest.assets)
   collectAssets(manifest)
   manifest.slideCount = manifest.slides.length
   manifest.quality = checkManifest(manifest)
@@ -319,7 +320,34 @@ async function generate(manifest, signal) {
 }
 function commit(paths, data) {
   const html = renderHtml(data.manifest, data.theme, data.language, paths)
-  commitDeckArtifacts([{ path: paths.json, data: data.json, encoding: 'utf8' }, { path: paths.html, data: html, encoding: 'utf8' }, { path: paths.pptx, data: data.pptx }])
+  data.manifest.artifacts = { html: hash(html), pptx: hash(data.pptx) }
+  commitDeckArtifacts([{ path: paths.json, data: documentBytes(data.manifest), encoding: 'utf8' }, { path: paths.html, data: html, encoding: 'utf8' }, { path: paths.pptx, data: data.pptx }])
+}
+
+function validateSnapshot(value, assets) {
+  resolveTheme(value.theme); resolveLanguage(value.language)
+  validateRawSlides(value.slides)
+  if (value.brand != null) {
+    if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
+    for (const key of ['primaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'name', 'footer']) {
+      if (value.brand[key] !== undefined && typeof value.brand[key] !== 'string') fail('工程 brand.' + key + ' 必须为字符串')
+    }
+    normalizeBrand(value.brand, assets, '.')
+  }
+  for (const slide of value.slides) {
+    if (slide.image) {
+      if (slide.image.fit !== undefined && !['contain', 'cover'].includes(slide.image.fit)) fail('工程 image.fit 只允许 contain / cover')
+      if (slide.image.src !== undefined || !assets[slide.image.assetId]) fail('工程图片必须使用有效的嵌入资产')
+    }
+    if (slide.chart) normalizeChart(slide.chart)
+  }
+}
+function artifactProblem(manifest, paths) {
+  if (!manifest.artifacts) return '旧工程没有成品校验记录，无法确认外部修改；请另存副本，保留原文件。'
+  for (const kind of ['html', 'pptx']) {
+    try { if (hash(readFileSync(paths[kind])) === manifest.artifacts[kind]) continue } catch {}
+    return kind.toUpperCase() + ' 已在外部修改或缺失，不会覆盖；请另存副本。副本从 JSON 生成，不导入 Office 手工修改。'
+  }
 }
 
 export async function buildDeckAsync(options = {}) {
@@ -361,6 +389,10 @@ function readDocument(pathInput, cwd = '.') {
   document.assets ??= {}; document.history ??= []
   if (typeof document.assets !== 'object' || Array.isArray(document.assets)) fail('工程图片资产无效')
   if (!Array.isArray(document.history) || document.history.length > MAX_HISTORY || document.history.some(h => !h || !Array.isArray(h.slides))) fail('工程历史无效')
+  validateSnapshot(document, document.assets)
+  for (const prior of document.history) validateSnapshot(prior, document.assets)
+  if (document.artifacts !== undefined && (!document.artifacts || typeof document.artifacts !== 'object'
+    || ['html', 'pptx'].some(kind => !/^[a-f0-9]{64}$/.test(document.artifacts[kind])))) fail('工程成品校验记录无效')
   const ids = new Set()
   for (const slide of document.slides) {
     if (!slide || !layouts.has(slide.layout)) fail('工程含有未知页面布局')
@@ -379,12 +411,21 @@ export function readDeckProject(options = {}) {
 function expected(manifest, revision) {
   if (revision !== undefined && (!Number.isInteger(revision) || revision !== manifest.revision)) fail(`修订号冲突：当前 revision=${manifest.revision}，请重新读取工程后修改`)
 }
-async function saveRevision(state, next, signal) {
+async function saveRevision(state, next, signal, saveAs = false) {
+  if (!saveAs) { const problem = artifactProblem(state.manifest, pathsFor(state.path)); if (problem) fail(problem) }
   next.version = DECK_VERSION; next.schemaVersion = 1; next.revision = state.manifest.revision + 1
-  const data = await generate(next, signal), paths = pathsFor(state.path)
+  if (saveAs) { next.deckId = randomUUID(); next.revision = 0; next.history = [] }
+  const data = await generate(next, signal)
+  let paths = pathsFor(state.path)
   withLock(state.path, () => {
     abort(signal)
     if (hash(readFileSync(state.path)) !== state.fingerprint) fail('工程已被其他操作修改，请重新读取后重试')
+    if (saveAs) {
+      const file = resolveDeckFileName(dirname(state.path), basename(state.path, '.json') + '-dsh', false)
+      paths = pathsFor(resolve(dirname(state.path), file + '.json'))
+    } else {
+      const problem = artifactProblem(state.manifest, paths); if (problem) fail(problem)
+    }
     commit(paths, data)
   })
   return result(next, paths)
@@ -396,7 +437,7 @@ export async function editDeck(options = {}) {
   expected(current, options.expectedRevision)
   const next = clone(current)
   if (!Array.isArray(options.edits) || !options.edits.length) {
-    if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined) fail('请提供 edits、order、duplicate、remove 或 brand')
+    if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined && options.saveAs !== true) fail('请提供 edits、order、duplicate、remove 或 brand')
   }
   const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart'])
   for (const edit of options.edits ?? []) {
@@ -445,9 +486,9 @@ export async function editDeck(options = {}) {
     duplicate.has(slide.id) ? [slide, { ...clone(slide), id: randomUUID() }] : [slide])
   if (options.brand !== undefined) next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
     ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, resolve(options.cwd || '.'))
-  if (JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
+  if (options.saveAs !== true && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
   next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
-  return { ...await saveRevision(state, next, options.signal), changed: true }
+  return { ...await saveRevision(state, next, options.signal, options.saveAs === true), changed: true }
 }
 
 export async function undoDeck(options = {}) {
@@ -464,7 +505,12 @@ export async function undoDeck(options = {}) {
 export function checkDeck(options = {}) {
   abort(options.signal)
   const { manifest, path } = readDocument(options.deckPath, options.cwd)
-  return { ...checkManifest(manifest), deckPath: path, deckId: manifest.deckId, revision: manifest.revision,
+  const quality = checkManifest(manifest), problem = artifactProblem(manifest, pathsFor(path))
+  if (problem) {
+    quality.issues.push({ slide: 0, severity: 'error', code: 'artifact-conflict', message: problem, suggestion: '保留原成品，使用 saveAs:true 或面板「另存副本」。副本不包含 Office 手工修改。' })
+    quality.errorCount++; quality.ok = false
+  }
+  return { ...quality, deckPath: path, deckId: manifest.deckId, revision: manifest.revision,
     verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' },
     undoAvailable: manifest.history.length, slides: manifest.slides.map((s, i) => ({ slide: i + 1, id: s.id, title: s.title, layout: s.layout })) }
 }

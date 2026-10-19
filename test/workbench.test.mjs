@@ -166,8 +166,10 @@ test('render preview invalidates when PPTX content or project revision changes',
   await rendered.remember(created, {}); const id = (await rendered.action({ operation: 'list' })).projects[0].id
   const result = await rendered.action({ operation: 'render', id, expectedRevision: 0 }); assert.equal(result.project.render.pageCount, 1)
   assert.deepEqual(result.project.render.missingFonts, ['Missing font']); assert.match((await rendered.action({ operation: 'page', id, page: 1 })).data, /^data:image\/png/)
+  const originalPptx = readFileSync(created.pptxPath)
   writeFileSync(created.pptxPath, Buffer.from('changed PPTX'))
   await assert.rejects(rendered.action({ operation: 'page', id, page: 1 }), /先渲染/)
+  writeFileSync(created.pptxPath, originalPptx)
   const slide = result.project.slides[0].id
   const changed = await rendered.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { title: '新修订' } }); assert.equal(changed.project.render, null)
   await assert.rejects(rendered.action({ operation: 'page', id, page: 1 }), /先渲染/)
