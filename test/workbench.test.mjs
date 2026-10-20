@@ -174,3 +174,10 @@ test('render preview invalidates when PPTX content or project revision changes',
   const changed = await rendered.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { title: '新修订' } }); assert.equal(changed.project.render, null)
   await assert.rejects(rendered.action({ operation: 'page', id, page: 1 }), /先渲染/)
 }))
+
+test('workbench client keeps keyboard shortcuts, dirty guard and retry affordance', () => {
+  const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  for (const marker of ['handleShortcut', 'dsh-ppt-shortcut', 'beforeunload', 'badge-dirty', '复制示例', "aria-busy", 'Ctrl/⌘+S']) {
+    assert.ok(source.includes(marker), marker + ' missing from workbench client')
+  }
+})
