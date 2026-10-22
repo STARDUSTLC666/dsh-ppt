@@ -411,10 +411,10 @@ export function readDeckProject(options = {}) {
 function expected(manifest, revision) {
   if (revision !== undefined && (!Number.isInteger(revision) || revision !== manifest.revision)) fail(`修订号冲突：当前 revision=${manifest.revision}，请重新读取工程后修改`)
 }
-async function saveRevision(state, next, signal, saveAs = false) {
+async function saveRevision(state, next, signal, saveAs = false, preserveUndo = false) {
   if (!saveAs) { const problem = artifactProblem(state.manifest, pathsFor(state.path)); if (problem) fail(problem) }
   next.version = DECK_VERSION; next.schemaVersion = 1; next.revision = state.manifest.revision + 1
-  if (saveAs) { next.deckId = randomUUID(); next.revision = 0; next.history = [] }
+  if (saveAs) { next.deckId = randomUUID(); next.revision = 0; next.history = preserveUndo ? [snapshot(state.manifest)] : [] }
   const data = await generate(next, signal)
   let paths = pathsFor(state.path)
   withLock(state.path, () => {
@@ -437,7 +437,7 @@ export async function editDeck(options = {}) {
   expected(current, options.expectedRevision)
   const next = clone(current)
   if (!Array.isArray(options.edits) || !options.edits.length) {
-    if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined && options.saveAs !== true) fail('请提供 edits、order、duplicate、remove 或 brand')
+    if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined && options.append === undefined && options.saveAs !== true) fail('请提供 edits、order、duplicate、remove、append 或 brand')
   }
   const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart'])
   for (const edit of options.edits ?? []) {
@@ -484,11 +484,18 @@ export async function editDeck(options = {}) {
   if (count > 120) fail('工程页数超过 120')
   if (duplicate.size || remove.size) next.slides = next.slides.flatMap(slide => remove.has(slide.id) ? [] :
     duplicate.has(slide.id) ? [slide, { ...clone(slide), id: randomUUID() }] : [slide])
+  if (options.append !== undefined) {
+    if (!Array.isArray(options.append) || options.append.length < 1 || options.append.length > 5) fail('append 需为 1-5 页')
+    validateRawSlides(options.append)
+    const added = normalizeSlides(options.append, 120, next.language)
+    if (next.slides.length + added.length > 120) fail('工程页数超过 120')
+    next.slides.push(...embedSlides(added, next.assets, resolve(options.cwd || '.')).map(slide => ({ ...slide, id: randomUUID() })))
+  }
   if (options.brand !== undefined) next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
     ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, resolve(options.cwd || '.'))
   if (options.saveAs !== true && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
   next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
-  return { ...await saveRevision(state, next, options.signal, options.saveAs === true), changed: true }
+  return { ...await saveRevision(state, next, options.signal, options.saveAs === true, options.preserveUndo === true), changed: true }
 }
 
 export async function undoDeck(options = {}) {

@@ -5,7 +5,7 @@ import type { DeckEngine, PptCreateArgs, PptThemesResult } from './types.js'
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
   readonly signal?: AbortSignal
-  readonly agent?: { readonly session: { readonly header: { readonly cwd?: string } } }
+  readonly agent?: { readonly session: { readonly header: { readonly cwd?: string }; requestContext?(): any; requestHeader?(): any } }
 }
 
 let enginePromise: Promise<DeckEngine> | null = null

@@ -1,5 +1,7 @@
 import { type PptExecution } from './execution.js';
 import type { DeckEngine } from './types.js';
+import { PptCoaching } from './coaching.js';
+import type { CoachingModel } from './coaching-model.js';
 export declare const PPT_WORKBENCH_ROUTE = "/api/dsh-ppt/workbench";
 export declare const PPT_DOWNLOAD_ROUTE = "/api/dsh-ppt/download";
 type WorkbenchEngine = DeckEngine & {
@@ -11,9 +13,11 @@ type WorkbenchEngine = DeckEngine & {
 type Options = {
     catalogPath?: string;
     loadEngine?: () => Promise<WorkbenchEngine>;
+    coachingModel?: CoachingModel;
 };
 export declare class PptWorkbench {
     readonly catalogPath: string;
+    readonly coaching: PptCoaching;
     private readonly loadEngine;
     private readonly renders;
     constructor(options?: Options);

@@ -25,6 +25,7 @@ const messages: Record<string, string> = {
 }
 
 export function englishWorkbenchMessage(message: string): string {
+  if (message.includes(' / ')) return message.slice(message.lastIndexOf(' / ') + 3)
   if (messages[message]) return messages[message]
   if (/外部修改|成品校验|保留原成品/.test(message)) return 'Outputs changed externally, are missing, or have no integrity record. Keep the originals and use Save a copy. The copy comes from JSON and does not import Office edits.'
   if (/修订号冲突|已被修改|正在被另一次|其他操作修改/.test(message)) return 'The project changed or is busy. Load the latest version and review your edits before retrying.'

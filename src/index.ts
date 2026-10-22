@@ -20,6 +20,7 @@ import { registerPptSkill, type SkillsService } from './skill.js'
 import type { PptConfig } from './types.js'
 import { buildPptTools, type ToolDefinition } from './tools.js'
 import { PptWorkbench, installPptWorkbench } from './workbench.js'
+import { nativeCoachingModel } from './coaching-model.js'
 export type { ToolDefinition } from './tools.js'
 export type { PptExecution } from './execution.js'
 
@@ -41,7 +42,14 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
   const warn = (message: string): void => { ctx.logger?.warn?.(message) }
   const disposers: Array<() => void> = []
   const workbench = typeof ctx.inject === 'function' ? new PptWorkbench() : undefined
-  if (workbench) installPptWorkbench(ctx, workbench)
+  if (workbench) {
+    installPptWorkbench(ctx, workbench)
+    ctx.inject?.(['llm'], host => {
+      workbench.coaching.setModel(nativeCoachingModel(host.llm))
+      host.effect?.(() => () => workbench.coaching.setModel())
+    })
+    disposers.push(() => workbench.coaching.dispose())
+  }
 
   // 技能注册：单个技能文件缺失只告警，不弄崩宿主启动。
   try {

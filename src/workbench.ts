@@ -7,16 +7,18 @@ import { getEngine, type PptExecution } from './execution.js'
 import type { DeckEngine } from './types.js'
 import { bilingualQuality, englishWorkbenchMessage } from './workbench-language.js'
 import { zipSync, strToU8 } from 'fflate'
+import { PptCoaching } from './coaching.js'
+import type { CoachingModel, ModelRoute } from './coaching-model.js'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
 const REQUEST_LIMIT = 12 * 1024 * 1024
 const FILE_LIMIT = 64 * 1024 * 1024
 const BUNDLE_LIMIT = 128 * 1024 * 1024
-type Project = { id: string; path: string; title: string; updatedAt: string }
+type Project = { id: string; path: string; title: string; updatedAt: string; modelRoute?: ModelRoute }
 type Render = { revision: number; pngPaths: string[]; pngHashes: string[]; missingFonts?: string[]; sourceSha256: string }
 type WorkbenchEngine = DeckEngine & { readDeckProject(options: Record<string, unknown>): { manifest: any; path: string } }
-type Options = { catalogPath?: string; loadEngine?: () => Promise<WorkbenchEngine> }
+type Options = { catalogPath?: string; loadEngine?: () => Promise<WorkbenchEngine>; coachingModel?: CoachingModel }
 const digest = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex')
 
 function ordinaryFile(path: string): Buffer {
@@ -38,7 +40,10 @@ function speakerNotes(manifest: any): string {
 function json(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
 }
-function fail(status: number, message: string): Response { return json(status, { ok: false, message, messageEn: englishWorkbenchMessage(message) }) }
+function fail(status: number, message: string): Response {
+  const display = /[\u3400-\u9fff]/.test(message) && message.includes(' / ') ? message.slice(0, message.indexOf(' / ')) : message
+  return json(status, { ok: false, message: display, messageEn: englishWorkbenchMessage(message) })
+}
 function originVerdict(request: Request): Response | undefined {
   const site = request.headers.get('sec-fetch-site'), origin = request.headers.get('origin')
   if (site && !['same-origin', 'none'].includes(site)) return fail(403, '拒绝跨站操作')
@@ -49,11 +54,13 @@ function originVerdict(request: Request): Response | undefined {
 
 export class PptWorkbench {
   readonly catalogPath: string
+  readonly coaching: PptCoaching
   private readonly loadEngine: () => Promise<WorkbenchEngine>
   private readonly renders = new Map<string, Render>()
   constructor(options: Options = {}) {
     this.catalogPath = options.catalogPath ?? join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'plugins', 'dsh-ppt', 'projects.jsonl')
     this.loadEngine = options.loadEngine ?? (getEngine as () => Promise<WorkbenchEngine>)
+    this.coaching = new PptCoaching(join(dirname(this.catalogPath), 'rehearsals'), options.coachingModel)
   }
   private catalog(): Project[] {
     if (!existsSync(this.catalogPath)) return []
@@ -78,7 +85,10 @@ export class PptWorkbench {
     const { manifest } = engine.readDeckProject({ deckPath: path })
     // Versioned generator projects only; arbitrary JSON and externally edited PPTX cannot enter.
     if (manifest.schemaVersion !== 1 || typeof manifest.deckId !== 'string' || manifest.slides.some((s: any) => typeof s.id !== 'string')) return
-    const row = { id: digest(path), path, title: manifest.title, updatedAt: new Date().toISOString() }
+    let route = exec?.agent?.session.requestContext?.()
+    if (!route?.provider || !route?.model) route = exec?.agent?.session.requestHeader?.()?.config
+    const modelRoute = typeof route?.provider === 'string' && typeof route?.model === 'string' ? { provider: route.provider, model: route.model } : this.catalog().find(p => p.path === path)?.modelRoute
+    const row = { id: digest(path), path, title: manifest.title, updatedAt: new Date().toISOString(), ...(modelRoute ? { modelRoute } : {}) }
     mkdirSync(dirname(this.catalogPath), { recursive: true })
     if (existsSync(this.catalogPath) && lstatSync(this.catalogPath).size >= 8 * 1024 * 1024) throw new Error('项目索引已满，请备份后整理 projects.jsonl')
     appendFileSync(this.catalogPath, JSON.stringify(row) + '\n')
@@ -132,6 +142,13 @@ export class PptWorkbench {
     if (body.operation === 'open') return this.view(body.id)
     const { entry, engine, manifest, files } = await this.project(body.id)
     signal?.throwIfAborted()
+    const context = { id: entry.id, manifest }
+    if (body.operation === 'coach-options') return { ok: true, ...await this.coaching.options(signal) }
+    if (body.operation === 'coach-list') return { ok: true, runs: this.coaching.list(context) }
+    if (body.operation === 'coach-get') return { ok: true, run: this.coaching.get(context, body.runId) }
+    if (body.operation === 'coach-stop') return { ok: true, run: this.coaching.stop(context, body.runId) }
+    if (body.operation === 'coach-finish') return { ok: true, run: this.coaching.finish(context, body.runId) }
+    if (body.operation === 'coach-delete') return { ok: true, ...this.coaching.remove(context, body.runId) }
     if (body.operation === 'download') {
       if (!['html', 'pptx', 'json'].includes(String(body.kind))) throw new Error('不支持此文件类型')
       const path = files[body.kind as keyof typeof files]
@@ -146,6 +163,21 @@ export class PptWorkbench {
       return { ok: true, data: 'data:image/png;base64,' + bytes.toString('base64') }
     }
     this.revision(body, manifest)
+    if (body.operation === 'coach-create') return { ok: true, run: await this.coaching.create(context, body, signal) }
+    if (body.operation === 'coach-step') {
+      await this.coaching.step(context, body.runId, body, signal)
+      const current = await this.project(entry.id)
+      return { ok: true, run: this.coaching.get({ id: entry.id, manifest: current.manifest }, body.runId) }
+    }
+    if (body.operation === 'coach-apply') {
+      if (body.confirmed !== true) throw new Error('请确认采纳所选建议 / Confirm selected suggestions')
+      const { edits, append } = this.coaching.application(context, body.runId, body.selected, body.backup)
+      const args = { deckPath: entry.path, expectedRevision: manifest.revision, signal, saveAs: true, preserveUndo: true,
+        ...(edits.length ? { edits } : {}), ...(append.length ? { append } : {}) }
+      const result = await engine.editDeck(args)
+      await this.remember(result, args)
+      return { ...await this.view(digest(result.jsonPath)), originalId: entry.id }
+    }
     if (body.operation === 'render') {
       const result = await engine.renderDeck({ pptxPath: files.pptx, format: 'png', signal })
       if (result.ok) this.renders.set(entry.id, { revision: manifest.revision, pngPaths: result.pngPaths ?? [], pngHashes: (result.pngPaths ?? []).map(path => digest(ordinaryFile(path))), missingFonts: result.missingFonts, sourceSha256: result.sourceSha256! })
@@ -188,12 +220,15 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle', 'notes'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle', 'notes', 'coaching'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
       let name: string, bytes: Uint8Array
-      if (kind === 'notes') {
+      if (kind === 'coaching') {
+        bytes = strToU8(this.coaching.markdown({ id: entry.id, manifest }, params.get('run')))
+        name = basename(entry.path, '.json') + '-rehearsal.md'
+      } else if (kind === 'notes') {
         bytes = strToU8(speakerNotes(manifest))
         name = basename(entry.path, '.json') + '-speaker-notes.md'
       } else if (kind === 'bundle') {
@@ -219,10 +254,10 @@ export class PptWorkbench {
       }
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const type = kind === 'notes' ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const type = kind === 'notes' || kind === 'coaching' ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind === 'notes' ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind === 'notes' || kind === 'coaching' ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }
@@ -241,7 +276,7 @@ export class PptWorkbench {
       return json(200, await this.action(body, request.signal))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return fail(/修订号冲突|已被修改|正在被另一次|其他操作修改/.test(message) ? 409 : 400, message)
+      return fail(/修订号冲突|已被修改|工程已被修改|正在被另一次|其他操作修改/.test(message) ? 409 : 400, message)
     }
   }
 }

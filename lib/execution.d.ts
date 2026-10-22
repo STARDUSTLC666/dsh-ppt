@@ -8,6 +8,8 @@ export interface PptExecution {
             readonly header: {
                 readonly cwd?: string;
             };
+            requestContext?(): any;
+            requestHeader?(): any;
         };
     };
 }

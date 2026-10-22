@@ -6,6 +6,8 @@
 
 Turn source material into an HTML slideshow, editable PPTX and a reusable project.
 
+Optional **AI review** and **rehearsal** reuse models configured in DSH. Both are off by default: download the finished presentation directly, or explicitly start a bounded rehearsal. Compare proposed wording edits, save selected changes and backup Q&A slides to an undoable copy, and export Q&A with an evidence checklist. See [the rehearsal guide](docs/COACHING.md#english). AI suggestions are not fact checks.
+
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
 Feedback and contributions are welcome: report [issues](https://github.com/STARDUSTLC666/dsh-ppt/issues) or submit [pull requests](https://github.com/STARDUSTLC666/dsh-ppt/pulls).
