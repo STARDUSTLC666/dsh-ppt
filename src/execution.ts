@@ -72,6 +72,7 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         maxSlides: config.maxSlides,
         template: args.template,
         brand: args.brand,
+        dataModel: args.dataModel,
         cwd,
         signal: exec?.signal,
       })
@@ -106,6 +107,14 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
       const engine = await loadEngine()
       exec?.signal?.throwIfAborted()
       return engine.renderDeck({ ...asRecord(rawArgs), cwd: exec?.agent?.session.header.cwd ?? process.cwd(), signal: exec?.signal })
+    },
+    async data(rawArgs: unknown, exec?: PptExecution) {
+      exec?.signal?.throwIfAborted()
+      const engine = await loadEngine(), args = asRecord(rawArgs)
+      const options = { ...args, cwd:exec?.agent?.session.header.cwd ?? process.cwd(), signal:exec?.signal, allowFiles:true }
+      if(args.action === 'preview') return engine.previewDeckData(options)
+      if(args.action === 'apply') return engine.updateDeckData(options)
+      throw new Error('dsh-ppt：action 需为 preview 或 apply / Use preview or apply')
     },
   }
 }

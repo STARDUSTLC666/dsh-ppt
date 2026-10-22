@@ -111,7 +111,7 @@ export class PptWorkbench {
     const render = this.renders.get(entry.id)
     const currentRender = render && render.revision === manifest.revision && digest(ordinaryFile(files.pptx)) === render.sourceSha256 ? render : undefined
     return { ok: true, project: { ...entry, deckId: manifest.deckId, revision: manifest.revision, slides: manifest.slides,
-      undoAvailable: manifest.history.length, quality: check, html,
+      undoAvailable: manifest.history.length, quality: check, html, dataModel:manifest.dataModel ?? null,
       assets: Object.fromEntries(Object.entries(manifest.assets ?? {}).map(([key, value]: [string, any]) => [key, { data: value.data, mime: value.mime }])),
       render: currentRender ? { pageCount: currentRender.pngPaths.length, missingFonts: currentRender.missingFonts ?? [] } : null } }
   }
@@ -142,7 +142,7 @@ export class PptWorkbench {
     if (body.operation === 'open') return this.view(body.id)
     const { entry, engine, manifest, files } = await this.project(body.id)
     signal?.throwIfAborted()
-    const context = { id: entry.id, manifest }
+    const context = { id: entry.id, manifest, ...(manifest.dataModel?{dataNotes:Object.fromEntries(manifest.slides.map((s:any)=>[s.id,engine.dataNotes(manifest,s)]))}:{}) }
     if (body.operation === 'coach-options') return { ok: true, ...await this.coaching.options(signal) }
     if (body.operation === 'coach-list') return { ok: true, runs: this.coaching.list(context) }
     if (body.operation === 'coach-get') return { ok: true, run: this.coaching.get(context, body.runId) }
@@ -163,6 +163,15 @@ export class PptWorkbench {
       return { ok: true, data: 'data:image/png;base64,' + bytes.toString('base64') }
     }
     this.revision(body, manifest)
+    if(body.operation === 'data-preview' || body.operation === 'data-apply') {
+      // Always force file reads off, including nested source updates and scenario packets.
+      const args = { deckPath:entry.path, expectedRevision:body.expectedRevision, parameters:body.parameters, sourceUpdates:body.sourceUpdates,
+        scenario:body.scenario, previewToken:body.previewToken, confirmed:body.confirmed, saveAs:body.saveAs!==false, allowFiles:false, signal }
+      if(body.operation === 'data-preview') return engine.previewDeckData(args)
+      const result=await engine.updateDeckData(args)
+      await this.remember(result,args)
+      return { ...await this.view(digest(result.jsonPath)), originalId:entry.id }
+    }
     if (body.operation === 'coach-create') return { ok: true, run: await this.coaching.create(context, body, signal) }
     if (body.operation === 'coach-step') {
       await this.coaching.step(context, body.runId, body, signal)
@@ -220,16 +229,18 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle', 'notes', 'coaching'].includes(String(kind))) return fail(400, '不支持此文件类型')
-      const { entry, manifest, files } = await this.project(params.get('id'))
+      if (!['html', 'pptx', 'json', 'bundle', 'notes', 'coaching', 'data'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      const { entry, manifest, files, engine } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
       let name: string, bytes: Uint8Array
-      if (kind === 'coaching') {
+      if(kind === 'data') {
+        bytes=strToU8(engine.dataReport(manifest));name=basename(entry.path,'.json')+'-data-lineage.md'
+      } else if (kind === 'coaching') {
         bytes = strToU8(this.coaching.markdown({ id: entry.id, manifest }, params.get('run')))
         name = basename(entry.path, '.json') + '-rehearsal.md'
       } else if (kind === 'notes') {
-        bytes = strToU8(speakerNotes(manifest))
+        bytes = strToU8(speakerNotes({...manifest,slides:manifest.slides.map((slide:any)=>({...slide,notes:engine.dataNotes(manifest,slide)}))}))
         name = basename(entry.path, '.json') + '-speaker-notes.md'
       } else if (kind === 'bundle') {
         const entries: Record<string, Uint8Array> = {}
@@ -254,10 +265,10 @@ export class PptWorkbench {
       }
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const type = kind === 'notes' || kind === 'coaching' ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const type = kind === 'notes' || kind === 'coaching' || kind === 'data' ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind === 'notes' || kind === 'coaching' ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind === 'notes' || kind === 'coaching' || kind === 'data' ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }

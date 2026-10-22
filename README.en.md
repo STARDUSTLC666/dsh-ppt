@@ -15,6 +15,7 @@ Feedback and contributions are welcome: report [issues](https://github.com/STARD
 ## What it does
 
 - Create branded decks with text, images, tables and native charts.
+- Optionally trace numbers to material, CSV cells or formulas; adjust assumptions, preview affected slides, and save an undoable copy. HTML stays interactive; PPTX includes confirmed static values with formulas and assumptions. See the [data guide](docs/DATA.md#english).
 - Edit text and images in Settings, reorder, duplicate or delete slides, and undo changes.
 - Check quality and optionally render the final PPTX as images or PDF.
 - Download Markdown speaker notes with each slide's current title and notes.

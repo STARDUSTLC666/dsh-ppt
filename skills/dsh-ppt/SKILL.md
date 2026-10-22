@@ -1,7 +1,7 @@
 ---
 name: dsh-ppt
 description: "Turn one sentence or a Markdown document into a complete, presentation-ready deck: a standalone HTML web slideshow plus an editable PPTX export, with 5 built-in visual themes (Swiss Pulse / Velvet Standard / Data Drift / Soft Signal / Maximalist Type), slide transitions + bullet entrance animations (motion, on by default), and bilingual Chinese/English support. Use when the user asks for a PPT, slides, deck, keynote, 演示文稿, 幻灯片, 汇报, 提案, 路演, 培训材料, or wants to turn a document into a presentation. 中文：把一句话或一篇文档变成完整演示文稿（HTML 网页放映 + PPTX 导出），内置 5 套视觉主题、页间转场与要点入场动画，中英双语。"
-compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts use @office-kit/pptx@0.21.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.1.3. Cross-harness: copy the full directory and run npm install --ignore-scripts there."
+compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts use @office-kit/pptx@0.21.0; optional data models use jsep@1.4.0 and csv-parse@6.1.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.1.5. Cross-harness: copy the full directory and run npm install --ignore-scripts there."
 allowed-tools: "Bash, Read, Write, Edit"
 ---
 
@@ -16,6 +16,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 ## 执行纪律（每次都要遵守）
 
 - 默认直接交付成品，不自动触发 AI 预审或答辩。用户可在设置页成品下载区主动开启两个可选模式；选择模型、范围与调用上限后再发送材料。AI 演练不等于事实核验，不编造实验、数据或引用；采纳建议另存副本，原件保留。
+- 数字溯源和现场推演也按需启用。提供 `dataModel` 与结构化 `slides` 的 `{{metricId}}` 绑定；先读 `references/data.md`。源事实必须对应真实材料行或单元格；用户假设用 `kind:input` 标注，禁止虚构来源。修改数据先 `ppt_data(action:preview)`，展示指标与页面差异，得到确认后携带原预览凭证和修订号保存；默认新副本。离线 HTML 参数必须回存确认后才能交付对应静态 PPTX。
 
 - 修改工程先 `ppt_check`。外部编辑过的 HTML/PPTX、缺少成品校验记录的旧工程不可覆盖；告知用户 `saveAs:true` 只从 JSON 另存新副本，原件保留，Office 手工修改不会导入。不得绕过校验或自行篡改校验值。
 
@@ -49,6 +50,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 | 选主题拿不准 | `references/themes.md` | 5 套主题色板 + 情绪决策树 |
 | 用表格/金句/备注/结构化 slides | `references/syntax.md` | Markdown 解析、进阶语法、slides JSON、motion 开关 |
 | 图片/图表/模板/品牌/编辑/渲染 | `references/advanced.md` | 参数、限制、草稿与成品、收据语义 |
+| 数字溯源与现场推演 | `references/data.md` | 来源绑定、公式、更新预览与离线参数回存 |
 | 交付异常 | `references/troubleshooting.md` | 症状 → 处理对照表 |
 
 ## 质量门禁（交付前逐项确认）

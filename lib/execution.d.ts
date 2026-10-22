@@ -26,4 +26,5 @@ export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine
     undo(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptCreateResult>;
     check(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptQualityResult | import("./types.js").PptCheckResult>;
     render(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptRenderResult>;
+    data(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptCreateResult | Record<string, any>>;
 };

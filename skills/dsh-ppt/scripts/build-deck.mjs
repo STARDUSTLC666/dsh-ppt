@@ -28,6 +28,7 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --slides <json>     结构化 slides JSON（可选，与 --content 二选一）
   --template <id>    weekly / defense / project / pitch；仅模板会生成草稿
   --brand <json|@path> 品牌颜色、字体、Logo、页脚
+  --data-model <json|@path> 可选数字来源、公式与推演假设；配合 --slides
   --edit <deck.json> 修改指定页，配合 --edits <json|@path>
   --undo <deck.json> 撤销最近一次修改
   --check <deck.json> 查看质量报告和页码 / ID
@@ -76,6 +77,7 @@ export function parseArgv(argv) {
     else if (key === '--slides') args.slides = readJson(nextValue())
     else if (key === '--template') args.template = nextValue()
     else if (key === '--brand') args.brand = readJson(nextValue())
+    else if (key === '--data-model') args.dataModel = readJson(nextValue())
     else if (key === '--edit') args.edit = nextValue()
     else if (key === '--edits') args.edits = readJson(nextValue())
     else if (key === '--undo') args.undo = nextValue()
@@ -163,6 +165,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     overwrite: args.overwrite,
     template: args.template,
     brand: args.brand,
+    dataModel: args.dataModel,
   }
   const result = await buildDeckAsync(options)
   log('dsh-ppt 已生成 ' + result.slideCount + ' 页演示文稿：')

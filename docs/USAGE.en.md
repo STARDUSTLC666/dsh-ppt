@@ -32,7 +32,7 @@ Example:
 dsh plugin --profile web add dsh-ppt
 ```
 
-On desktop, install `dsh-ppt` through plugin management. Restart the host after updating to load seven tools and the skill. Ask naturally to include screenshots/charts, edit only slide three, or undo the last edit; users do not need to write JSON.
+On desktop, install `dsh-ppt` through plugin management. Restart the host after updating to load eight tools and the skill. Ask naturally to include screenshots/charts, edit only slide three, or undo the last edit; users do not need to write JSON. Optional `ppt_data` previews and confirms source/assumption changes; see the [data guide](DATA.md#english).
 
 ## Uninstall
 

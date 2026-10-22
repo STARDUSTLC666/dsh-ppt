@@ -2,6 +2,7 @@ import type { CoachingModel, ModelRoute } from './coaching-model.js';
 export type CoachingContext = {
     id: string;
     manifest: any;
+    dataNotes?: Record<string, string>;
 };
 type Kind = 'expression' | 'logic' | 'evidence';
 type Finding = {

@@ -19,6 +19,7 @@ import { resolve as resolvePath, join as joinPath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 import { MEDIA_LAYOUTS, MEDIA_CSS, normalizeMediaSlide, renderMediaHtml, mediaBoxes } from './deck-media.mjs'
 import { renderDelivery } from './deck-delivery.mjs'
+import { renderDataView } from './deck-data-view.mjs'
 
 /**
  * manifest 版本跟随发布包 package.json；把 skills/dsh-ppt 独立复制到其他
@@ -952,6 +953,7 @@ export function commitDeckArtifacts(artifacts) {
 }
 
 export function buildDeck(options = {}) {
+  if(options.dataModel!==undefined)throw new Error('dsh-ppt：数据绑定请使用 deck-advanced.mjs 的 buildDeckAsync / Data models require buildDeckAsync from deck-advanced.mjs')
   if (options.brand || options.template || options.slides?.some(slide => MEDIA_LAYOUTS.has(slide.layout) || slide.image || slide.chart)) {
     throw new Error('dsh-ppt：图片、图表、模板与品牌请使用异步 buildDeckAsync 或 ppt_create / CLI')
   }
@@ -1024,6 +1026,7 @@ body.motion .bullets li{
   const themeLabel = t.name[lang.id] ?? t.name.en
   const total = manifest.slides.length
   const delivery = renderDelivery(manifest, files, lang.id)
+  const dataView = renderDataView(manifest, t)
 
   return `<!DOCTYPE html>
 <html lang="${lang.attr}">
@@ -1051,7 +1054,8 @@ body{
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
 }
 #stage{position:fixed;inset:0}
-.slide-frame{position:fixed;inset:0}
+.slide-frame{position:fixed;inset:0;pointer-events:none}
+.slide-frame.is-current,body.overview .slide-frame{pointer-events:auto}
 .slide{
   position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;
   padding:clamp(34px,7vw,110px);overflow:hidden;
@@ -1236,11 +1240,13 @@ body.presenting #hud:hover{opacity:1;pointer-events:auto}
   #progress,#hud,#notes-panel,#help-panel,#toast{display:none !important}
 }
 ${delivery.css}
+${dataView.css}
 </style>
 </head>
 <body class="${motion ? 'motion' : 'no-motion'}">
 <div id="progress" aria-hidden="true"></div>
 ${delivery.body}
+${dataView.body}
 <div id="stage">
 ${slides}
 </div>
@@ -1650,10 +1656,12 @@ ${slides}
   window.addEventListener('beforeunload', closePresenter);
 
   ${delivery.script}
+  window.addEventListener('dsh-data-change', () => { syncNotes(); if (presenterOpen()) sendInit(); updatePresenter(); });
   const start = Number.parseInt(location.hash?.replace('#slide-', ''), 10);
   go(Number.isInteger(start) ? start - 1 : 0);
 })();
 </script>
+${dataView.script}
 </body>
 </html>`
 }

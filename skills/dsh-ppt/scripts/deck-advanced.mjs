@@ -4,6 +4,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveTheme, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, pptxEastAsianFont } from './deck-core.mjs'
 import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, chartColors, normalizeChart } from './deck-media.mjs'
+import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
+export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, buildThemePreview, listThemes, resolveTheme, resolveLanguage } from './deck-core.mjs'
 
 const MAX_IMAGE = 5 * 1024 * 1024, MAX_ASSETS = 32 * 1024 * 1024, MAX_DOCUMENT = 64 * 1024 * 1024
@@ -149,7 +151,7 @@ function validateRawSlides(slides) {
   })
 }
 function snapshot(manifest) {
-  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
+  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
 function collectAssets(manifest) {
   const ids = new Set()
@@ -231,7 +233,7 @@ export function checkManifest(manifest) {
 }
 
 async function exportPptx(manifest, theme, language, signal) {
-  const base = buildPptx(manifest, theme, language)
+  const base = buildPptx({ ...manifest, slides: manifest.slides.map(s => ({ ...s, notes: dataNotes(manifest,s) })) }, theme, language)
   if (!manifest.brand?.logoAssetId && !manifest.brand?.footer && !manifest.slides.some(s => s.image || s.chart)) return base
   abort(signal)
   let lib
@@ -327,6 +329,7 @@ function commit(paths, data) {
 function validateSnapshot(value, assets) {
   resolveTheme(value.theme); resolveLanguage(value.language)
   validateRawSlides(value.slides)
+  validateDataSnapshot(value, normalizeSlides)
   if (value.brand != null) {
     if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
     for (const key of ['primaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'name', 'footer']) {
@@ -357,12 +360,17 @@ export async function buildDeckAsync(options = {}) {
   if (options.template && !scenario) fail('未知 template，请使用 weekly / defense / project / pitch')
   const input = { ...options, theme: options.theme || scenario?.theme,
     ...(!options.content?.trim() && !options.slides?.length && scenario ? { slides: templateSlides(scenario, String(options.title ?? ''), options.lang) } : {}) }
-  const normalized = normalizeBuildOptions(input), cwd = resolve(options.cwd || '.')
+  const cwd = resolve(options.cwd || '.')
+  const dataModel = options.dataModel ? normalizeDataModel(options.dataModel, { cwd, allowFiles:true }) : undefined
+  if (dataModel && (!Array.isArray(input.slides) || !input.slides.length)) fail('数据绑定需使用结构化 slides / Data binding requires structured slides')
+  const prepared = dataModel ? prepareDataSlides(input.slides, dataModel, normalizeSlides, resolveLanguage(input.lang).id) : undefined
+  const normalized = normalizeBuildOptions({ ...input, ...(prepared ? { slides:prepared } : {}) })
+  if(prepared) normalized.deck.slides = prepared
   const assets = {}
   const brand = normalizeBrand(options.brand, assets, cwd)
   const manifest = { version: DECK_VERSION, schemaVersion: 1, deckId: randomUUID(), revision: 0,
     title: normalized.title, theme: normalized.theme.id, language: normalized.language.id, motion: normalized.motion,
-    ...(scenario ? { template: scenario.id } : {}), ...(brand ? { brand } : {}), assets, history: [],
+    ...(scenario ? { template: scenario.id } : {}), ...(brand ? { brand } : {}), ...(dataModel ? {dataModel} : {}), assets, history: [],
     slides: embedSlides(normalized.deck.slides, assets, cwd).map(s => ({ ...s, id: randomUUID() })) }
   const data = await generate(manifest, options.signal)
   mkdirSync(normalized.outputDir, { recursive: true })
@@ -448,14 +456,15 @@ export async function editDeck(options = {}) {
     if (!edit.patch || typeof edit.patch !== 'object' || Array.isArray(edit.patch)) fail('第 ' + (index + 1) + ' 页 patch 需为对象')
     for (const key of Object.keys(edit.patch)) if (!allowed.has(key)) fail('不支持修改页面字段：' + key)
     validateRawSlides([edit.patch])
-    const changed = { ...next.slides[index], ...edit.patch }
+    const changed = { ...next.slides[index], ...next.slides[index].dataTemplate, ...edit.patch }
+    delete changed.dataTemplate
     for (const key of Object.keys(changed)) if (changed[key] === null) delete changed[key]
     if (edit.patch.chart) { if (!edit.patch.layout) changed.layout = 'chart'; if (changed.layout === 'chart') delete changed.image }
     if (edit.patch.image) { if (!edit.patch.layout && !['image', 'image-left', 'image-right'].includes(changed.layout)) changed.layout = 'image-right'; if (['image', 'image-left', 'image-right'].includes(changed.layout)) delete changed.chart }
     if (edit.patch.layout && !MEDIA_LAYOUTS.has(edit.patch.layout)) { delete changed.image; delete changed.chart }
     validateRawSlides([changed])
     let slides
-    try { slides = normalizeSlides([changed], 120, next.language) } catch (error) { fail(`第 ${index + 1} 页修改失败：${error.message}`) }
+    try { slides = next.dataModel ? prepareDataSlides([changed], next.dataModel, normalizeSlides, next.language) : normalizeSlides([changed], 120, next.language) } catch (error) { fail(`第 ${index + 1} 页修改失败：${error.message}`) }
     if (slides.length !== 1) fail(`第 ${index + 1} 页修改会产生分页，请减少表格行数或另建演示文稿`)
     const embedded = embedSlides(slides, next.assets, resolve(options.cwd || '.'))[0]
     next.slides[index] = { ...embedded, id: current.slides[index].id }
@@ -487,7 +496,7 @@ export async function editDeck(options = {}) {
   if (options.append !== undefined) {
     if (!Array.isArray(options.append) || options.append.length < 1 || options.append.length > 5) fail('append 需为 1-5 页')
     validateRawSlides(options.append)
-    const added = normalizeSlides(options.append, 120, next.language)
+    const added = next.dataModel ? prepareDataSlides(options.append, next.dataModel, normalizeSlides, next.language) : normalizeSlides(options.append, 120, next.language)
     if (next.slides.length + added.length > 120) fail('工程页数超过 120')
     next.slides.push(...embedSlides(added, next.assets, resolve(options.cwd || '.')).map(slide => ({ ...slide, id: randomUUID() })))
   }
@@ -504,9 +513,29 @@ export async function undoDeck(options = {}) {
   expected(state.manifest, options.expectedRevision)
   if (!state.manifest.history.length) fail('该工程没有可撤销的修改')
   const next = clone(state.manifest), prior = next.history.pop()
-  for (const key of ['brand', 'template']) delete next[key]
+  for (const key of ['brand', 'template', 'dataModel']) delete next[key]
   Object.assign(next, prior)
   return saveRevision(state, next, options.signal)
+}
+
+function dataChange(state, options) {
+  expected(state.manifest, options.expectedRevision)
+  const packet=options.scenario
+  if(packet && (packet.schemaVersion!==1||packet.deckId!==state.manifest.deckId||packet.revision!==state.manifest.revision||packet.fingerprint!==state.manifest.dataModel?.fingerprint))fail('推演参数来自其他工程或旧版本，请重新导出 / Scenario belongs to another project or revision')
+  return previewDataChange(state.manifest,{...options,...(packet?{parameters:packet.parameters}:{})},normalizeSlides)
+}
+export function previewDeckData(options = {}) {
+  abort(options.signal)
+  const state=readDocument(options.deckPath, options.cwd)
+  return { ok:true, deckId:state.manifest.deckId, revision:state.manifest.revision, ...dataChange(state,options).preview }
+}
+export async function updateDeckData(options = {}) {
+  abort(options.signal)
+  const state=readDocument(options.deckPath,options.cwd),change=dataChange(state,options)
+  if(options.confirmed!==true||options.expectedRevision===undefined||options.previewToken!==change.preview.token)fail('请先预览差异，再携带修订号与预览凭证确认 / Preview changes and confirm with the revision and preview token')
+  if(!change.preview.changed)return {...result(state.manifest,pathsFor(state.path)),changed:false}
+  const next={...clone(state.manifest),dataModel:change.model,slides:change.slides,history:[...state.manifest.history,snapshot(state.manifest)].slice(-MAX_HISTORY)}
+  return {...await saveRevision(state,next,options.signal,options.saveAs!==false,true),changed:true}
 }
 
 export function checkDeck(options = {}) {

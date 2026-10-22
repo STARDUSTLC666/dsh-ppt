@@ -4,7 +4,7 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, re
 import { join } from 'node:path'
 import type { CoachingModel, ModelRoute } from './coaching-model.js'
 
-export type CoachingContext = { id: string; manifest: any }
+export type CoachingContext = { id: string; manifest: any; dataNotes?: Record<string,string> }
 type Kind = 'expression' | 'logic' | 'evidence'
 type Finding = { id: string; slideId: string; kind: Kind; question: string; answer: string; issue: string; suggestion: string; reference: string; quote: string; grounded: boolean; patch?: Record<string, string | string[]> }
 type Question = { id: string; slideId: string; question: string; answer?: string; feedback?: string; needsEvidence?: boolean; reference: string; quote: string }
@@ -98,7 +98,7 @@ export class PptCoaching {
     if (material.length > 20000) throw new Error('补充材料最多 20000 字符 / Supporting material limit: 20000 characters')
     const selected = body.slideId === undefined ? context.manifest.slides : context.manifest.slides.filter((s:any) => s.id === body.slideId)
     if (!selected.length) throw new Error('检查范围没有页面 / No slides in the selected scope')
-    const slides = selected.map((s:any) => ({id:s.id, ...JSON.parse(slideText(s))}))
+    const slides = selected.map((s:any) => ({id:s.id, ...JSON.parse(slideText({...s,...(context.dataNotes?.[s.id]?{notes:context.dataNotes[s.id]}:{})}))}))
     if (JSON.stringify(slides).length + material.length > 60000) throw new Error('材料超过 60000 字符，请选择当前页检查 / Input too long; check the current slide')
     mkdirSync(this.directory,{recursive:true,mode:0o700})
     if (this.list(context).length >= 20 || readdirSync(this.directory).filter(f => f.endsWith('.json')).length >= 200) throw new Error('请删除旧记录后再开始（每个工程 20 次，本机共 200 次） / Delete old records first (20 per project, 200 total)')

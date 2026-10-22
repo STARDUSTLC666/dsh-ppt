@@ -94,6 +94,43 @@ export interface PptProjectArgs {
     deckPath: string;
     expectedRevision?: number;
 }
+export interface PptDataSource {
+    id: string;
+    name?: string;
+    format?: 'csv' | 'tsv' | 'text';
+    path?: string;
+    content?: string;
+    kind?: 'table' | 'text';
+    rows?: Array<Array<string | number>>;
+    text?: string;
+}
+export interface PptDataMetric {
+    id: string;
+    label?: string;
+    kind: 'source' | 'input' | 'formula';
+    source?: {
+        sourceId: string;
+        cell?: string;
+        line?: number;
+        numberIndex?: number;
+    };
+    value?: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    note?: string;
+    formula?: string;
+    format?: {
+        style?: 'number' | 'percent';
+        digits?: number;
+        unit?: string;
+    };
+}
+export interface PptDataModel {
+    schemaVersion?: 1;
+    sources: PptDataSource[];
+    metrics: PptDataMetric[];
+}
 export interface PptSlideSpec {
     id?: string;
     layout?: PptSlideLayout;
@@ -135,6 +172,8 @@ export interface PptCreateArgs {
     overwrite?: boolean;
     template?: PptTemplateId;
     brand?: PptBrand;
+    /** Optional explicit source facts, assumptions and safe arithmetic; bind slides with {{metricId}}. */
+    dataModel?: PptDataModel;
 }
 export interface PptThemeInfo {
     id: string;
@@ -186,6 +225,10 @@ export interface PptCreateResult {
 }
 /** Shared generator and optional renderer exposed to the plugin. */
 export interface DeckEngine {
+    previewDeckData(options: Record<string, unknown>): Record<string, any>;
+    updateDeckData(options: Record<string, unknown>): Promise<PptCreateResult>;
+    dataReport(manifest: any): string;
+    dataNotes(manifest: any, slide: any): string;
     buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>;
     listTemplates(lang?: string): unknown[];
     editDeck(options: Record<string, unknown>): Promise<PptCreateResult>;

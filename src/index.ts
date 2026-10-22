@@ -98,4 +98,7 @@ export type {
   PptCheckResult,
   PptEditArgs,
   PptProjectArgs,
+  PptDataModel,
+  PptDataSource,
+  PptDataMetric,
 } from './types.js'
