@@ -1,5 +1,7 @@
 # dsh-ppt
 
+Optional **visual review and repair** inspects images rendered from the actual PPTX, highlights problem regions, creates a formatting-only copy and renders it again for rechecking. The original stays intact. See [visual review](docs/VISUAL.md#english).
+
 [中文](README.md)
 
 ![dsh-ppt whale girl plugin cover](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)

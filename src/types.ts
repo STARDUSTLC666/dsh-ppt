@@ -33,6 +33,8 @@ export interface PptSlideSpec {
   notes?: string
   image?: PptImageSpec | string | null
   chart?: PptChartSpec | null
+  /** Optional bounded native font sizes, in points. */
+  visual?: { titleSize?: number; bodySize?: number; chartLabelSize?: number }
 }
 
 export interface PptConfig {
@@ -113,6 +115,8 @@ export interface PptCreateResult {
 
 /** Shared generator and optional renderer exposed to the plugin. */
 export interface DeckEngine {
+  repairDeckVisual(options: Record<string, unknown>): Promise<PptCreateResult>
+  readRenderReceipt(pptxPath: string, receiptPath: string): PptRenderResult
   previewDeckData(options: Record<string, unknown>): Record<string, any>
   updateDeckData(options: Record<string, unknown>): Promise<PptCreateResult>
   dataReport(manifest: any): string

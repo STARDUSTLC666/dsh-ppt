@@ -11,7 +11,7 @@
  *   deck.pptx  可编辑 PPTX（16:9，OOXML 由本文件手写，zip 用 node:zlib）
  *   deck.json  结构化 deck manifest
  *
- * 零运行时依赖，仅使用 node:fs / node:path / node:zlib。
+ * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -20,6 +20,7 @@ import { deflateRawSync } from 'node:zlib'
 import { MEDIA_LAYOUTS, MEDIA_CSS, normalizeMediaSlide, renderMediaHtml, mediaBoxes } from './deck-media.mjs'
 import { renderDelivery } from './deck-delivery.mjs'
 import { renderDataView } from './deck-data-view.mjs'
+import { normalizeVisual, visualHtmlStyle, visualShapeXml, VISUAL_CSS } from './deck-visual.mjs'
 
 /**
  * manifest 版本跟随发布包 package.json；把 skills/dsh-ppt 独立复制到其他
@@ -804,6 +805,10 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
 const SLIDE_LAYOUTS = new Set(['cover', 'section', 'bullets', 'statement', 'closing', 'quote', 'table', ...MEDIA_LAYOUTS])
 
 function normalizeSlide(raw, index) {
+  const result = normalizeSlideContent(raw, index), visual = normalizeVisual(raw?.visual)
+  return visual ? { ...result, visual } : result
+}
+function normalizeSlideContent(raw, index) {
   const source = (raw !== null && typeof raw === 'object') ? raw : {}
   const layout = SLIDE_LAYOUTS.has(source.layout) ? source.layout : source.chart ? 'chart' : source.image ? 'image-right' : 'bullets'
   const title = stripInlineMarkdown(source.title ?? '')
@@ -1070,6 +1075,7 @@ body{
 .slide.is-active{display:flex}
 ${motionCss}
 ${MEDIA_CSS}
+${VISUAL_CSS}
 .kicker{
   color:var(--accent);font-weight:700;letter-spacing:.18em;text-transform:uppercase;
   font-size:clamp(12px,1.3vw,18px);margin-bottom:22px;
@@ -1733,7 +1739,8 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
   const notesAttr = typeof slide.notes === 'string' && slide.notes.trim() !== ''
     ? ' data-notes="' + escapeHtml(slide.notes) + '"'
     : ''
-  return '<section class="slide slide--' + escapeHtml(slide.layout || 'bullets') + '" data-index="' + number + '"' + notesAttr + '>' +
+  const visualStyle = visualHtmlStyle(slide.visual)
+  return '<section class="slide slide--' + escapeHtml(slide.layout || 'bullets') + '" data-index="' + number + '"' + notesAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
     '<div class="slide-inner">' + inner + '</div>' +
     (manifest.brand?.logoAssetId ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
     (manifest.brand?.footer ? '<div class="brand-footer">' + escapeHtml(manifest.brand.footer) + '</div>' : '') + '</section>'
@@ -1985,7 +1992,7 @@ function slideShapeList(slide, index, total, theme, langId) {
     para(footer, { size: 1000, color: p.muted, align: 'r', font: theme.fonts.body }),
   ]))
 
-  return shapes.join('')
+  return visualShapeXml(shapes.join(''), slide.visual)
 }
 
 /**

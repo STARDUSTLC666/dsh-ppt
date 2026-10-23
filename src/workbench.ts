@@ -9,6 +9,8 @@ import { bilingualQuality, englishWorkbenchMessage } from './workbench-language.
 import { zipSync, strToU8 } from 'fflate'
 import { PptCoaching } from './coaching.js'
 import type { CoachingModel, ModelRoute } from './coaching-model.js'
+import { PptVisual } from './visual.js'
+import type { VisualModel } from './visual-model.js'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
@@ -18,7 +20,7 @@ const BUNDLE_LIMIT = 128 * 1024 * 1024
 type Project = { id: string; path: string; title: string; updatedAt: string; modelRoute?: ModelRoute }
 type Render = { revision: number; pngPaths: string[]; pngHashes: string[]; missingFonts?: string[]; sourceSha256: string }
 type WorkbenchEngine = DeckEngine & { readDeckProject(options: Record<string, unknown>): { manifest: any; path: string } }
-type Options = { catalogPath?: string; loadEngine?: () => Promise<WorkbenchEngine>; coachingModel?: CoachingModel }
+type Options = { catalogPath?: string; loadEngine?: () => Promise<WorkbenchEngine>; coachingModel?: CoachingModel; visualModel?: VisualModel }
 const digest = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex')
 
 function ordinaryFile(path: string): Buffer {
@@ -55,12 +57,14 @@ function originVerdict(request: Request): Response | undefined {
 export class PptWorkbench {
   readonly catalogPath: string
   readonly coaching: PptCoaching
+  readonly visual: PptVisual
   private readonly loadEngine: () => Promise<WorkbenchEngine>
   private readonly renders = new Map<string, Render>()
   constructor(options: Options = {}) {
     this.catalogPath = options.catalogPath ?? join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'plugins', 'dsh-ppt', 'projects.jsonl')
     this.loadEngine = options.loadEngine ?? (getEngine as () => Promise<WorkbenchEngine>)
     this.coaching = new PptCoaching(join(dirname(this.catalogPath), 'rehearsals'), options.coachingModel)
+    this.visual = new PptVisual(join(dirname(this.catalogPath), 'visual-reviews'), options.visualModel)
   }
   private catalog(): Project[] {
     if (!existsSync(this.catalogPath)) return []
@@ -143,6 +147,13 @@ export class PptWorkbench {
     const { entry, engine, manifest, files } = await this.project(body.id)
     signal?.throwIfAborted()
     const context = { id: entry.id, manifest, ...(manifest.dataModel?{dataNotes:Object.fromEntries(manifest.slides.map((s:any)=>[s.id,engine.dataNotes(manifest,s)]))}:{}) }
+    const visualContext = { id: entry.id, path: entry.path, manifest, engine }
+    if (body.operation === 'visual-options') return { ok: true, ...await this.visual.options(signal) }
+    if (body.operation === 'visual-list') return { ok: true, runs: this.visual.list(visualContext) }
+    if (body.operation === 'visual-get') return { ok: true, run: this.visual.get(visualContext, body.runId) }
+    if (body.operation === 'visual-stop') return { ok: true, run: this.visual.stop(visualContext, body.runId) }
+    if (body.operation === 'visual-delete') return { ok: true, ...this.visual.remove(visualContext, body.runId) }
+    if (body.operation === 'visual-page') return this.visual.page(visualContext, body.runId, body.round, body.slideId)
     if (body.operation === 'coach-options') return { ok: true, ...await this.coaching.options(signal) }
     if (body.operation === 'coach-list') return { ok: true, runs: this.coaching.list(context) }
     if (body.operation === 'coach-get') return { ok: true, run: this.coaching.get(context, body.runId) }
@@ -163,6 +174,16 @@ export class PptWorkbench {
       return { ok: true, data: 'data:image/png;base64,' + bytes.toString('base64') }
     }
     this.revision(body, manifest)
+    if (body.operation === 'visual-create') return { ok: true, run: await this.visual.create(visualContext, body, signal) }
+    if (body.operation === 'visual-step') return { ok: true, run: await this.visual.step(visualContext, body.runId, body, signal) }
+    if (body.operation === 'visual-adopt') {
+      if (body.confirmed !== true) throw new Error('请确认采用修复副本 / Confirm adopting the repaired copy')
+      const { path, render } = this.visual.adoption(visualContext, body.runId)
+      await this.remember({ jsonPath: path }, {}, undefined)
+      const copy = await this.project(digest(path))
+      this.renders.set(copy.entry.id, { revision: copy.manifest.revision, sourceSha256: render.sourceSha256!, pngPaths: render.pngPaths!, pngHashes: render.pngPaths!.map(p => digest(ordinaryFile(p))), missingFonts: render.missingFonts })
+      return { ...await this.view(digest(path)), originalId: entry.id }
+    }
     if(body.operation === 'data-preview' || body.operation === 'data-apply') {
       // Always force file reads off, including nested source updates and scenario packets.
       const args = { deckPath:entry.path, expectedRevision:body.expectedRevision, parameters:body.parameters, sourceUpdates:body.sourceUpdates,
@@ -229,12 +250,14 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle', 'notes', 'coaching', 'data'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle', 'notes', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files, engine } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
       let name: string, bytes: Uint8Array
-      if(kind === 'data') {
+      if(kind === 'visual') {
+        bytes = strToU8(this.visual.markdown({ id: entry.id, path: entry.path, manifest, engine }, params.get('run'))); name = basename(entry.path,'.json') + '-visual-review.md'
+      } else if(kind === 'data') {
         bytes=strToU8(engine.dataReport(manifest));name=basename(entry.path,'.json')+'-data-lineage.md'
       } else if (kind === 'coaching') {
         bytes = strToU8(this.coaching.markdown({ id: entry.id, manifest }, params.get('run')))
@@ -265,10 +288,10 @@ export class PptWorkbench {
       }
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const type = kind === 'notes' || kind === 'coaching' || kind === 'data' ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const type = ['notes','coaching','data','visual'].includes(String(kind)) ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : kind === 'notes' || kind === 'coaching' || kind === 'data' ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : ['notes','coaching','data','visual'].includes(String(kind)) ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }

@@ -5,6 +5,8 @@ import { inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveTheme, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, pptxEastAsianFont } from './deck-core.mjs'
 import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, chartColors, normalizeChart } from './deck-media.mjs'
 import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
+import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
+export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, buildThemePreview, listThemes, resolveTheme, resolveLanguage } from './deck-core.mjs'
 
@@ -145,6 +147,7 @@ function validateRawSlides(slides) {
   slides.forEach((s, i) => {
     if (!s || typeof s !== 'object' || Array.isArray(s)) fail(`第 ${i + 1} 页必须是对象`)
     if (s.layout && !layouts.has(s.layout)) fail(`第 ${i + 1} 页未知布局 ${s.layout}`)
+    normalizeVisual(s.visual)
     if (s.chart && s.image) fail(`第 ${i + 1} 页不能同时放入 image 和 chart`)
     if (s.image && s.layout && !['image', 'image-left', 'image-right'].includes(s.layout)) fail(`第 ${i + 1} 页图片需使用 image / image-left / image-right 布局`)
     if (s.chart && s.layout && s.layout !== 'chart') fail(`第 ${i + 1} 页图表需使用 chart 布局`)
@@ -257,7 +260,7 @@ async function exportPptx(manifest, theme, language, signal) {
     if (source.image) putImage(slide, source.image.assetId, boxes.image, source.image.fit, 'Slide image', source.image.alt)
     if (source.chart) {
       const colors = chartColors(theme), font = pptxEastAsianFont(theme.fonts.body)
-      const style = { font, sizePt: 17, color: theme.palette.fg }
+      const style = { font, sizePt: source.visual?.chartLabelSize ?? 17, color: theme.palette.fg }
       lib.addSlideChart(slide, { ...emu(boxes.chart), name: 'Editable data chart', spec: {
         kind: source.chart.kind, categories: source.chart.categories,
         series: source.chart.series.map((s, i) => ({ ...s, color: colors[i], ...(source.chart.kind === 'pie' ? { pointColors: source.chart.categories.map((_, j) => colors[j % colors.length]) } : {}) })),
@@ -447,7 +450,7 @@ export async function editDeck(options = {}) {
   if (!Array.isArray(options.edits) || !options.edits.length) {
     if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined && options.append === undefined && options.saveAs !== true) fail('请提供 edits、order、duplicate、remove、append 或 brand')
   }
-  const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart'])
+  const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart', 'visual'])
   for (const edit of options.edits ?? []) {
     const index = typeof edit.slide === 'number' && Number.isInteger(edit.slide) ? edit.slide - 1 : next.slides.findIndex(s => s.id === edit.slide)
     if (index < 0 || index >= next.slides.length) fail('找不到要修改的页面：' + edit.slide)
@@ -505,6 +508,20 @@ export async function editDeck(options = {}) {
   if (options.saveAs !== true && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
   next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
   return { ...await saveRevision(state, next, options.signal, options.saveAs === true, options.preserveUndo === true), changed: true }
+}
+
+/** An AI-selected, bounded formatting vocabulary; always an undoable new copy. */
+export async function repairDeckVisual(options = {}) {
+  abort(options.signal)
+  const state = readDocument(options.deckPath, options.cwd)
+  expected(state.manifest, options.expectedRevision)
+  const next = clone(state.manifest)
+  next.slides = applyVisualActions(next, options.actions)
+  // Splitting can move the only binding off a continuation page. Rebuild each
+  // page's canonical template so plain fields do not remain falsely bound.
+  if (next.dataModel) next.slides = next.slides.map(slide => ({ ...prepareDataSlides([slide], next.dataModel, normalizeSlides, next.language)[0], id: slide.id }))
+  if (JSON.stringify(next.slides) === JSON.stringify(state.manifest.slides)) fail('排版操作没有变化 / Formatting actions made no changes')
+  return saveRevision(state, next, options.signal, true, true)
 }
 
 export async function undoDeck(options = {}) {
