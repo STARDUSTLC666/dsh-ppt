@@ -4,6 +4,8 @@
 
 普通生成仍直接提供 PPTX、HTML 和工程文件。需要进一步检查时，在 **设置 → 演示文稿 → 打开工程 → 视觉检查与修复** 主动开启。
 
+模型目录可随 DSH 更新。点击“刷新视觉模型”会保留仍然可用的原选择；原模型下线时清空选择，重新选定后才能开始，不会自动换成另一个模型。
+
 ## 怎么用
 
 1. 选择 DSH 已配置、明确声明支持图片输入的视觉模型。选当前页，或一次检查最多 12 页。
@@ -44,6 +46,8 @@
 ## English
 
 Open **Settings → Presentations → a project → Visual review and repair**. Choose a configured image-capable model, the current slide or up to 12 original slides, and inspection only or up to two repair rounds.
+
+Refreshing the catalog preserves an available selection by provider and model ID. If that route disappears, selection is cleared and Start stays disabled until you choose again; another model is never substituted automatically.
 
 The plugin renders the actual PPTX using the optional official LibreOffice Kit, sends the selected images and visible slide content through native DSH model and attachment services, and records image-based findings. A small formatting vocabulary may create an undoable copy: font sizes, bullet/table splits, horizontal bars or uncropped images. Original wording, values, formulas and source bindings remain intact.
 

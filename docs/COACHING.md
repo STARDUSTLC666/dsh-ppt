@@ -11,6 +11,8 @@
 
 先选择 DSH 已配置的文字模型、听众、温和 / 普通 / 严格的提问强度，以及整个工程或当前页。需要时粘贴补充材料，或导入 TXT / Markdown（最多 20,000 字符，文件最多 100 KB）。开始按钮说明将发送哪些内容和最多调用几次；点击后才发起生成。可用时优先选中生成工程时的模型；旧工程需要自行核对模型。
 
+刷新目录或切换预审 / 答辩时会保留仍然可用的已选模型。原提供方或模型下线后，必须重新选择才能开始，不会自动换用目录中的其他模型。
+
 只发送所选页面的文字、表格 / 图表数据、备注及主动提供的补充材料，不发送图片文件、密钥或工作区文件。模型调用不附带文件、终端等工具。请在开始前检查输入是否适合交给所选模型服务。供应商自身的重试和计费规则仍然适用，次数上限指插件主动发起的调用。
 
 ## 如何使用结果
@@ -36,6 +38,8 @@
 Finished files remain the primary output. AI review and rehearsal are optional and never start automatically.
 
 Choose a configured DSH text model, audience, difficulty, scope and optional supporting material. Click Start to send selected slide text, table/chart data, notes and the supplied material; image files are excluded. No file or shell tools are offered to the model. No additional account is needed beyond the chosen DSH provider.
+
+Catalog refresh and mode changes preserve an available selection by provider and model ID. If the selected route disappears, choose again before starting; another model is never substituted automatically.
 
 Review makes up to three plugin calls. Practice asks one question at a time and accepts human answers: one initial question plus feedback for up to five questions, at most six plugin calls. Provider retries and billing rules still apply. You can stop a call or finish early; stopping may still incur a charge, and failed attempts use the current budget. There is no automatic retry.
 
