@@ -8,11 +8,11 @@ test('browser entry registers the declared settings slot and confines generated 
     window: { __ModuleLoader__: { load(entry) { plugin = entry.factory(() => ({ createElement() {} })) } } }
   })
   let definition
-  plugin.apply({ slots: { inject(name, callback) { assert.equal(name, 'settings.section'); callback() }, register(meta, Component) { assert.equal(meta.name, 'settings.section'); assert.equal(typeof Component, 'function'); definition = meta } } })
+  plugin.apply({ slots: { inject(_name, callback) { callback() }, register(meta, Component) { assert.equal(typeof Component, 'function'); if(meta.name === 'settings.section') definition = meta } } })
   assert.equal(definition.id, 'dsh-ppt'); assert.equal(definition.label(), '演示文稿')
   let active = 'en'
   const locale = { getSnapshot() { return { active } } }
-  plugin.apply({ locale, slots: { inject(_name, callback) { callback() }, register(meta) { definition = meta } } })
+  plugin.apply({ locale, slots: { inject(_name, callback) { callback() }, register(meta) { if(meta.name === 'settings.section') definition = meta } } })
   assert.equal(definition.label(), 'Presentations')
   assert.equal(definition.inject().locale, locale)
   active = 'zh'; assert.equal(definition.label(), '演示文稿')

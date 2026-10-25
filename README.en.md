@@ -14,6 +14,8 @@ Optional **AI review** and **rehearsal** reuse models configured in DSH. Both ar
 
 Feedback and contributions are welcome: report [issues](https://github.com/STARDUSTLC666/dsh-ppt/issues) or submit [pull requests](https://github.com/STARDUSTLC666/dsh-ppt/pulls).
 
+Open the new native sidebar workbench after updating and restarting DSH. Settings remains available. See the [workbench guide and validation boundaries](docs/WORKBENCH.md).
+
 ## What it does
 
 - Create branded decks with text, images, tables and native charts.

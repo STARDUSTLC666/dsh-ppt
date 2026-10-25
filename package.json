@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "description": "DSH 演示文稿插件：生成 HTML、可编辑 PPTX 和工程文件，支持数字溯源、现场推演与可选 AI 看图修复。",
   "type": "module",
   "main": "lib/index.js",
@@ -30,7 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm run build && node --test \"test/*.test.mjs\"",
     "test:core": "node --test \"test/*.test.mjs\"",
@@ -42,7 +42,9 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
       ],
       "platform": "web"
     }
