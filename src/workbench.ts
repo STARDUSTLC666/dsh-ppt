@@ -17,6 +17,15 @@ export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
 const REQUEST_LIMIT = 12 * 1024 * 1024
 const FILE_LIMIT = 64 * 1024 * 1024
 const BUNDLE_LIMIT = 128 * 1024 * 1024
+/** Sharing keeps the offline deck, but omits the control for a project not in the ZIP. */
+function shareHtml(bytes: Buffer): Uint8Array {
+  const html = bytes.toString('utf8'), marker = '<a id="download-project"'
+  const start = html.indexOf(marker)
+  if (start < 0) return bytes
+  const end = html.indexOf('</a>', start + marker.length)
+  if (end < 0 || end - start > 4096 || html.indexOf(marker, end + 4) >= 0) throw new Error('HTML 工程下载入口异常，请保存副本后重试')
+  return strToU8(html.slice(0, start) + html.slice(end + 4))
+}
 type Project = { id: string; path: string; title: string; updatedAt: string; modelRoute?: ModelRoute }
 type Render = { revision: number; pngPaths: string[]; pngHashes: string[]; missingFonts?: string[]; sourceSha256: string }
 type WorkbenchEngine = DeckEngine & { readDeckProject(options: Record<string, unknown>): { manifest: any; path: string } }
@@ -250,7 +259,7 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle', 'notes', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle', 'share', 'notes', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files, engine } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
@@ -265,33 +274,40 @@ export class PptWorkbench {
       } else if (kind === 'notes') {
         bytes = strToU8(speakerNotes({...manifest,slides:manifest.slides.map((slide:any)=>({...slide,notes:engine.dataNotes(manifest,slide)}))}))
         name = basename(entry.path, '.json') + '-speaker-notes.md'
-      } else if (kind === 'bundle') {
+      } else if (kind === 'bundle' || kind === 'share') {
         const entries: Record<string, Uint8Array> = {}
         let total = 0
-        for (const path of Object.values(files)) {
+        const selected = kind === 'share' ? [files.html, files.pptx] : Object.values(files)
+        const add = (name: string, content: Uint8Array) => { total += content.byteLength; if (total > BUNDLE_LIMIT) return false; entries[name] = content; return true }
+        for (const path of selected) {
           if (!existsSync(path)) return fail(400, '成品文件不完整，请先保存一次再下载成品包')
-          const content = ordinaryFile(path)
-          total += content.byteLength
-          if (total > BUNDLE_LIMIT) return fail(413, '成品包超过 128 MiB，请分别下载文件')
-          entries[basename(path)] = content
+          const content = ordinaryFile(path), exported = kind === 'share' && path === files.html ? shareHtml(content) : content
+          if (!add(basename(path), exported)) return fail(413, '成品包超过 128 MiB，请分别下载文件')
         }
-        // Only the three known sibling artifacts are included. No directory walks,
-        // local configuration, attachment paths or journal files enter the archive.
-        entries['README.txt'] = strToU8('演示文稿成品包 / Presentation delivery bundle\n\nPPTX: 在 PowerPoint / WPS 中编辑。 / Edit in PowerPoint or WPS.\nHTML: 解压后用浏览器打开，支持离线放映。 / Extract and open in a browser for offline playback.\nJSON: 保留以便继续在 DSH 中编辑。 / Keep this project file for future DSH edits.\n\n修订 / Revision: ' + manifest.revision + '\n')
+        // An allowlist of registered sibling files; never walk project directories.
+        if (kind === 'share') {
+          const notes = speakerNotes({...manifest,slides:manifest.slides.map((slide:any)=>({...slide,notes:engine.dataNotes(manifest,slide)}))})
+          if (!add(basename(entry.path, '.json') + '-speaker-notes.md', strToU8(notes))) return fail(413, '成品包超过 128 MiB，请分别下载文件')
+        }
+        const details = kind === 'share'
+          ? '演示文稿分享包 / Presentation share bundle\n\nPPTX: 在 PowerPoint / WPS 中打开。 / Open in PowerPoint or WPS.\nHTML: 解压后用浏览器离线放映。 / Extract and open in a browser for offline playback.\nMarkdown: 当前修订的逐页讲稿。 / Speaker notes for this revision.\n\n此包不含 JSON 工程或完整导入材料。HTML、PPTX 备注和讲稿保留已绑定的来源摘录及用户填写内容。\nThe project JSON and complete imported materials are not included. HTML, PPTX notes and speaker notes retain bound source excerpts and authored content.\n'
+          : '演示文稿工程包 / Presentation project bundle\n\nPPTX: 在 PowerPoint / WPS 中编辑。 / Edit in PowerPoint or WPS.\nHTML: 解压后用浏览器打开，支持离线放映。 / Extract and open in a browser for offline playback.\nJSON: 保留以便继续在 DSH 中编辑；其中可能包含完整导入材料。 / Keep for future DSH edits; this project may contain complete imported materials.\n'
+        if (!add('README.txt', strToU8(details + '\n修订 / Revision: ' + manifest.revision + '\n'))) return fail(413, '成品包超过 128 MiB，请分别下载文件')
         // PPTX and embedded images are already compressed; store to avoid a large
         // synchronous recompression on the host's event loop.
         bytes = zipSync(entries, { level: 0 })
-        name = basename(entry.path, '.json') + '-delivery.zip'
+        name = basename(entry.path, '.json') + (kind === 'share' ? '-share.zip' : '-delivery.zip')
       } else {
         const path = files[kind as keyof typeof files]
         bytes = ordinaryFile(path); name = basename(path)
       }
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const type = ['notes','coaching','data','visual'].includes(String(kind)) ? 'text/markdown; charset=utf-8' : kind === 'bundle' ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const archive = kind === 'bundle' || kind === 'share'
+      const type = ['notes','coaching','data','visual'].includes(String(kind)) ? 'text/markdown; charset=utf-8' : archive ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${kind === 'bundle' ? 'zip' : ['notes','coaching','data','visual'].includes(String(kind)) ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${archive ? 'zip' : ['notes','coaching','data','visual'].includes(String(kind)) ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }

@@ -27,6 +27,7 @@ async function fixture(run, generate = async data => ({ findings: [defaultFindin
 test('normal delivery neither lists models nor generates; configuration and creation are not model calls', () => fixture(async ({ wb, id, act, create, calls, listings }) => {
   const opened = await wb.action({ operation: 'open', id }); assert.deepEqual(opened.project.modelRoute, { provider: route.provider, model: route.model })
   const zip = await wb.fetchDownload(new Request('http://local' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=bundle&revision=0`)); assert.equal(zip.status, 200)
+  const share = await wb.fetchDownload(new Request('http://local' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=share&revision=0`)); assert.equal(share.status, 200)
   assert.equal(calls(), 0); assert.equal(listings(), 0)
   const options = await act('options'); assert.equal(options.available, true)
   const { run } = await create(); assert.equal(run.usedCalls, 0); assert.equal(run.maxCalls, 1); assert.equal(run.material, undefined); assert.equal(run.slides, undefined)

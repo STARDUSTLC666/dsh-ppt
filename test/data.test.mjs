@@ -79,6 +79,14 @@ test('confirmed copy synchronizes editable chart/text/notes; original bytes pres
   const manifest=readDeckProject({deckPath:changed.jsonPath}).manifest;assert.equal(manifest.dataModel.values.profit,900);assert.equal(manifest.slides[1].title,'增长 50%');assert.equal(manifest.slides[2].chart.series[0].values[1],900)
   const zip=unzipSync(readFileSync(changed.pptxPath)),notes=Object.entries(zip).filter(([p])=>/notesSlides\/notesSlide\d+\.xml$/.test(p)).map(([,b])=>strFromU8(b)).join('');assert.match(notes,/revenue-cost/);assert.match(notes,/用户假设/);assert.match(notes,/SHA-256/);assert.match(notes,/B2/);assert.ok(Object.keys(zip).some(p=>/ppt\/charts\/chart\d+\.xml/.test(p)));assert.match(dataReport(manifest),/900万元/)
   const html=readFileSync(changed.htmlPath,'utf8');assert.match(html,/data-panel/);assert.doesNotMatch(html,/private-material-not-for-export/);assert.doesNotMatch(html,/"sources":/)
+  const workbench=new PptWorkbench({catalogPath:join(dir,'catalog.jsonl')});await workbench.remember(changed,{})
+  const id=(await workbench.action({operation:'list'})).projects[0].id
+  const share=await workbench.fetchDownload(new Request('http://localhost/api/dsh-ppt/download?id='+id+'&kind=share&revision=0'));assert.equal(share.status,200)
+  const shared=unzipSync(new Uint8Array(await share.arrayBuffer()))
+  assert.ok(Object.keys(shared).every(name=>!name.endsWith('.json')))
+  for(const[name,bytes]of Object.entries(shared))if(!name.endsWith('.pptx'))assert.doesNotMatch(strFromU8(bytes),/private-material-not-for-export/)
+  assert.match(strFromU8(shared[Object.keys(shared).find(name=>name.endsWith('.md'))]),/revenue-cost/)
+  assert.match(readFileSync(changed.jsonPath,'utf8'),/private-material-not-for-export/)
   await undoDeck({deckPath:changed.jsonPath,expectedRevision:0});const undone=readDeckProject({deckPath:changed.jsonPath}).manifest;assert.equal(undone.dataModel.values.profit,700);assert.equal(undone.slides[1].title,'增长 30%')
 }))
 test('ordinary page edits preserve other bindings; replacing a bound field intentionally unlinks it',()=>inDir(async dir=>{

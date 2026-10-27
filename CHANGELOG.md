@@ -4,6 +4,12 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.19.0 (2026-10-28)
+
+- 下载面板区分分享成品包与完整工程包。分享包包含当前 PPTX、离线 HTML 和逐页讲稿，不打包 JSON 工程；工程备份入口继续保留。
+- 分享 HTML 移除缺失工程文件的下载入口；不覆盖原文件，沿用修订校验与未保存保护，下载无需调用模型。
+- Add separate share and project bundles, with current speaker notes and clear content boundaries. Preserve revision guards and original files; ordinary downloads require no model calls.
+
 ## 0.18.3 (2026-10-27)
 
 - 修复分批更新时的新旧更新控件混用：保留原页面、草稿与安装保护，空闲后接管旧控制器，兼容旧入口。

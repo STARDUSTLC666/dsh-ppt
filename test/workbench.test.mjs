@@ -127,6 +127,35 @@ test('speaker notes download contains every current slide and refuses stale revi
   assert.equal(readDeckProject({ deckPath: created.jsonPath }).manifest.revision, 2)
 }))
 
+test('share ZIP includes current presentation and notes, omits the project and removes its offline download control', () => fixture(async ({ dir, created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  await editDeck({ deckPath: created.jsonPath, expectedRevision: 0, edits: [{ slide: 1, patch: { notes: '当前讲稿，仅本次合成验收。' } }] })
+  writeFileSync(join(dir, 'private-config.json'), '{"password":"synthetic-do-not-export"}')
+  const before = Object.values(created.files).map(path => readFileSync(path))
+  const download = revision => wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=share&revision=${revision}`))
+  assert.equal((await download(0)).status, 409)
+  const response = await download(1); assert.equal(response.status, 200); assert.equal(response.headers.get('content-type'), 'application/zip')
+  assert.match(decodeURIComponent(response.headers.get('content-disposition')), /工程-share\.zip/)
+  const entries = unzipSync(new Uint8Array(await response.arrayBuffer())), filename = path => path.split(/[\\/]/).pop()
+  assert.deepEqual(Object.keys(entries).sort(), [filename(created.files.pptx), filename(created.files.html), '工程-speaker-notes.md', 'README.txt'].sort())
+  assert.deepEqual(Buffer.from(entries[filename(created.files.pptx)]), readFileSync(created.files.pptx))
+  assert.match(strFromU8(entries['工程-speaker-notes.md']), /当前讲稿/)
+  assert.equal(entries[filename(created.files.json)], undefined); assert.equal(entries['private-config.json'], undefined)
+  assert.doesNotMatch(strFromU8(entries[filename(created.files.html)]), /id="download-project"/)
+  assert.match(strFromU8(entries[filename(created.files.html)]), /id="download-pptx"/)
+  assert.match(strFromU8(entries['README.txt']), /Revision: 1/)
+  Object.values(created.files).forEach((path,index) => assert.deepEqual(readFileSync(path), before[index], 'Download must not rewrite the original artifacts'))
+  assert.match(readFileSync(created.files.html, 'utf8'), /id="download-project"/)
+}))
+
+test('a malformed project link in an externally changed HTML cannot produce a misleading share archive', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {}); const id = (await wb.action({ operation: 'list' })).projects[0].id
+  writeFileSync(created.files.html, '<html><body><a id="download-project" href="./project.json">broken control')
+  const response = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=share&revision=0`))
+  assert.equal(response.status, 400); assert.match((await response.json()).messageEn, /project download control/)
+}))
+
 test('empty speaker-note guidance follows the deck language without translating authored content', () => fixture(async ({ dir, wb }) => {
   for (const lang of ['en', 'bilingual']) {
     const deck = await buildDeckAsync({ title: 'Notes ' + lang, slides: [{ layout: 'cover', title: 'Original title', notes: '保留用户写的中文备注' }, { layout: 'closing', title: 'Next' }], lang, outputDir: dir })

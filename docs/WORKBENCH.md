@@ -14,6 +14,18 @@ Update the plugin, restart DSH and open its native sidebar panel (or More if it 
 
 The UI follows host language and theme without translating user content. Narrow master/detail views have a Back action; editors adapt their columns to available space. Destructive actions require confirmation and edits are protected.
 
+## 下载与分享 / Download and share
+
+在项目右上角点击「下载成品」。先保存修改，再选择需要的文件：
+
+- **分享成品包 ZIP**：当前 PPTX、可离线放映的 HTML、逐页 Markdown 讲稿与使用说明；不含 JSON 工程和完整导入材料。分享版 HTML 保留 PPTX 下载入口，移除工程下载入口。原文件不会改变。
+- **完整工程包 ZIP**：PPTX、HTML、JSON 工程与使用说明，方便备份或继续编辑。JSON 可能含完整导入材料。
+- 也可分别下载 PPTX、HTML、讲稿或工程。未保存时先保存，旧修订的下载会被拒绝。
+
+分享包里的 HTML、PPTX 备注和讲稿仍保留已绑定的来源摘录与用户填写内容。分包不等于自动脱敏，请按收件人需要选择内容。
+
+Open **Download output** and save edits first. **Share bundle ZIP** contains the current PPTX, offline HTML, Markdown speaker notes and instructions; it omits the project JSON and complete imported materials. **Project bundle ZIP** includes the editable JSON for backup. Original files are preserved. Share output still contains bound source excerpts and authored notes. These downloads never require AI review or a model call.
+
 ## 源码 / Source
 
 编辑 templates/client.js、templates/panels/*.js 与 templates/workbench-ui.js，运行 pnpm run build。lib/client.js 是确定性产物，请随源码提交。公共组件的规范源位于 dsh-suite/ui/workbench-ui.js，Suite 的同步脚本显式分发副本；单个仓库可独立构建和安装。

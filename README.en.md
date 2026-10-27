@@ -23,6 +23,7 @@ Open the new native sidebar workbench after updating and restarting DSH. Setting
 - Edit text and images in Settings, reorder, duplicate or delete slides, and undo changes.
 - Check quality and optionally render the final PPTX as images or PDF.
 - Download Markdown speaker notes with each slide's current title and notes.
+- Choose a share bundle (PPTX, offline HTML and current speaker notes) or a project bundle (including the editable JSON). Share bundles retain bound source excerpts and authored content. See [download details](docs/WORKBENCH.md#下载与分享--download-and-share).
 - Keyboard support: Ctrl/⌘+S save, Esc cancel or go back, Alt+←/→ switch slides; leaving with unsaved edits prompts first.
 
 ## Install
