@@ -4,6 +4,11 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.18.2 (2026-10-27)
+
+- 更新控件移至原有工作台或原生插件详情页底部；更新记录与选项原地展开，移除独立更新菜单与页面。
+- 保留原页面操作与草稿，自动安装默认关闭；安装前确认，遇到未保存修改或运行任务时暂停。
+
 ## 0.18.1 (2026-10-27)
 
 - Keep this component's own update entry visible when installed transitively through Suite. Confirm whole-Suite update scope before opening its controls.
