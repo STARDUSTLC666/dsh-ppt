@@ -1,3 +1,4 @@
+import { registerUpdates } from '@stardustlc/dsh-updates'
 /**
  * dsh-ppt —— 演示文稿技能 + 工具插件。
  *
@@ -39,6 +40,8 @@ export interface PptPluginContext {
 }
 
 export function apply(ctx: PptPluginContext, config: Config = {}): void {
+  registerUpdates(ctx, { name: "dsh-ppt" })
+
   const resolved = resolvePptConfig(config)
   const warn = (message: string): void => { ctx.logger?.warn?.(message) }
   const disposers: Array<() => void> = []

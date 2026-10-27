@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "DSH 演示文稿插件：生成 HTML、可编辑 PPTX 和工程文件，支持数字溯源、现场推演与可选 AI 看图修复。",
   "type": "module",
   "main": "lib/index.js",
@@ -30,7 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/build-updates.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm run build && node --test \"test/*.test.mjs\"",
     "test:core": "node --test \"test/*.test.mjs\"",
@@ -41,12 +41,12 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
+      "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-sidebar"
-      ],
-      "platform": "web"
+      ]
     }
   },
   "keywords": [
@@ -63,7 +63,8 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -83,7 +84,8 @@
     "@office-kit/pptx": "0.21.0",
     "csv-parse": "6.1.0",
     "fflate": "0.8.3",
-    "jsep": "1.4.0"
+    "jsep": "1.4.0",
+    "@stardustlc/dsh-updates": "0.1.0"
   },
   "peerDependencies": {
     "@deepseek-ai/libreoffice-kit": "0.1.5"

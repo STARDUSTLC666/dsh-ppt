@@ -440,6 +440,9 @@ const fieldId=React.useId();
             }
             function source(card) { return card.reference ? h('blockquote', null, h('small', { className: 'muted' }, card.reference === 'material' ? L('补充材料中的原文', 'Quote from supporting material') : L('幻灯片中的原文', 'Quote from slides')), h('pre', null, card.quote)) : h('p', { className: 'muted' }, L('未匹配到材料原文，请核对或补充依据。', 'No matching source quote. Verify or add supporting evidence.')); }
             const last = run?.questions.at(-1);
+// Update protection: dsh-ppt.coaching
+__stardustUpdatesGuard(React, "dsh-ppt.coaching", { dirty: !!last && !last.feedback && !!answer.trim() && answer.trim() !== (last.answer || ''), busy });
+
             useEffect(() => {
                 if (!last || last.feedback || !answer.trim() || answer.trim() === (last.answer || ''))
                     return;
@@ -467,6 +470,9 @@ const fieldId=React.useId();
             const [scope, setScope] = useState(project.slides.length > 12 ? 'current' : 'all'), [repairs, setRepairs] = useState(1);
             const [run, setRun] = useState(null), [history, setHistory] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('');
             const [compare, setCompare] = useState(''), [pictures, setPictures] = useState({}), [loading, setLoading] = useState(false);
+// Update protection: dsh-ppt.visual
+__stardustUpdatesGuard(React, "dsh-ppt.visual", { busy: busy || loading });
+
             const active = useRef(null), alive = useRef(true), current = useRef(null), runRef = useRef(null), progressVersion = useRef(0), routeInitialized = useRef(false);
             current.current = { project, selected, blocked };
             runRef.current = run;
@@ -598,6 +604,9 @@ const fieldId=React.useId();
             const baseline = Object.fromEntries(model.metrics.filter(m => m.kind === 'input').map(m => [m.id, String(m.value)]));
             const [parameters, setParameters] = useState(baseline), [updates, setUpdates] = useState({}), [sourceId, setSourceId] = useState(model.sources[0]?.id || '');
             const [metricId, setMetricId] = useState(model.metrics[0]?.id || ''), [preview, setPreview] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [valid, setValid] = useState(true), [saveAs, setSaveAs] = useState(true), [readingFile, setReadingFile] = useState(false);
+// Update protection: dsh-ppt.data
+__stardustUpdatesGuard(React, "dsh-ppt.data", { busy: busy || readingFile });
+
             const pending = useRef(null), alive = useRef(true), reading = useRef(0), latest = useRef(''), guard = useRef(false);
             const numeric = Object.fromEntries(Object.entries(parameters).map(([id, value]) => [id, value.trim() === '' ? null : Number(value)]));
             const inputsValid = model.metrics.filter(m => m.kind === 'input').every(m => typeof numeric[m.id] === 'number' && Number.isFinite(numeric[m.id]) && numeric[m.id] >= m.min && numeric[m.id] <= m.max && Math.abs((numeric[m.id] - m.min) / m.step - Math.round((numeric[m.id] - m.min) / m.step)) <= 1e-6);
@@ -729,6 +738,9 @@ function requestNavigation(target){if(busy)return;if(dataDirty){setActiveTab('da
             if (!imageLoader.current)
                 imageLoader.current = createImageLoader();
             const imagePending = imageLoader.current.pending;
+// Update protection: dsh-ppt
+__stardustUpdatesGuard(React, "dsh-ppt", { dirty: dirty || dataDirty, busy: busy || imagePending });
+
             const nonce = useRef(crypto.randomUUID());
             const dataCommand = useRef(0);
             const previewDocument = useMemo(() => project?.html ? editorHtml(project.html, nonce.current) : '', [project?.html]);
