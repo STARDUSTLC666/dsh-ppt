@@ -1,4 +1,4 @@
 overrides:
   "@deepseek-ai/libreoffice-kit>fflate": 0.8.3
 minimumReleaseAgeExclude:
-  - "@stardustlc/dsh-updates@0.1.0 || 0.1.1 || 0.1.2"
+  - "@stardustlc/dsh-updates@0.1.0 || 0.1.1 || 0.1.2 || 0.1.3"
