@@ -1,22 +1,22 @@
 # dsh-ppt
 
-Optional **visual review and repair** inspects images rendered from the actual PPTX, highlights problem regions, creates a formatting-only copy and renders it again for rechecking. The original stays intact. See [visual review](docs/VISUAL.md#english).
-
 [中文](README.md)
 
 ![dsh-ppt whale girl plugin cover](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)
 
-Turn source material into an HTML slideshow, editable PPTX and a reusable project.
-
-Optional **AI review** and **rehearsal** reuse models configured in DSH. Both are off by default: download the finished presentation directly, or explicitly start a bounded rehearsal. Compare proposed wording edits, save selected changes and backup Q&A slides to an undoable copy, and export Q&A with an evidence checklist. See [the rehearsal guide](docs/COACHING.md#english). AI suggestions are not fact checks.
+Turn source material into a finished HTML slideshow, editable PPTX and reusable project bundle. Edit in DSH, trace numeric sources and explore live scenarios; AI review, rehearsal and visual repair are optional, so you can download the finished deck directly.
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
 Feedback and contributions are welcome: report [issues](https://github.com/STARDUSTLC666/dsh-ppt/issues) or submit [pull requests](https://github.com/STARDUSTLC666/dsh-ppt/pulls).
 
-Open the new native sidebar workbench after updating and restarting DSH. Settings remains available. See the [workbench guide and validation boundaries](docs/WORKBENCH.md).
+Open the workbench from the native DSH sidebar. See the [workbench guide](docs/WORKBENCH.md) for configuration and operating boundaries.
 
 ## What it does
+
+Optional **visual review and repair** inspects images rendered from the actual PPTX, highlights problem regions, creates a formatting-only copy and renders it again for rechecking. The original stays intact. See [visual review](docs/VISUAL.md#english).
+
+Optional **AI review** and **rehearsal** reuse models configured in DSH. Both are off by default: download the finished presentation directly, or explicitly start a bounded rehearsal. Compare proposed wording edits, save selected changes and backup Q&A slides to an undoable copy, and export Q&A with an evidence checklist. See [the rehearsal guide](docs/COACHING.md#english). AI suggestions are not fact checks.
 
 - Create branded decks with text, images, tables and native charts.
 - Optionally trace numbers to material, CSV cells or formulas; adjust assumptions, preview affected slides, and save an undoable copy. HTML stays interactive; PPTX includes confirmed static values with formulas and assumptions. See the [data guide](docs/DATA.md#english).
