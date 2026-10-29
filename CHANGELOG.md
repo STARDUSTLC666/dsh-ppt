@@ -4,6 +4,11 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.20.0 (2026-10-29)
+
+- 工程库新增关键词搜索和最近 / 最早更新、自然标题排序；保留返回列表时的筛选条件，提供无匹配提示和清空搜索。
+- Add project search and updated / oldest / natural-title sorting, retained filters on return, and a clear no-results state.
+
 ## 0.19.1 (2026-10-29)
 
 - 同步仓库与 npm 的简明介绍、中英文 README 和反馈入口；本次为文档与包元数据更新。

@@ -14,6 +14,7 @@ Open the workbench from the native DSH sidebar. See the [workbench guide](docs/W
 
 ## What it does
 
+- Search projects and sort by update time or natural title; keep filters when returning to the library.
 Optional **visual review and repair** inspects images rendered from the actual PPTX, highlights problem regions, creates a formatting-only copy and renders it again for rechecking. The original stays intact. See [visual review](docs/VISUAL.md#english).
 
 Optional **AI review** and **rehearsal** reuse models configured in DSH. Both are off by default: download the finished presentation directly, or explicitly start a bounded rehearsal. Compare proposed wording edits, save selected changes and backup Q&A slides to an undoable copy, and export Q&A with an evidence checklist. See [the rehearsal guide](docs/COACHING.md#english). AI suggestions are not fact checks.
