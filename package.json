@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
-  "version": "0.19.0",
-  "description": "DSH 演示文稿插件：生成 HTML、可编辑 PPTX 和工程文件，支持数字溯源、现场推演与可选 AI 看图修复。",
+  "version": "0.19.1",
+  "description": "DSH 演示文稿：HTML / 可编辑 PPTX / 工程包、轻量编辑、数字溯源与现场推演，可选 AI 审阅。欢迎提交 issues 和 PR。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

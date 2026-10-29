@@ -4,6 +4,11 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.19.1 (2026-10-29)
+
+- 同步仓库与 npm 的简明介绍、中英文 README 和反馈入口；本次为文档与包元数据更新。
+- Sync npm descriptions and both README guides with the repository, including issue and pull-request links.
+
 ## 0.19.0 (2026-10-28)
 
 - 下载面板区分分享成品包与完整工程包。分享包包含当前 PPTX、离线 HTML 和逐页讲稿，不打包 JSON 工程；工程备份入口继续保留。
