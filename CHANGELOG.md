@@ -4,6 +4,11 @@
 
 [历史英文记录](docs/CHANGELOG.en.md)
 
+## 0.20.1 (2026-10-29)
+
+- 补齐中英文使用流程：准备、入口、具体操作与结果核对；新增累计 npm 下载徽章并保留月统计。
+- Add practical getting-started workflows and lifetime npm download badges alongside monthly counts.
+
 ## 0.20.0 (2026-10-29)
 
 - 工程库新增关键词搜索和最近 / 最早更新、自然标题排序；保留返回列表时的筛选条件，提供无匹配提示和清空搜索。

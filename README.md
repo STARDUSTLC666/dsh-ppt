@@ -6,7 +6,9 @@
 
 把材料制作成可直接交付的 HTML 放映、可编辑 PPTX 与工程包。可在 DSH 工作台轻量编辑、核对数字来源和现场推演；AI 预审、模拟答辩与看图修复均按需选择，也可直接下载成品。
 
-[![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
+[![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
+
+[下载统计说明](https://github.com/STARDUSTLC666/dsh-suite/blob/npm-downloads/README.md)
 
 欢迎使用，遇到问题或有改进建议，请提交 [issues](https://github.com/STARDUSTLC666/dsh-ppt/issues) 和 [PR](https://github.com/STARDUSTLC666/dsh-ppt/pulls)。
 
@@ -37,7 +39,11 @@ dsh plugin --profile desktop add dsh-ppt
 
 ## 开始使用
 
-可说：“把这份材料做成可直接交付的演示文稿，生成 HTML、PPTX 和工程文件。”0.8.0 起可在「设置 → 演示文稿」轻量修改自产工程，也可在 PowerPoint / WPS 中继续编辑 PPTX。
+1. 在目标工作区提供材料、用途、听众和页数，例如“做成可交付的演示文稿，生成 HTML、PPTX 和工程文件”。
+2. 从左侧栏打开“演示文稿”，在工程库搜索或选择生成的项目。
+3. 选择页面编辑文字、图片或顺序，保存后核对预览；需要时渲染当前 PPTX 检查实际画面。
+4. 按需要主动开启 AI 预审、模拟答辩或看图修复；直接下载成品不要求这些步骤。
+5. 下载“分享成品包”交付，或下载“完整工程包”保留编辑能力；在目标播放器或 Office 中再核对一次。
 
 Office 中的修改不会同步回 JSON。插件检测到成品在外部修改，或旧工程没有校验记录时，会拒绝直接覆盖；可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 生成新文件，保留原成品。副本不包含 Office 手工修改。
 
