@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
-  "version": "0.20.2",
-  "description": "DSH 演示文稿：HTML / 可编辑 PPTX / 工程包、工程检索与轻量编辑、数字溯源和现场推演，可选 AI 审阅。欢迎提交 issues 和 PR。",
+  "version": "0.20.3",
+  "description": "给出材料，拿到可以交付的演示文稿。 可直接下载成品 欢迎提交 issues 和 PR。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
