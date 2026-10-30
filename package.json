@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.20.1",
+  "version": "0.20.2",
   "description": "DSH 演示文稿：HTML / 可编辑 PPTX / 工程包、工程检索与轻量编辑、数字溯源和现场推演，可选 AI 审阅。欢迎提交 issues 和 PR。",
   "type": "module",
   "main": "lib/index.js",
@@ -27,7 +27,8 @@
     "README.md",
     "README.en.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "assets/plugin-icon.webp"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/build-updates.mjs",
@@ -94,5 +95,6 @@
     "@deepseek-ai/libreoffice-kit": {
       "optional": true
     }
-  }
+  },
+  "icon": "./assets/plugin-icon.webp"
 }

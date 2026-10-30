@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.20.2 (2026-10-30)
+
+- 原生插件列表与详情新增专门生成的鲸鱼娘图标：大头像、独立功能符号、透明留白，适合 30 / 36 px 显示；原封面保留。
+- Add purpose-made whale-girl artwork with a distinct function emblem, transparent padding and small-size readability; preserve the original cover.
+
+
 [返回简介](README.md) · [使用说明](docs/USAGE.md) · [验证记录](docs/VALIDATION.md)
 
 [历史英文记录](docs/CHANGELOG.en.md)
