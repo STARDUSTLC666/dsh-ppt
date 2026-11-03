@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/build-updates.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm run build && node --test \"test/*.test.mjs\"",
+    "test": "npm run build && node --test \"test/*.test.mjs\"",
     "test:core": "node --test \"test/*.test.mjs\"",
     "smoke:cli": "node skills/dsh-ppt/scripts/build-deck.mjs --title \"DSH PPT Smoke\" --content @smoke/sample-deck.md --theme data --lang zh --out .smoke-deck"
   },
