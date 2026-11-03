@@ -1,41 +1,44 @@
-# dsh-ppt
+**简体中文** · [English](README.en.md)
 
-[English](README.en.md)
+# PPT
 
-![dsh-ppt 鲸鱼娘插件封面](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)
-
-把材料制作成可直接交付的 HTML 放映、可编辑 PPTX 与工程包。可在 DSH 工作台轻量编辑、核对数字来源和现场推演；AI 预审、模拟答辩与看图修复均按需选择，也可直接下载成品。
+**给出材料，拿到可以交付的演示文稿。**
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
-[下载统计说明](https://github.com/STARDUSTLC666/dsh-suite/blob/npm-downloads/README.md)
+**[安装使用](#安装) · [使用流程](#开始使用) · [完整说明](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)**
 
-欢迎使用，遇到问题或有改进建议，请提交 [issues](https://github.com/STARDUSTLC666/dsh-ppt/issues) 和 [PR](https://github.com/STARDUSTLC666/dsh-ppt/pulls)。
-
-从 DSH 原生侧栏打开工作台；配置与操作边界见[工作台说明](docs/WORKBENCH.md)。
+<picture>
+  <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-dark.svg">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-dark.svg">
+  <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-light.svg" alt="给出材料，拿到可以交付的演示文稿。 · 流程示意" width="100%">
+</picture>
 
 ## 功能
 
-- 工程库按关键词搜索，按最近 / 最早更新或标题排序；返回列表时保留筛选条件。
-- 生成图文、表格、原生图表和品牌化演示文稿。
-- 可选数字溯源与现场推演：点击数字追到原始材料、CSV 单元格或公式；调整假设、预览影响并确认保存。HTML 保留交互，PPTX 保存静态结果及公式 / 假设，见[数据说明](docs/DATA.md)。
-- 在设置页编辑文字和图片、调整顺序、复制或删除页面，并支持撤销。
-- 提供质量检查与可选的最终 PPTX 图片 / PDF 渲染。
-- 可选 AI 视觉检查：看实际 PPTX 图片，标记问题区域，调整排版并另存副本，重新渲染复查；支持前后对比、停止、撤销与检查记录。见[看图修复](docs/VISUAL.md)。
-- 下载按页整理的 Markdown 讲稿，保留当前版本的标题与演讲备注。
-- 下载时可选「分享成品包」（PPTX、离线 HTML、当前讲稿）或「完整工程包」（含 JSON 工程）。分享包仍保留已绑定的来源摘录与用户填写内容，详见[下载说明](docs/WORKBENCH.md#下载与分享--download-and-share)。
-- 可选 AI 预审与模拟答辩：复用 DSH 已配置模型，按需提问、比较改稿、另存可撤销副本，并导出问答与待补充材料清单。默认关闭，直接下载成品无需预审。
-- 键盘操作：Ctrl/⌘+S 保存、Esc 取消或返回、Alt+←/→ 切换页面；有未保存修改时离开会提示。
+- 生成 HTML 放映、可编辑 PPTX 与工程包。
+- 按需编辑文字、图片与页序，支持撤销。
+- 可选数字溯源、现场推演、AI 预审与答辩演练。
+
+<details>
+<summary>查看实际示例</summary>
+
+![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-zh.webp)
+
+图片来自验证环境的真实界面或示例 PPTX 渲染，使用示例数据。
+
+</details>
 
 ## 安装
 
-桌面版可在「插件」面板按包名 `dsh-ppt` 安装。已配置 dsh 命令时也可使用：
+在 DSH 桌面版「插件」面板安装 `dsh-ppt`。已配置命令行时也可使用：
 
 ```bash
 dsh plugin --profile desktop add dsh-ppt
 ```
 
-网页版把命令中的 `desktop` 改为 `web`。安装后重启 DSH。
+网页版把 `desktop` 改为 `web`；安装后重启对应的 DSH。宿主要求以包声明 `>=0.2.1-rc.3` 为准。
 
 ## 开始使用
 
@@ -45,29 +48,32 @@ dsh plugin --profile desktop add dsh-ppt
 4. 按需要主动开启 AI 预审、模拟答辩或看图修复；直接下载成品不要求这些步骤。
 5. 下载“分享成品包”交付，或下载“完整工程包”保留编辑能力；在目标播放器或 Office 中再核对一次。
 
-Office 中的修改不会同步回 JSON。插件检测到成品在外部修改，或旧工程没有校验记录时，会拒绝直接覆盖；可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 生成新文件，保留原成品。副本不包含 Office 手工修改。
+可以这样说：
 
-成品页下方可主动开启「AI 预审」或「模拟答辩」。前者根据材料模拟质疑与回答，后者由 AI 一次问一题、你来回答。可以先选模型、听众、强度和范围，再决定是否发送。具体流程与调用上限见[演练说明](docs/COACHING.md)。AI 建议不等于事实核验；普通成品生成、编辑和下载仍不要求配置模型。
+> 根据这些材料制作演示文稿，提供 HTML、可编辑 PPTX 和工程包，先确认听众与页数。
 
-## 依赖与配置
+## 开始前要知道
 
-普通生成不需要 Office。最终 PPTX 渲染使用可选的官方 LibreOffice Kit；依赖版本、字体环境和安装方法见使用说明。
+可直接下载成品；AI 预审与演练按需开启。Office 修改不会自动同步回工程。
 
-详细配置、工具参数与排错见[使用说明](docs/USAGE.md)。从源码独立开发时，Node 要求以 [package.json](package.json) 为准。
-
-## 文档
-
-- [使用与排错](docs/USAGE.md)
-- [更新记录](CHANGELOG.md)
-- [验证范围与历史记录](docs/VALIDATION.md)
-- [问题反馈与功能建议](https://github.com/STARDUSTLC666/dsh-ppt/issues)
+配置、完整工具与排错见[详细使用说明](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)。
 
 ## 插件更新
 
-需要 DSH 0.2.1-rc.3 或更新版本。更新控件直接位于原有工作台内容末尾；没有工作台的插件，位于原生插件详情页底部。检查、更新记录和偏好在原地展开，不增加独立更新页面或设置菜单。自动检查默认开启；**自动安装默认关闭**，明确授权后才会在空闲且没有未保存修改时安装兼容的稳定补丁。开关按插件独立保存，可关闭、推迟或忽略提醒；不会强制重启 DSH、升级 DSH 本体或替换本地源码安装。Suite 组件在当前页面底部明确说明并操作 Suite 整包更新。
+在工作台或原生插件详情页底部检查更新。默认自动检查，**默认不自动安装**；是否安装、何时重启由你决定。Suite 管理的组件随整包更新。[查看更新规则](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)。
 
-旧版用户先在官方插件管理中手动更新一次，之后才会获得此入口。发布到 npm 不会直接替换用户已经安装的版本。
+## 文档
+
+- [详细使用、配置与边界](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)
+- [更新记录](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/CHANGELOG.md)
+- [验证范围与历史](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/VALIDATION.md)
+
+## 反馈与贡献
+
+如果插件帮到了你，欢迎 Star，让更多人发现它。问题和建议请提交 [Issues](https://github.com/STARDUSTLC666/dsh-ppt/issues)，也欢迎代码与文档 [PR](https://github.com/STARDUSTLC666/dsh-ppt/pulls)。反馈时附上版本与复现步骤，并移除凭据。
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/LICENSE)
+
+<a id="依赖与配置"></a>

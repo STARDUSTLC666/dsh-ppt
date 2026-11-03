@@ -1,11 +1,18 @@
 # 更新记录
 
-## 0.20.3 (2026-11-03)
+## 0.20.4 (2026-11-03)
 
 - 工作台改用宿主主题 token（暗色不再写死浅色）；错误恢复改用共享 Status/Button 与重试，首次空态复用 Empty，退出全屏按钮仅在全屏显示。
 - The workbench follows host theme tokens, uses shared status/retry and empty states, and only shows the exit-fullscreen control in fullscreen.
 - 同步共享 workbench-ui v1.1：Page 外的 Empty / Dialog / Status 自带样式与 `.dshw` 主题作用域，Status 新增 warn 色调。
 - Sync workbench-ui v1.1: Empty / Dialog / Status now carry their own styles and `.dshw` theme scope outside Page, and Status gains a warn tone.
+
+## 0.20.3 (2026-10-30)
+
+- 重整中英文首页：用途、三步流程图、安装入口与操作示例；详细配置与边界集中到完整说明。
+- 保留下载统计、独立更新选择、问题反馈和贡献入口；原封面与运行功能保留。
+- Refresh bilingual landing pages, workflow artwork, quick starts and reference navigation.
+
 
 ## 0.20.2 (2026-10-30)
 
