@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.20.5 (2026-11-04)
+
+- 同步共享界面：嵌入设置时继承宿主底色，输入框跟随主题，空状态保持可读宽度；新版 DSH 可显示插件设置图标。
+- Align embedded surfaces, themed inputs, readable empty states and optional native settings icons.
+
+
 ## 0.20.4 (2026-11-03)
 
 - 工作台改用宿主主题 token（暗色不再写死浅色）；错误恢复改用共享 Status/Button 与重试，首次空态复用 Empty，退出全屏按钮仅在全屏显示。
