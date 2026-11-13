@@ -248,3 +248,34 @@ test('长主题标题不溢出：按显示宽度判定，端到端无 title-over
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('计时守恒与互动可用性：任意模式/时长下各页之和等于设定值，互动不低于 3 分钟', () => {
+  for (const lessonType of LESSON_TYPES) {
+    for (const duration of [15, 30, 45, 60, 90]) {
+      const plan = generateLessonPlan({ topic: '用户访谈', lessonType, duration, language: 'zh' })
+      // ① 总和必须等于设定时长
+      assert.equal(plan.totalTiming, duration, `${lessonType}/${duration} 总计时 ${plan.totalTiming} ≠ ${duration}`)
+      const sum = plan.slides.reduce((n, s) => n + (s.timing || 0), 0)
+      assert.equal(sum, duration, `${lessonType}/${duration} 各页之和 ${sum} ≠ ${duration}`)
+      // ② 互动页要够用（≥3 分钟），否则页面上的活动步骤做不完
+      for (const slide of plan.slides.filter(s => s.activity === 'interaction')) {
+        assert.ok((slide.timing || 0) >= 3, `${lessonType}/${duration} 互动「${slide.title}」仅 ${slide.timing} 分钟`)
+      }
+      // ③ 主活动与步骤合起来要有实际时长
+      const mainActivity = plan.slides
+        .filter(s => s.activity === 'main-activity' || s.activity === 'activity-step')
+        .reduce((n, s) => n + (s.timing || 0), 0)
+      if (plan.slides.some(s => s.activity === 'main-activity')) {
+        assert.ok(mainActivity >= 4, `${lessonType}/${duration} 主活动合计仅 ${mainActivity} 分钟`)
+      }
+    }
+  }
+})
+
+test('教案时间轴不出现 0 分钟的主活动行，且合计与时长一致', async () => {
+  const { renderLessonPlanMarkdown } = await import('../skills/dsh-ppt/scripts/deck-advanced.mjs')
+  const plan = generateLessonPlan({ topic: '用户访谈', duration: 45, language: 'zh' })
+  const md = renderLessonPlanMarkdown(plan)
+  assert.doesNotMatch(md, /\|\s*主活动\s*\|\s*0\s*\|/, '主活动不应显示为 0 分钟')
+  assert.match(md, new RegExp(`\\|\\s*\\*\\*?合计\\*\\*?\\s*\\|\\s*\\*\\*?${plan.totalTiming}\\*\\*?\\s*\\|`))
+})

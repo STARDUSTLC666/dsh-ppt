@@ -53,16 +53,16 @@ export const BLOOM_VERBS = {
 
 /** 互动活动类型（duration 仅作参考说明，实际时间由总时长预算分配） */
 export const INTERACTION_TYPES = {
-  poll: { zh: '即时投票', en: 'Live Poll', icon: '📊' },
-  quiz: { zh: '快速测验', en: 'Quick Quiz', icon: '❓' },
-  thinkPairShare: { zh: '思考-配对-分享', en: 'Think-Pair-Share', icon: '🤝' },
-  groupDiscussion: { zh: '小组讨论', en: 'Group Discussion', icon: '💬' },
-  handsOn: { zh: '动手实操', en: 'Hands-on Exercise', icon: '⌨️' },
-  caseAnalysis: { zh: '案例分析', en: 'Case Analysis', icon: '📋' },
-  peerReview: { zh: '同伴互评', en: 'Peer Review', icon: '👥' },
-  exitTicket: { zh: '出口票/离场卡', en: 'Exit Ticket', icon: '🎫' },
-  reflection: { zh: '反思日志', en: 'Reflection Journal', icon: '📝' },
-  galleryWalk: { zh: '画廊漫步', en: 'Gallery Walk', icon: '🖼️' },
+  poll: { zh: '即时投票', en: 'Live Poll', icon: '📊', minutes: 3 },
+  quiz: { zh: '快速测验', en: 'Quick Quiz', icon: '❓', minutes: 4 },
+  thinkPairShare: { zh: '思考-配对-分享', en: 'Think-Pair-Share', icon: '🤝', minutes: 5 },
+  groupDiscussion: { zh: '小组讨论', en: 'Group Discussion', icon: '💬', minutes: 8 },
+  handsOn: { zh: '动手实操', en: 'Hands-on Exercise', icon: '⌨️', minutes: 10 },
+  caseAnalysis: { zh: '案例分析', en: 'Case Analysis', icon: '📋', minutes: 10 },
+  peerReview: { zh: '同伴互评', en: 'Peer Review', icon: '👥', minutes: 8 },
+  exitTicket: { zh: '出口票/离场卡', en: 'Exit Ticket', icon: '🎫', minutes: 3 },
+  reflection: { zh: '反思日志', en: 'Reflection Journal', icon: '📝', minutes: 5 },
+  galleryWalk: { zh: '画廊漫步', en: 'Gallery Walk', icon: '🖼️', minutes: 8 },
 }
 
 const VISUAL_LABELS = {
@@ -172,6 +172,44 @@ function fitTitle(text, langKey, layout = 'bullets') {
   return clampWidth(text, limit)
 }
 
+/** 把 slides 的总计时校正到 target 分钟；优先压缩概念/示例等弹性页，互动与主活动保底。 */
+function balanceTiming(slides, target) {
+  const total = () => slides.reduce((sum, s) => sum + (s.timing || 0), 0)
+  let diff = total() - target
+  if (diff === 0) return slides
+
+  // 可压缩页：保留至少 1 分钟；互动/主活动/评价这类参与型环节下限更高。
+  const floorOf = slide => {
+    if (slide.activity === 'interaction') return Math.min(3, slide.timing || 1)
+    if (slide.activity === 'main-activity' || slide.activity === 'activity-step') return 2
+    if (slide.activity === 'formative-check') return 1
+    if (slide.timing > 0) return 1
+    return 0
+  }
+  const shrinkables = slides.filter(s => (s.timing || 0) > floorOf(s))
+
+  while (diff > 0 && shrinkables.length > 0) {
+    // 每轮从最长的页各扣 1 分钟，避免把某一页压到不可用
+    shrinkables.sort((a, b) => (b.timing || 0) - (a.timing || 0))
+    let shrunk = false
+    for (const slide of shrinkables) {
+      if (diff <= 0) break
+      if ((slide.timing || 0) > floorOf(slide)) { slide.timing -= 1; diff -= 1; shrunk = true }
+    }
+    if (!shrunk) break
+  }
+
+  // 若仍不足（页数太多、每页都已到下限），把多出来的量补给最长的页，至少保证总数一致
+  if (diff !== 0) {
+    const flexible = slides.filter(s => s.timing !== undefined && s.timing > 0)
+    if (flexible.length > 0) {
+      flexible.sort((a, b) => (b.timing || 0) - (a.timing || 0))
+      flexible[0].timing = Math.max(0, (flexible[0].timing || 0) - diff)
+    }
+  }
+  return slides
+}
+
 // ---------------------------------------------------------------------------
 // 自动推断
 // ---------------------------------------------------------------------------
@@ -200,17 +238,37 @@ function calculateTimeAllocation(totalMinutes, lessonType, hasInteractions, hasA
   const weights = { ...model.weights }
   if (!hasInteractions) { weights.activity += weights.interactions; weights.interactions = 0 }
   if (!hasAssessment) { weights.activity += weights.assessment; weights.assessment = 0 }
+  // 各段最小可用时间：低于这个值环节没有实际意义（例如主活动 0 分钟、互动 1 分钟）。
+  const MINIMUM = { concepts: 6, examples: 4, activity: 8, interactions: 3, assessment: 3 }
   const keys = ['concepts', 'examples', 'activity', 'interactions', 'assessment']
   const weightTotal = keys.reduce((sum, k) => sum + weights[k], 0) || 1
   const alloc = { objectives: fixed.objectives, agenda: fixed.agenda, hook: fixed.hook, summary: fixed.summary, homework: fixed.homework }
-  let used = fixedTotal
   for (const key of keys) {
-    alloc[key] = Math.round(flexible * weights[key] / weightTotal)
-    used += alloc[key]
+    alloc[key] = weights[key] > 0 ? Math.round(flexible * weights[key] / weightTotal) : 0
   }
-  // 修正四舍五入误差，把差额补到 concepts（内容主段），保证总和精确等于 duration。
-  alloc.concepts += totalMinutes - used
-  if (alloc.concepts < 0) alloc.concepts = 0
+
+  // ① 先补足低于最小值的环节，从占比最大且富余最多的段落里扣。
+  for (const key of keys) {
+    if (weights[key] <= 0) { alloc[key] = 0; continue }
+    if (alloc[key] >= MINIMUM[key]) continue
+    const need = MINIMUM[key] - alloc[key]
+    const donors = keys
+      .filter(k => k !== key && weights[k] > 0 && alloc[k] > MINIMUM[k])
+      .sort((a, b) => (alloc[b] - MINIMUM[b]) - (alloc[a] - MINIMUM[a]))
+    let remaining = need
+    for (const donor of donors) {
+      if (remaining <= 0) break
+      const spare = alloc[donor] - MINIMUM[donor]
+      const take = Math.min(spare, remaining)
+      alloc[donor] -= take
+      remaining -= take
+    }
+    alloc[key] += need - remaining
+  }
+
+  // ② 修正四舍五入误差，把差额补到 concepts（内容主段），保证总和精确等于 duration。
+  const used = fixedTotal + keys.reduce((sum, k) => sum + alloc[k], 0)
+  alloc.concepts = Math.max(0, alloc.concepts + (totalMinutes - used))
   return alloc
 }
 
@@ -314,10 +372,10 @@ function selectInteraction(lessonType, bloomLevels, langKey, seed, index) {
     ? {
         poll: [`Which aspect of today's topic is most relevant to you?`, `Rate your confidence level (1-5)`],
         quiz: [`Quick question: What is the key principle?`, `Multiple choice: Which approach is best for X?`],
-        thinkPairShare: [`Think: What's your answer? (1 min)`, `Pair: Discuss with a neighbor (2 min)`, `Share: Volunteer to share (2 min)`],
+        thinkPairShare: [`Think: work out your own answer first`, `Pair: discuss and compare with a neighbor`, `Share: volunteers present to the group`],
         groupDiscussion: [`Discuss in groups of 3-4`, `Each group presents one key insight`, `Synthesize: What patterns emerged?`],
         handsOn: [`Follow the step-by-step guide`, `Complete the exercise independently`, `Compare results with a partner`],
-        caseAnalysis: [`Read the case (3 min)`, `Analyze: What would you do?`, `Debate: Alternative approaches`],
+        caseAnalysis: [`Read the case silently`, `Analyze: What would you do?`, `Debate: Alternative approaches`],
         peerReview: [`Exchange work with a partner`, `Use the rubric to give feedback`, `Discuss improvements`],
         exitTicket: [`One thing you learned`, `One question you still have`, `Rate today's session (1-5)`],
         reflection: [`What was your "aha!" moment?`, `How will you apply this?`, `What needs more practice?`],
@@ -326,10 +384,10 @@ function selectInteraction(lessonType, bloomLevels, langKey, seed, index) {
     : {
         poll: [`今天的主题中，哪方面与你最相关？`, `你的自信度打几分 (1-5)？`],
         quiz: [`快速提问：核心原则是什么？`, `单选题：场景X最适合哪种方法？`],
-        thinkPairShare: [`独立思考：你的答案是什么？(1分钟)`, `两两讨论：分享你的想法 (2分钟)`, `全班分享：自愿者展示 (2分钟)`],
+        thinkPairShare: [`独立思考：先各自写出你的答案`, `两两讨论：与同桌交换并对比想法`, `全班分享：自愿者向全班展示`],
         groupDiscussion: [`3-4人小组讨论`, `每组输出一个核心洞见`, `综合：发现了什么共同模式？`],
         handsOn: [`跟随步骤指南操作`, `独立完成练习`, `与搭档对比结果`],
-        caseAnalysis: [`阅读案例 (3分钟)`, `分析：你会怎么做？`, `辩论：有什么替代方案？`],
+        caseAnalysis: [`静读案例材料`, `分析：你会怎么做？`, `辩论：有什么替代方案？`],
         peerReview: [`与搭档交换作业`, `用评分表给予反馈`, `讨论改进方向`],
         exitTicket: [`今天学到的一点`, `仍有的一个疑问`, `给今天打分 (1-5)`],
         reflection: [`你的"顿悟时刻"是什么？`, `你打算怎么应用？`, `哪里还需要练习？`],
@@ -364,6 +422,7 @@ function selectInteraction(lessonType, bloomLevels, langKey, seed, index) {
     id: selected.id,
     icon: selected.icon,
     name: selected[langKey],
+    minutes: selected.minutes,
     prompts: prompts[selected.id] || [en ? 'Activity prompt 1' : '活动提示 1'],
     notes: notes[selected.id] || (en ? 'Facilitate the activity.' : '主持该活动。'),
   }
@@ -709,9 +768,31 @@ export function generateLessonPlan(options = {}) {
 
   // 5. 核心概念 + 概念间互动
   const concepts = generateConcepts(topic, lessonType, duration, langKey, seed)
-  const conceptTimes = splitMinutes(alloc.concepts, concepts.length)
   const interactionSlots = includeInteractions && lessonType !== 'micro' ? Math.min(concepts.length - 1, 3) : 0
-  const interactionTimes = splitMinutes(alloc.interactions, interactionSlots)
+  // 先按「活动自身标准时长」为每个互动预留时间；不足时从概念段扣，
+  // 保证各页 timing 之和仍等于 duration，也不会出现「页面写 5 分钟、时间轴给 1 分钟」的矛盾。
+  const planned = []
+  for (let k = 0; k < interactionSlots; k++) {
+    const probe = selectInteraction(lessonType, bloomLevels, langKey, seed, k)
+    planned.push(probe.minutes || 0)
+  }
+  let interactionBudget = alloc.interactions
+  let over = planned.reduce((a, b) => a + b, 0) - interactionBudget
+  if (over > 0) {
+    // 缺口按「弹性段」比例分摊扣减（概念 → 示例 → 主活动），各自保留最小值，
+    // 这样总时长始终守恒，不会出现 45 分钟的课跑出 64 分钟。
+    const FLOOR = { concepts: 6, examples: 4, activity: 8 }
+    for (const key of ['concepts', 'examples', 'activity']) {
+      if (over <= 0) break
+      const spare = Math.max(0, alloc[key] - FLOOR[key])
+      const take = Math.min(spare, over)
+      alloc[key] -= take
+      over -= take
+      interactionBudget += take
+    }
+  }
+  const interactionTimes = planned.length > 0 ? planned : []
+  const conceptTimes = splitMinutes(alloc.concepts, concepts.length)
   let interactionIndex = 0
   concepts.forEach((concept, i) => {
     slides.push({
@@ -729,7 +810,7 @@ export function generateLessonPlan(options = {}) {
         title: fitTitle(`${interaction.icon} ${interaction.name}`, langKey),
         bullets: interaction.prompts,
         notes: interaction.notes,
-        timing: interactionTimes[interactionIndex] || 0,
+        timing: Math.max(interactionTimes[interactionIndex] || 0, interaction.minutes || 0),
         activity: 'interaction',
         interaction: true,
       })
@@ -752,7 +833,11 @@ export function generateLessonPlan(options = {}) {
   })
 
   // 7. 主活动
-  if (includeInteractions) {
+  // 短课（≤20 分钟）或微课放不下「主活动 + 分步」结构，直接省略，避免出现 0 分钟的环节。
+  // 主活动需要至少 6 分钟才有意义（否则就是走过场），不够时同样省略。
+  const activityBudgetOk = (alloc.activity || 0) >= 6
+  const includeMainActivity = includeInteractions && duration > 20 && lessonType !== 'micro' && activityBudgetOk
+  if (includeMainActivity) {
     const mainActivity = generateMainActivity(topic, lessonType, langKey)
     slides.push({
       layout: 'section',
@@ -854,6 +939,10 @@ export function generateLessonPlan(options = {}) {
     activity: 'closing',
   })
 
+  // 统一校正：各段最小值叠加后可能超出设定时长，这里把差额按比例压缩回非关键页，
+  // 保证「各页计时之和 == 设定时长」这条硬约束始终成立（互动页保留其活动所需的最短时间）。
+  balanceTiming(slides, duration)
+
   const totalTiming = slides.reduce((sum, s) => sum + (s.timing || 0), 0)
 
   return {
@@ -898,11 +987,15 @@ const PREP_ITEMS = {
 }
 
 function timelineGroups(slides) {
+  // 主活动的过渡页（section）与它下面的步骤页属于同一环节，合并成一行统计，
+  // 否则时间轴会出现「主活动 0 分钟 + 活动步骤 N 分钟」这种误导性拆分。
+  const MERGE = { 'main-activity': 'activity-step', 'activity-step': 'main-activity' }
   const groups = []
   for (const s of slides) {
     const label = s.activity || 'other'
     const last = groups[groups.length - 1]
-    if (last && last.activity === label) {
+    const same = last && (last.activity === label || MERGE[last.activity] === label)
+    if (same) {
       last.minutes += s.timing || 0
       last.pages += 1
     } else {
