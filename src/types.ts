@@ -3,7 +3,7 @@
 export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold'
 export type PptLanguage = 'zh' | 'en' | 'bilingual'
 export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'quote' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart'
-export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch'
+export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'lesson'
 export interface PptImageSpec { src?: string; assetId?: string; alt?: string; fit?: 'contain' | 'cover'; caption?: string }
 export interface PptChartSpec { kind?: 'column' | 'bar' | 'line' | 'pie'; categories?: Array<string | number>; series?: Array<{ name: string; values: Array<string | number> }>; rows?: Array<Array<string | number>>; unit?: string; caption?: string }
 export interface PptBrand { name?: string; primaryColor?: string; backgroundColor?: string; textColor?: string; fontFamily?: string; logo?: string | null; footer?: string }

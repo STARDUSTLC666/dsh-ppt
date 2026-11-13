@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.21.0 (2026-11-13)
+
+- 新增课件教学模板：`lesson` / `Course lesson`，结构包含课程目标、核心知识点、示例与案例、练习与互动、总结与作业；默认主题 `soft`（温暖/人本），适合培训、教学、个人分享场景。
+- Add course lesson template: `lesson` / `Course lesson` with Learning objectives, Key concepts, Examples and cases, Exercises and interaction, Summary and homework; defaults to `soft` theme (warm/human-centric), suitable for training, teaching and personal sharing.
+
 ## 0.20.5 (2026-11-04)
 
 - 同步共享界面：嵌入设置时继承宿主底色，输入框跟随主题，空状态保持可读宽度；新版 DSH 可显示插件设置图标。

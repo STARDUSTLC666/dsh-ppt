@@ -34,7 +34,7 @@ function zipEntries(buffer) {
 }
 
 test('all four scenarios expose useful outlines; unfilled templates are labelled draft', () => inDir(async dir => {
-  assert.deepEqual(listTemplates().map(s => s.id), ['weekly', 'defense', 'project', 'pitch'])
+  assert.deepEqual(listTemplates().map(s => s.id), ['weekly', 'defense', 'project', 'pitch', 'lesson'])
   for (const template of listTemplates('en')) {
     const result = await buildDeckAsync({ title: 'Report', template: template.id, lang: 'en', outputDir: dir })
     assert.equal(result.deliveryStatus, 'draft')

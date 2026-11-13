@@ -2,7 +2,7 @@
 export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
 export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'quote' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart';
-export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch';
+export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'lesson';
 export interface PptImageSpec {
     src?: string;
     assetId?: string;

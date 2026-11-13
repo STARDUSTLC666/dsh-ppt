@@ -23,6 +23,7 @@ const scenarios = [
   { id: 'defense', name: { zh: '论文答辩', en: 'Thesis defense' }, theme: 'soft', sections: [['研究问题', 'Research question'], ['相关研究', 'Related work'], ['研究方法', 'Method'], ['研究结果', 'Results'], ['结论与局限', 'Conclusions and limitations']] },
   { id: 'project', name: { zh: '项目汇报', en: 'Project update' }, theme: 'swiss', sections: [['目标与范围', 'Goals and scope'], ['进度与交付', 'Progress and delivery'], ['数据与证据', 'Evidence'], ['风险与决策', 'Risks and decisions'], ['下一步', 'Next steps']] },
   { id: 'pitch', name: { zh: '项目路演', en: 'Pitch deck' }, theme: 'velvet', sections: [['用户问题', 'Customer problem'], ['解决方案', 'Solution'], ['产品与证据', 'Product and evidence'], ['商业模式', 'Business model'], ['计划与需求', 'Plan and ask']] },
+  { id: 'lesson', name: { zh: '课件教学', en: 'Course lesson' }, theme: 'soft', sections: [['课程目标', 'Learning objectives'], ['核心知识点', 'Key concepts'], ['示例与案例', 'Examples and cases'], ['练习与互动', 'Exercises and interaction'], ['总结与作业', 'Summary and homework']] },
 ]
 
 export function listTemplates(lang = 'zh') {
