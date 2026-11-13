@@ -109,4 +109,10 @@ export type {
   PptDataModel,
   PptDataSource,
   PptDataMetric,
+  LessonTypeId,
+  AudienceLevelId,
+  LessonPlanOptions,
+  LessonPlanResult,
+  LessonCreateOptions,
+  LessonCreateResult,
 } from './types.js'

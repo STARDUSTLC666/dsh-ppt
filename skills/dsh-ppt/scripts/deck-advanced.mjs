@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, statSync, openSync, closeSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, statSync, openSync, closeSync, rmSync } from 'node:fs'
 import { resolve, dirname, extname, basename } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
@@ -6,6 +6,7 @@ import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveT
 import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, chartColors, normalizeChart } from './deck-media.mjs'
 import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
 import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
+import { LESSON_TYPES, AUDIENCE_LEVELS, INTERACTION_TYPES, BLOOM_VERBS, generateLessonPlan, renderLessonPlanMarkdown, inferLessonType } from './deck-lesson.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, buildThemePreview, listThemes, resolveTheme, resolveLanguage } from './deck-core.mjs'
@@ -25,6 +26,29 @@ const scenarios = [
   { id: 'pitch', name: { zh: '项目路演', en: 'Pitch deck' }, theme: 'velvet', sections: [['用户问题', 'Customer problem'], ['解决方案', 'Solution'], ['产品与证据', 'Product and evidence'], ['商业模式', 'Business model'], ['计划与需求', 'Plan and ask']] },
   { id: 'lesson', name: { zh: '课件教学', en: 'Course lesson' }, theme: 'soft', sections: [['课程目标', 'Learning objectives'], ['核心知识点', 'Key concepts'], ['示例与案例', 'Examples and cases'], ['练习与互动', 'Exercises and interaction'], ['总结与作业', 'Summary and homework']] },
 ]
+
+/** 课件教学模式常量与生成逻辑统一在 deck-lesson.mjs，此处转导出。 */
+export { LESSON_TYPES, AUDIENCE_LEVELS, INTERACTION_TYPES, BLOOM_VERBS, generateLessonPlan, renderLessonPlanMarkdown, inferLessonType }
+
+/** 一键出成品：生成教案 → buildDeckAsync 落盘 HTML+PPTX+JSON 三件套 → 写教案 Markdown。 */
+export async function createLessonDeck(options = {}) {
+  const plan = generateLessonPlan(options)
+  const deck = await buildDeckAsync({
+    title: plan.title,
+    slides: plan.slides,
+    theme: options.theme || 'soft',
+    lang: plan.language,
+    motion: options.motion,
+    outputDir: options.outputDir,
+    fileName: options.fileName,
+    overwrite: options.overwrite,
+    cwd: options.cwd,
+    signal: options.signal,
+  })
+  const lessonPlanPath = deck.jsonPath.slice(0, -5) + '.lesson-plan.md'
+  writeFileSync(lessonPlanPath, renderLessonPlanMarkdown(plan), 'utf8')
+  return { ...deck, lessonPlan: plan, lessonPlanPath }
+}
 
 export function listTemplates(lang = 'zh') {
   const language = resolveLanguage(lang).id === 'en' ? 'en' : 'zh'

@@ -1,5 +1,5 @@
 import type { ResolvedPptConfig } from './config.js';
-import type { DeckEngine, PptThemesResult } from './types.js';
+import type { DeckEngine, PptThemesResult, LessonPlanResult, LessonCreateResult } from './types.js';
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
     readonly signal?: AbortSignal;
@@ -27,4 +27,6 @@ export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine
     check(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptQualityResult | import("./types.js").PptCheckResult>;
     render(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptRenderResult>;
     data(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptCreateResult | Record<string, any>>;
+    lessonGenerate(rawArgs: unknown, exec?: PptExecution): Promise<LessonPlanResult>;
+    lessonCreate(rawArgs: unknown, exec?: PptExecution): Promise<LessonCreateResult>;
 };

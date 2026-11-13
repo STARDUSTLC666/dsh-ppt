@@ -18,8 +18,17 @@
 ## Features
 
 - Generate HTML slides, editable PPTX and a project bundle.
+- From a single topic, one-click lesson generation (HTML + PPTX + lesson-plan Markdown).
 - Optionally edit text, images and slide order with undo.
 - Choose traceable data, live scenarios, AI review or rehearsal when needed.
+
+## One-click lessons
+
+Give it a single topic and `ppt_lesson_create` writes the HTML slideshow + editable PPTX + project JSON + a lesson-plan Markdown in one call. For example:
+
+> Make a lesson on “how to run an effective user interview” — workshop format, 45 minutes, for beginners.
+
+It auto-builds the teaching design (7 modes × 4 audience levels, Bloom's taxonomy objectives, interactions and formative assessment, a timed agenda). The result is an editable teaching-structure skeleton — fill the `[To fill: …]` placeholders with real content before delivery. To inspect or edit the plan first, use `ppt_lesson_generate` for structured slides and pass them to `ppt_create`. See the [usage guide](docs/USAGE.md).
 
 <details>
 <summary>See a workbench example</summary>

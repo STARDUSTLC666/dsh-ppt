@@ -2,8 +2,19 @@
 
 ## 0.21.0 (2026-11-13)
 
-- 新增课件教学模板：`lesson` / `Course lesson`，结构包含课程目标、核心知识点、示例与案例、练习与互动、总结与作业；默认主题 `soft`（温暖/人本），适合培训、教学、个人分享场景。
-- Add course lesson template: `lesson` / `Course lesson` with Learning objectives, Key concepts, Examples and cases, Exercises and interaction, Summary and homework; defaults to `soft` theme (warm/human-centric), suitable for training, teaching and personal sharing.
+- **一键课件**：新增 `ppt_lesson_create`，只给一个主题/一句话，一次调用直接产出 HTML + PPTX + JSON 三件套 + 教案 Markdown（目标、时间轴、互动清单、评价设计、准备事项）。
+- **课件教学骨架**：新增 `ppt_lesson_generate`，返回结构化 slides（不落盘）供二次编辑；与 `ppt_lesson_create` 共用同一套生成逻辑。
+- 支持 7 种教学模式（lecture / workshop / caseStudy / lab / seminar / flipped / micro）× 4 类受众（beginner / intermediate / advanced / mixed）；`lessonType` 未传时按中英文关键词自动推断，`micro` 默认 15 分钟、其余 45 分钟。
+- 布鲁姆分类学学习目标（Remember/Understand/Apply/Analyze/Evaluate/Create，动词随受众层级变化）；10 类互动活动（投票/测验/思考-配对-分享/小组讨论/动手实操/案例分析/同伴互评/出口票/反思日志/画廊漫步）随模式自动挑选。
+- 完整教学闭环：封面 → 学习目标 → 议程 → 引入钩子 → 核心概念（含视觉建议）→ 示例/案例 → 主活动（分步）→ 形成性检查 → 总结 → 作业 → 结束页；每页带讲稿备注与分钟计时。
+- 确定性生成：以主题 + 关键参数做确定性哈希选择，同输入两次产出结构一致；时间一次性分配，各页 timing 之和精确等于时长。
+- 不编造内容：产出为可编辑的教学结构骨架，需要真实内容处统一用 [待填写：…] / [To fill: …] 占位，`ppt_check` 延续「未填 = 草稿」判定。
+- 新增课件教学模板 `lesson` / `Course lesson`（课程目标、核心知识点、示例与案例、练习与互动、总结与作业），默认主题 `soft`。
+
+- Add one-click lesson maker `ppt_lesson_create`: from a single topic, produce the HTML + PPTX + JSON trio plus a lesson-plan Markdown (objectives, timeline, interaction plan, assessment design, preparation) in one call.
+- Add `ppt_lesson_generate` (structured slides only, no files) sharing the same generator; 7 teaching modes × 4 audience levels, Bloom's taxonomy objectives, 10 auto-selected interaction types, full lesson loop with notes and per-page timing.
+- Deterministic hash-based selection and one-pass time allocation (per-page timings sum exactly to duration); no fabricated facts — real-content slots use explicit [To fill: …] placeholders and stay marked as draft until filled.
+- Add course lesson template (`lesson` / `Course lesson`) defaulting to the `soft` theme.
 
 ## 0.20.5 (2026-11-04)
 
