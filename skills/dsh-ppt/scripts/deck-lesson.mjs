@@ -142,6 +142,36 @@ function splitMinutes(total, count) {
   return out
 }
 
+/**
+ * 标题长度兜底：长主题在拼接「核心概念 N: 主题+片段」后会超出行宽，触发 title-overflow。
+ * 中英文分别按更保守的字数/词数截断，并保留可读的省略号；不改动主题本身。
+ */
+/** 与 ppt_check 一致的显示宽度：全角记 1、半角记 0.55。 */
+function displayWidth(text) {
+  return [...String(text ?? '')].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0)
+}
+
+/** 按显示宽度裁剪文本，保留可读省略号。 */
+function clampWidth(text, limit) {
+  const raw = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!raw || displayWidth(raw) <= limit) return raw
+  let out = ''
+  for (const c of raw) {
+    if (displayWidth(out + c) > limit - 1) break
+    out += c
+  }
+  return out.replace(/[\s,，、:：—-]+$/, '') + '…'
+}
+
+/**
+ * 标题长度兜底：正文页标题限额 24（显示宽度），大版式（cover/closing/statement/quote/section）为 40。
+ * 长主题拼接后容易超出行宽并触发 title-overflow，这里统一按版式收缩。
+ */
+function fitTitle(text, langKey, layout = 'bullets') {
+  const limit = ['cover', 'closing', 'statement', 'quote', 'section'].includes(layout) ? 40 : 24
+  return clampWidth(text, limit)
+}
+
 // ---------------------------------------------------------------------------
 // 自动推断
 // ---------------------------------------------------------------------------
@@ -240,18 +270,18 @@ function generateConcepts(topic, lessonType, duration, langKey, seed) {
   const count = Math.min(5, Math.max(3, Math.floor(duration / 10)))
   const conceptTemplates = en
     ? [
-        { title: `Fundamentals of ${topic}`, points: [`What is ${topic}?`, `Why does ${topic} matter?`, `Core principles`, `Key terminology`], visual: 'concept-map' },
-        { title: `How ${topic} Works`, points: [`Step-by-step process`, `Input → Process → Output`, `Critical decision points`, `Common variations`], visual: 'flowchart' },
-        { title: `Key Techniques in ${topic}`, points: [`Technique A: when to use it`, `Technique B: when to use it`, `Technique C: when to use it`, `How to compare them`], visual: 'comparison-table' },
-        { title: `Best Practices for ${topic}`, points: [`Do: [To fill: proven patterns]`, `Don't: [To fill: common pitfalls]`, `Performance / quality tips`, `Maintainability guidelines`], visual: 'checklist' },
-        { title: `Advanced ${topic} Concepts`, points: [`Edge cases`, `Optimization strategies`, `Integration with other tools`, `Future trends`], visual: 'mind-map' },
+        { title: `Fundamentals`, points: [`What is ${topic}?`, `Why does ${topic} matter?`, `Core principles`, `Key terminology`], visual: 'concept-map' },
+        { title: `How it works`, points: [`Step-by-step process`, `Input → Process → Output`, `Critical decision points`, `Common variations`], visual: 'flowchart' },
+        { title: `Key techniques`, points: [`Technique A: when to use it`, `Technique B: when to use it`, `Technique C: when to use it`, `How to compare them`], visual: 'comparison-table' },
+        { title: `Best practices`, points: [`Do: [To fill: proven patterns]`, `Don't: [To fill: common pitfalls]`, `Performance / quality tips`, `Maintainability guidelines`], visual: 'checklist' },
+        { title: `Advanced concepts`, points: [`Edge cases`, `Optimization strategies`, `Integration with other tools`, `Future trends`], visual: 'mind-map' },
       ]
     : [
-        { title: `${topic}基础入门`, points: [`什么是${topic}？`, `为什么${topic}重要？`, `核心原理`, `关键术语`], visual: 'concept-map' },
-        { title: `${topic}运作机制`, points: [`分步骤流程`, `输入 → 处理 → 输出`, `关键决策点`, `常见变体`], visual: 'flowchart' },
-        { title: `${topic}核心技巧`, points: [`技巧A：适用场景`, `技巧B：适用场景`, `技巧C：适用场景`, `如何对比选择`], visual: 'comparison-table' },
-        { title: `${topic}最佳实践`, points: [`推荐做法：[待填写：经验模式]`, `避坑指南：[待填写：常见错误]`, `性能/质量优化建议`, `可维护性原则`], visual: 'checklist' },
-        { title: `${topic}进阶概念`, points: [`边界情况处理`, `优化策略`, `与其他工具集成`, `未来发展趋势`], visual: 'mind-map' },
+        { title: `基础入门`, points: [`什么是${topic}？`, `为什么${topic}重要？`, `核心原理`, `关键术语`], visual: 'concept-map' },
+        { title: `运作机制`, points: [`分步骤流程`, `输入 → 处理 → 输出`, `关键决策点`, `常见变体`], visual: 'flowchart' },
+        { title: `核心技巧`, points: [`技巧A：适用场景`, `技巧B：适用场景`, `技巧C：适用场景`, `如何对比选择`], visual: 'comparison-table' },
+        { title: `最佳实践`, points: [`推荐做法：[待填写：经验模式]`, `避坑指南：[待填写：常见错误]`, `性能/质量优化建议`, `可维护性原则`], visual: 'checklist' },
+        { title: `进阶概念`, points: [`边界情况处理`, `优化策略`, `与其他工具集成`, `未来发展趋势`], visual: 'mind-map' },
       ]
   const start = hashString(seed + '::concepts') % conceptTemplates.length
   const concepts = []
@@ -343,7 +373,7 @@ function generateExamples(topic, lessonType, langKey, seed) {
   const en = langKey === 'en'
   const frames = [
     {
-      title: en ? `Real-world ${topic} case` : `${topic}真实应用案例`,
+      title: en ? `Real-world case` : `真实应用案例`,
       points: [
         en ? `Context: [To fill: one line on the industry and scenario]` : `背景：[待填写：一句话说明案例所在行业与场景]`,
         en ? `Challenge: [To fill: the specific problem faced]` : `挑战：[待填写：该场景面临的具体问题]`,
@@ -353,7 +383,7 @@ function generateExamples(topic, lessonType, langKey, seed) {
       ],
     },
     {
-      title: en ? `Step-by-step ${topic} walkthrough` : `${topic}分步演示`,
+      title: en ? `Step-by-step walkthrough` : `分步演示`,
       points: [
         en ? `Starting point: [To fill: initial state / prerequisites]` : `起点：[待填写：初始状态/前提条件]`,
         en ? `Step 1: [To fill: first action]` : `步骤 1：[待填写：第一步操作]`,
@@ -586,9 +616,29 @@ export function generateLessonPlan(options = {}) {
   const duration = clampInt(opts.duration, defaultDuration, 5, 180)
   const includeInteractions = opts.includeInteractions !== false
   const includeAssessment = opts.includeAssessment !== false
-  const title = (typeof opts.title === 'string' && opts.title.trim() !== '')
+  // 封面标题：长主题拼接模式名后可能超出封面版式宽度，按显示宽度兜底。
+  const titleLimit = 40
+  const displayWidth = text => [...String(text ?? '')].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0)
+  const fitCover = text => {
+    const raw = String(text ?? '').replace(/\s+/g, ' ').trim()
+    if (displayWidth(raw) <= titleLimit) return raw
+    const suffix = en ? ` — ${t.en}` : ` — ${t.zh}`
+    // 先尝试省略模式名，只保留主题
+    if (displayWidth(raw.slice(0, raw.length - suffix.length)) <= titleLimit) {
+      return raw.slice(0, raw.length - suffix.length).trim()
+    }
+    // 主题本身也过长：按宽度逐字裁剪
+    const chars = [...raw]
+    let out = ''
+    for (const c of chars) {
+      if (displayWidth(out + c) > titleLimit - 1) break
+      out += c
+    }
+    return out.replace(/[\s,，、:：—-]+$/, '') + '…'
+  }
+  const title = fitCover((typeof opts.title === 'string' && opts.title.trim() !== '')
     ? opts.title.trim()
-    : (en ? `${topic} — ${t.en}` : `${topic} — ${t.zh}`)
+    : (en ? `${topic} — ${t.en}` : `${topic} — ${t.zh}`))
 
   const seed = `${topic}|${lessonType}|${audience}|${language}`
   const bloomLevels = level.bloom
@@ -666,7 +716,7 @@ export function generateLessonPlan(options = {}) {
   concepts.forEach((concept, i) => {
     slides.push({
       layout: 'bullets',
-      title: `${en ? 'Concept' : '核心概念'} ${i + 1}: ${concept.title}`,
+      title: fitTitle(`${en ? 'Concept' : '核心概念'} ${i + 1}: ${concept.title}`, langKey),
       bullets: concept.points,
       notes: concept.notes,
       timing: conceptTimes[i] || 0,
@@ -676,7 +726,7 @@ export function generateLessonPlan(options = {}) {
       const interaction = selectInteraction(lessonType, bloomLevels, langKey, seed, interactionIndex)
       slides.push({
         layout: 'bullets',
-        title: `${interaction.icon} ${interaction.name}`,
+        title: fitTitle(`${interaction.icon} ${interaction.name}`, langKey),
         bullets: interaction.prompts,
         notes: interaction.notes,
         timing: interactionTimes[interactionIndex] || 0,
@@ -693,7 +743,7 @@ export function generateLessonPlan(options = {}) {
   examples.forEach((ex, i) => {
     slides.push({
       layout: ex.layout,
-      title: `${en ? 'Example' : '示例'} ${i + 1}: ${ex.title}`,
+      title: fitTitle(`${en ? 'Example' : '示例'} ${i + 1}: ${ex.title}`, langKey),
       bullets: ex.points,
       notes: ex.notes,
       timing: exampleTimes[i] || 0,
@@ -716,7 +766,7 @@ export function generateLessonPlan(options = {}) {
     mainActivity.steps.forEach((step, i) => {
       slides.push({
         layout: 'bullets',
-        title: `${en ? 'Step' : '步骤'} ${i + 1}: ${step.title}`,
+        title: fitTitle(`${en ? 'Step' : '步骤'} ${i + 1}: ${step.title}`, langKey),
         bullets: step.details,
         notes: step.notes,
         timing: stepTimes[i] || 0,
@@ -756,7 +806,7 @@ export function generateLessonPlan(options = {}) {
     checks.forEach((check, i) => {
       slides.push({
         layout: check.layout,
-        title: `${en ? 'Check' : '检查'} ${i + 1}: ${check.question}`,
+        title: fitTitle(`${en ? 'Check' : '检查'} ${i + 1}: ${check.question}`, langKey),
         bullets: check.options,
         notes: check.notes,
         timing: checkTimes[i] || 0,

@@ -213,3 +213,38 @@ test('ppt_lesson_create 工具可经注册通道一键出成品', async () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('长主题标题不溢出：按显示宽度判定，端到端无 title-overflow', async () => {
+  // 与引擎一致：全角字符记 1、半角记 0.55；正文页限额 24，封面等大版式限额 40
+  const textWidth = text => [...String(text ?? '')].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0)
+  const limitFor = layout => (['cover', 'closing', 'statement', 'quote', 'section'].includes(layout) ? 40 : 24)
+
+  const cases = [
+    ['如何做一次真正有效且能落地的用户深度访谈与需求洞察完整方法论', 'zh'],
+    ['How to run deeply effective user interviews that actually produce actionable insight', 'en'],
+    ['短主题', 'zh'],
+  ]
+  for (const [topic, language] of cases) {
+    const plan = generateLessonPlan({ topic, duration: 45, language })
+    for (const slide of plan.slides) {
+      if (typeof slide.title !== 'string' || slide.title === '') continue
+      const width = textWidth(slide.title), limit = limitFor(slide.layout)
+      assert.ok(width <= limit, `[${language}/${slide.layout}] 标题显示宽度 ${width} > ${limit}：${slide.title}`)
+    }
+  }
+
+  // 端到端：ppt_check 不应报 title-overflow
+  const dir = mkdtempSync(join(tmpdir(), 'lesson-title-'))
+  try {
+    const { checkDeck } = await import('../skills/dsh-ppt/scripts/deck-advanced.mjs')
+    for (const [topic, language] of cases) {
+      const result = await createLessonDeck({ topic, duration: 45, language, outputDir: dir })
+      const report = checkDeck({ deckPath: result.jsonPath })
+      const overflow = report.issues.filter(i => i.code === 'title-overflow')
+      assert.deepEqual(overflow, [], `[${language}] 不应再有标题溢出：${JSON.stringify(overflow)}`)
+      assert.equal(report.errorCount, 0)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
