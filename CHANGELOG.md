@@ -1,5 +1,20 @@
 # 更新记录
 
+## 0.22.0 (2026-11-13)
+
+- **课程包转课件**：新增 `ppt_course_scan`（干跑扫描，分类视频/压缩包/文档/图片，给课程序号与每课时长）、`ppt_course_build`（一键拆解：扫描→抽音轨→转写→分课→提炼→成稿，产出每课三件套 + `homework.md` + 课程总览 + 转写 + 生成报告）、`ppt_course_voice`（音色替换，需 VoiceStudio 在跑）、`ppt_course_clean`（ffmpeg 去水印）四个工具。
+- 支持 `deep`（每课 15–25 页）/ `quick`（6–10 页）/ `outline`（3–5 页）三种深度；`useMaterials=auto` 解压作业素材并按文件名/序号匹配到课程。
+- **ASR 三级探测**：优先 VoiceStudio 本地转写（OpenAI 兼容端点），其次 `~/.dsh/asr.json`，都不可用则中文报错并给三条出路；转写缺失/过短降级为提取式摘要，绝不编造课程内容。
+- **优雅降级**：无 LLM / 无 STT / VoiceStudio 未运行分别给出明确中文原因和可继续的部分；长任务支持 signal 取消，转写/解压产物落盘缓存可续跑。
+- **路径安全**：解压防 zip-slip（`../` 越界）、单文件与总量上限；delogo/blur/box/crop 四种去水印滤镜，`regions` 为唯一可靠方式，`auto` 只产候选需确认。
+- **修复压缩包中文文件名乱码**：系统 `zip` 命令或资源管理器打的包不带 UTF-8 标志位，原先按 latin1 还原成「ä½ä¸š」；现在按 UTF-8 优先、GBK 兜底重新解码，中文素材名与内容均保留。
+
+- Add course-pack → lessons: `ppt_course_scan`, `ppt_course_build` (per-lesson HTML + PPTX + JSON trio, `homework.md`, overview, transcripts and build report), `ppt_course_voice` and `ppt_course_clean`.
+- Three depth modes (deep 15–25 / quick 6–10 / outline 3–5 pages per lesson); `useMaterials=auto` extracts homework archives and matches them to lessons by filename/number.
+- Three-tier ASR (VoiceStudio first, then `~/.dsh/asr.json`, else a clear Chinese error with remedies); extractive-summary fallback instead of fabricating content.
+- Graceful degradation without LLM / STT / VoiceStudio, cancellable long runs with cached transcripts and zip extraction; zip-slip-safe unzip with size/count caps; four watermark filters with `regions` as the only reliable path.
+- Fix mojibake in archive entry names: zips written by the system `zip` CLI or file managers carry no UTF-8 flag and were decoded as latin1; names are now re-decoded as UTF-8 with a GBK fallback.
+
 ## 0.21.0 (2026-11-13)
 
 - **一键课件**：新增 `ppt_lesson_create`，只给一个主题/一句话，一次调用直接产出 HTML + PPTX + JSON 三件套 + 教案 Markdown（目标、时间轴、互动清单、评价设计、准备事项）。

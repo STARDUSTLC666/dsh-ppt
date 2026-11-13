@@ -15,6 +15,10 @@
 | `ppt_create` 工具 | Markdown / 结构化 slides → `*.html` + `*.pptx` + `*.json` 三件套 |
 | `ppt_lesson_create` 工具 | 只给一个主题/一句话，一键产出 HTML + PPTX + JSON 三件套 + 教案 Markdown |
 | `ppt_lesson_generate` 工具 | 从主题生成结构化教学 slides（不落盘），供二次编辑后再 `ppt_create` |
+| `ppt_course_scan` 工具 | 干跑扫描课程文件夹，分类清单 + 课程序号 + 每课时长 + 素材匹配猜测 |
+| `ppt_course_build` 工具 | 一键把视频课程文件夹拆成精讲课件 + 作业（转写三级探测、提炼、三件套） |
+| `ppt_course_voice` 工具 | 音色替换：从视频/ srt 生成配音（需 VoiceStudio 在跑） |
+| `ppt_course_clean` 工具 | 用 ffmpeg 滤镜去水印（delogo / blur / box / crop），输出新文件 |
 | `ppt_themes` 工具 | 列出 5 套内置主题与适用场景；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套一张 SVG 色板卡（可直接进 README/npm 首屏） |
 | 11 种页型 | 封面 / 章节 / 要点 / 核心观点 / 金句 / 表格 / 结束 / 整页图片 / 左图右文 / 左文右图 / 图表 |
 | `ppt_templates` | 周报、论文答辩、项目汇报、路演的大纲和草稿结构参考 |
@@ -36,6 +40,8 @@
 > 把这句话做成 PPT：「AI 客服把首次响应时间压缩到 8 秒」，主题用科技感深色。
 >
 > 把 `docs/季度汇报.md` 做成双语演示文稿，导出 PPTX。
+>
+> 把这个课程文件夹（录屏视频 + 作业素材压缩包）拆成精讲课件：先 `ppt_course_scan` 看清单，再 `ppt_course_build { folder, mode: "deep", withHomework: true }`。
 
 ## 安装
 
@@ -43,7 +49,7 @@
 dsh plugin --profile web add dsh-ppt
 ```
 
-桌面版可在插件管理中安装 `dsh-ppt`。更新后重启对应宿主，加载八个工具与 `dsh-ppt` 技能。无需手写 JSON，可直接要求 Agent「加入这两张截图和销售图表」「只修改第三页」「撤销上次修改」。
+桌面版可在插件管理中安装 `dsh-ppt`。更新后重启对应宿主，加载十四个工具与 `dsh-ppt` 技能。无需手写 JSON，可直接要求 Agent「加入这两张截图和销售图表」「只修改第三页」「撤销上次修改」。
 
 ## 快速开始
 

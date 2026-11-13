@@ -39,6 +39,14 @@
 
 </details>
 
+## 课程包转课件
+
+给一个视频课程文件夹（录屏讲解 + 每课作业素材压缩包），先 `ppt_course_scan` 看清单，再 `ppt_course_build` 一键拆成精讲课件 + 作业。例如：
+
+> 把这个课程文件夹拆成精讲课件，deep 模式，配好每课作业。
+
+它会自动扫描→抽音轨→转写（ASR 三级探测，优雅降级）→分课→提炼→成稿，产出每课三件套 + `homework.md` + 课程总览 + 转写 + 生成报告；可选配音（`voice.enabled`）与去水印（`watermark.enabled`）。详见 [课程包转课件](skills/dsh-ppt/references/course.md)。
+
 ## 安装
 
 在 DSH 桌面版「插件」面板安装 `dsh-ppt`。已配置命令行时也可使用：

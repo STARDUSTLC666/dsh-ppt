@@ -89,7 +89,7 @@ const LESSON_TIME_MODEL = {
   micro: { fixed: { hook: 1, objectives: 1, agenda: 0, summary: 1, homework: 1 }, weights: { concepts: 0.50, examples: 0.20, activity: 0.20, interactions: 0.00, assessment: 0.10 } },
 }
 
-const ACTIVITY_LABELS = {
+export const ACTIVITY_LABELS = {
   cover: { zh: '封面', en: 'Cover' },
   objectives: { zh: '学习目标', en: 'Learning objectives' },
   agenda: { zh: '课程议程', en: 'Agenda' },

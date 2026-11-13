@@ -15,6 +15,8 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 用户只想给一个主题 / 一句话想法就要「课件 / 教案 / 培训课 / 教学方案 / 微课」，走下方「一键课件」流程（`ppt_lesson_create` / `ppt_lesson_generate`）。
 
+用户给的是一个**视频课程文件夹**（录屏讲解 + 每课作业素材压缩包），要「课程包 / 拆解 / 精讲 / 留作业」，走「课程包转课件」流程（先 `ppt_course_scan` 看清单，再 `ppt_course_build` 一键出课件；详见 `references/course.md`）。
+
 ## 执行纪律（每次都要遵守）
 
 - 默认直接交付成品，不自动触发 AI 预审或答辩。用户可在设置页成品下载区主动开启两个可选模式；选择模型、范围与调用上限后再发送材料。AI 演练不等于事实核验，不编造实验、数据或引用；采纳建议另存副本，原件保留。
@@ -66,6 +68,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 | 图片/图表/模板/品牌/编辑/渲染 | `references/advanced.md` | 参数、限制、草稿与成品、收据语义 |
 | 数字溯源与现场推演 | `references/data.md` | 来源绑定、公式、更新预览与离线参数回存 |
 | 一键课件 / 教案 | `references/lesson.md` | 教学设计说明、7 模式对照、受众-布鲁姆映射、占位符约定 |
+| 课程包转课件 | `references/course.md` | 四个工具、流水线、模式对照、素材匹配、音色与水印用法与限制 |
 | 交付异常 | `references/troubleshooting.md` | 症状 → 处理对照表 |
 
 ## 质量门禁（交付前逐项确认）

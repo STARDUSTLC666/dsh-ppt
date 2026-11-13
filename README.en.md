@@ -39,6 +39,14 @@ Actual interface with controlled validation data; the PPTX image is a rendered s
 
 </details>
 
+## Course pack → lessons
+
+Give it a video-course folder (screencast lessons plus per-lesson homework zip archives). Run `ppt_course_scan` to preview the inventory, then `ppt_course_build` to unpack it into polished lessons + homework. For example:
+
+> Unpack this course folder into polished lessons, deep mode, with homework per lesson.
+
+It scans → extracts audio → transcribes (three-tier ASR with graceful fallback) → splits lessons → refines → writes per-lesson decks (HTML + PPTX + JSON) plus `homework.md`, a course overview, transcripts and a build report; optional voice-over (`voice.enabled`) and watermark removal (`watermark.enabled`). See [course pack → lessons](skills/dsh-ppt/references/course.md).
+
 ## Install
 
 Open **Plugins** in the DSH desktop app and install `dsh-ppt`. If the CLI is available:

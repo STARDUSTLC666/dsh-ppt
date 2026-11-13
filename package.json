@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "给出材料，拿到可以交付的演示文稿。 可直接下载成品 欢迎提交 issues 和 PR。",
   "type": "module",
   "main": "lib/index.js",

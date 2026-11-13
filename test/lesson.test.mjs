@@ -195,11 +195,11 @@ test('ppt_lesson_generate 与 ppt_lesson_create 共用同一套生成逻辑', as
   }
 })
 
-test('工具注册数为 10，ppt_lesson_create 参数 schema 合法', async () => {
+test('工具注册数为 14，ppt_lesson_create 参数 schema 合法', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})
   const names = ctx.tools.defs.map((def) => def.name).sort()
-  assert.deepEqual(names, ['ppt_check', 'ppt_create', 'ppt_data', 'ppt_edit', 'ppt_lesson_create', 'ppt_lesson_generate', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo'])
+  assert.deepEqual(names, ['ppt_check', 'ppt_course_build', 'ppt_course_clean', 'ppt_course_scan', 'ppt_course_voice', 'ppt_create', 'ppt_data', 'ppt_edit', 'ppt_lesson_create', 'ppt_lesson_generate', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo'])
   const create = ctx.tools.defs.find((def) => def.name === 'ppt_lesson_create')
   assert.ok(create)
   assert.deepEqual(create.parameters.required, ['topic'])
