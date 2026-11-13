@@ -676,7 +676,8 @@ export function generateLessonPlan(options = {}) {
   const includeInteractions = opts.includeInteractions !== false
   const includeAssessment = opts.includeAssessment !== false
   // 封面标题：长主题拼接模式名后可能超出封面版式宽度，按显示宽度兜底。
-  const titleLimit = 40
+  // 渲染实测：封面大字号下约 15 个全角字宽即折行，超过就会把末字挤到下一行。
+  const titleLimit = 15
   const displayWidth = text => [...String(text ?? '')].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0)
   const fitCover = text => {
     const raw = String(text ?? '').replace(/\s+/g, ' ').trim()

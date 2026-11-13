@@ -224,7 +224,8 @@ export function checkManifest(manifest) {
   const issue = (index, code, message, suggestion, severity = 'warning') => issues.push({ slide: index + 1, slideId: manifest.slides[index]?.id, severity, code, message, suggestion })
   manifest.slides.forEach((slide, i) => {
     if (!slide.title?.trim()) issue(i, 'missing-title', '页面没有标题', '补充能说明本页内容的标题')
-    const titleLimit = ['cover', 'closing', 'statement', 'quote', 'section'].includes(slide.layout) ? 40 : 24
+    // 渲染实测：cover/closing/statement/quote/section 用大字号，约 15 个全角字宽即折行；正文页约 24。
+    const titleLimit = ['cover', 'closing', 'statement', 'quote', 'section'].includes(slide.layout) ? 15 : 24
     if (textWidth(slide.title) > titleLimit) issue(i, 'title-overflow', '标题可能换行过多或超过标题区域', '缩短标题，把解释移入正文')
     const mixed = ['image-left', 'image-right'].includes(slide.layout), bullets = slide.bullets ?? []
     if (bullets.length > (mixed ? 5 : 8)) issue(i, 'dense-bullets', `本页有 ${bullets.length} 条要点，放映时过密`, '减少要点或拆成多页')
