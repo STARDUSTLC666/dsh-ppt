@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Standalone dsh-ppt skill dependencies for image/chart export",
   "dependencies": { "@office-kit/pptx": "0.21.0", "csv-parse": "6.1.0", "jsep": "1.4.0" },
-  "peerDependencies": { "@deepseek-ai/libreoffice-kit": "0.1.5" },
+  "peerDependencies": { "@deepseek-ai/libreoffice-kit": "0.1.5 || 0.2.3" },
   "peerDependenciesMeta": { "@deepseek-ai/libreoffice-kit": { "optional": true } },
   "engines": { "node": "^22.19.0 || >=24.0.0" }
 }

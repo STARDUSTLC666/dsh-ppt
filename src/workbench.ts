@@ -224,7 +224,7 @@ export class PptWorkbench {
       if (result.ok && !view.project.render) throw new Error('项目已被修改，请重新渲染')
       return { ...result, ...(result.ok ? {} : {
         messageEn: englishWorkbenchMessage(result.message || 'PPTX rendering failed.'),
-        installationHintEn: 'Optional renderer: @deepseek-ai/libreoffice-kit@0.1.5. Install it in this DSH profile and restart DSH.',
+        installationHintEn: 'Optional renderer: @deepseek-ai/libreoffice-kit@0.2.3 (bundled by DSH 0.2.2+), or 0.1.5. Install it in this DSH profile and restart DSH.',
       }), project: view.project }
     }
     if (body.operation === 'edit') {

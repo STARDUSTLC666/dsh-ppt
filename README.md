@@ -38,7 +38,7 @@
 dsh plugin --profile desktop add dsh-ppt
 ```
 
-网页版把 `desktop` 改为 `web`；安装后重启对应的 DSH。宿主要求以包声明 `>=0.2.1-rc.3` 为准。
+网页版把 `desktop` 改为 `web`；安装后重启对应的 DSH。宿主要求以包声明 `>=0.2.2-rc.3` 为准。
 
 ## 开始使用
 

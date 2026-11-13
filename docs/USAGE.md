@@ -124,7 +124,7 @@ node <skill-dir>/scripts/build-deck.mjs \
 在插件所在项目或独立技能目录安装：
 
 ```bash
-npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.5
+npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.2.3
 ```
 
 声明为精确版本可选 peer，普通消费者安装不要求引擎。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。缺失时 `ppt_render` 返回 `unavailable` 和安装提示。

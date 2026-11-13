@@ -12,7 +12,7 @@ importers:
   .:
     dependencies:
       '@deepseek-ai/libreoffice-kit':
-        specifier: 0.1.5
+        specifier: 0.1.5 || 0.2.3
         version: 0.1.5
       '@office-kit/pptx':
         specifier: 0.21.0

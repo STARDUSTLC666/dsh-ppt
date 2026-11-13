@@ -107,7 +107,7 @@ Structure example: `{deckPath:"report.json",expectedRevision:0,duplicate:[2],rem
 Install in the plugin's project or standalone skill directory:
 
 ```bash
-npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.1.5
+npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.2.3
 ```
 
 The exact optional peer is not a mandatory engine download for ordinary consumers. Windows also needs the Microsoft Visual C++ v14 runtime matching Node's architecture. Missing dependency/engine returns `unavailable` with guidance.

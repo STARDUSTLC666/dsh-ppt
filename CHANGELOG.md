@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.20.6 (2026-11-14)
+
+- 适配 DSH 0.2.2-rc.3：PPTX 渲染器接受宿主内置的 @deepseek-ai/libreoffice-kit 0.2.3（0.1.5 继续可用），并实测其 createConverter / renderImages / convert 接口；最低 Harness 声明提升至 0.2.2-rc.3。
+- Support DSH 0.2.2-rc.3: accept the host-bundled @deepseek-ai/libreoffice-kit 0.2.3 (0.1.5 keeps working) and verify its createConverter / renderImages / convert API; raise the minimum Harness declaration to 0.2.2-rc.3.
+
 ## 0.20.5 (2026-11-04)
 
 - 同步共享界面：嵌入设置时继承宿主底色，输入框跟随主题，空状态保持可读宽度；新版 DSH 可显示插件设置图标。

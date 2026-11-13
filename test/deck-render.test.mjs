@@ -52,6 +52,25 @@ test('native engine absence is unavailable and never publishes an empty render',
   assert.equal(existsSync(f.outputDir), false)
 })
 
+test('renderer versions 0.1.5 and 0.2.3 both render and record the actual version', async t => {
+  for (const version of ['0.1.5', '0.2.3']) {
+    const f = fixture(t), base = await loader().load()
+    const result = await renderDeck(f, async () => ({ ...base, ENGINE_VERSION: version }))
+    assert.equal(result.status, 'rendered', version)
+    assert.equal(result.rendererVersion, version)
+    assert.equal(JSON.parse(readFileSync(result.receiptPath)).renderer.version, version)
+    assert.equal(readRenderReceipt(f.pptxPath, result.receiptPath).ok, true)
+  }
+})
+
+test('an unsupported renderer version is unavailable and never publishes output', async t => {
+  const f = fixture(t), base = await loader().load()
+  const result = await renderDeck(f, async () => ({ ...base, ENGINE_VERSION: '9.9.9' }))
+  assert.equal(result.status, 'unavailable')
+  assert.match(result.message, /9\.9\.9/)
+  assert.equal(existsSync(f.outputDir), false)
+})
+
 test('ZIP64 and malformed extras outside presentation.xml are rejected before converter creation', async t => {
   const f = fixture(t), original = f.original, end = original.length - 22
   assert.equal(original.readUInt32LE(end), 0x06054b50)

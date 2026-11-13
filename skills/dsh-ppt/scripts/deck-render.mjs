@@ -6,7 +6,11 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
 export const RENDERER_PACKAGE = '@deepseek-ai/libreoffice-kit'
-export const RENDERER_VERSION = '0.1.5'
+/** Preferred renderer version: install guidance and the receipt default. */
+export const RENDERER_VERSION = '0.2.3'
+/** Renderer versions whose converter API this skill supports (DSH 0.2.2 bundles 0.2.3). */
+export const RENDERER_VERSIONS = Object.freeze(['0.2.3', '0.1.5'])
+const isSupportedVersion = version => RENDERER_VERSIONS.includes(version)
 const INPUT_LIMIT = 64 * 1024 * 1024
 const OUTPUT_LIMIT = 128 * 1024 * 1024
 const PAGE_LIMIT = 120
@@ -99,22 +103,25 @@ function geometry(bytes, width) {
 function unavailable(error) {
   return { ok: false, status: 'unavailable', backend: 'libreoffice-kit',
     message: `PPTX 渲染引擎不可用：${error?.message ?? String(error)}`,
-    installationHint: `在 dsh-ppt 所在项目或独立技能目录安装：npm install --ignore-scripts ${RENDERER_PACKAGE}@${RENDERER_VERSION}。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。` }
+    installationHint: `在 dsh-ppt 所在项目或独立技能目录安装：npm install --ignore-scripts ${RENDERER_PACKAGE}@${RENDERER_VERSION}（${RENDERER_VERSIONS.join(' / ')} 均受支持）。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。` }
 }
 function missingDependency(error) { return ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'unavailable'].includes(error?.code) }
 async function loadRenderer() {
   const require = createRequire(import.meta.url)
-  // DSH redirects linked-package peer requests to its bundled version. Prefer
-  // an explicitly installed matching SDK using its physical entry; this Office
-  // helper has no Cordis services and must not share a stale host engine.
+  // DSH redirects linked-package peer requests to its bundled version. Prefer an
+  // explicitly installed supported SDK using its physical entry; DSH 0.2.2 ships
+  // 0.2.3, older profiles may still have 0.1.5 installed.
+  let fallback
   for (const directory of require.resolve.paths(RENDERER_PACKAGE) ?? []) {
     const candidate = join(directory, RENDERER_PACKAGE, 'package.json')
     let manifest
     try { manifest = JSON.parse(readFileSync(candidate, 'utf8')) } catch (error) { if (error.code === 'ENOENT') continue; throw error }
-    if (manifest.name === RENDERER_PACKAGE && manifest.version === RENDERER_VERSION && typeof manifest.main === 'string') {
-      return import(pathToFileURL(require.resolve(join(dirname(candidate), manifest.main))).href)
-    }
+    if (manifest.name !== RENDERER_PACKAGE || typeof manifest.main !== 'string' || !isSupportedVersion(manifest.version)) continue
+    const entry = pathToFileURL(require.resolve(join(dirname(candidate), manifest.main))).href
+    if (manifest.version === RENDERER_VERSION) return import(entry)
+    fallback = fallback ?? entry
   }
+  if (fallback) return import(fallback)
   return import(pathToFileURL(require.resolve(RENDERER_PACKAGE)).href)
 }
 function reserveDirectory(base) {
@@ -159,7 +166,7 @@ export async function renderDeck(options = {}, loadKit = loadRenderer) {
   let kit
   try { kit = await loadKit() } catch (error) { abort(options.signal); if (missingDependency(error)) return unavailable(error); throw error }
   abort(options.signal)
-  if (kit.ENGINE_VERSION !== RENDERER_VERSION || typeof kit.createConverter !== 'function') return unavailable(new Error(`需要 ${RENDERER_PACKAGE}@${RENDERER_VERSION}，当前模块版本为 ${String(kit.ENGINE_VERSION ?? '未知')}`))
+  if (!isSupportedVersion(kit.ENGINE_VERSION) || typeof kit.createConverter !== 'function') return unavailable(new Error(`需要 ${RENDERER_PACKAGE}@${RENDERER_VERSIONS.join(' 或 ')}，当前模块版本为 ${String(kit.ENGINE_VERSION ?? '未知')}`))
   const input = readBounded(pptxPath, INPUT_LIMIT, 'PPTX'), sourceSha256 = sha256(input), shape = geometry(input, width)
   let converter
   try { converter = await kit.createConverter({ timeoutMs, maxInputBytes: INPUT_LIMIT, maxOutputBytes: OUTPUT_LIMIT, maxArchiveEntries: 20000, maxUncompressedBytes: 512 * 1024 * 1024, fontMetadataCacheDirectory: false }) }
@@ -178,7 +185,7 @@ export async function renderDeck(options = {}, loadKit = loadRenderer) {
     writeFileSync(snapshot, input, { flag: 'wx' })
     const destination = join(root, 'artifacts'), budget = { bytes: 0 }, fonts = []
     const receipt = { schemaVersion: 1, producer: 'dsh-ppt-render', status: 'rendered', visual: 'not-verified', createdAt: new Date().toISOString(),
-      renderer: { package: RENDERER_PACKAGE, version: RENDERER_VERSION, backend: converter.backend },
+      renderer: { package: RENDERER_PACKAGE, version: kit.ENGINE_VERSION, backend: converter.backend },
       source: { sha256: sourceSha256, byteLength: input.length }, format, slideCount: shape.slideCount, missingFonts: [], pngs: [] }
     if (!['native', 'wasm'].includes(converter.backend)) fail('引擎未返回有效 backend')
     if (format !== 'pdf') {
@@ -251,7 +258,7 @@ export function readRenderReceipt(pptxPath, receiptPath) {
   try {
     const inputPath = absolute(pptxPath, 'pptxPath'), path = absolute(receiptPath, 'receiptPath')
     const receipt = JSON.parse(readBounded(path, RECEIPT_LIMIT, '渲染收据').toString('utf8'))
-    if (receipt.schemaVersion !== 1 || receipt.producer !== 'dsh-ppt-render' || receipt.status !== 'rendered' || receipt.renderer?.package !== RENDERER_PACKAGE || receipt.renderer?.version !== RENDERER_VERSION || !['native', 'wasm'].includes(receipt.renderer?.backend) || !['png', 'pdf', 'both'].includes(receipt.format) || !Number.isSafeInteger(receipt.slideCount) || receipt.slideCount < 1 || receipt.slideCount > PAGE_LIMIT || !Array.isArray(receipt.pngs) || !Array.isArray(receipt.missingFonts) || receipt.missingFonts.some(name => typeof name !== 'string') || !/^[0-9a-f]{64}$/.test(receipt.source?.sha256)) return unverified('收据格式或渲染版本不匹配', 'invalid-receipt')
+    if (receipt.schemaVersion !== 1 || receipt.producer !== 'dsh-ppt-render' || receipt.status !== 'rendered' || receipt.renderer?.package !== RENDERER_PACKAGE || !isSupportedVersion(receipt.renderer?.version) || !['native', 'wasm'].includes(receipt.renderer?.backend) || !['png', 'pdf', 'both'].includes(receipt.format) || !Number.isSafeInteger(receipt.slideCount) || receipt.slideCount < 1 || receipt.slideCount > PAGE_LIMIT || !Array.isArray(receipt.pngs) || !Array.isArray(receipt.missingFonts) || receipt.missingFonts.some(name => typeof name !== 'string') || !/^[0-9a-f]{64}$/.test(receipt.source?.sha256)) return unverified('收据格式或渲染版本不匹配', 'invalid-receipt')
     const input = readBounded(inputPath, INPUT_LIMIT, 'PPTX')
     if (input.length !== receipt.source.byteLength || sha256(input) !== receipt.source.sha256) return unverified('PPTX 与渲染时的内容不同', 'source-changed')
     if ((receipt.format !== 'pdf' && (receipt.pngs.length !== receipt.slideCount || !receipt.manifest)) || (receipt.format !== 'png' && !receipt.pdf) || (receipt.format === 'pdf' && receipt.pngs.length) || (receipt.format === 'png' && receipt.pdf)) return unverified('收据缺少完整渲染输出', 'incomplete-output')

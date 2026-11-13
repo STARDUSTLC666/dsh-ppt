@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.20.5",
+  "version": "0.20.6",
   "description": "给出材料，拿到可以交付的演示文稿。 可直接下载成品 欢迎提交 issues 和 PR。",
   "type": "module",
   "main": "lib/index.js",
@@ -65,7 +65,7 @@
   "license": "MIT",
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
-    "dsh": ">=0.2.1-rc.3"
+    "dsh": ">=0.2.2-rc.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -89,7 +89,7 @@
     "@stardustlc/dsh-updates": "0.1.4"
   },
   "peerDependencies": {
-    "@deepseek-ai/libreoffice-kit": "0.1.5"
+    "@deepseek-ai/libreoffice-kit": "0.1.5 || 0.2.3"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/libreoffice-kit": {
