@@ -3,11 +3,32 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { inflateRawSync } from 'node:zlib'
 import { generateLessonPlan, inferLessonType, createLessonDeck } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { apply } from '../lib/index.js'
 
 const LESSON_TYPES = ['lecture', 'workshop', 'caseStudy', 'lab', 'seminar', 'flipped', 'micro']
 const AUDIENCE_LEVELS = ['beginner', 'intermediate', 'advanced', 'mixed']
+
+
+/** 读取 PPTX zip 中的条目（仅测试用）。 */
+function zipEntries(buffer) {
+  let end = buffer.length - 22
+  while (end >= 0 && buffer.readUInt32LE(end) !== 0x06054b50) end--
+  const count = buffer.readUInt16LE(end + 10), entries = {}
+  let pos = buffer.readUInt32LE(end + 16)
+  for (let i = 0; i < count; i++) {
+    const method = buffer.readUInt16LE(pos + 10), size = buffer.readUInt32LE(pos + 20)
+    const nameLength = buffer.readUInt16LE(pos + 28), extra = buffer.readUInt16LE(pos + 30)
+    const comment = buffer.readUInt16LE(pos + 32), local = buffer.readUInt32LE(pos + 42)
+    const name = buffer.toString('utf8', pos + 46, pos + 46 + nameLength)
+    const start = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28)
+    const raw = buffer.subarray(start, start + size)
+    entries[name] = method === 0 ? raw : inflateRawSync(raw)
+    pos += 46 + nameLength + extra + comment
+  }
+  return entries
+}
 
 function fakeCtx() {
   return {
@@ -278,4 +299,39 @@ test('教案时间轴不出现 0 分钟的主活动行，且合计与时长一�
   const md = renderLessonPlanMarkdown(plan)
   assert.doesNotMatch(md, /\|\s*主活动\s*\|\s*0\s*\|/, '主活动不应显示为 0 分钟')
   assert.match(md, new RegExp(`\\|\\s*\\*\\*?合计\\*\\*?\\s*\\|\\s*\\*\\*?${plan.totalTiming}\\*\\*?\\s*\\|`))
+})
+
+test('长标题自动降字号：HTML 与 PPTX 都标记长度等级，不再依赖固定 max-width', async () => {
+  const { buildDeckAsync } = await import('../skills/dsh-ppt/scripts/deck-advanced.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'lesson-font-'))
+  try {
+    // 13 个全角字：PPTX 44pt 会折行，HTML 的 20ch 更早折行
+    const title = '如何做一次有效的用户访谈'
+    const out = await buildDeckAsync({
+      title,
+      theme: 'soft',
+      outputDir: dir,
+      fileName: 'font-check',
+      slides: [
+        { layout: 'cover', title, subtitle: '副标题' },
+        { layout: 'closing', title: '谢谢' },
+      ],
+    })
+    const html = readFileSync(out.htmlPath, 'utf8')
+    assert.ok(html.includes('data-len="long"'), '长标题应带 data-len="long" 标记以触发降字号')
+    // 短标题不应被降级
+    assert.ok(!/data-len="long"[^>]*>谢谢/.test(html), '短标题不应被标记为长')
+
+    // PPTX 侧：封面标题文本框里的字号应小于默认 44pt
+    const entries = zipEntries(readFileSync(out.pptxPath))
+    const slide1 = entries['ppt/slides/slide1.xml'].toString()
+    const titleBox = slide1.match(/name="Title"[\s\S]*?<\/p:sp>/)
+    assert.ok(titleBox, '应能找到封面标题文本框')
+    assert.ok(titleBox[0].includes('如何做一次有效的用户访谈'), '标题文本框应包含标题文字')
+    const sizeMatch = titleBox[0].match(/sz="(\d+)"/)
+    assert.ok(sizeMatch, '封面标题应写入字号')
+    assert.ok(Number(sizeMatch[1]) < 4400, `长标题封面字号应小于 4400，实际 ${sizeMatch[1]}`)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

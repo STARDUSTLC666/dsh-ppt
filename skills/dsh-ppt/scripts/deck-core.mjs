@@ -460,7 +460,17 @@ export function escapeXml(value) {
     .replace(/'/g, '&apos;')
 }
 
-export function escapeHtml(value) {
+export /** 按标题显示宽度标记长度等级，让 CSS 自动降字号避免中文折行。 */
+function titleLengthClass(text) {
+  const w = [...String(text ?? '')].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0)
+  // 渲染实测：PPTX 封面 44pt 下 12 个全角字即折行，13 字起必须降级；
+  // HTML 的 max-width 更窄，因此把降级线提前到 10。
+  if (w > 22) return 'xlong'
+  if (w >= 10) return 'long'
+  return ''
+}
+
+function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -1081,8 +1091,10 @@ ${VISUAL_CSS}
   font-size:clamp(12px,1.3vw,18px);margin-bottom:22px;
 }
 h1,h2,.statement-title{font-family:var(--font-heading);line-height:1.06;letter-spacing:-.015em;margin:0}
-h1{font-size:clamp(44px,7.4vw,118px);max-width:20ch}
-h2{font-size:clamp(34px,5vw,82px);max-width:20ch}
+h1{font-size:clamp(44px,7.4vw,118px);max-width:none;word-break:keep-all}
+.slide h1[data-len="long"]{font-size:clamp(36px,5.6vw,88px)}
+.slide h1[data-len="xlong"]{font-size:clamp(30px,4.6vw,72px)}
+h2{font-size:clamp(34px,5vw,82px);max-width:14em}
 .subtitle{
   color:var(--muted);font-size:clamp(18px,2.3vw,34px);line-height:1.5;
   max-width:46em;margin-top:28px;
@@ -1687,13 +1699,13 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
       break
     case 'cover':
       inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<h1>' + escapeHtml(title) + '</h1>' +
+        '<h1' + (titleLengthClass(title) ? ' data-len="' + titleLengthClass(title) + '"' : '') + '>' + escapeHtml(title) + '</h1>' +
         (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '') +
         '<div class="meta">' + escapeHtml(ui.generatedBy) + '</div>'
       break
     case 'section':
       inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<h2>' + escapeHtml(title) + '</h2>' +
+        '<h2' + (titleLengthClass(title) ? ' data-len="' + titleLengthClass(title) + '"' : '') + '>' + escapeHtml(title) + '</h2>' +
         '<div class="accent-line"></div>' +
         (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '')
       break
@@ -1725,14 +1737,14 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
       break
     }
     case 'closing':
-      inner = '<h1>' + escapeHtml(title || ui.closingTitle) + '</h1>' +
+      inner = '<h1' + (titleLengthClass(title || ui.closingTitle) ? ' data-len="' + titleLengthClass(title || ui.closingTitle) + '"' : '') + '>' + escapeHtml(title || ui.closingTitle) + '</h1>' +
         (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '') +
         '<div class="meta">' + escapeHtml(ui.generatedBy) + '</div>'
       break
     case 'bullets':
     default:
       inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<h2>' + escapeHtml(title) + '</h2>' +
+        '<h2' + (titleLengthClass(title) ? ' data-len="' + titleLengthClass(title) + '"' : '') + '>' + escapeHtml(title) + '</h2>' +
         '<ul>' + bullets.map((bullet, bulletIndex) => '<li style="--i:' + bulletIndex + '">' + escapeHtml(bullet) + '</li>').join('') + '</ul>'
       break
   }
@@ -1900,8 +1912,9 @@ function slideShapeList(slide, index, total, theme, langId) {
     if (caption) shapes.push(textShapeXml(idBase + 4, 'Caption', emu(boxes.caption), [para(caption, { size: 1400, color: p.muted, font: bodyFont })]))
   } else if (slide.layout === 'cover') {
     shapes.push(accentBarXml(idBase + 1, 'Accent bar', { x: 914400, y: 2250000, w: 240000, h: 1600000 }, p.accent))
+    const coverTitleSize = titleLengthClass(title) === 'xlong' ? 3000 : titleLengthClass(title) === 'long' ? 3600 : 4400
     shapes.push(textShapeXml(idBase + 2, 'Title', { x: 1550000, y: 2160000, w: 9250000, h: 1800000 }, [
-      para(title, { size: 4400, color: p.fg, bold: true, font }),
+      para(title, { size: coverTitleSize, color: p.fg, bold: true, font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 3, 'Subtitle', { x: 1570000, y: 4150000, w: 9000000, h: 1200000 }, [
@@ -1920,8 +1933,9 @@ function slideShapeList(slide, index, total, theme, langId) {
       ]))
     }
     shapes.push(accentBarXml(idBase + 2, 'Accent bar', { x: 1050000, y: 2850000, w: 1600000, h: 160000 }, p.accent2))
+    const sectionTitleSize = titleLengthClass(title) === 'xlong' ? 2800 : titleLengthClass(title) === 'long' ? 3200 : 4000
     shapes.push(textShapeXml(idBase + 3, 'Title', { x: 1050000, y: 3150000, w: 10200000, h: 1400000 }, [
-      para(title, { size: 4000, color: p.fg, bold: true, font }),
+      para(title, { size: sectionTitleSize, color: p.fg, bold: true, font }),
     ]))
     if (subtitle !== '') {
       shapes.push(textShapeXml(idBase + 4, 'Subtitle', { x: 1070000, y: 4750000, w: 9000000, h: 900000 }, [
