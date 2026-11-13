@@ -13,6 +13,10 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 用户要做 PPT / 幻灯片 / 演示文稿 / deck / 汇报 / 提案 / 路演 / 培训材料，或给一句话、一段文字、一篇 Markdown 想变成可放映的演示。
 
+用户只想给一个主题 / 一句话想法就要「课件 / 教案 / 培训课 / 教学方案 / 微课」，走下方「一键课件」流程（`ppt_lesson_create` / `ppt_lesson_generate`）。
+
+用户给的是一个**视频课程文件夹**（录屏讲解 + 每课作业素材压缩包），要「课程包 / 拆解 / 精讲 / 留作业」，走「课程包转课件」流程（先 `ppt_course_scan` 看清单，再 `ppt_course_build` 一键出课件；详见 `references/course.md`）。
+
 ## 执行纪律（每次都要遵守）
 
 - 默认直接交付成品，不自动触发 AI 预审或答辩。用户可在设置页成品下载区主动开启两个可选模式；选择模型、范围与调用上限后再发送材料。AI 演练不等于事实核验，不编造实验、数据或引用；采纳建议另存副本，原件保留。
@@ -43,6 +47,17 @@ allowed-tools: "Bash, Read, Write, Edit"
 5. **Verify 校验与修正**：调 `ppt_check` 检查具体页；在浏览器操作放映、总览和备注，查看图片/图表。若可选官方引擎可用，调 `ppt_render` 读取最终 PPTX 生成逐页 PNG/PDF，逐页看画面。修正用 `ppt_edit`，以 `expectedRevision` 防冲突；需要时 `ppt_undo`。修改后重新渲染，以收据复核当前文件。文件头/结构通过不等同于视觉验收，静态估算、渲染、视觉检查必须分开说明。
 6. **Deliver 交付**：给用户三个绝对路径，说明 HTML 直接放映（← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印），PPTX 用 PowerPoint / WPS / Keynote 打开（备注在演示者视图可见，bullets 页放映时逐条点击出现）。DSH 用户也可在「设置 → 演示文稿」修改文字、替换 PNG/JPEG、移动/复制/删除页面、撤销和下载最新文件；已有 JSON 工程先 `ppt_check` 才会出现在项目列表。`ppt_edit.order` 使用每个稳定页面 ID 各一次；`duplicate`、`remove` 使用修改前的页码或稳定 ID，复制保留图片/图表/备注，最终保留 1–120 页。结构与正文修改可合为一次撤销。
 
+## 一键课件（只给一个主题就出成品）
+
+用户只给一个主题/一句话想法时，直接调 `ppt_lesson_create`，一次调用产出 HTML + PPTX + JSON 三件套 + 教案 Markdown（与 `ppt_create` 同规格）。
+
+- **`ppt_lesson_create`（推荐，傻瓜式）**：只传 `topic`，其余自动推断——`lessonType` 按关键词推断（中英文都覆盖）、`duration`（micro 默认 15 分钟，其余 45）、`audience`（默认 beginner）、`language`（默认 zh）、`theme`（默认 soft）。可传 `title / lessonType / duration / audience / language / theme / includeInteractions / includeAssessment / outputDir / fileName / overwrite / motion`。
+- **`ppt_lesson_generate`（高级）**：只返回结构化 slides（教案 JSON），不落盘，供需要二次编辑后再 `ppt_create` 的用户。
+
+**工具选择**：想要「一次到位、直接拿到文件」用 `ppt_lesson_create`；想要「先看/改教案结构再自己生成」用 `ppt_lesson_generate`，然后把 `slides` 传给 `ppt_create`。两者共用同一套生成逻辑，不要复制两份。
+
+**边界（重要）**：生成的是一份**可编辑的教学结构骨架**，不是真实学科知识。所有需要真实内容的位置统一用 `[待填写：…]` / `[To fill: …]` 占位，`ppt_check` 会把含未填占位符的课件判为「草稿」。不要把「生成了骨架」说成「已完成课件内容」；交付前需由老师/AI 用 `ppt_edit` 填真实内容，或用真实材料重新生成。详见 `references/lesson.md`。
+
 ## 按需装载索引
 
 | 何时读 | 文件 | 内容 |
@@ -52,6 +67,8 @@ allowed-tools: "Bash, Read, Write, Edit"
 | 用表格/金句/备注/结构化 slides | `references/syntax.md` | Markdown 解析、进阶语法、slides JSON、motion 开关 |
 | 图片/图表/模板/品牌/编辑/渲染 | `references/advanced.md` | 参数、限制、草稿与成品、收据语义 |
 | 数字溯源与现场推演 | `references/data.md` | 来源绑定、公式、更新预览与离线参数回存 |
+| 一键课件 / 教案 | `references/lesson.md` | 教学设计说明、7 模式对照、受众-布鲁姆映射、占位符约定 |
+| 课程包转课件 | `references/course.md` | 四个工具、流水线、模式对照、素材匹配、音色与水印用法与限制 |
 | 交付异常 | `references/troubleshooting.md` | 症状 → 处理对照表 |
 
 ## 质量门禁（交付前逐项确认）

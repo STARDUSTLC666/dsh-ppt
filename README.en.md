@@ -18,8 +18,17 @@
 ## Features
 
 - Generate HTML slides, editable PPTX and a project bundle.
+- From a single topic, one-click lesson generation (HTML + PPTX + lesson-plan Markdown).
 - Optionally edit text, images and slide order with undo.
 - Choose traceable data, live scenarios, AI review or rehearsal when needed.
+
+## One-click lessons
+
+Give it a single topic and `ppt_lesson_create` writes the HTML slideshow + editable PPTX + project JSON + a lesson-plan Markdown in one call. For example:
+
+> Make a lesson on “how to run an effective user interview” — workshop format, 45 minutes, for beginners.
+
+It auto-builds the teaching design (7 modes × 4 audience levels, Bloom's taxonomy objectives, interactions and formative assessment, a timed agenda). The result is an editable teaching-structure skeleton — fill the `[To fill: …]` placeholders with real content before delivery. To inspect or edit the plan first, use `ppt_lesson_generate` for structured slides and pass them to `ppt_create`. See the [usage guide](docs/USAGE.md).
 
 <details>
 <summary>See a workbench example</summary>
@@ -29,6 +38,14 @@
 Actual interface with controlled validation data; the PPTX image is a rendered sample when shown.
 
 </details>
+
+## Course pack → lessons
+
+Give it a video-course folder (screencast lessons plus per-lesson homework zip archives). Run `ppt_course_scan` to preview the inventory, then `ppt_course_build` to unpack it into polished lessons + homework. For example:
+
+> Unpack this course folder into polished lessons, deep mode, with homework per lesson.
+
+It scans → extracts audio → transcribes (three-tier ASR with graceful fallback) → splits lessons → refines → writes per-lesson decks (HTML + PPTX + JSON) plus `homework.md`, a course overview, transcripts and a build report; optional voice-over (`voice.enabled`) and watermark removal (`watermark.enabled`). See [course pack → lessons](skills/dsh-ppt/references/course.md).
 
 ## Install
 

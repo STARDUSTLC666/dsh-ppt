@@ -13,6 +13,12 @@
 | 能力 | 说明 |
 | --- | --- |
 | `ppt_create` 工具 | Markdown / 结构化 slides → `*.html` + `*.pptx` + `*.json` 三件套 |
+| `ppt_lesson_create` 工具 | 只给一个主题/一句话，一键产出 HTML + PPTX + JSON 三件套 + 教案 Markdown |
+| `ppt_lesson_generate` 工具 | 从主题生成结构化教学 slides（不落盘），供二次编辑后再 `ppt_create` |
+| `ppt_course_scan` 工具 | 干跑扫描课程文件夹，分类清单 + 课程序号 + 每课时长 + 素材匹配猜测 |
+| `ppt_course_build` 工具 | 一键把视频课程文件夹拆成精讲课件 + 作业（转写三级探测、提炼、三件套） |
+| `ppt_course_voice` 工具 | 音色替换：从视频/ srt 生成配音（需 VoiceStudio 在跑） |
+| `ppt_course_clean` 工具 | 用 ffmpeg 滤镜去水印（delogo / blur / box / crop），输出新文件 |
 | `ppt_themes` 工具 | 列出 5 套内置主题与适用场景；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套一张 SVG 色板卡（可直接进 README/npm 首屏） |
 | 11 种页型 | 封面 / 章节 / 要点 / 核心观点 / 金句 / 表格 / 结束 / 整页图片 / 左图右文 / 左文右图 / 图表 |
 | `ppt_templates` | 周报、论文答辩、项目汇报、路演的大纲和草稿结构参考 |
@@ -34,6 +40,8 @@
 > 把这句话做成 PPT：「AI 客服把首次响应时间压缩到 8 秒」，主题用科技感深色。
 >
 > 把 `docs/季度汇报.md` 做成双语演示文稿，导出 PPTX。
+>
+> 把这个课程文件夹（录屏视频 + 作业素材压缩包）拆成精讲课件：先 `ppt_course_scan` 看清单，再 `ppt_course_build { folder, mode: "deep", withHomework: true }`。
 
 ## 安装
 
@@ -41,7 +49,7 @@
 dsh plugin --profile web add dsh-ppt
 ```
 
-桌面版可在插件管理中安装 `dsh-ppt`。更新后重启对应宿主，加载八个工具与 `dsh-ppt` 技能。无需手写 JSON，可直接要求 Agent「加入这两张截图和销售图表」「只修改第三页」「撤销上次修改」。
+桌面版可在插件管理中安装 `dsh-ppt`。更新后重启对应宿主，加载十四个工具与 `dsh-ppt` 技能。无需手写 JSON，可直接要求 Agent「加入这两张截图和销售图表」「只修改第三页」「撤销上次修改」。
 
 ## 快速开始
 
@@ -80,6 +88,29 @@ node <skill-dir>/scripts/build-deck.mjs \
 | `*.html` | 独立网页放映：← → 翻页，V 演讲者视图（独立窗口：真实当前页/下一页预览、缩略图跳页、备注、计时、进度、暂停、字号、黑/白屏），S 备注，G 缩略图总览，F 全屏，P 打印，? 快捷键，Esc 关闭 |
 | `*.pptx` | 16:9 原生可编辑文字、表格、图片和图表，保留备注与转场 |
 | `*.json` | 工程、图片资产、页面 ID、修订号、最多 20 次修改历史和质量报告 |
+
+## 一键课件（ppt_lesson_create / ppt_lesson_generate）
+
+只给一个主题或一句话想法，就能出完整课件。两个工具共用同一套生成逻辑：
+
+- `ppt_lesson_create`：一次调用直接产出 HTML + PPTX + JSON 三件套 + 教案 Markdown（`<fileName>.lesson-plan.md`，含目标、时间轴、互动清单、评价设计、准备事项）。
+- `ppt_lesson_generate`：只返回结构化 slides（不落盘），供先看/改教案结构再交给 `ppt_create` 的高级用户。
+
+```json
+// 一次到位：只传 topic
+{ "topic": "如何做一次有效的用户访谈", "lessonType": "workshop", "duration": 45, "audience": "beginner", "language": "zh", "theme": "soft" }
+
+// 更傻瓜：连 lessonType 都可以不传，按关键词自动推断
+{ "topic": "Python 动手实操" }          // → workshop
+{ "topic": "商业案例分析" }              // → caseStudy
+{ "topic": "15分钟微课：时间管理" }       // → micro（默认 15 分钟）
+```
+
+自动推断：含「实操/动手/练习/workshop/hands-on」→ `workshop`；「案例/case」→ `caseStudy`；「实验/lab」→ `lab`；「研讨/讨论/seminar」→ `seminar`；「翻转/flipped」→ `flipped`；「微课/15分钟/短课/micro」→ `micro`；否则 `lecture`。`micro` 默认 15 分钟，其余默认 45 分钟；`duration` 范围为 5–180。
+
+`ppt_lesson_create` 支持的参数：`topic`（必填）、`title`、`lessonType`、`duration`、`audience`、`language`（zh/en/bilingual）、`theme`（默认 soft）、`includeInteractions`（默认 true）、`includeAssessment`（默认 true），以及透传 `outputDir / fileName / overwrite / motion`。
+
+**边界**：产出的是**可编辑的教学结构骨架**，不是真实学科知识。需要真实内容处统一用 `[待填写：…]` / `[To fill: …]` 占位，`ppt_check` 会将其判为「草稿」。交付前用 `ppt_edit` 补全真实内容或改用真实材料重新生成；不要把「生成了骨架」说成「已完成课件内容」。教学设计细节（7 模式对照、受众-布鲁姆映射、占位符约定）见 `skills/dsh-ppt/references/lesson.md`。
 
 ## 图片、图表、编辑与交付
 

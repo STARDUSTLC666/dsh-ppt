@@ -2,7 +2,96 @@
 export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
 export type PptSlideLayout = 'cover' | 'section' | 'bullets' | 'statement' | 'quote' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart';
-export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch';
+export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'lesson';
+/** 课件教学类型 */
+export type LessonTypeId = 'lecture' | 'workshop' | 'caseStudy' | 'lab' | 'seminar' | 'flipped' | 'micro';
+export type AudienceLevelId = 'beginner' | 'intermediate' | 'advanced' | 'mixed';
+export interface LessonTypeInfo {
+    id: LessonTypeId;
+    name: {
+        zh: string;
+        en: string;
+    };
+    description: {
+        zh: string;
+        en: string;
+    };
+}
+export interface AudienceLevelInfo {
+    id: AudienceLevelId;
+    name: {
+        zh: string;
+        en: string;
+    };
+    bloom: Array<'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create'>;
+}
+export interface InteractionTypeInfo {
+    id: string;
+    name: {
+        zh: string;
+        en: string;
+    };
+    icon: string;
+    duration: number;
+}
+export interface LessonPlanOptions {
+    topic: string;
+    lessonType?: LessonTypeId;
+    duration?: number;
+    audience?: AudienceLevelId;
+    language?: PptLanguage;
+    title?: string;
+    includeInteractions?: boolean;
+    includeAssessment?: boolean;
+    customObjectives?: string[];
+}
+export interface LessonPlanSlide {
+    layout: PptSlideLayout;
+    title: string;
+    subtitle?: string;
+    kicker?: string;
+    bullets?: string[];
+    notes?: string;
+    timing?: number;
+    activity?: string;
+    interaction?: boolean;
+    visual?: string;
+    chart?: any;
+    image?: any;
+}
+export interface LessonPlanResult {
+    title: string;
+    topic: string;
+    lessonType: LessonTypeId;
+    duration: number;
+    audience: AudienceLevelId;
+    language: PptLanguage;
+    slides: LessonPlanSlide[];
+    totalTiming: number;
+    objectives: string[];
+    metadata: {
+        version: string;
+        slideCount: number;
+        estimatedDuration: number;
+        interactionsCount: number;
+        assessmentCount: number;
+    };
+}
+/** ppt_lesson_create 的一键参数：在 LessonPlanOptions 上增加落盘相关透传字段。 */
+export interface LessonCreateOptions extends LessonPlanOptions {
+    /** 视觉主题 id，默认 soft。 */
+    theme?: string;
+    /** 页间转场与要点入场动画：on（默认）/ off。 */
+    motion?: 'on' | 'off';
+    outputDir?: string;
+    fileName?: string;
+    overwrite?: boolean;
+}
+/** ppt_lesson_create 的返回：三件套结果 + 教案 + 教案 Markdown 路径。 */
+export interface LessonCreateResult extends PptCreateResult {
+    lessonPlan: LessonPlanResult;
+    lessonPlanPath: string;
+}
 export interface PptImageSpec {
     src?: string;
     assetId?: string;
@@ -249,4 +338,6 @@ export interface DeckEngine {
     listThemes(lang?: string): PptThemeInfo[];
     resolveTheme(input: unknown): Record<string, unknown>;
     resolveLanguage(input: unknown): Record<string, unknown>;
+    generateLessonPlan(options: LessonPlanOptions): LessonPlanResult;
+    createLessonDeck?(options: Record<string, unknown>): Promise<LessonCreateResult>;
 }

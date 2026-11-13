@@ -1,5 +1,36 @@
 # 更新记录
 
+## 0.22.0 (2026-11-13)
+
+- **课程包转课件**：新增 `ppt_course_scan`（干跑扫描，分类视频/压缩包/文档/图片，给课程序号与每课时长）、`ppt_course_build`（一键拆解：扫描→抽音轨→转写→分课→提炼→成稿，产出每课三件套 + `homework.md` + 课程总览 + 转写 + 生成报告）、`ppt_course_voice`（音色替换，需 VoiceStudio 在跑）、`ppt_course_clean`（ffmpeg 去水印）四个工具。
+- 支持 `deep`（每课 15–25 页）/ `quick`（6–10 页）/ `outline`（3–5 页）三种深度；`useMaterials=auto` 解压作业素材并按文件名/序号匹配到课程。
+- **ASR 三级探测**：优先 VoiceStudio 本地转写（OpenAI 兼容端点），其次 `~/.dsh/asr.json`，都不可用则中文报错并给三条出路；转写缺失/过短降级为提取式摘要，绝不编造课程内容。
+- **优雅降级**：无 LLM / 无 STT / VoiceStudio 未运行分别给出明确中文原因和可继续的部分；长任务支持 signal 取消，转写/解压产物落盘缓存可续跑。
+- **路径安全**：解压防 zip-slip（`../` 越界）、单文件与总量上限；delogo/blur/box/crop 四种去水印滤镜，`regions` 为唯一可靠方式，`auto` 只产候选需确认。
+- **修复压缩包中文文件名乱码**：系统 `zip` 命令或资源管理器打的包不带 UTF-8 标志位，原先按 latin1 还原成「ä½ä¸š」；现在按 UTF-8 优先、GBK 兜底重新解码，中文素材名与内容均保留。
+
+- Add course-pack → lessons: `ppt_course_scan`, `ppt_course_build` (per-lesson HTML + PPTX + JSON trio, `homework.md`, overview, transcripts and build report), `ppt_course_voice` and `ppt_course_clean`.
+- Three depth modes (deep 15–25 / quick 6–10 / outline 3–5 pages per lesson); `useMaterials=auto` extracts homework archives and matches them to lessons by filename/number.
+- Three-tier ASR (VoiceStudio first, then `~/.dsh/asr.json`, else a clear Chinese error with remedies); extractive-summary fallback instead of fabricating content.
+- Graceful degradation without LLM / STT / VoiceStudio, cancellable long runs with cached transcripts and zip extraction; zip-slip-safe unzip with size/count caps; four watermark filters with `regions` as the only reliable path.
+- Fix mojibake in archive entry names: zips written by the system `zip` CLI or file managers carry no UTF-8 flag and were decoded as latin1; names are now re-decoded as UTF-8 with a GBK fallback.
+
+## 0.21.0 (2026-11-13)
+
+- **一键课件**：新增 `ppt_lesson_create`，只给一个主题/一句话，一次调用直接产出 HTML + PPTX + JSON 三件套 + 教案 Markdown（目标、时间轴、互动清单、评价设计、准备事项）。
+- **课件教学骨架**：新增 `ppt_lesson_generate`，返回结构化 slides（不落盘）供二次编辑；与 `ppt_lesson_create` 共用同一套生成逻辑。
+- 支持 7 种教学模式（lecture / workshop / caseStudy / lab / seminar / flipped / micro）× 4 类受众（beginner / intermediate / advanced / mixed）；`lessonType` 未传时按中英文关键词自动推断，`micro` 默认 15 分钟、其余 45 分钟。
+- 布鲁姆分类学学习目标（Remember/Understand/Apply/Analyze/Evaluate/Create，动词随受众层级变化）；10 类互动活动（投票/测验/思考-配对-分享/小组讨论/动手实操/案例分析/同伴互评/出口票/反思日志/画廊漫步）随模式自动挑选。
+- 完整教学闭环：封面 → 学习目标 → 议程 → 引入钩子 → 核心概念（含视觉建议）→ 示例/案例 → 主活动（分步）→ 形成性检查 → 总结 → 作业 → 结束页；每页带讲稿备注与分钟计时。
+- 确定性生成：以主题 + 关键参数做确定性哈希选择，同输入两次产出结构一致；时间一次性分配，各页 timing 之和精确等于时长。
+- 不编造内容：产出为可编辑的教学结构骨架，需要真实内容处统一用 [待填写：…] / [To fill: …] 占位，`ppt_check` 延续「未填 = 草稿」判定。
+- 新增课件教学模板 `lesson` / `Course lesson`（课程目标、核心知识点、示例与案例、练习与互动、总结与作业），默认主题 `soft`。
+
+- Add one-click lesson maker `ppt_lesson_create`: from a single topic, produce the HTML + PPTX + JSON trio plus a lesson-plan Markdown (objectives, timeline, interaction plan, assessment design, preparation) in one call.
+- Add `ppt_lesson_generate` (structured slides only, no files) sharing the same generator; 7 teaching modes × 4 audience levels, Bloom's taxonomy objectives, 10 auto-selected interaction types, full lesson loop with notes and per-page timing.
+- Deterministic hash-based selection and one-pass time allocation (per-page timings sum exactly to duration); no fabricated facts — real-content slots use explicit [To fill: …] placeholders and stay marked as draft until filled.
+- Add course lesson template (`lesson` / `Course lesson`) defaulting to the `soft` theme.
+
 ## 0.20.5 (2026-11-04)
 
 - 同步共享界面：嵌入设置时继承宿主底色，输入框跟随主题，空状态保持可读宽度；新版 DSH 可显示插件设置图标。

@@ -23,6 +23,7 @@ import { buildPptTools, type ToolDefinition } from './tools.js'
 import { PptWorkbench, installPptWorkbench } from './workbench.js'
 import { nativeCoachingModel } from './coaching-model.js'
 import { nativeVisualModel } from './visual-model.js'
+import { CourseService } from './course.js'
 export type { ToolDefinition } from './tools.js'
 export type { PptExecution } from './execution.js'
 
@@ -59,6 +60,15 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
     disposers.push(() => { workbench.coaching.dispose(); workbench.visual.dispose() })
   }
 
+  // 课程包拆解服务：注入宿主 llm + speechToText（ASR 三级探测在其内部完成）。
+  const course = new CourseService({ outputDir: resolved.outputDir, maxSlides: resolved.maxSlides })
+  if (typeof ctx.inject === 'function') {
+    ctx.inject?.(['llm', 'speechToText'], host => {
+      course.setHost({ llm: host.llm, speechToText: host.speechToText })
+      host.effect?.(() => () => course.setHost({}))
+    })
+  }
+
   // 技能注册：单个技能文件缺失只告警，不弄崩宿主启动。
   try {
     disposers.push(registerPptSkill(ctx))
@@ -66,7 +76,7 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
     warn('[dsh-ppt] 技能加载失败：' + (error instanceof Error ? error.message : String(error)))
   }
 
-  for (const definition of buildPptTools(resolved)) {
+  for (const definition of buildPptTools(resolved, course)) {
     const execute = definition.execute
     disposers.push(ctx.tools.register({ ...definition, async execute(args, exec) {
       const result = await execute(args, exec)
@@ -84,6 +94,21 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
 
 export { resolvePptConfig, PPT_OUTPUT_DIR_ENV, DEFAULT_MAX_SLIDES, clampInt } from './config.js'
 export { bundledSkillsDir, parseSkillFile, registerPptSkill, SKILL_NAMES } from './skill.js'
+export { CourseService, nativeCourseLlm } from './course.js'
+export type {
+  CourseTranscriptSegment,
+  CourseScanFile,
+  CourseScanResult,
+  CoursePoint,
+  CourseRefined,
+  CourseLessonResult,
+  CourseBuildResult,
+  CourseVoiceResult,
+  CourseCleanResult,
+  CourseLlm,
+  CourseTranscriber,
+  CourseServiceOptions,
+} from './course.js'
 export type {
   PptConfig,
   PptCreateArgs,
@@ -109,4 +134,10 @@ export type {
   PptDataModel,
   PptDataSource,
   PptDataMetric,
+  LessonTypeId,
+  AudienceLevelId,
+  LessonPlanOptions,
+  LessonPlanResult,
+  LessonCreateOptions,
+  LessonCreateResult,
 } from './types.js'

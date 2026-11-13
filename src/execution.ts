@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { ResolvedPptConfig } from './config.js'
-import type { DeckEngine, PptCreateArgs, PptThemesResult } from './types.js'
+import type { DeckEngine, PptCreateArgs, PptThemesResult, LessonPlanOptions, LessonPlanResult, LessonCreateResult } from './types.js'
 
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
@@ -115,6 +115,31 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
       if(args.action === 'preview') return engine.previewDeckData(options)
       if(args.action === 'apply') return engine.updateDeckData(options)
       throw new Error('dsh-ppt：action 需为 preview 或 apply / Use preview or apply')
+    },
+    async lessonGenerate(rawArgs: unknown, exec?: PptExecution): Promise<LessonPlanResult> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs) as unknown as LessonPlanOptions
+      if (typeof args.topic !== 'string' || args.topic.trim() === '') throw new Error('dsh-ppt：topic 不能为空')
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      return engine.generateLessonPlan(args)
+    },
+    async lessonCreate(rawArgs: unknown, exec?: PptExecution): Promise<LessonCreateResult> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs)
+      if (typeof args.topic !== 'string' || args.topic.trim() === '') throw new Error('dsh-ppt：topic 不能为空')
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      if (typeof engine.createLessonDeck !== 'function') throw new Error('dsh-ppt：当前引擎不支持一键课件生成')
+      const cwd = exec?.agent?.session.header.cwd ?? process.cwd()
+      const outputDir = typeof args.outputDir === 'string' && args.outputDir.trim() !== '' ? args.outputDir.trim() : config.outputDir
+      return engine.createLessonDeck({
+        ...args,
+        topic: args.topic.trim(),
+        outputDir: resolve(cwd, outputDir || '.'),
+        cwd,
+        signal: exec?.signal,
+      })
     },
   }
 }

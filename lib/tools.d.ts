@@ -1,5 +1,6 @@
 import type { ResolvedPptConfig } from './config.js';
 import { type PptExecution } from './execution.js';
+import type { CourseService } from './course.js';
 export interface ToolDefinition {
     name: string;
     description: string;
@@ -14,4 +15,4 @@ export interface ToolDefinition {
     execute: (rawArgs: unknown, exec?: PptExecution) => Promise<unknown>;
 }
 /** Assemble presentation schemas, rendering and the session-aware executors. */
-export declare function buildPptTools(config: ResolvedPptConfig): ToolDefinition[];
+export declare function buildPptTools(config: ResolvedPptConfig, course?: CourseService): ToolDefinition[];
