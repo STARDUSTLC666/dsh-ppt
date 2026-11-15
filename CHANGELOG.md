@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.20.7（未发布）
+
+- 修复在 Electron/asar 打包的 DSH 里 `ppt_render` 必然失败（`spawn ...app.asar\...\dsoffice.exe ENOENT`）：引擎包（`libreoffice-kit-win32-x64`）只能从 `app.asar.unpacked` 启动，而 Kit 默认按自身位置解析。现在加载 Kit 后把该路径映射到 unpacked 兄弟目录，并作为 `resolveEnginePackage` 传给 `createConverter`（Kit 0.2.3 起支持；非 asar 环境下映射为 no-op，行为不变）。
+- Fix `ppt_render` inside Electron/asar-packaged DSH: the engine package (`libreoffice-kit-win32-x64`) can only be spawned from `app.asar.unpacked`, while Kit resolves it next to itself. The loader now maps that path to the unpacked sibling and passes it as `resolveEnginePackage` to `createConverter` (Kit 0.2.3+; a no-op outside asar).
+
 ## 0.20.6 (2026-11-14)
 
 - 适配 DSH 0.2.2-rc.3：PPTX 渲染器接受宿主内置的 @deepseek-ai/libreoffice-kit 0.2.3（0.1.5 继续可用），并实测其 createConverter / renderImages / convert 接口；最低 Harness 声明提升至 0.2.2-rc.3。

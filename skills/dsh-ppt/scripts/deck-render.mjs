@@ -106,6 +106,17 @@ function unavailable(error) {
     installationHint: `在 dsh-ppt 所在项目或独立技能目录安装：npm install --ignore-scripts ${RENDERER_PACKAGE}@${RENDERER_VERSION}（${RENDERER_VERSIONS.join(' / ')} 均受支持）。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。` }
 }
 function missingDependency(error) { return ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'unavailable'].includes(error?.code) }
+/** Kit resolves its engine package from its own location. Inside an Electron asar
+ * archive that is a path `spawn` cannot follow (the native engine lives in the
+ * `.asar.unpacked` sibling), so hand Kit the mapped location explicitly. Outside
+ * asar the replacement is a no-op. The option exists from Kit 0.2.3 onwards. */
+async function loadKitEntry(entry) {
+  const kit = await import(entry)
+  if (kit.ENGINE_VERSION !== RENDERER_VERSION) return kit
+  const require = createRequire(entry)
+  const resolveEnginePackage = name => require.resolve(`${name}/package.json`).replace(/\.asar(?=[\\/]|$)/, '.asar.unpacked')
+  return Object.assign(Object.create(null), kit, { resolveEnginePackage })
+}
 async function loadRenderer() {
   const require = createRequire(import.meta.url)
   // DSH redirects linked-package peer requests to its bundled version. Prefer an
@@ -118,11 +129,11 @@ async function loadRenderer() {
     try { manifest = JSON.parse(readFileSync(candidate, 'utf8')) } catch (error) { if (error.code === 'ENOENT') continue; throw error }
     if (manifest.name !== RENDERER_PACKAGE || typeof manifest.main !== 'string' || !isSupportedVersion(manifest.version)) continue
     const entry = pathToFileURL(require.resolve(join(dirname(candidate), manifest.main))).href
-    if (manifest.version === RENDERER_VERSION) return import(entry)
+    if (manifest.version === RENDERER_VERSION) return loadKitEntry(entry)
     fallback = fallback ?? entry
   }
-  if (fallback) return import(fallback)
-  return import(pathToFileURL(require.resolve(RENDERER_PACKAGE)).href)
+  if (fallback) return loadKitEntry(fallback)
+  return loadKitEntry(pathToFileURL(require.resolve(RENDERER_PACKAGE)).href)
 }
 function reserveDirectory(base) {
   mkdirSync(dirname(base), { recursive: true })
@@ -169,7 +180,9 @@ export async function renderDeck(options = {}, loadKit = loadRenderer) {
   if (!isSupportedVersion(kit.ENGINE_VERSION) || typeof kit.createConverter !== 'function') return unavailable(new Error(`需要 ${RENDERER_PACKAGE}@${RENDERER_VERSIONS.join(' 或 ')}，当前模块版本为 ${String(kit.ENGINE_VERSION ?? '未知')}`))
   const input = readBounded(pptxPath, INPUT_LIMIT, 'PPTX'), sourceSha256 = sha256(input), shape = geometry(input, width)
   let converter
-  try { converter = await kit.createConverter({ timeoutMs, maxInputBytes: INPUT_LIMIT, maxOutputBytes: OUTPUT_LIMIT, maxArchiveEntries: 20000, maxUncompressedBytes: 512 * 1024 * 1024, fontMetadataCacheDirectory: false }) }
+  const converterOptions = { timeoutMs, maxInputBytes: INPUT_LIMIT, maxOutputBytes: OUTPUT_LIMIT, maxArchiveEntries: 20000, maxUncompressedBytes: 512 * 1024 * 1024, fontMetadataCacheDirectory: false }
+  if (typeof kit.resolveEnginePackage === 'function') converterOptions.resolveEnginePackage = kit.resolveEnginePackage
+  try { converter = await kit.createConverter(converterOptions) }
   catch (error) { abort(options.signal); if (missingDependency(error)) return unavailable(error); throw error }
   let root, staging, committed = false
   const deadline = new AbortController()
