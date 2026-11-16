@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.20.7 (2026-11-16)
+
+- 修复 Windows 版 DeepSeek Harness 中 `ppt_render` 导出 PNG 和 PDF 时找不到 `dsoffice.exe` 的问题。使用桌面版已解包的 LibreOffice 引擎即可导出，无需另外安装（#8）。
+- Fix PNG and PDF export in the packaged Windows desktop app by resolving the bundled LibreOffice native engine from `app.asar.unpacked` (#8).
+
 ## 0.20.6 (2026-11-14)
 
 - 适配 DSH 0.2.2-rc.3：PPTX 渲染器接受宿主内置的 @deepseek-ai/libreoffice-kit 0.2.3（0.1.5 继续可用），并实测其 createConverter / renderImages / convert 接口；最低 Harness 声明提升至 0.2.2-rc.3。

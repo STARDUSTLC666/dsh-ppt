@@ -2,8 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { buildDeck } from '../skills/dsh-ppt/scripts/deck-core.mjs'
 import { renderDeck, readRenderReceipt, RENDERER_VERSION } from '../skills/dsh-ppt/scripts/deck-render.mjs'
 
@@ -60,6 +61,52 @@ test('renderer versions 0.1.5 and 0.2.3 both render and record the actual versio
     assert.equal(result.rendererVersion, version)
     assert.equal(JSON.parse(readFileSync(result.receiptPath)).renderer.version, version)
     assert.equal(readRenderReceipt(f.pptxPath, result.receiptPath).ok, true)
+  }
+})
+
+test('the Electron Kit resolves native manifests on disk and keeps WASM in the archive', async t => {
+  const f = fixture(t)
+  const archive = join(f.dir, 'app.asar')
+  const put = (file, content) => {
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, content)
+  }
+  const packageFile = (root, suffix) => join(root, 'node_modules', '@deepseek-ai', 'libreoffice-kit' + suffix, 'package.json')
+  const kit = packageFile(archive, '')
+  const native = packageFile(archive, '-win32-x64')
+  const wasm = packageFile(archive, '-wasm')
+  put(native, '{}')
+  put(wasm, '{}')
+  put(packageFile(archive + '.unpacked', '-win32-x64'), '{}')
+  put(kit, JSON.stringify({ name: '@deepseek-ai/libreoffice-kit', version: '0.2.3', main: './index.mjs' }))
+  put(join(dirname(kit), 'index.mjs'), `
+    import assert from 'node:assert/strict'
+    import { createRequire } from 'node:module'
+    export const ENGINE_VERSION = '0.2.3'
+    export function createConverter({ resolveEnginePackage }) {
+      const fromHere = createRequire(import.meta.url)
+      const native = '@deepseek-ai/libreoffice-kit-win32-x64'
+      const wasm = '@deepseek-ai/libreoffice-kit-wasm'
+      if (!process.versions.electron) {
+        assert.equal(resolveEnginePackage, undefined)
+        throw Object.assign(new Error('test: ordinary Node'), { code: 'unavailable' })
+      }
+      assert.equal(resolveEnginePackage(native), ${JSON.stringify(packageFile(archive + '.unpacked', '-win32-x64'))})
+      assert.equal(resolveEnginePackage(wasm), fromHere.resolve(wasm + '/package.json'))
+      throw Object.assign(new Error('test: resolved both engine paths'), { code: 'unavailable' })
+    }
+  `)
+  const renderer = join(archive, 'deck-render.mjs')
+  put(renderer, readFileSync(new URL('../skills/dsh-ppt/scripts/deck-render.mjs', import.meta.url)))
+  const { renderDeck: renderFromArchive } = await import(pathToFileURL(renderer).href)
+  assert.match((await renderFromArchive(f)).message, /ordinary Node/)
+  const previous = Object.getOwnPropertyDescriptor(process.versions, 'electron')
+  Object.defineProperty(process.versions, 'electron', { value: 'fixture', configurable: true })
+  try {
+    assert.match((await renderFromArchive(f)).message, /resolved both engine paths/)
+  } finally {
+    if (previous) Object.defineProperty(process.versions, 'electron', previous)
+    else delete process.versions.electron
   }
 })
 

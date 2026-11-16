@@ -59,6 +59,12 @@ async function metadata(version) {
 async function main() {
   const command = process.argv[2]
   if (command === 'check-input') { checkInput(); console.log('Release inputs verified'); return }
+  if (command === 'github-release') {
+    const pkg = checkInput()
+    const { publishGitHubRelease } = await import('./github-release.mjs')
+    await publishGitHubRelease(pkg, config.repository, process.env.GITHUB_SHA)
+    return
+  }
   if (command === 'pack') {
     const pkg = checkInput(); assert.ok(!existsSync(dist), 'Release directory already exists')
     mkdirSync(dist)

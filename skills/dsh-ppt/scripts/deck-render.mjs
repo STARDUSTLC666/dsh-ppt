@@ -106,6 +106,29 @@ function unavailable(error) {
     installationHint: `在 dsh-ppt 所在项目或独立技能目录安装：npm install --ignore-scripts ${RENDERER_PACKAGE}@${RENDERER_VERSION}（${RENDERER_VERSIONS.join(' / ')} 均受支持）。Windows 还需与 Node 架构匹配的 Microsoft Visual C++ v14 运行库。` }
 }
 function missingDependency(error) { return ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'unavailable'].includes(error?.code) }
+const ASAR_SEGMENT = /\.asar(?=[\\/])/
+
+async function loadKitEntry(entry) {
+  const kit = await import(pathToFileURL(entry).href)
+  if (kit.ENGINE_VERSION !== '0.2.3' || !process.versions.electron || !ASAR_SEGMENT.test(entry)) return kit
+
+  const fromKit = createRequire(entry)
+  return {
+    ENGINE_VERSION: kit.ENGINE_VERSION,
+    createConverter(options) {
+      return kit.createConverter({
+        ...options,
+        resolveEnginePackage(name) {
+          const manifest = fromKit.resolve(`${name}/package.json`)
+          // Electron can read an archived manifest, but spawn needs the native
+          // executable on disk. WASM stays in the archive.
+          return name === `${RENDERER_PACKAGE}-wasm` ? manifest : manifest.replace(ASAR_SEGMENT, '.asar.unpacked')
+        },
+      })
+    },
+  }
+}
+
 async function loadRenderer() {
   const require = createRequire(import.meta.url)
   // DSH redirects linked-package peer requests to its bundled version. Prefer an
@@ -117,12 +140,11 @@ async function loadRenderer() {
     let manifest
     try { manifest = JSON.parse(readFileSync(candidate, 'utf8')) } catch (error) { if (error.code === 'ENOENT') continue; throw error }
     if (manifest.name !== RENDERER_PACKAGE || typeof manifest.main !== 'string' || !isSupportedVersion(manifest.version)) continue
-    const entry = pathToFileURL(require.resolve(join(dirname(candidate), manifest.main))).href
-    if (manifest.version === RENDERER_VERSION) return import(entry)
+    const entry = require.resolve(join(dirname(candidate), manifest.main))
+    if (manifest.version === RENDERER_VERSION) return loadKitEntry(entry)
     fallback = fallback ?? entry
   }
-  if (fallback) return import(fallback)
-  return import(pathToFileURL(require.resolve(RENDERER_PACKAGE)).href)
+  return loadKitEntry(fallback ?? require.resolve(RENDERER_PACKAGE))
 }
 function reserveDirectory(base) {
   mkdirSync(dirname(base), { recursive: true })
