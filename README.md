@@ -21,8 +21,27 @@
 - 按需编辑文字、图片与页序，支持撤销。
 - 可选数字溯源、现场推演、AI 预审与答辩演练。
 
+## 风格预览
+
+这些画面来自插件生成的 PPTX。点击查看大图。
+
+<table>
+<tr>
+  <th>白底红色封面</th>
+  <th>暖色图文页</th>
+  <th>浅蓝数据页</th>
+</tr>
+<tr>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-zh.webp" alt="白底红色封面，标题为周末阅读计划" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-zh.webp" alt="奶油色图文页，文字旁是一张阳光下的阅读桌" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-zh.webp" alt="浅蓝色数据页，柱状图展示四周的示例到馆人次" width="100%"></a></td>
+</tr>
+</table>
+
+图文页用了生成配图，图表用的是示例数据。
+
 <details>
-<summary>查看实际示例</summary>
+<summary>查看工作台界面</summary>
 
 ![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-zh.webp)
 

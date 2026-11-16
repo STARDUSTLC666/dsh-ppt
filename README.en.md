@@ -21,8 +21,27 @@
 - Optionally edit text, images and slide order with undo.
 - Choose traceable data, live scenarios, AI review or rehearsal when needed.
 
+## Style previews
+
+Rendered from PPTX files made with dsh-ppt. Select an image to enlarge it.
+
+<table>
+<tr>
+  <th>Minimal cover</th>
+  <th>Warm photo layout</th>
+  <th>Light blue chart</th>
+</tr>
+<tr>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-en.webp" alt="Weekend Reading cover in warm white with a red accent" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-en.webp" alt="Cream slide pairing a reading schedule with a sunlit library photo" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-en.webp" alt="Light blue slide with a column chart of sample weekend library visits" width="100%"></a></td>
+</tr>
+</table>
+
+The photo was generated for the example, and the chart uses sample data.
+
 <details>
-<summary>See a workbench example</summary>
+<summary>See the workbench</summary>
 
 ![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-en.webp)
 
