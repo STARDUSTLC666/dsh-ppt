@@ -2,31 +2,38 @@
 
 [返回简介](../README.md) · [English](#english)
 
-普通生成仍直接提供 PPTX、HTML 和工程文件。需要进一步检查时，在 **设置 → 演示文稿 → 打开工程 → 视觉检查与修复** 主动开启。
+普通生成仍直接提供 PPTX、HTML 和工程文件。需要进一步检查版面质量与视觉美感时，可在工作台打开工程后切换至 **视觉检查（Visual review）** 分栏（或通过 **设置 → 演示文稿 → 打开工程 → 视觉检查与修复**）主动开启。
 
 模型目录可随 DSH 更新。点击“刷新视觉模型”会保留仍然可用的原选择；原模型下线时清空选择，重新选定后才能开始，不会自动换成另一个模型。
 
 ## 怎么用
 
-1. 选择 DSH 已配置、明确声明支持图片输入的视觉模型。选当前页，或一次检查最多 12 页。
+1. 选择 DSH 已配置、明确声明支持图片输入的视觉模型。选当前页，或一次检查最多 **24 页**原始页面。
 2. 选择“仅看图检查”，或最多自动修复 1 / 2 轮。开始前会显示发送范围与调用上限。
-3. 插件读取当前实际 PPTX，用官方 LibreOffice Kit 渲染，然后把所选页的图片和页面文字交给模型。
-4. 模型发现可处理的排版问题后，插件保留原稿，生成可撤销副本，再读取副本的 PPTX 重新渲染、复查。拆出的新页也会检查。
-5. 查看前后画面，橙框表示模型定位的区域。“采用修复副本”打开复查后的工程；仍有问题时会明确标注。可以撤销、下载最新成品或导出检查记录。
+3. 插件读取当前实际 PPTX，用官方 LibreOffice Kit 渲染逐页 PNG，然后按**双层审美与版面标尺**（硬性裁切/重叠/溢出 + 留白呼吸感、信息密度、字号层级、图表与表格可读性）把所选页图片和页面文字交给模型。
+4. 模型发现可处理的版面或层级问题后，插件保留原稿，生成可撤销副本，执行受控无损修复动作，再读取副本的 PPTX 重新渲染、复查。拆出的新页也会纳入复查。
+5. 在画布中央查看大尺寸「修复前 / 修复后」并排画面，橙框表示模型定位的问题区域。点击“采用修复副本”即可打开复查后的工程；仍有问题时会明确标注。可以随时撤销、下载最新成品或导出 Markdown 检查记录。
 
-**一轮修复包括“检查 → 修改 → 再渲染检查”，不是一次模型调用。** 每次调用最多两张图片，每张渲染图最多 4 MiB；若所有选定页面都拆分，最多两轮修复会检查原来的四倍页数。12 个原始页面、两轮修复的最坏调用上限为 42 次，开始前会展示。服务商自身的重试、计费规则仍然适用。
+**一轮修复包括“检查 → 修改 → 再渲染检查”，不是一次模型调用。** 每次调用最多两张图片，每张渲染图最多 4 MiB；若选定页面全部发生拆页，后续轮次调用上限按 `min(120, 页数 × 2^轮次)` 受控收敛。24 个原始页面、两轮修复的最坏调用上限为 **84 次**（`12 + 24 + 48`），开始前会明确展示。服务商自身的重试、计费规则仍然适用。
 
-## 能自动改什么
+## 能自动改什么（12 种无损动作）
 
-| 操作 | 保留的内容 |
+| 动作 | 保留的内容与效果 |
 | --- | --- |
-| 标题字号 24–60 pt、正文字号 16–28 pt | 原文不改写，PPTX 与 HTML 同步 |
-| 图表标签字号 14–24 pt | 分类、系列、数值、单位和公式不改 |
-| 柱状图改为横向条形图 | 保留全部数据与数字绑定 |
-| 过密要点或表格拆页 | 保留顺序、原文、表头、备注和数字绑定 |
-| 图片改为完整显示 | 使用已有嵌入图片，不新增图片或读取文件 |
+| `title-size`（标题字号 24–60 pt） | 收敛折行或放大弱标题，原文不改写，PPTX 与 HTML 同步 |
+| `body-size`（正文字号 14–28 pt） | 缓解拥挤或过小字号，原文与要点顺序不变 |
+| `chart-label-size`（图表标签字号 12–24 pt） | 改善坐标轴与数据标签拥挤，分类、系列、数值、单位和公式不改 |
+| `chart-horizontal`（柱状图转横向条形图） | 解决长类别名斜排或重叠，保留全部数据与数字绑定 |
+| `chart-highlight`（突出关键数据项） | 高亮图表焦点柱/序列以强化视觉重心，不改动任何数值 |
+| `image-contain`（图片改为完整显示） | 消除关键截图裁切，使用已有嵌入图片，不新增或读取外部文件 |
+| `swap-image-side`（左右图文对调） | 平衡图文重心与视线流向，保留原图与说明文字 |
+| `density-mode`（页面疏密 `compact` / `balanced` / `airy`） | 调整留白、行距与内边距，缓解呼吸感不足或版面松散 |
+| `switch-layout`（兼容版式无损切换） | 将单调或失衡的列表页映射为更匹配的卡片/对比/分栏版式，不丢字 |
+| `table-style`（表格样式切换） | 在咨询表（`consulting`）、学术三线表（`booktabs`）、极简（`minimal`）与条纹（`banded`）间切换以提升易读性 |
+| `split-bullets`（过密要点拆页） | 自动拆分为连续两页，保留顺序、原文、备注和数字绑定 |
+| `split-table`（过密表格拆页） | 重复表头拆页，保留全部单元格数据、备注与数字绑定 |
 
-不能用这些操作解决的问题会留下说明。不会根据模型意见捏造内容、重写结论、替换数字、安装字体或下载图片，也不会把“未发现明显问题”当作人工验收通过。缺失字体会单独报告。
+不能用这 12 种无损动作解决的问题会明确列出说明。插件绝不会根据模型意见捏造内容、重写业务结论、替换数字、安装系统字体或联网下载图片，也不会把“未发现明显问题”当作人工最终验收通过。缺失字体会单独报告。
 
 ## 模型与渲染条件
 
@@ -45,14 +52,14 @@
 
 ## English
 
-Open **Settings → Presentations → a project → Visual review and repair**. Choose a configured image-capable model, the current slide or up to 12 original slides, and inspection only or up to two repair rounds.
+Open the **Visual review** tab in the Presentations workbench (or **Settings → Presentations → a project → Visual review and repair**). Choose a configured image-capable model, the current slide or up to **24** original slides, and inspection only or up to two repair rounds.
 
 Refreshing the catalog preserves an available selection by provider and model ID. If that route disappears, selection is cleared and Start stays disabled until you choose again; another model is never substituted automatically.
 
-The plugin renders the actual PPTX using the optional official LibreOffice Kit, sends the selected images and visible slide content through native DSH model and attachment services, and records image-based findings. A small formatting vocabulary may create an undoable copy: font sizes, bullet/table splits, horizontal bars or uncropped images. Original wording, values, formulas and source bindings remain intact.
+The plugin renders the actual PPTX using the optional official LibreOffice Kit, evaluates both hard layout defects (clipping, overlap, overflow) and visual hierarchy (whitespace, density, typography contrast, chart/table legibility) through native DSH model and attachment services, and records localized findings. Twelve lossless formatting actions may create an undoable copy: `title-size`, `body-size`, `chart-label-size`, `chart-horizontal`, `chart-highlight`, `image-contain`, `swap-image-side`, `density-mode`, `switch-layout`, `table-style`, `split-bullets`, and `split-table`. Original wording, values, formulas, and source bindings remain intact.
 
-Each repaired PPTX is rendered and inspected again, including newly split pages. Compare actual before/after images before adopting the copy. AI findings are not human verification. Unsupported issues and missing fonts remain explicit; errors, truncated output or cancellation stop the run without automatic plugin retries. The source presentation is preserved.
+Each repaired PPTX is rendered and inspected again, including newly split pages. Inspect the full-width before/after comparison in the center canvas before adopting the copy. AI findings are not human verification. Unsupported issues and missing fonts remain explicit; errors, truncated output, or cancellation stop the run without automatic plugin retries. The source presentation is preserved.
 
-Each request carries at most two images. Splitting can increase the scope; the maximum number of requests is shown before starting (at most 42 for 12 original slides and two repair rounds). Providers may have separate retries or billing. Ordinary generation never starts this optional flow.
+Each request carries at most two images. Splitting can increase the scope up to the per-round cap `min(120, count * 2^round)`; the maximum number of requests is shown before starting (at most **84** for 24 original slides and two repair rounds: `12 + 24 + 48`). Providers may have separate retries or billing. Ordinary generation never starts this optional flow.
 
-Records are local and tied to exact project/render hashes. A changed project, PPTX, image or copy cannot be reused as a current review. Deleting a record removes its plugin preview images, not presentation files or the host-managed DSH attachment store.
+Records are local and tied to exact project/render hashes. A changed project, PPTX, image, or copy cannot be reused as a current review. Deleting a record removes its plugin preview images, not presentation files or the host-managed DSH attachment store.

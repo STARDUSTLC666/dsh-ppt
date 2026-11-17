@@ -57,27 +57,46 @@ function initDataView(data, math, chartRenderer) {
       for(const id of metric.dependencies){const dependency=byId.get(id);button(dependency.label+' = '+math.format(values[id],dependency,data.language),evidence,()=>open(id));}
     }
   }
+  function appendBoundText(parent,text){
+    const pattern=/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g;let end=0;
+    for(const match of text.matchAll(pattern)){if(match.index>end)parent.append(document.createTextNode(text.slice(end,match.index)));const metric=byId.get(match[1]);el('button',math.format(values[metric.id],metric,data.language),parent,{type:'button',class:'data-number','data-metric':metric.id,title:L('查看数字出处','Inspect source')});end=match.index+match[0].length;}
+    if(end<text.length)parent.append(document.createTextNode(text.slice(end)));
+  }
   function fragment(template){
-    const result=document.createDocumentFragment(),pattern=/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g;let end=0;
-    for(const match of template.matchAll(pattern)){result.append(document.createTextNode(template.slice(end,match.index)));const metric=byId.get(match[1]);const number=el('button',math.format(values[metric.id],metric,data.language),result,{type:'button',class:'data-number','data-metric':metric.id,title:L('查看数字出处','Inspect source')});end=match.index+match[0].length;}
-    result.append(document.createTextNode(template.slice(end)));return result;
+    const result=document.createDocumentFragment(),inline=/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*?\*)/g;let end=0;
+    for(const match of template.matchAll(inline)){
+      if(match.index>end)appendBoundText(result,template.slice(end,match.index));
+      const tok=match[0];
+      if(tok.startsWith('**')&&tok.endsWith('**'))appendBoundText(el('strong',undefined,result),tok.slice(2,-2));
+      else if(tok.startsWith('`')&&tok.endsWith('`'))appendBoundText(el('code',undefined,result,{class:'inline-code'}),tok.slice(1,-1));
+      else if(tok.startsWith('*')&&tok.endsWith('*'))appendBoundText(el('em',undefined,result),tok.slice(1,-1));
+      else appendBoundText(result,tok);
+      end=match.index+tok.length;
+    }
+    if(end<template.length||template==='')appendBoundText(result,template.slice(end));
+    return result;
   }
   function fill(node,template){if(node&&typeof template==='string')node.replaceChildren(fragment(template));}
-  function graphFor(template,solved){const graph=structuredClone(template),text=value=>typeof value==='string'?value.replace(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g,(_,id)=>math.format(solved[id],byId.get(id),data.language)):value;graph.categories=graph.categories.map(text);graph.series=graph.series.map(s=>({...s,name:text(s.name),values:s.values.map(v=>typeof v==='string'&&/^\{\{[A-Za-z][A-Za-z0-9]*\}\}$/.test(v)?solved[v.slice(2,-2)]:Number(v))}));graph.unit=text(graph.unit);graph.caption=text(graph.caption);if(graph.kind==='pie'&&(graph.series[0].values.some(v=>v<0)||graph.series[0].values.reduce((a,b)=>a+b,0)<=0))throw new Error(L('饼图数值需非负且总和大于零','Pie values must be non-negative with a positive total'));return graph;}
+  function graphFor(template,solved){const graph=structuredClone(template),text=value=>typeof value==='string'?value.replace(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g,(_,id)=>math.format(solved[id],byId.get(id),data.language)):value;graph.categories=graph.categories.map(text);graph.series=graph.series.map(s=>({...s,name:text(s.name),values:s.values.map(v=>typeof v==='string'&&/^\{\{[A-Za-z][A-Za-z0-9]*\}\}$/.test(v)?solved[v.slice(2,-2)]:Number(v))}));graph.unit=text(graph.unit);graph.caption=text(graph.caption);graph.source=text(graph.source);if(['pie','doughnut','percent-column','percent-bar'].includes(graph.kind)&&(graph.series.some(s=>s.values.some(v=>v<0))||graph.series[0].values.reduce((a,b)=>a+b,0)<=0))throw new Error(L('占比图表数值需非负且总和大于零','Proportional chart values must be non-negative with a positive total'));return graph;}
   function missingNumbers(root){
-    const targets=root.querySelectorAll('h1,h2,.statement-title,.quote-text,.subtitle,.quote-attr,.deck-table th,.deck-table td,li,.media-body p,.media-caption');
-    const texts=[];for(const target of targets){const walker=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);while(walker.nextNode()){const node=walker.currentNode;if(node.parentElement?.closest('.data-number,svg,.chart-data'))continue;texts.push(node);}}
+    const targets=root.querySelectorAll('h1,h2,.statement-title,.quote-text,.subtitle,.quote-attr,.deck-table th,.deck-table td,.harvey-table th,.harvey-table td,li,.media-body p,.media-caption,.media-lead,.media-takeaway,.takeaway-text,.slide-source,.media-source,.kpi-value,.kpi-delta,.card-title,.card-body,.card-stat,.comp-head,.callout-hero,.exec-thesis,.media-card-title,.media-card-body,[data-item-field]');
+    const texts=[];for(const target of targets){const walker=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);while(walker.nextNode()){const node=walker.currentNode;if(node.parentElement?.closest('.data-number,svg,.chart-data,.item-badge,.section-index,.folio,.slide-folio'))continue;texts.push(node);}}
     for(const node of new Set(texts)){const pattern=/[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?[%％]?/g,content=node.textContent,matches=[...content.matchAll(pattern)];if(!matches.length)continue;const output=document.createDocumentFragment();let end=0;for(const match of matches){output.append(document.createTextNode(content.slice(end,match.index)));el('button',match[0],output,{type:'button',class:'data-number data-unlinked','data-unlinked':'1',title:L('未关联来源','Source not linked')});end=match.index+match[0].length;}output.append(document.createTextNode(content.slice(end)));node.replaceWith(output);}
   }
   function redraw(){
     for(const slide of data.slides){const root=document.querySelectorAll('.slide')[slide.page-1];if(!root)continue;const template=slide.template;
       fill(root.querySelector('.media-title,h1,h2,.statement-title,.quote-text'),template.title);
-      fill(root.querySelector('.subtitle,.quote-attr,.media-body > p'),template.subtitle);fill(root.querySelector('.kicker'),template.kicker);
-      if(template.bullets)root.querySelectorAll('li').forEach((li,i)=>fill(li,template.bullets[i]));
-      if(template.rows)root.querySelectorAll('.deck-table tr').forEach((row,r)=>Array.from(row.children).forEach((cell,c)=>fill(cell,template.rows[r]?.[c])));
+      fill(root.querySelector('.subtitle,.quote-attr,.media-lead,.media-body > p'),template.subtitle);fill(root.querySelector('.kicker:not(.matrix-tag)'),template.kicker);
+      fill(root.querySelector('.callout-hero,.exec-thesis'),template.text);
+      fill(root.querySelector('.takeaway-text,.media-takeaway'),template.takeaway);
+      fill(root.querySelector('.slide-source,.media-source'),template.source);
+      if(Array.isArray(template.columns))root.querySelectorAll('[data-col-index]').forEach(col=>fill(col,template.columns[Number(col.dataset.colIndex)]));
+      if(template.items)root.querySelectorAll('[data-item-index]').forEach(card=>{const it=template.items[Number(card.dataset.itemIndex)];if(!it)return;for(const f of ['tag','title','text','value','unit','delta'])card.querySelectorAll('[data-item-field="'+f+'"]').forEach(node=>fill(node,it[f]));if(it.bullets)card.querySelectorAll('li').forEach((li,i)=>fill(li,it.bullets[i]));});
+      if(template.bullets){const lis=root.querySelectorAll('.bullets-list li,.media-list li,.media-bullets li');(lis.length?lis:!template.items?root.querySelectorAll('li:not([data-item-index])'):[]).forEach((li,i)=>fill(li,template.bullets[i]));}
+      if(template.rows)root.querySelectorAll('.deck-table tr,.harvey-table tr').forEach((row,r)=>Array.from(row.children).forEach((cell,c)=>fill(cell,template.rows[r]?.[c])));
       if(template.notes)root.dataset.notes=template.notes.replace(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g,(_,id)=>math.format(values[id],byId.get(id),data.language));
-      if(template.chart){const graph=graphFor(template.chart,values),area=root.querySelector('.media-chart');if(area)area.innerHTML=chartRenderer(graph,data.theme);fill(root.querySelector('.media-caption'),template.chart.caption);}
-      if(slide.chart&&!root.querySelector('.data-chart-trace')){const link=button(L('图表数字来源','Chart sources'),root.querySelector('.media-canvas'),()=>{const id=Object.keys(template.chart||{}).length?[...JSON.stringify(template.chart).matchAll(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g)][0]?.[1]:null;open(id,!id);});link.className='data-chart-trace';}
+      if(template.chart){const graph=graphFor(template.chart,values),area=root.querySelector('.media-chart');if(area)area.innerHTML=chartRenderer(graph,data.theme);fill(root.querySelector('.media-caption'),template.chart.caption);fill(root.querySelector('.media-source'),template.chart.source||template.source);}
+      if(slide.chart&&!root.querySelector('.data-chart-trace')){const link=button(L('图表数字来源','Chart sources'),root.querySelector('.media-canvas')||root,()=>{const id=Object.keys(template.chart||{}).length?[...JSON.stringify(template.chart).matchAll(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g)][0]?.[1]:null;open(id,!id);});link.className='data-chart-trace';}
       missingNumbers(root);
     }
     for(const {metric,range,number,formatted}of controls){range.value=String(parameters[metric.id]);number.value=String(parameters[metric.id]);formatted.textContent=' '+math.format(values[metric.id],metric,data.language);}

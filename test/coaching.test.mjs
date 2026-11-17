@@ -196,3 +196,121 @@ test('persisted proposals cannot bypass the expression-only patch boundary', () 
   await assert.rejects(act('apply', { runId: run.id, confirmed: true, selected: [report.findings[0].id], backup: [] }), /不支持的字段/)
   assert.deepEqual(readFileSync(created.jsonPath), before)
 }))
+
+test('storyline coaching supports up to 8 findings, Action-Title/takeaway patches, and persona examiner prompts while blocking invented numbers', () => {
+  let capturedSystem = ''
+  return fixture(async ({ create, act }) => {
+    const { run } = await create({ audience: 'investor' })
+    const report = (await act('step', { runId: run.id, confirmed: true })).run
+    assert.equal(report.findings.length, 8)
+    assert.match(capturedSystem, /Investors \/ Pitch committee/)
+    assert.equal(report.findings[0].kind, 'storyline')
+    assert.ok(report.findings[0].patch)
+    assert.equal(report.findings[7].patch, undefined, 'invented number in storyline patch must be stripped')
+    const adopted = await act('apply', { runId: run.id, confirmed: true, selected: [report.findings[0].id], backup: [] })
+    assert.equal(adopted.project.slides[0].title, '完成十二个项目驱动实际收入增长20%')
+    assert.equal(adopted.project.slides[0].takeaway, '实际收入增长20%，交付节奏符合预期')
+  }, async (data, _signal, system) => {
+    capturedSystem = system
+    const s0 = data.slides[0], s1 = data.slides[1]
+    return {
+      findings: [
+        { slideId: s0.id, kind: 'storyline', question: '核心结论是什么？', answer: '收入增长20%。', issue: '标题为名词短语而非判断句', suggestion: '改为结论先行 Action Title 并补充底栏 takeaway', reference: 'slide:' + s0.id, quote: '完成十二个项目，实际收入增长20%', patch: { title: '完成十二个项目驱动实际收入增长20%', takeaway: '实际收入增长20%，交付节奏符合预期' } },
+        ...Array.from({ length: 6 }, (_, idx) => ({ slideId: idx % 2 ? s1.id : s0.id, kind: 'expression', question: 'Q' + idx, answer: 'A' + idx, issue: '表达细化 ' + idx, suggestion: '精简措辞 ' + idx, reference: 'slide:' + s0.id, quote: s0.title })),
+        { slideId: s1.id, kind: 'storyline', question: '有无虚构数字？', answer: '无。', issue: '测试数字守卫', suggestion: '不应通过补丁', reference: 'slide:' + s1.id, quote: s1.title, patch: { title: '虚构增长99%' } },
+      ],
+    }
+  })
+})
+
+test('coaching forwards gantt columns, pro-diagram items, and harvey rows with grounded evidence', async () => {
+  const directory = mkdtempSync(join(work, 'coaching-pro-'))
+  try {
+    let seenInput
+    const created = await buildDeckAsync({
+      title: '专业图示与蓝图预审',
+      template: 'architecture-review',
+      outputDir: directory,
+      fileName: 'pro-coach',
+      slides: [
+        { layout: 'gantt', chrome: 'consulting-classic', title: '交付排期路线图', columns: ['Q1', 'Q2', 'Q3', 'Q4'], items: [{ tag: '核心', title: '完成多活网关切换', start: 0, span: 2 }] },
+        { layout: 'harvey', title: '架构能力矩阵', rows: [['评估项', '新架构', '旧架构'], ['异地多活能力', '●', '○']] },
+      ],
+    })
+    const wb = new PptWorkbench({
+      catalogPath: join(directory, 'projects.jsonl'),
+      coachingModel: {
+        routes: async () => [route],
+        generate: async (_r, _sys, input) => {
+          seenInput = JSON.parse(input)
+          const g = seenInput.slides[0]
+          return JSON.stringify({
+            findings: [{ slideId: g.id, kind: 'storyline', question: 'Q', answer: 'A', issue: '结论可更前置', suggestion: '补强结论句', reference: 'slide:' + g.id, quote: '完成多活网关切换', patch: { takeaway: 'Q2 前完成多活网关切换' } }],
+          })
+        },
+      },
+    })
+    await wb.remember(created, {})
+    const id = (await wb.action({ operation: 'list' })).projects[0].id
+    const { run } = await wb.action({ operation: 'coach-create', id, expectedRevision: 0, confirmed: true, mode: 'review', ...route, difficulty: 'strict', limit: 1 })
+    const res = (await wb.action({ operation: 'coach-step', id, expectedRevision: 0, runId: run.id, confirmed: true })).run
+    assert.deepEqual(seenInput.slides[0].columns, ['Q1', 'Q2', 'Q3', 'Q4'])
+    assert.deepEqual(seenInput.slides[1].rows[1], ['异地多活能力', '●', '○'])
+    assert.equal(res.findings[0].grounded, true)
+    assert.equal(res.findings[0].patch.takeaway, 'Q2 前完成多活网关切换')
+    wb.coaching.dispose()
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})
+
+test('coaching audience personas route academic, technical, executive, and client system guides', async () => {
+  for (const [audience, marker] of [
+    ['academic', /Thesis defense panel/],
+    ['technical', /Architecture \/ Engineering review/],
+    ['executive', /Pyramid Principle/],
+    ['client', /Enterprise client \/ buyer/],
+  ]) {
+    let sys = ''
+    await fixture(async ({ create, act }) => {
+      const { run } = await create({ audience })
+      await act('step', { runId: run.id, confirmed: true })
+      assert.match(sys, marker)
+    }, async (_data, _sig, system) => { sys = system; return { findings: [] } })
+  }
+})
+
+test('coaching apply preserves gantt columns, chrome, and milestone metadata on patched slide', async () => {
+  const directory = mkdtempSync(join(work, 'coaching-preserve-'))
+  try {
+    const created = await buildDeckAsync({
+      title: '保留甘特图元数据',
+      outputDir: directory,
+      fileName: 'gantt-coach',
+      slides: [
+        { layout: 'gantt', chrome: 'academic-minimal', title: '季度计划', columns: ['M1', 'M2', 'M3'], items: [{ tag: 'P1', title: '完成方案评审与发布门禁', start: 0, span: 2 }, { tag: 'GA', title: '上线节点', start: 2, span: 0, milestone: true }] },
+      ],
+    })
+    const wb = new PptWorkbench({
+      catalogPath: join(directory, 'projects.jsonl'),
+      coachingModel: {
+        routes: async () => [route],
+        generate: async (_r, _s, input) => {
+          const s0 = JSON.parse(input).slides[0]
+          return JSON.stringify({
+            findings: [{ slideId: s0.id, kind: 'expression', question: 'Q', answer: 'A', issue: '标题可更明确', suggestion: '优化标题', reference: 'slide:' + s0.id, quote: '完成方案评审与发布门禁', patch: { title: '三月前完成方案评审与发布门禁' } }],
+          })
+        },
+      },
+    })
+    await wb.remember(created, {})
+    const id = (await wb.action({ operation: 'list' })).projects[0].id
+    const { run } = await wb.action({ operation: 'coach-create', id, expectedRevision: 0, confirmed: true, mode: 'review', ...route, difficulty: 'normal', limit: 1 })
+    const reviewed = (await wb.action({ operation: 'coach-step', id, expectedRevision: 0, runId: run.id, confirmed: true })).run
+    const adopted = await wb.action({ operation: 'coach-apply', id, expectedRevision: 0, runId: run.id, confirmed: true, selected: [reviewed.findings[0].id], backup: [] })
+    const slide = adopted.project.slides[0]
+    assert.equal(slide.title, '三月前完成方案评审与发布门禁')
+    assert.equal(slide.chrome, 'academic-minimal')
+    assert.deepEqual(slide.columns, ['M1', 'M2', 'M3'])
+    assert.equal(slide.items[1].milestone, true)
+    wb.coaching.dispose()
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})

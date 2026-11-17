@@ -6,7 +6,7 @@
 
 ![dsh-ppt 鲸鱼娘插件封面](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)
 
-把材料制作成可直接交付的 HTML 放映、可编辑 PPTX 与工程包。可在 DSH 工作台轻量编辑、核对数字来源和现场推演；AI 预审、模拟答辩与看图修复均按需选择，也可直接下载成品。
+把材料制作成高审美品味、可直接交付的 HTML 放映、100% 原生可编辑 PPTX 与工程包。无需懂设计参数，自动导演会匹配合适的明暗主题与丰富版式；也可在 DSH 工作台一键换肤、吸收外部 `.pptx` 风格、编辑卡片/三线表、核对数字来源和现场推演。AI 预审、模拟答辩与看图修复均按需选择，也可直接下载成品。
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
@@ -18,16 +18,14 @@
 
 ## 功能
 
-- 工程库按关键词搜索，按最近 / 最早更新或标题排序；返回列表时保留筛选条件。
-- 生成图文、表格、原生图表和品牌化演示文稿。
-- 可选数字溯源与现场推演：点击数字追到原始材料、CSV 单元格或公式；调整假设、预览影响并确认保存。HTML 保留交互，PPTX 保存静态结果及公式 / 假设，见[数据说明](DATA.md)。
-- 在设置页编辑文字和图片、调整顺序、复制或删除页面，并支持撤销。
-- 提供质量检查与可选的最终 PPTX 图片 / PDF 渲染。
-- 可选 AI 视觉检查：看实际 PPTX 图片，标记问题区域，调整排版并另存副本，重新渲染复查；支持前后对比、停止、撤销与检查记录。见[看图修复](VISUAL.md)。
-- 下载按页整理的 Markdown 讲稿，保留当前版本的标题与演讲备注。
-- 下载时可选「分享成品包」（PPTX、离线 HTML、当前讲稿）或「完整工程包」（含 JSON 工程）。分享包仍保留已绑定的来源摘录与用户填写内容，详见[下载说明](WORKBENCH.md#下载与分享--download-and-share)。
-- 可选 AI 预审与模拟答辩：复用 DSH 已配置模型，按需提问、比较改稿、另存可撤销副本，并导出问答与待补充材料清单。默认关闭，直接下载成品无需预审。
-- 键盘操作：Ctrl/⌘+S 保存、Esc 取消或返回、Alt+←/→ 切换页面；有未保存修改时离开会提示。
+- **零品味负担自动导演、18 套大师主题与 6 套母版骨架**：内建 12 套明亮投影友好主题（咨询蔚蓝 `consulting`、钴蓝简报 `cobalt-cream`、霁蓝政务 `exec-jilan`、故宫丹宸 `exec-palace`、清澄学术 `academic`、森系社论 `editorial-forest`、暖石极简 `cartesian`、知行讲义 `course-sage`、柔和信号 `soft`、库比蒂诺留白 `keynote-light`、金融时报 `financial-ft`、仁心临床 `medical-clean`）与 6 套深色舞台主题（黑曜石路演 `linear-dark`、`swiss`、`velvet`、`data`、`bold`、黑金策展 `luxury-noir`），匹配 **6 套差异化母版骨架**（`consulting-classic` / `keynote-spatial` / `editorial-folio` / `saas-bento` / `academic-minimal` / `gov-ceremonial`）与 **16 套行业场景蓝图**。未指定主题时 `ppt_create` 默认启用 `auto` 场景导演。
+- **深度吸收外部 `.pptx` 骨架与配色**：支持 `ppt_absorb` 工具、`referencePptx`（含 `cloneStructure: true` 结构复刻）或工作台「风格与母版」面板直接上传参考 `.pptx`，自动解析 OOXML 修饰色板、中英文字体、母版 Logo、骨架几何（`extractedSkeleton` / `recommendedChrome`）与逐页版式序列（`slideSkeleton[]`），并经 `sanitizeAbsorbedTheme()` 执行 WCAG ≥4.5:1 对比度钳制与高饱和红/蓝底封面降级。
+- **24 种原生可编辑版式/专业图示与 13 种出版级图表**：覆盖 Bento/支柱卡片（`cards`）、大数字指标（`kpi`）、双栏/痛点举措对比（`comparison`）、四象限矩阵（`matrix`）、流程/里程碑轴/漏斗/飞轮（`process`）、定理/行动清单（`callout`）、甘特图路线图（`gantt`）、分层系统架构（`architecture`）、哈维球竞品矩阵（`harvey`）、TAM/SAM/SOM 同心圆（`tam`）、组织架构/团队图谱（`org`）、咨询表与学术三线表（`table` `booktabs` `harvey`）、图表+洞察分栏（`chart-split`）及矢量瀑布桥（`waterfall`）、环形图、组合图、焦点高亮柱等。
+- **工程库与增强工作台**：按关键词/主题搜索排序，展示主题与页数标签；支持单页版式与单页母版骨架一键无损切换、结构化卡片/甘特图时间轴/哈维球与表格编辑、新增页面、HTML ↔ PPTX 并排分屏对比、点击质量提醒直接跳页，以及最多 20 步撤销。
+- **可选数字溯源与现场推演**：点击数字追到原始材料、CSV 单元格或公式（全面支持 `items`、甘特图、`tam`、架构、哈维球矩阵、`takeaway`、`source` 与图表绑定）；调整假设、预览影响并确认保存。见[数据说明](DATA.md)。
+- **可选双层 AI 视觉检查（最多 24 页）**：看实际 PPTX 渲染图，兼顾排版溢出检测与审美层级把关，支持 12 种零文本篡改排版动作、全宽画布前后对比、停止与撤销。见[看图修复](VISUAL.md)。
+- **可选高管叙事预审与模拟答辩**：把关结论先行 Action Title、SCQA 金字塔叙事与论据缺口（单轮最多 8 条建议，支持高管/投资人/学术评委/技术评审等 7 类听众画像），导出问答与待补充材料清单。见[演练说明](COACHING.md)。
+- **分享成品包与工程包下载**：可选「分享成品包」（PPTX、离线 HTML、逐页 Markdown 讲稿）或「完整工程包」（含 JSON 工程），见[下载说明](WORKBENCH.md#下载与分享--download-and-share)。
 
 ## 安装
 
@@ -41,25 +39,25 @@ dsh plugin --profile desktop add dsh-ppt
 
 ## 开始使用
 
-1. 在目标工作区提供材料、用途、听众和页数，例如“做成可交付的演示文稿，生成 HTML、PPTX 和工程文件”。
+1. 在目标工作区提供材料、用途、听众或参考 `.pptx`，例如“做成可交付的季度汇报演示文稿，生成 HTML、PPTX 和工程文件”。
 2. 从左侧栏打开“演示文稿”，在工程库搜索或选择生成的项目。
-3. 选择页面编辑文字、图片或顺序，保存后核对预览；需要时渲染当前 PPTX 检查实际画面。
+3. 在「内容编辑」切换 24 种单页版式与单页母版骨架、编辑文字/甘特图/哈维球/卡片/表格/图片或新增页面；在「风格与母版」一键切换 18 套主题、6 套母版骨架或拖拽 `.pptx` 吸收企业风格与骨架；需要时渲染当前 PPTX 并开启并排对比。
 4. 按需要主动开启 AI 预审、模拟答辩或看图修复；直接下载成品不要求这些步骤。
 5. 下载“分享成品包”交付，或下载“完整工程包”保留编辑能力；在目标播放器或 Office 中再核对一次。
 
 Office 中的修改不会同步回 JSON。插件检测到成品在外部修改，或旧工程没有校验记录时，会拒绝直接覆盖；可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 生成新文件，保留原成品。副本不包含 Office 手工修改。
 
-成品页下方可主动开启「AI 预审」或「模拟答辩」。前者根据材料模拟质疑与回答，后者由 AI 一次问一题、你来回答。可以先选模型、听众、强度和范围，再决定是否发送。具体流程与调用上限见[演练说明](COACHING.md)。AI 建议不等于事实核验；普通成品生成、编辑和下载仍不要求配置模型。
-
 ## 依赖与配置
 
-普通生成不需要 Office。最终 PPTX 渲染使用可选的官方 LibreOffice Kit；依赖版本、字体环境和安装方法见使用说明。
-
-详细配置、工具参数与排错见[使用说明](USAGE.md)。从源码独立开发时，Node 要求以 [package.json](../package.json) 为准。
+普通生成与 `.pptx` 风格吸收均不需要安装 Office 或 LibreOffice。最终 PPTX 逐页 PNG / PDF 渲染使用可选的官方 LibreOffice Kit；依赖版本、跨平台零缺字字体环境和安装方法见[使用说明](USAGE.md)。从源码独立开发时，Node 要求以 [package.json](../package.json) 为准。
 
 ## 文档
 
 - [使用与排错](USAGE.md)
+- [工作台与风格工作室](WORKBENCH.md)
+- [AI 看图修复](VISUAL.md)
+- [AI 叙事预审与答辩演练](COACHING.md)
+- [数字溯源与现场推演](DATA.md)
 - [更新记录](../CHANGELOG.md)
 - [验证范围与历史记录](VALIDATION.md)
 - [问题反馈与功能建议](https://github.com/STARDUSTLC666/dsh-ppt/issues)

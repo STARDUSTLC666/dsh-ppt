@@ -33,8 +33,14 @@ function zipEntries(buffer) {
   return entries
 }
 
-test('all four scenarios expose useful outlines; unfilled templates are labelled draft', () => inDir(async dir => {
-  assert.deepEqual(listTemplates().map(s => s.id), ['weekly', 'defense', 'project', 'pitch'])
+test('all sixteen scenarios expose useful outlines; unfilled templates are labelled draft', () => inDir(async dir => {
+  const ids = listTemplates().map(s => s.id)
+  assert.deepEqual(ids.slice(0, 4), ['weekly', 'defense', 'project', 'pitch'])
+  assert.deepEqual(ids, [
+    'weekly', 'defense', 'project', 'pitch', 'consulting', 'keynote', 'gov-report', 'workshop',
+    'architecture-review', 'financial-earnings', 'medical-case', 'postmortem',
+    'marketing-campaign', 'promotion-review', 'legal-compliance', 'creative-lookbook',
+  ])
   for (const template of listTemplates('en')) {
     const result = await buildDeckAsync({ title: 'Report', template: template.id, lang: 'en', outputDir: dir })
     assert.equal(result.deliveryStatus, 'draft')
@@ -44,6 +50,27 @@ test('all four scenarios expose useful outlines; unfilled templates are labelled
   const finished = await buildDeckAsync({ title: 'Report', template: 'weekly', slides: simple, outputDir: dir })
   assert.equal(finished.deliveryStatus, 'ready-for-review')
   assert.deepEqual(json(finished.jsonPath).slides.map(s => s.title), simple.map(s => s.title))
+}))
+
+test('editDeck supports slide.chrome override and clearing brand.chromeStyle with null', () => inDir(async dir => {
+  const created = await buildDeckAsync({
+    title: '骨架切换测试',
+    theme: 'consulting',
+    brand: { chromeStyle: 'academic-minimal' },
+    slides: simple,
+    outputDir: dir,
+  })
+  assert.equal(json(created.jsonPath).brand.chromeStyle, 'academic-minimal')
+  const edited = await editDeck({
+    deckPath: created.jsonPath,
+    expectedRevision: 0,
+    edits: [{ slide: 2, patch: { chrome: 'editorial-folio' } }],
+    brand: { chromeStyle: null },
+  })
+  assert.equal(edited.revision, 1)
+  const manifest = json(created.jsonPath)
+  assert.equal(manifest.brand, undefined)
+  assert.equal(manifest.slides[1].chrome, 'editorial-folio')
 }))
 
 test('PNG embedded in HTML/PPTX; contain/cover and all image layouts preserve notes and animation', () => inDir(async dir => {
@@ -208,7 +235,7 @@ test('render CLI leaves default directory selection to renderer and respects exp
 })
 
 test('all default themes write usable Office font fallbacks and explicit East Asian faces', () => inDir(async dir => {
-  for (const theme of ['swiss', 'velvet', 'data', 'soft', 'bold']) {
+  for (const theme of ['swiss', 'velvet', 'data', 'soft', 'bold', 'consulting', 'exec-jilan', 'academic']) {
     const output = await buildDeckAsync({ title: '中文和 English', theme, slides: simple, outputDir: dir, fileName: theme })
     const parts = zipEntries(readFileSync(output.pptxPath)), slide = parts['ppt/slides/slide2.xml'].toString(), scheme = parts['ppt/theme/theme1.xml'].toString()
     assert.ok(slide.includes('已完成第一阶段'))
@@ -218,4 +245,36 @@ test('all default themes write usable Office font fallbacks and explicit East As
     const chosen = process.platform === 'win32' ? /Microsoft YaHei|SimSun/ : process.platform === 'darwin' ? /PingFang SC|Songti SC/ : /Noto (Sans|Serif) CJK SC/
     assert.match(slide, chosen)
   }
+}))
+
+test('editDeck switches theme, appends slides, derives light brand surfaces without dark gridlines, and undoes cleanly', () => inDir(async dir => {
+  const output = await buildDeckAsync({
+    title: '品牌浅色覆盖',
+    theme: 'data',
+    brand: { backgroundColor: '#F8FAFC', primaryColor: '#0057B8' },
+    slides: [
+      { layout: 'cover', title: '浅色品牌覆盖深色主题' },
+      { layout: 'chart-split', title: 'Q3 收入增长 38%', chart: chart('column'), items: [{ tag: '01', title: '华东领跑', text: '复购率提升 **12%**' }], takeaway: '核心大区贡献 70% 增量' },
+    ],
+    outputDir: dir,
+  })
+  assert.equal(output.quality.errorCount, 0)
+  const chartXml = zipEntries(readFileSync(output.pptxPath))['ppt/charts/chart1.xml'].toString()
+  assert.doesNotMatch(chartXml, /0D1424/i, 'light brand override must recompute panel/hairline instead of leaking dark gridlines')
+
+  const restyled = await editDeck({
+    deckPath: output.jsonPath,
+    expectedRevision: 0,
+    theme: 'exec-jilan',
+    append: [{ layout: 'gallery', title: '现场照片墙', images: [{ src: dataImage, alt: '图一', caption: '阶段一' }, { src: dataImage, alt: '图二', caption: '阶段二' }] }],
+  })
+  assert.equal(restyled.theme, 'exec-jilan')
+  assert.equal(restyled.slideCount, 3)
+  const galleryHtml = readFileSync(restyled.htmlPath, 'utf8')
+  assert.match(galleryHtml, /阶段一/)
+  assert.match(galleryHtml, /阶段二/)
+
+  const undone = await undoDeck({ deckPath: output.jsonPath, expectedRevision: 1 })
+  assert.equal(undone.theme, 'data')
+  assert.equal(undone.slideCount, 2)
 }))

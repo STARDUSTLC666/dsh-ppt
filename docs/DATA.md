@@ -4,10 +4,10 @@
 
 ## 怎么用
 
-可以对 DSH 说：“用这份经营数据做汇报，给数字关联出处，并把增长率设为可调整的假设。”助手使用真实材料建立绑定后，打开「设置 → 演示文稿」：
+可以对 DSH 说：“用这份经营数据做汇报，给数字关联出处，并把增长率设为可调整的假设。”助手使用真实材料建立 `{{metricId}}` 绑定后，打开演示文稿工作台的「数据与推演（Data and what-if）」分栏（或「设置 → 演示文稿」）：
 
 1. 点击预览中带点状下划线的数字，查看材料行、CSV 单元格或计算公式。公式中的输入可继续点开。灰色下划线表示没有关联来源，不会因数值相同自动认定来源相同。
-2. 调整「现场推演参数」中的滑杆或数值，预览文字、表格和图表的变化。只有明确声明的假设可调，原始事实保持只读。
+2. 调整「现场推演参数」中的滑杆或数值，实时预览标题、正文、要点、结构化卡片与专业图示（KPI / 多栏卡片 / 甘特图 `gantt` / 市场空间 `tam` / 系统架构 `architecture` / 组织图谱 `org` 的 `value`、`delta`、`text` 与 `bullets`）、底部结论栏（`takeaway`）、来源角注（`source`）、表格与哈维球矩阵（`rows`）以及全部 **13 类原生图表**（含瀑布图 `waterfall`、双轴组合图 `combo`、堆叠图等）的联动变化。只有明确声明的假设可调，原始事实保持只读。
 3. 点击「预览差异」，核对指标、受影响页面及字段的之前 / 之后。默认「保存为新副本」保留原稿，确认后才更新三件套，副本也可撤销。
 4. 来源有更新时，在「更新来源材料」选择已有来源，导入或粘贴新材料，再走同样的预览和确认流程。不会监视文件，也不会回写源文件。
 
@@ -33,11 +33,11 @@ PPTX 保留确认后的静态数值及原生可编辑图表。每页的演讲备
 
 Both features are optional. Ordinary finished-deck delivery does not require a data model or rehearsal.
 
-- Supply actual material and ask DSH to link its numbers and expose selected assumptions. In Settings → Presentations, click a linked number to inspect its source row, CSV cell or formula. Follow formula inputs to their origins. Unlinked numbers are labelled explicitly.
-- Adjust declared assumptions; text, tables and charts change together. Source facts are read-only in what-if mode. Preview metric and slide differences before confirming. The default is an undoable new copy, preserving the original.
-- Replace an existing source by importing or pasting UTF-8 CSV, TSV, TXT or Markdown. Excel tables can be exported as CSV. Nothing watches or writes the original source file; XLSX parsing and automatic online research are not included.
-- Offline HTML retains controls and lineage (D opens the panel). Export scenario parameters, import them into the same DSH project, preview and confirm to create a matching static PPTX. Foreign or stale packets are rejected. Downloads of older PPTX/JSON files are blocked while the HTML has unsaved values.
-- PPTX contains confirmed static values and native editable charts, with formulas, assumptions, source excerpts/locators and checksums in speaker notes. Download the Markdown lineage report separately. It does not execute HTML controls inside PowerPoint.
+- Supply actual material and ask DSH to link its numbers (`{{metricId}}`) and expose selected assumptions. In the Presentations workbench (**Data and what-if** tab), click a linked number to inspect its source row, CSV cell, or formula. Follow formula inputs to their origins. Unlinked numbers are labelled explicitly.
+- Adjust declared assumptions; titles, bullets, structured `items` across KPI/cards/`gantt`/`tam`/`architecture`/`org` (`value`, `delta`, `text`, `bullets`), `takeaway` callouts, `source` footnotes, tables & Harvey matrices (`rows`), and all **13 native chart kinds** (including `waterfall`, `combo`, and stacked charts) recalculate together. Source facts remain read-only in what-if mode. Preview metric and slide differences before confirming. The default is an undoable new copy, preserving the original.
+- Replace an existing source by importing or pasting UTF-8 CSV, TSV, TXT, or Markdown. Excel tables can be exported as CSV. Nothing watches or writes the original source file; XLSX parsing and automatic online research are not included.
+- Offline HTML retains controls and lineage (`D` opens the panel). Export scenario parameters, import them into the same DSH project, preview, and confirm to create a matching static PPTX. Foreign or stale packets are rejected. Downloads of older PPTX/JSON files are blocked while the HTML has unsaved values.
+- PPTX contains confirmed static values and native editable charts, with formulas, assumptions, source excerpts/locators, and checksums in speaker notes. Download the Markdown lineage report separately. It does not execute HTML controls inside PowerPoint.
 - A source link is not factual verification. JSON retains full imported material; HTML/PPTX include metric-referenced row excerpts, which may contain other fields from that row. Review before sharing.
 
-See the [model reference](../skills/dsh-ppt/references/data.md) for schema, limits and tool examples.
+See the [model reference](../skills/dsh-ppt/references/data.md) for schema, limits, and tool examples.

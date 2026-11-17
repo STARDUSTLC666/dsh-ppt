@@ -4,27 +4,35 @@
 
 ## Current improvements
 
-Save workbench edits, then choose Download delivery ZIP. Individual downloads remain available. The ZIP excludes configuration, secrets and other workspace files; each file is limited to 64 MiB and the total to 128 MiB.
+- **Zero-taste-burden Auto-Director, 6 Chrome Skeletons & Deep `.pptx` Absorption**: `ppt_create` defaults to `theme: "auto"` to match topic, audience, and master chrome skeleton automatically (standalone CLI keeps `data` by default for backward compatibility unless `--theme auto` is passed). `ppt_absorb` and `referencePptx` (with `cloneStructure: true` / `--clone-structure`) resolve OOXML `lumMod`/`tint`/`shade` color modifiers, CJK/Latin fonts, master logos, skeleton geometry (`extractedSkeleton`, `recommendedChrome`), and slide-by-slide layout sequences (`slideSkeleton[]`) locally with WCAG ≥4.5:1 contrast sanitization.
+- **18 built-in themes, 6 Master Chrome Skeletons, 24 canonical layouts & 16 industry blueprints**: 12 daylight-first themes for bright rooms/print and 6 dark themes for keynotes/screens, mapped to 6 structurally distinct chrome skeletons (`consulting-classic`, `keynote-spatial`, `editorial-folio`, `saas-bento`, `academic-minimal`, `gov-ceremonial`); adds 5 native editable pro diagrams (`gantt`, `architecture`, `harvey`, `tam`, `org`) plus `flywheel` process variant, `tableStyle` (`consulting | booktabs | minimal | banded | harvey`), per-slide `chrome`, `columns`, `takeaway` bars, and `source` footnotes; native editable OOXML charts span 13 publication-grade kinds including vector `waterfall` bridges.
+- **Style Studio & visual workbench**: Switch across 18 themes and **6 Master Chrome Skeletons (`brand.chromeStyle`)**, drag-and-drop a `.pptx` (`≤10 MiB`, parsed in memory with zero host path reads) to inspect `recommendedChrome`, `extractedSkeleton`, and `slideSkeleton`, switch across all 24 slide archetypes & per-slide `chrome`, edit Gantt timelines & Harvey matrices, append starter slides (`+ New slide`), compare HTML ↔ PPTX side-by-side, inspect full-width Vision QA before/after diffs (up to 24 slides, 12 lossless actions), and run storyline/action-title coaching (up to 8 findings across 7 audience personas).
+- **Artifact integrity & safe delivery bundles**: Every build records HTML/PPTX digests so external Office edits are never silently overwritten; save a copy (`saveAs: true`) when needed. Save workbench edits, then download either the **Share bundle ZIP** or **Project bundle ZIP** (each file ≤64 MiB, total ≤128 MiB; excludes config, secrets, and unrelated workspace files).
 
 ## Capabilities
 
 | Capability | Description |
 | --- | --- |
-| `ppt_create` tool | Markdown / structured slides → `*.html` + `*.pptx` + `*.json` |
-| `ppt_themes` tool | Lists the 5 built-in themes and their best use cases; pass `preview: true` with `outputDir` to write a side-by-side gallery plus one SVG palette card per theme |
-| 11 layouts | cover / section / bullets / statement / quote / table / closing / image / image-left / image-right / chart |
-| Speaker notes | `<!-- note: ... -->` comments or the `notes` field: press `S` in the HTML player; native PPTX notes slides (presenter view) |
-| Motion | On by default: HTML slide-in transitions + staggered bullet entrances; native PPTX fade transitions + click-to-reveal bullets. `motion: 'off'` / `--motion off` for a fully static deck |
-| Markdown extras | Tables (`\| ... \|`), blockquotes (`>`), and note comments are auto-detected into matching layouts |
-| `dsh-ppt` skill | A complete six-step SOP registered into DSH |
-| Standalone SKILL.md | Copy `skills/dsh-ppt/` into Claude Code / Cursor / Gemini CLI / Codex for cross-harness use |
-| Visual engine | Reuses the hyperframes visual style library; HTML and PPTX share the same theme source |
+| `ppt_create` tool | Markdown / structured `slides` → `*.html` + `*.pptx` + `*.json`; defaults to `theme: "auto"` and accepts `referencePptx` + `cloneStructure: true` for deep palette, chrome & skeleton cloning |
+| `ppt_absorb` tool | Read-only local extraction of OOXML modified palette colors, fonts, aspect ratio, chrome geometry (`extractedSkeleton`, `recommendedChrome`), slide sequence (`slideSkeleton[]`), and optional logo from a reference `.pptx` |
+| `ppt_themes` tool | Lists all 18 built-in themes (12 daylight + 6 dark) paired with 6 chrome skeletons; pass `preview: true` with `outputDir` to generate a side-by-side HTML gallery and SVG palette cards |
+| 24 layouts & diagrams | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout` / `gantt` / `architecture` / `harvey` / `tam` / `org` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split` (plus `waterfall`, `gallery`, and `flywheel` aliases) |
+| 13 chart kinds | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall` with `highlight` focal emphasis |
+| `ppt_templates` | 16 scenario blueprints: `weekly`, `defense`, `project`, `pitch`, `consulting`, `keynote`, `gov-report`, `workshop`, `architecture-review`, `financial-earnings`, `medical-case`, `postmortem`, `marketing-campaign`, `promotion-review`, `legal-compliance`, `creative-lookbook` |
+| `ppt_edit` / `ppt_undo` | Edit selected slides, switch deck `theme` / `brand` / `referencePptx`, append/duplicate/remove/reorder slides with 20-step undo and revision guards |
+| `ppt_check` | Read-only layout & aesthetic density check (including action-title, bullet overload, and monotony hints) plus optional render-receipt verification |
+| `ppt_render` | Optional official LibreOffice Kit PNG / PDF page rendering with missing-font diagnostics |
+| `ppt_data` | Optional source lineage updates and what-if simulation with diff preview before saving; see [data guide](DATA.md#english) |
+| Visual review & repair | Optional rendered-PPTX inspection (up to 24 original slides) with 12 lossless repair actions and re-render verification; see [visual guide](VISUAL.md#english) |
+| Coaching & rehearsal | Optional storyline (SCQA / Pyramid / Action Titles), expression, logic & evidence pre-review (up to 8 findings) and 7-persona Q&A rehearsal; see [coaching guide](COACHING.md#english) |
+| Speaker notes & motion | `<!-- note: ... -->` or `notes` field synced to HTML presenter view (`V`/`S`) and native PPTX notes; motion on by default (`motion: 'off'` / `--motion off` for static) |
+| `dsh-ppt` skill & CLI | Full Auto-Director SOP registered in DSH, or copy `skills/dsh-ppt/` into Claude Code / Cursor / Gemini CLI / Codex for standalone cross-harness builds |
 
 Example:
 
-> Turn this sentence into a deck: "AI support cuts first response time to 8 seconds", with a dark tech theme.
+> Turn this sentence into a deck: "AI support cuts first response time to 8 seconds", and automatically pick an executive-ready daylight theme.
 >
-> Turn `docs/quarterly-review.md` into a bilingual presentation and export PPTX.
+> Match the palette and fonts of `assets/company-template.pptx`, and turn `docs/quarterly-review.md` into an editable PPTX with KPI cards, a waterfall chart, and booktabs tables.
 
 ## Installation
 
@@ -32,7 +40,7 @@ Example:
 dsh plugin --profile web add dsh-ppt
 ```
 
-On desktop, install `dsh-ppt` through plugin management. Restart the host after updating to load eight tools and the skill. Ask naturally to include screenshots/charts, edit only slide three, or undo the last edit; users do not need to write JSON. Optional `ppt_data` previews and confirms source/assumption changes; see the [data guide](DATA.md#english).
+On desktop, install `dsh-ppt` through plugin management. Restart the host after updating to load all nine tools and the `dsh-ppt` skill. Ask naturally to match a reference template, include screenshots/charts, switch slide 3 to a 3-pillar card layout, or undo the last edit; users never need to hand-write JSON.
 
 ## Uninstall
 
@@ -47,60 +55,66 @@ Then restart the web service. To clean up fully, also remove the plugin entry fr
 ### Inside DSH (recommended)
 
 ```
-1. ppt_themes { preview: true, outputDir: "dist" }   # themes + gallery
+1. ppt_themes { preview: true, outputDir: "dist" }   # inspect 18 themes + gallery
 2. ppt_create {
-     title: "Fewer Meetings",
-     content: "# Problem\n- Too many meetings\n\n# Solution\n- Async decisions",
-     theme: "data",
+     title: "Q3 Operations Review & Next Steps",
+     content: "# Executive Summary\n> [!TAKEAWAY] First-response time dropped to 8s while net retention rose +4.2 pts\n\n::: kpi\n- 8s | First response | -64% QoQ\n- 98.5% | SLA attainment | +4.2 pts\n:::",
+     theme: "auto",
      lang: "en"
    }
-3. Open the returned HTML path in a browser; edit the PPTX in PowerPoint / WPS / Keynote
+3. Open the returned HTML path in a browser, edit the PPTX in PowerPoint / WPS / Keynote, or refine in the Presentations workbench
 ```
 
 ### Any harness (standalone SKILL.md)
 
-Copy `skills/dsh-ppt/` to any Agent Skills directory, then:
+Copy `skills/dsh-ppt/` to any Agent Skills directory, run `npm install --ignore-scripts` inside it, then:
 
 ```bash
 node <skill-dir>/scripts/build-deck.mjs \
   --title "Product Launch" \
   --content deck.md \
-  --theme data \
+  --theme auto \
   --lang en \
   --out dist/deck
 ```
 
-Artifacts:
+The standalone CLI also supports `--absorb ref.pptx`, `--reference-pptx ref.pptx`, `--clone-structure`, and `--chrome consulting-classic` (when `--theme` is omitted on the bare CLI, `data` remains the backward-compatible default).
 
-Existing artifacts are not overwritten by default: if any member of the trio already exists, the whole set receives a shared `-1`, `-2`, ... suffix. Replacement requires explicit `overwrite: true` (or `--overwrite` in the CLI).
+Artifacts (existing files are never overwritten by default; colliding sets receive `-1`, `-2`, ... suffixes unless `overwrite: true` or `--overwrite` is passed):
 
 | File | Purpose |
 | --- | --- |
-| `*.html` | Standalone slideshow: arrow keys, V presenter view (separate window with real current/next previews, thumbnail strip, notes, timer, progress, pause, font size, blank screen), S notes, G thumbnail overview, F fullscreen, P print, ? shortcuts, Esc close |
-| `*.pptx` | Editable 16:9 presentation (hand-written OOXML, zip via `node:zlib`, no third-party deps) |
-| `*.json` | Structured manifest (version, theme, language, slides) |
+| `*.html` | Standalone slideshow: arrow keys, V presenter view (separate window with current/next previews, thumbnail strip, notes, timer, progress, pause, font size, blank screen), S notes, G thumbnail overview, D what-if data panel, F fullscreen, P print, ? shortcuts, Esc close |
+| `*.pptx` | Editable 16:9 presentation with native shapes, structured cards, tables, embedded images, and native editable OOXML charts + workbooks |
+| `*.json` | Structured project manifest (schemaVersion, theme, brand, assets, stable slide IDs, up to 20 undo steps, quality report) |
 
-## Images, charts, editing and review
+## Workbench, structured layouts, charts and review
 
-### Lightweight Settings editor (0.8.0)
+### Presentations Workbench & Style Studio
 
-Open Settings → Presentations and choose a project registered by `ppt_create`, `ppt_edit` or `ppt_check`. Select a page to edit text, bullets and speaker notes; clicking text in the HTML preview focuses its field. Upload PNG/JPEG images, reorder, duplicate or delete slides and undo changes. Copies preserve images, charts and notes. The last slide cannot be deleted; the limit is 120 slides. Save or cancel pending edits before changing slide structure. Saving regenerates HTML, PPTX and JSON together.
+Open the native sidebar **Presentations** workbench (or **Settings → Presentations**) and select a project registered by `ppt_create`, `ppt_edit` or `ppt_check`:
 
-Save or cancel pending changes before switching pages, reordering, downloading or rendering. A stale revision cannot overwrite another writer's changes. Use “Load latest, keep my input”, review overlapping fields, then explicitly save. The HTML preview and actual PPTX rendering are separate; edits invalidate previous renders. Review every rendered page and font diagnostics before downloading the latest files. The editor works with this plugin's own JSON projects; it does not import arbitrary external PPTX files, and ordinary generation/editing does not need the optional renderer.
+- **Content inspector & 1-click archetype switching**: Slide cards in the left rail show layout badges and per-slide quality status dots, plus **+ New slide** starter archetypes (including Gantt, Architecture, Harvey, TAM, Org), reorder, duplicate, delete (keeping 1–120 slides), and undo. At the top of the inspector, switch across all 24 archetypes, variants, per-slide `chrome` skeletons, and density modes (`compact | balanced | airy`) with lossless draft projection across bullets, structured `items` (including Gantt `start`/`span`, `columns`, `role`, `conversion`), and `rows`; edit KPI/card fields, switch `tableStyle` (`consulting | booktabs | minimal | banded | harvey`), and edit `takeaway` callouts and `source` footnotes.
+- **Style Studio**: Browse Daylight (12) vs Dark (6) themes with live palette swatches and scenario tags, switch across **6 Master Chrome Skeletons** (`brand.chromeStyle`), apply a new deck theme in 1 click, customize brand colors/fonts/footer/PNG-or-JPEG logo, or drag-and-drop a `.pptx` (`≤10 MiB`, decoded in memory with zero host path reads) to preview `recommendedChrome`, `extractedSkeleton`, `slideSkeleton`, and apply its extracted palette and recommended theme.
+- **Side-by-side split & clickable findings**: Toggle between HTML preview, rendered PPTX PNGs, and **HTML + PPTX side-by-side** comparison; click any quality finding row to jump straight to that slide.
+- **Concurrency & asset safety**: Saving regenerates HTML, PPTX, and JSON atomically. Stale revisions return HTTP 409 so another writer's edits are never overwritten; choose “Load latest, keep my input” to reconcile before saving. Uploaded PNG/JPEG images are capped at 5 MiB each (switching slides or cancelling aborts in-flight reads). The workbench edits this plugin's own JSON projects and does not import arbitrary external PPTX slides for text editing.
 
-The additional tools are `ppt_templates`, `ppt_edit`, `ppt_undo`, `ppt_check`, and `ppt_render`. New layouts are `image`, `image-left`, `image-right` and `chart`, alongside the seven existing layouts.
+### Structured slides, media and charts
 
-An image slide accepts `image: {src, alt, fit: "contain"|"cover", caption}`. Use local PNG/JPEG paths relative to session cwd or matching data URIs. Assets are embedded in all outputs and undo works after original files move. Limits: 5 MiB / 32 megapixels per image, 32 MiB total project assets. Remote links and SVG are not automatically downloaded or converted.
+Structured `slides` support all 24 canonical layouts & pro diagrams:
 
-A chart accepts `chart: {kind:"column"|"bar"|"line"|"pie", categories, series:[{name,values}], unit, caption}` or `rows` with a category/series header. Values must be finite with matching lengths. Pie requires one nonnegative series with a positive total. HTML uses accessible SVG and data tables; PPTX contains native charts and embedded editable workbooks.
+- **Structured cards / KPI / comparison / matrix / process / Gantt / architecture / TAM / org**: Supply up to 8 `items` (`{ tag, title, text, value, unit, delta, start, span, milestone, role, conversion, status, bullets }`), Gantt `columns: ["Q1","Q2","Q3","Q4"]`, plus optional `chrome`, `takeaway`, and `source`.
+- **Harvey-ball matrix & tables** (`harvey | table`): Supports `tableStyle: "consulting" | "booktabs" | "minimal" | "banded" | "harvey"`; `harvey` renders crisp Harvey-ball / check indicators for `●`, `◕`, `◑`, `◔`, `○`, `✓`, `✗`.
+- **Image slides** (`image | image-left | image-right`): Accept `image: { src, alt, fit: "contain" | "cover", caption }` using local PNG/JPEG paths relative to session cwd or matching data URIs. Assets are embedded in all outputs (limits: 5 MiB / 32 megapixels per image, 32 MiB total project assets; remote URLs and SVGs are not fetched or converted).
+- **Native chart slides** (`chart | chart-split`): Accept `chart: { kind, categories, series: [{ name, values }], unit, highlight, caption }` or `rows` with headers across all 13 chart kinds (`column`, `bar`, `stacked-column`, `stacked-bar`, `percent-column`, `percent-bar`, `line`, `area`, `pie`, `doughnut`, `scatter`, `combo`, `waterfall`). Values must be finite with matching lengths; `pie`/`doughnut` require one nonnegative series with a positive sum. HTML renders accessible SVG + screen-reader tables; PPTX embeds native editable charts and workbooks.
 
-`brand` supports `name`, `primaryColor`, `backgroundColor`, `textColor`, `fontFamily`, `logo` and `footer`. Colors are `#RRGGBB`; select a font available on the recipient computer. `template` is `weekly|defense|project|pitch` and does not overwrite a supplied narrative.
+`brand` supports `name`, `primaryColor`, `backgroundColor`, `textColor`, `fontFamily`, `logo`, `footer`, and `chromeStyle` (`#RRGGBB` colors; choose recipient-safe fonts). `template` supports all 16 industry blueprints (`weekly | defense | project | pitch | consulting | keynote | gov-report | workshop | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook`) without overwriting supplied narratives.
 
-Edit example: `{deckPath:"report.json",expectedRevision:0,edits:[{slide:3,patch:{title:"A clearer conclusion",bullets:["Evidence","Next action"]}}]}`. Use `ppt_check` to obtain stable IDs and the revision; `ppt_undo` restores the latest edit including assets/brand. Keeps up to 20 edits and rejects stale revisions. The artifact trio is regenerated atomically with rollback on commit failure.
+Edit & structure examples:
+- Content + theme update: `{ deckPath: "report.json", expectedRevision: 0, theme: "consulting", edits: [{ slide: 3, patch: { layout: "kpi", title: "All core SLA targets exceeded plan", takeaway: "Net retention improved +4.2 pts QoQ" } }] }`
+- Structural edit: `{ deckPath: "report.json", expectedRevision: 0, duplicate: [2], remove: [4], append: [{ layout: "callout", title: "Immediate next actions" }] }` (keeps 1–120 slides, up to 20 undo steps, atomic trio commit with rollback on failure).
 
-Structure example: `{deckPath:"report.json",expectedRevision:0,duplicate:[2],remove:[3]}`. References use the original 1-based slide numbers or stable IDs. Copies follow the source slide with new IDs; existing slides keep theirs. A slide cannot be copied and removed in the same request. Keep 1–120 slides. Text edits, reordering and structural changes can share one undo step.
-
-`deliveryStatus: draft` means unfilled slots; `ready-for-review` means review can start. Static estimates, rendering and visual inspection are recorded separately. Generation/rendering never automatically certifies visual quality. Inspect HTML and every page image before delivery.
+`deliveryStatus: draft` indicates unfilled template slots; `ready-for-review` means review can start. Static estimates, rendering, and visual inspection are recorded separately—always inspect HTML and rendered page images before final delivery.
 
 ## Optional PNG/PDF renderer
 
@@ -116,31 +130,64 @@ The exact optional peer is not a mandatory engine download for ordinary consumer
 
 This repository's pnpm overrides are not inherited by consumers. If an installed renderer's audit reports `fflate@0.8.2`, set `overrides: { "@deepseek-ai/libreoffice-kit": { "fflate": "0.8.3" } }` in the consumer's root package.json (npm), or `overrides: { "@deepseek-ai/libreoffice-kit>fflate": "0.8.3" }` in its root pnpm-workspace.yaml, then reinstall. The plugin also validates PPTX/ZIP64 bounds before rendering; that check does not replace updating the underlying dependency.
 
-CLI supports `--slides @slides.json`, `--brand @brand.json`, `--template weekly`, `--edit report.json --edits @edits.json --revision 0`, `--undo report.json --revision 1`, `--check report.json`, and `--render report.pptx --format both`. Explicit receipt validation uses `--check report.json --render-receipt path/to/render-receipt.json`; failure returns a nonzero exit code.
+CLI supports `--slides @slides.json`, `--brand @brand.json`, `--reference-pptx ref.pptx`, `--absorb ref.pptx`, `--template consulting`, `--edit report.json --edits @edits.json --revision 0`, `--undo report.json --revision 1`, `--check report.json`, and `--render report.pptx --format both`. Explicit receipt validation uses `--check report.json --render-receipt path/to/render-receipt.json`; failure returns a nonzero exit code.
 
-For standalone usage copy the entire skill directory and run `npm install --ignore-scripts` there. Plain text remains usable without Office Kit; image/chart/logo/footer PPTX export needs Office Kit 0.21.0. `dsh-ppt/deck-advanced` exports `buildDeckAsync`, `editDeck`, `undoDeck`, `checkDeckAsync` and `renderDeck`. The legacy synchronous `deck-core` API supports plain text and explicitly rejects unsupported media inputs.
+For standalone usage copy the entire skill directory and run `npm install --ignore-scripts` there. Plain text remains usable without Office Kit; image/chart/logo/footer PPTX export needs Office Kit 0.21.0. `dsh-ppt/deck-advanced` exports `buildDeckAsync`, `editDeck`, `undoDeck`, `checkDeckAsync`, `renderDeck`, and `absorbPptx`. The legacy synchronous `deck-core` API supports plain text and explicitly rejects unsupported media inputs.
 
-## Theme palette
+## Built-in themes (18 palettes) & 6 Chrome Skeletons
+
+### 6 Master Chrome Skeletons (`chromeStyle`)
+
+| ID | Name | Structural geometry | Default themes |
+| --- | --- | --- | --- |
+| `consulting-classic` | Consulting Classic | 0px sharp cards, left vertical accent rule, top-right section tracker, 0.75pt header rule | `consulting`, `cobalt-cream`, `financial-ft` |
+| `keynote-spatial` | Keynote Spatial | Divider-free header, airy margins, 16pt borderless surface cards, minimal takeaway caption | `keynote-light`, `bold` |
+| `editorial-folio` | Editorial Folio | Full-width top running folio, page number top-right, 0px borders, display serif numerals | `editorial-forest`, `cartesian`, `velvet`, `luxury-noir` |
+| `saas-bento` | SaaS Bento | 10pt rounded `surface1` cards with hairline stroke, primary accent focus, monospace pills | `linear-dark`, `swiss`, `data`, `soft` |
+| `academic-minimal` | Academic Beamer | Full-width Beamer tinted header band (`13.333"`) + 3-zone academic footer status bar | `academic`, `course-sage`, `medical-clean` |
+| `gov-ceremonial` | Gov Ceremonial | Double-rule header (`1.5pt` + `0.5pt`), bracketed chapter tag, symmetric warm-paper cards | `exec-jilan`, `exec-palace` |
+
+### Daylight themes (12 — recommended for bright rooms, print, consulting, medical, academic & executive reviews)
 
 | ID | Name | Mood | Best for |
 | --- | --- | --- | --- |
-| `data` | Data Drift (default) | Futuristic / immersive | AI, tech launches, research |
-| `swiss` | Swiss Pulse | Precise / rational | Data, SaaS, developer tools |
-| `velvet` | Velvet Standard | Premium / restrained | Executive decks, brand, investor pitches |
-| `soft` | Soft Signal | Warm / human | Brand stories, training, personal talks |
-| `bold` | Maximalist Type | Loud / kinetic | Product launches, events, big moments |
+| `consulting` | Strategy Navy (`auto` business default) | Authoritative / crisp | Management consulting, strategy reviews, board & operations decks |
+| `cobalt-cream` | Blue Professional | Paper-warm / modern | Product proposals, B2B pitches, research & technical briefs |
+| `exec-jilan` | Imperial Slate | Poised / institutional | Enterprise briefings, public-sector reviews, formal alignments |
+| `exec-palace` | Palace Vermilion | Ceremonial / dignified | Institutional summaries, annual reviews, keynote ceremonies |
+| `academic` | ETH & Nature | Clean / scholarly | Thesis defenses, grant proposals, research seminars |
+| `editorial-forest` | Editorial Forest | Thoughtful / narrative | Industry whitepapers, ESG reports, research essays |
+| `cartesian` | Cartesian Stone | Minimal / geometric | Architecture reviews, engineering postmortems, methodology decks |
+| `course-sage` | Workshop Sage | Calm / legible | Workshops, lectures, training handouts |
+| `soft` | Soft Signal | Warm / human | Brand stories, enablement, team talks |
+| `keynote-light` | Cupertino Spatial | Pure / airy | Product keynotes, flagship launches, Apple-inspired briefs |
+| `financial-ft` | FT Salmon | Editorial / financial | Earnings releases, investor briefings, macro research |
+| `medical-clean` | Clinical Teal | Crisp / clinical | Clinical case reviews, biotech/pharma R&D, healthcare boards |
 
-Themes are derived from [dsh-hyperframes](https://github.com/STARDUSTLC666/dsh-hyperframes) `visual-styles.md`. Full palettes: `skills/dsh-ppt/references/themes.md`. Run `ppt_themes { preview: true, outputDir: "dist" }` for a side-by-side gallery and SVG palette cards.
+### Dark themes (6 — recommended for keynotes, dark venues, luxury curation & technical demos)
+
+| ID | Name | Mood | Best for |
+| --- | --- | --- | --- |
+| `data` | Data Drift (CLI fallback default) | Futuristic / immersive | AI launches, live telemetry, technical showcases |
+| `swiss` | Swiss Pulse | Precise / rational | Data reports, SaaS products, developer tools |
+| `velvet` | Velvet Standard | Premium / restrained | Investor pitches, luxury brand briefings |
+| `bold` | Maximalist Type | Loud / kinetic | Keynotes, big announcements, event openers |
+| `linear-dark` | Obsidian Keynote | Sharp / modern | Modern software launches, startup pitch decks |
+| `luxury-noir` | Atelier Noir | Opulent / editorial | Creative lookbooks, luxury curation, flagship showcases |
+
+Full palettes and typography tokens live in `skills/dsh-ppt/references/themes.md`. Run `ppt_themes { preview: true, outputDir: "dist" }` for an 18-theme side-by-side HTML gallery and SVG palette cards.
 
 ## Markdown input rules
 
 - The first `# heading` becomes the cover title; its first paragraph becomes the cover subtitle.
-- Each `## section` becomes one slide: lists produce `bullets` slides; empty sections produce `section` dividers.
-- Plain text without headings: the first paragraph is the cover, then every 5 sentences become one slide.
-- A single sentence automatically produces a complete 3-slide structure: cover → core idea → closing.
-- Long tables paginate automatically with repeated headers and up to 8 data rows per page. Notes stay on the first page. Tables support 8 columns and 60 characters per cell; oversized input returns an actionable error. Short rows are padded consistently in all artifacts.
+- Each `## section` becomes a slide: standard lists, quotes, and tables are recognized automatically, alongside fenced semantic directives:
+  - `::: kpi`, `::: cards`, `::: comparison`, `::: matrix`, `::: process`, `::: callout`, `::: agenda`, `::: gantt`, `::: architecture`, `::: harvey`, `::: tam`, `::: org` → parsed directly into structured cards, pro diagrams, or Harvey-ball matrices.
+  - `> [!TAKEAWAY] Single-sentence conclusion` → extracted into the slide's bottom `takeaway` callout bar.
+  - `<!-- source: ... -->` / `<!-- 来源: ... -->` → extracted as `source` footnote; `<!-- note: ... -->` → extracted as speaker `notes`.
+- Plain text without headings: the first paragraph is the cover, then every 5 sentences become one slide; a single sentence produces a complete 3-slide structure (cover → statement → closing).
+- Long tables paginate automatically with repeated headers and up to 8 data rows per page (`notes` stay on the first page; `tableStyle` supports `consulting | booktabs | minimal | banded | harvey`). Short rows are padded consistently across all artifacts.
 - `maxSlides` counts pages after expansion. Exceeding it fails before writing files; raise the limit (up to 120) or split the deck. Middle slides are never silently discarded.
-- For precise control, use structured `slides` (`cover | section | bullets | statement | quote | table | closing`), with `rows` for tables and `notes` for speaker notes.
+- For exact per-slide control, pass structured `slides` using any of the 24 `layout` values, `chrome`, `columns`, `items`, `rows`, `chart`, `image`, `takeaway`, `source`, and `notes`.
 
 ## Configuration
 
@@ -151,7 +198,7 @@ No required configuration. Optional:
   config:
     outputDir: E:\decks   # optional; defaults to the session working directory
     maxSlides: 40         # optional; default 60 (3–120)
-    defaultTheme: data    # optional; used when ppt_create has no theme
+    defaultTheme: auto    # optional; used when ppt_create has no theme (auto or any of the 18 theme IDs)
     defaultLang: en       # optional; used when ppt_create has no lang (zh/en/bilingual)
 ```
 
@@ -168,26 +215,26 @@ Relative paths and configured output directories resolve per session cwd without
 ## Engineering quality
 
 - Tools and the skill share an asynchronous generator. The legacy synchronous plain-text API remains available.
-- Images and native charts use MIT-licensed `@office-kit/pptx@0.21.0`; optional rendering is loaded on demand.
-- Unit tests cover registration contracts, JSON Schema, theme resolution, Markdown parsing, artifact generation, PPTX part integrity, and the CLI.
+- Images and native charts use MIT-licensed `@office-kit/pptx@0.21.0`; reference `.pptx` absorption uses safe local `fflate` + OOXML parsing with ZIP-bomb and path-traversal guards; optional rendering is loaded on demand.
+- Unit tests cover registration contracts, JSON Schema, 18 themes, 6 chrome skeletons & auto-direction, 24 layouts & pro diagrams, 16 industry blueprints, 13 chart kinds, deep `.pptx` absorption (`cloneStructure`), artifact generation, PPTX part integrity, workbench security bounds, and the CLI.
 - No `eval` / `child_process` / secrets; artifacts are only written to the user-specified local directory.
 
 ## Development
 
 ```sh
 pnpm install
-pnpm run build      # tsc → lib/
-pnpm test           # build + node --test (registration/config/engine/CLI)
+pnpm run build      # tsc + client workbench bundle → lib/
+pnpm test           # build + node --test (registration/config/engine/charts/absorb/workbench/CLI)
 pnpm run smoke:cli  # bare CLI smoke test, generates .smoke-deck
 ```
 
 ## Known limitations
 
-- The PPTX uses a blank layout plus text boxes: text is editable in PowerPoint / WPS, but no smart master placeholders yet.
-- A one-sentence input produces a minimal 3-slide structure; for richer decks, expand the content into a Markdown outline first.
-- `bilingual` only localizes the player UI; it does not translate content.
+- PPTX slides use positioned native shapes, tables, charts, and text boxes: text and chart workbooks are editable in PowerPoint / WPS / Keynote, without complex master-placeholder inheritance chains.
+- `ppt_absorb` and `referencePptx` (including `cloneStructure`) extract colors, fonts, slide aspect ratio, chrome geometry, and slide layout skeletons; they do not copy third-party slide copy verbatim.
+- `bilingual` localizes the player and workbench UI; it does not translate authored slide content.
 - Selected-page editing supports this plugin's JSON project, not arbitrary external PPTX editing.
-- Text fit checks are static estimates; inspect actual rendered output for clipping and font substitution.
+- Static checks estimate text fit and visual density; inspect rendered page images for exact font substitution and clipping.
 
 ## License
 

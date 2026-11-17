@@ -2,40 +2,37 @@ import { mkdirSync, readFileSync, statSync, openSync, closeSync, rmSync } from '
 import { resolve, dirname, extname, basename } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
-import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveTheme, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, pptxEastAsianFont } from './deck-core.mjs'
-import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, chartColors, normalizeChart } from './deck-media.mjs'
+import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, buildDeck } from './deck-core.mjs'
+import { listThemes, resolveTheme, buildThemePreview as buildThemePreviewFromThemes, deriveBrandedTheme, pptxEastAsianFont } from './deck-themes.mjs'
+import { CORE_LAYOUTS, LAYOUT_ALIASES, stripInlineMarkdown } from './deck-layouts.mjs'
+import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, normalizeChart, buildOfficeKitChartSpec, computeWaterfallGeometry } from './deck-media.mjs'
 import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
 import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
+import { absorbPptx, CHROME_STYLE_IDS } from './deck-absorb.mjs'
+import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, auditSlideAesthetics } from './deck-director.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
-export { buildDeck, buildThemePreview, listThemes, resolveTheme, resolveLanguage } from './deck-core.mjs'
+export { buildDeck, resolveLanguage } from './deck-core.mjs'
+export { listThemes, resolveTheme } from './deck-themes.mjs'
+export { absorbPptx } from './deck-absorb.mjs'
+export { inferThemeFromContent } from './deck-director.mjs'
+
+export function buildThemePreview(options = {}) {
+  return buildThemePreviewFromThemes(options, resolveLanguage, DECK_VERSION)
+}
 
 const MAX_IMAGE = 5 * 1024 * 1024, MAX_ASSETS = 32 * 1024 * 1024, MAX_DOCUMENT = 64 * 1024 * 1024
 const MAX_HISTORY = 20
-const layouts = new Set(['cover', 'section', 'bullets', 'statement', 'closing', 'quote', 'table', ...MEDIA_LAYOUTS])
+const canonicalLayouts = new Set([...CORE_LAYOUTS, ...MEDIA_LAYOUTS])
+const layouts = new Set([...canonicalLayouts, ...Object.keys(LAYOUT_ALIASES)])
 const hash = data => createHash('sha256').update(data).digest('hex')
 const clone = value => structuredClone(value)
 function abort(signal) { signal?.throwIfAborted() }
 function fail(message) { throw new Error('dsh-ppt：' + message) }
 
-const scenarios = [
-  { id: 'weekly', name: { zh: '工作周报', en: 'Weekly report' }, theme: 'data', sections: [['本周工作', 'This week'], ['完成情况', 'Progress'], ['问题与风险', 'Risks'], ['下周计划', 'Next week']] },
-  { id: 'defense', name: { zh: '论文答辩', en: 'Thesis defense' }, theme: 'soft', sections: [['研究问题', 'Research question'], ['相关研究', 'Related work'], ['研究方法', 'Method'], ['研究结果', 'Results'], ['结论与局限', 'Conclusions and limitations']] },
-  { id: 'project', name: { zh: '项目汇报', en: 'Project update' }, theme: 'swiss', sections: [['目标与范围', 'Goals and scope'], ['进度与交付', 'Progress and delivery'], ['数据与证据', 'Evidence'], ['风险与决策', 'Risks and decisions'], ['下一步', 'Next steps']] },
-  { id: 'pitch', name: { zh: '项目路演', en: 'Pitch deck' }, theme: 'velvet', sections: [['用户问题', 'Customer problem'], ['解决方案', 'Solution'], ['产品与证据', 'Product and evidence'], ['商业模式', 'Business model'], ['计划与需求', 'Plan and ask']] },
-]
-
 export function listTemplates(lang = 'zh') {
   const language = resolveLanguage(lang).id === 'en' ? 'en' : 'zh'
-  return scenarios.map(s => ({ id: s.id, name: s.name[language], theme: s.theme,
-    outline: s.sections.map(p => p[language === 'en' ? 1 : 0]),
-    slides: templateSlides(s, s.name[language], language) }))
-}
-function templateSlides(scenario, title, lang) {
-  const en = lang === 'en'
-  return [{ layout: 'cover', title, subtitle: en ? 'To fill: presenter and date' : '待填写：汇报人和日期' },
-    ...scenario.sections.map(section => ({ layout: 'bullets', title: section[en ? 1 : 0], bullets: [en ? 'To fill: specific facts, evidence and next action' : '待填写：具体事实、依据与下一步行动'] })),
-    { layout: 'closing', title: en ? 'Next action' : '下一步行动', subtitle: en ? 'To fill: owner and deadline' : '待填写：负责人和时间' }]
+  return listScenarioTemplates(language)
 }
 
 function imageInfo(bytes, page) {
@@ -98,6 +95,8 @@ function addAsset(image, assets, cwd, page) {
   return id
 }
 
+const CHROME_STYLE_SET = new Set(CHROME_STYLE_IDS)
+
 function normalizeBrand(input, assets, cwd) {
   if (input === undefined || input === null) return undefined
   if (typeof input !== 'object' || Array.isArray(input)) fail('brand 必须是对象')
@@ -118,6 +117,11 @@ function normalizeBrand(input, assets, cwd) {
     if (String(input.footer).length > 100) fail('brand.footer 最多 100 字符')
     brand.footer = String(input.footer)
   }
+  if (input.chromeStyle !== undefined && input.chromeStyle !== null && input.chromeStyle !== '') {
+    const cs = String(input.chromeStyle).trim().toLowerCase()
+    if (!CHROME_STYLE_SET.has(cs)) fail('brand.chromeStyle 需为 ' + CHROME_STYLE_IDS.join(' / '))
+    brand.chromeStyle = cs
+  }
   if (input.logo) brand.logoAssetId = addAsset({ src: input.logo }, assets, cwd, '品牌 Logo')
   else if (input.logoAssetId) {
     if (!assets[input.logoAssetId]) fail('品牌 Logo 嵌入资产不存在')
@@ -125,42 +129,70 @@ function normalizeBrand(input, assets, cwd) {
   }
   return brand
 }
+
 function brandedTheme(manifest) {
-  const theme = clone(resolveTheme(manifest.theme)), brand = manifest.brand
-  if (brand?.primaryColor) theme.palette.accent = brand.primaryColor
-  if (brand?.backgroundColor) theme.palette.bg = brand.backgroundColor
-  if (brand?.textColor) theme.palette.fg = brand.textColor
-  if (brand?.fontFamily) theme.fonts = { heading: brand.fontFamily, body: brand.fontFamily }
-  return theme
+  return deriveBrandedTheme(manifest.theme, manifest.brand)
 }
+
 function embedSlides(slides, assets, cwd) {
   return slides.map((slide, index) => {
-    if (!slide.image) return slide
-    const assetId = addAsset(slide.image, assets, cwd, `第 ${index + 1} 页`)
-    const { src, ...image } = slide.image
-    return { ...slide, image: { ...image, assetId } }
+    const pageLabel = `第 ${index + 1} 页`
+    let nextSlide = slide
+    if (slide.image) {
+      const assetId = addAsset(slide.image, assets, cwd, pageLabel)
+      const { src, ...image } = slide.image
+      nextSlide = { ...nextSlide, image: { ...image, assetId } }
+    }
+    if (Array.isArray(slide.images) && slide.images.length > 0) {
+      const embeddedImages = slide.images.map((img, gIdx) => {
+        const assetId = addAsset(img, assets, cwd, `${pageLabel}图 ${gIdx + 1}`)
+        const { src, ...rest } = img
+        return { ...rest, assetId }
+      })
+      nextSlide = { ...nextSlide, images: embeddedImages }
+    }
+    return nextSlide
   })
 }
+
+function effectiveLayout(rawLayout) {
+  if (!rawLayout) return undefined
+  return LAYOUT_ALIASES[rawLayout]?.layout || rawLayout
+}
+
 function validateRawSlides(slides) {
   if (slides === undefined || slides === null) return
   if (!Array.isArray(slides)) fail('slides 必须是数组')
   slides.forEach((s, i) => {
     if (!s || typeof s !== 'object' || Array.isArray(s)) fail(`第 ${i + 1} 页必须是对象`)
     if (s.layout && !layouts.has(s.layout)) fail(`第 ${i + 1} 页未知布局 ${s.layout}`)
+    if (s.chrome !== undefined && s.chrome !== null && s.chrome !== '') {
+      const ch = String(s.chrome).trim().toLowerCase()
+      if (!CHROME_STYLE_SET.has(ch)) fail(`第 ${i + 1} 页未知母版骨架 chrome: ${s.chrome}`)
+    }
     normalizeVisual(s.visual)
-    if (s.chart && s.image) fail(`第 ${i + 1} 页不能同时放入 image 和 chart`)
-    if (s.image && s.layout && !['image', 'image-left', 'image-right'].includes(s.layout)) fail(`第 ${i + 1} 页图片需使用 image / image-left / image-right 布局`)
-    if (s.chart && s.layout && s.layout !== 'chart') fail(`第 ${i + 1} 页图表需使用 chart 布局`)
+    const eff = effectiveLayout(s.layout)
+    const hasImg = Boolean(s.image || (Array.isArray(s.images) && s.images.length > 0))
+    if (s.chart && hasImg) fail(`第 ${i + 1} 页不能同时放入 image 和 chart`)
+    if (hasImg && eff && !['image', 'image-left', 'image-right'].includes(eff)) fail(`第 ${i + 1} 页图片需使用 image / image-left / image-right / gallery 布局`)
+    if (s.chart && eff && !['chart', 'chart-split'].includes(eff)) fail(`第 ${i + 1} 页图表需使用 chart / chart-split / waterfall 布局`)
   })
 }
+
 function snapshot(manifest) {
   return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
+
 function collectAssets(manifest) {
   const ids = new Set()
   for (const state of [manifest, ...(manifest.history ?? [])]) {
     if (state.brand?.logoAssetId) ids.add(state.brand.logoAssetId)
-    for (const slide of state.slides) if (slide.image?.assetId) ids.add(slide.image.assetId)
+    for (const slide of state.slides) {
+      if (slide.image?.assetId) ids.add(slide.image.assetId)
+      if (Array.isArray(slide.images)) {
+        for (const img of slide.images) if (img?.assetId) ids.add(img.assetId)
+      }
+    }
   }
   manifest.assets = Object.fromEntries([...ids].map(id => [id, manifest.assets[id]]))
   const size = Object.values(manifest.assets).reduce((sum, asset) => sum + (asset?.data?.length ?? 0), 0)
@@ -181,7 +213,7 @@ function embeddedAssetError(asset, id) {
 }
 
 // This is a conservative fit estimate. Fonts and PowerPoint/WPS rendering still need visual inspection.
-function textWidth(text) { return [...String(text ?? '')].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0) }
+function textWidth(text) { return [...stripInlineMarkdown(String(text ?? ''))].reduce((n, c) => n + (/[^\x00-\xff]/.test(c) ? 1 : 0.55), 0) }
 function contrast(a, b) {
   const lum = color => {
     const rgb = color.slice(1).match(/../g).map(v => parseInt(v, 16) / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
@@ -189,6 +221,7 @@ function contrast(a, b) {
   }
   const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05)
 }
+
 export function checkManifest(manifest) {
   const issues = [], theme = brandedTheme(manifest)
   const invalidAssets = new Map()
@@ -199,21 +232,39 @@ export function checkManifest(manifest) {
   const issue = (index, code, message, suggestion, severity = 'warning') => issues.push({ slide: index + 1, slideId: manifest.slides[index]?.id, severity, code, message, suggestion })
   manifest.slides.forEach((slide, i) => {
     if (!slide.title?.trim()) issue(i, 'missing-title', '页面没有标题', '补充能说明本页内容的标题')
-    const titleLimit = ['cover', 'closing', 'statement', 'quote', 'section'].includes(slide.layout) ? 40 : 24
+    const titleLimit = ['cover', 'closing', 'statement', 'quote', 'section'].includes(slide.layout) ? 40 : 34
     if (textWidth(slide.title) > titleLimit) issue(i, 'title-overflow', '标题可能换行过多或超过标题区域', '缩短标题，把解释移入正文')
-    const mixed = ['image-left', 'image-right'].includes(slide.layout), bullets = slide.bullets ?? []
+    const mixed = ['image-left', 'image-right', 'chart-split'].includes(slide.layout), bullets = slide.bullets ?? []
     if (bullets.length > (mixed ? 5 : 8)) issue(i, 'dense-bullets', `本页有 ${bullets.length} 条要点，放映时过密`, '减少要点或拆成多页')
-    const width = mixed ? 19 : 37
+    const width = mixed ? 24 : 37
     const lines = bullets.reduce((sum, b) => sum + Math.max(1, Math.ceil(textWidth(b) / width)), 0)
       + (slide.subtitle ? Math.ceil(textWidth(slide.subtitle) / width) : 0)
-    if (lines > (mixed ? 9 : 11)) issue(i, 'body-overflow', '正文估计超过可用高度', '先精简文字，再分拆页面，避免继续缩小字体')
-    if ([slide.title, slide.subtitle, ...bullets].some(s => /待填写|To fill:/i.test(String(s)))) issue(i, 'template-unfilled', '模板中还有待填写内容', '提供实际事实、依据和行动，填完后重新检查')
+    if (slide.layout === 'bullets' || mixed) {
+      if (lines > (mixed ? 9 : 11)) issue(i, 'body-overflow', '正文估计超过可用高度', '先精简文字，再分拆页面，避免继续缩小字体')
+    }
+    const itemStrings = Array.isArray(slide.items)
+      ? slide.items.flatMap(it => [it?.title, it?.text, it?.value, ...(it?.bullets ?? [])]).filter(Boolean)
+      : []
+    if ([slide.title, slide.subtitle, slide.takeaway, ...bullets, ...itemStrings].some(s => /待填写|To fill:/i.test(String(s)))) {
+      issue(i, 'template-unfilled', '模板中还有待填写内容', '提供实际事实、依据和行动，填完后重新检查')
+    }
     if (slide.layout === 'table') {
-      if ((slide.rows?.[0]?.length ?? 0) > 6) issue(i, 'small-font', '表格超过 6 列，使用 14pt，小屏放映可能难以阅读', '减少列数或把重点数据改成图表，导出后检查可读性')
+      if ((slide.rows?.[0]?.length ?? 0) > 6) issue(i, 'small-font', '表格超过 6 列，使用较小字号，小屏放映可能难以阅读', '减少列数或把重点数据改成图表，导出后检查可读性')
       if (slide.rows?.some(row => row.some(c => textWidth(c) > 18))) issue(i, 'table-density', '表格单元格文字较长，可能换行拥挤', '精简单元格或减少列数')
     }
-    if (slide.image) {
-      const asset = manifest.assets?.[slide.image.assetId], box = mediaBoxes(slide.layout).image
+    const boxes = MEDIA_LAYOUTS.has(slide.layout) ? mediaBoxes(slide.layout, slide.variant, slide) : null
+    if (Array.isArray(boxes?.gallery) && Array.isArray(slide.images) && slide.images.length > 1) {
+      slide.images.forEach((img, gIdx) => {
+        const asset = manifest.assets?.[img?.assetId], gBox = boxes.gallery[gIdx] || boxes.image
+        if (!asset) issue(i, 'missing-image', `找不到本页第 ${gIdx + 1} 张嵌入图片`, '重新指定图片路径后编辑本页', 'error')
+        else {
+          if (assetError(img.assetId)) issue(i, 'invalid-image', assetError(img.assetId), '重新提供本地图片后编辑该页', 'error')
+          if (asset.width < gBox.w * 100 || asset.height < gBox.h * 100) issue(i, 'low-resolution', `图片为 ${asset.width}×${asset.height}，放大后可能模糊`, '换成更高分辨率图片；Logo 等小图可忽略此提示')
+        }
+        if (!img?.alt?.trim()) issue(i, 'missing-alt', '图片没有说明文字', '填写 images[].alt，方便读屏及理解图片')
+      })
+    } else if (slide.image) {
+      const asset = manifest.assets?.[slide.image.assetId], box = boxes?.image || mediaBoxes('image').image
       if (!asset) issue(i, 'missing-image', '找不到本页的嵌入图片', '重新指定图片路径后编辑本页', 'error')
       else {
         if (assetError(slide.image.assetId)) issue(i, 'invalid-image', assetError(slide.image.assetId), '重新提供本地图片后编辑该页', 'error')
@@ -223,21 +274,83 @@ export function checkManifest(manifest) {
     }
     if (slide.chart) {
       try { normalizeChart(slide.chart, i + 1) } catch (error) { issue(i, 'invalid-chart', error.message, '修正图表类别和数值', 'error') }
-      if (slide.chart.categories?.length > 10 || slide.chart.categories?.some(c => textWidth(c) > 10)) issue(i, 'chart-density', '图表类别较多或标签较长，可能相互遮挡', '减少类别，或使用横向条形图')
+      if (slide.chart.categories?.length > 10 || (slide.chart.kind !== 'bar' && slide.chart.kind !== 'stacked-bar' && slide.chart.kind !== 'percent-bar' && slide.chart.categories?.some(c => textWidth(c) > 10))) {
+        issue(i, 'chart-density', '图表类别较多或标签较长，可能相互遮挡', '减少类别，或使用横向条形图 bar')
+      }
       if (slide.chart.series?.some(s => textWidth(s.name) > 14)) issue(i, 'chart-legend', '图例名称较长', '精简系列名称并检查渲染')
     }
     if (contrast(theme.palette.bg, theme.palette.fg) < 4.5) issue(i, 'low-contrast', '正文与背景对比度低于 4.5:1', '调整品牌背景色或文字色')
   })
   if (manifest.brand?.logoAssetId && !manifest.assets?.[manifest.brand.logoAssetId]) issue(0, 'missing-logo', '品牌 Logo 资产不存在', '重新提供 Logo', 'error')
   else if (manifest.brand?.logoAssetId && assetError(manifest.brand.logoAssetId)) issue(0, 'invalid-logo', assetError(manifest.brand.logoAssetId), '重新提供 Logo', 'error')
+
+  // 追加 SLOP-01..10 审美反模式静态诊断
+  for (const aestheticIssue of auditSlideAesthetics(manifest, theme, textWidth)) {
+    issues.push(aestheticIssue)
+  }
+
   return { ok: !issues.some(i => i.severity === 'error'), slideCount: manifest.slides.length,
     errorCount: issues.filter(i => i.severity === 'error').length, warningCount: issues.filter(i => i.severity === 'warning').length,
     issues, note: '文字尺寸与溢出为静态估算；最终请检查 HTML 放映和 PowerPoint / WPS 实际显示。页脚和页码的小字号不计入正文检查。' }
 }
 
+function drawNativeWaterfallWithKit(lib, slide, chart, boxIn, theme) {
+  const emuVal = inches => Math.round(inches * 914400)
+  const cb = { x: emuVal(boxIn.x), y: emuVal(boxIn.y), w: emuVal(boxIn.w), h: emuVal(boxIn.h) }
+  const plotLeft = cb.x + Math.round(cb.w * 0.085)
+  const plotRight = cb.x + Math.round(cb.w * 0.975)
+  const plotTop = cb.y + Math.round(cb.h * 0.11)
+  const plotBottom = cb.y + Math.round(cb.h * 0.83)
+  const geom = computeWaterfallGeometry(chart, { left: plotLeft, right: plotRight, top: plotTop, bottom: plotBottom })
+
+  const tokens = theme.tokens || {}
+  const fg = tokens.inkPrimary || theme.palette.fg
+  const muted = tokens.inkMuted || theme.palette.muted
+  const hairline = tokens.hairline || theme.palette.panel
+  const focalColor = tokens.chartFocal || theme.palette.accent
+  const posColor = tokens.positive || '#0D7A4E'
+  const negColor = tokens.negative || '#C81E1E'
+  const font = pptxEastAsianFont(theme.fonts.body)
+
+  geom.ticks.forEach((tk, idx) => {
+    const grid = lib.addSlideLine(slide, { x1: plotLeft, y1: Math.round(tk.y), x2: plotRight, y2: Math.round(tk.y), name: `Waterfall Grid ${idx}` })
+    lib.setShapeStroke(grid, { color: hairline, width: 9525 })
+    const lbl = lib.addSlideTextBox(slide, { x: cb.x, y: Math.round(tk.y - 95000), w: Math.max(91440, plotLeft - cb.x - 68000), h: 190000, text: tk.label, name: `Waterfall Tick ${idx}` })
+    lib.setShapeTextFormat(lbl, { size: 11, font, color: muted })
+    lib.setShapeAlignment(lbl, 'right')
+  })
+
+  geom.connectors.forEach((cn, idx) => {
+    const bridge = lib.addSlideLine(slide, { x1: Math.round(cn.x1), y1: Math.round(cn.y1), x2: Math.round(cn.x2), y2: Math.round(cn.y2), name: `Waterfall Bridge ${idx + 1}` })
+    lib.setShapeStroke(bridge, { color: muted, width: 11430, dash: 'dash' })
+  })
+
+  geom.bars.forEach((b, idx) => {
+    const col = b.role === 'total' ? focalColor : b.role === 'positive' ? posColor : negColor
+    const bar = lib.addSlideShape(slide, 'roundRect', { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.max(25400, Math.round(b.h)), name: `Waterfall Bar ${idx + 1}` })
+    lib.setShapeFill(bar, col)
+    lib.setShapeNoStroke(bar)
+    const labelY = b.value >= 0 || b.isTotal ? Math.round(b.y - 220000) : Math.round(b.y + b.h + 25000)
+    const valBox = lib.addSlideTextBox(slide, { x: Math.round(b.x - 95000), y: labelY, w: Math.round(b.w + 190000), h: 205000, text: b.label, name: `Waterfall Value ${idx + 1}` })
+    lib.setShapeTextFormat(valBox, { size: 11.5, font, color: b.role === 'total' ? fg : col, bold: true })
+    lib.setShapeAlignment(valBox, 'center')
+    const catBox = lib.addSlideTextBox(slide, { x: Math.round(b.x - 110000), y: plotBottom + 42000, w: Math.round(b.w + 220000), h: 240000, text: b.category, name: `Waterfall Category ${idx + 1}` })
+    lib.setShapeTextFormat(catBox, { size: 12, font, color: fg })
+    lib.setShapeAlignment(catBox, 'center')
+  })
+
+  const axis = lib.addSlideLine(slide, { x1: plotLeft, y1: Math.round(geom.zeroY), x2: plotRight, y2: Math.round(geom.zeroY), name: 'Waterfall Baseline' })
+  lib.setShapeStroke(axis, { color: tokens.inkSecondary || muted, width: 15875 })
+}
+
 async function exportPptx(manifest, theme, language, signal) {
-  const base = buildPptx({ ...manifest, slides: manifest.slides.map(s => ({ ...s, notes: dataNotes(manifest,s) })) }, theme, language)
-  if (!manifest.brand?.logoAssetId && !manifest.brand?.footer && !manifest.slides.some(s => s.image || s.chart)) return base
+  const base = buildPptx({ ...manifest, slides: manifest.slides.map(s => ({ ...s, notes: dataNotes(manifest, s) })) }, theme, language)
+  const hasWaterfall = manifest.slides.some(s => s.chart?.kind === 'waterfall')
+  const waterfallMissingInBase = hasWaterfall && !base.includes(Buffer.from('Waterfall Bar 1'))
+  const hasOfficeKitChart = manifest.slides.some(s => s.chart && s.chart.kind !== 'waterfall')
+  const hasImages = manifest.slides.some(s => s.image || (Array.isArray(s.images) && s.images.length > 0))
+  if (!manifest.brand?.logoAssetId && !manifest.brand?.footer && !hasImages && !hasOfficeKitChart && !waterfallMissingInBase) return base
+
   abort(signal)
   let lib
   try { lib = await import('@office-kit/pptx') } catch (error) { fail('图片、图表和品牌导出需要 @office-kit/pptx@0.21.0。插件请重新安装；独立技能请在技能目录运行 npm install --ignore-scripts。' + error.message) }
@@ -256,26 +369,29 @@ async function exportPptx(manifest, theme, language, signal) {
   }
   manifest.slides.forEach((source, index) => {
     abort(signal)
-    const slide = slides[index], boxes = mediaBoxes(source.layout)
-    if (source.image) putImage(slide, source.image.assetId, boxes.image, source.image.fit, 'Slide image', source.image.alt)
+    const slide = slides[index]
+    const boxes = MEDIA_LAYOUTS.has(source.layout) ? mediaBoxes(source.layout, source.variant, source) : mediaBoxes('image')
+    if (Array.isArray(boxes.gallery) && Array.isArray(source.images) && source.images.length > 1) {
+      boxes.gallery.forEach((gBox, gIdx) => {
+        const img = source.images[gIdx]
+        if (img?.assetId) putImage(slide, img.assetId, gBox, img.fit || 'cover', `Gallery image ${gIdx + 1}`, img.alt)
+      })
+    } else if (source.image) {
+      putImage(slide, source.image.assetId, boxes.image, source.image.fit, 'Slide image', source.image.alt)
+    }
     if (source.chart) {
-      const colors = chartColors(theme), font = pptxEastAsianFont(theme.fonts.body)
-      const style = { font, sizePt: source.visual?.chartLabelSize ?? 17, color: theme.palette.fg }
-      lib.addSlideChart(slide, { ...emu(boxes.chart), name: 'Editable data chart', spec: {
-        kind: source.chart.kind, categories: source.chart.categories,
-        series: source.chart.series.map((s, i) => ({ ...s, color: colors[i], ...(source.chart.kind === 'pie' ? { pointColors: source.chart.categories.map((_, j) => colors[j % colors.length]) } : {}) })),
-        chartAreaFill: theme.palette.bg, chartAreaStrokeColor: theme.palette.bg, plotAreaFill: theme.palette.bg,
-        categoryAxisLabelStyle: style, valueAxisLabelStyle: style,
-        valueAxisMinorTickMark: 'none', categoryAxisMinorTickMark: 'none', valueAxisMajorTickMark: 'none', categoryAxisMajorTickMark: 'none',
-        valueAxisMajorGridlines: true, valueAxisMajorGridlineColor: theme.palette.panel,
-        ...(source.chart.kind === 'bar' ? { categoryAxisOrientation: 'maxMin', valueAxisCrosses: 'max' } : {}),
-        ...(source.chart.kind === 'pie' ? { dataLabels: { showPercent: true, showValue: false, showCategory: false, showSeriesName: false, numberFormat: '0.0%', position: 'bestFit', textStyle: style } } : {}),
-        ...(source.chart.unit ? { valueAxisTitle: source.chart.unit, valueAxisTitleStyle: style } : {}),
-        legend: { position: 'b', textStyle: style },
-      } })
+      if (source.chart.kind === 'waterfall') {
+        if (!lib.findShapeByName(slide, 'Waterfall Bar 1')) {
+          drawNativeWaterfallWithKit(lib, slide, source.chart, boxes.chart, theme)
+        }
+      } else {
+        const font = pptxEastAsianFont(theme.fonts.body)
+        const spec = buildOfficeKitChartSpec(source.chart, theme, source.visual, font)
+        lib.addSlideChart(slide, { ...emu(boxes.chart), name: 'Editable data chart', spec })
+      }
     }
     if (manifest.brand?.logoAssetId) putImage(slide, manifest.brand.logoAssetId, LOGO_BOX, 'contain', 'Brand logo', manifest.brand.name)
-    if (manifest.brand?.footer) {
+    if (manifest.brand?.footer && !lib.findShapeByName(slide, 'Footer source')) {
       const footer = lib.addSlideTextBox(slide, { ...emu(FOOTER_BOX), text: manifest.brand.footer, name: 'Brand footer' })
       lib.setShapeTextFormat(footer, { size: 10, font: pptxEastAsianFont(theme.fonts.body), color: theme.palette.muted })
     }
@@ -329,25 +445,31 @@ function commit(paths, data) {
   commitDeckArtifacts([{ path: paths.json, data: documentBytes(data.manifest), encoding: 'utf8' }, { path: paths.html, data: html, encoding: 'utf8' }, { path: paths.pptx, data: data.pptx }])
 }
 
+function validateEmbeddedImgObject(img, assets) {
+  if (img.fit !== undefined && !['contain', 'cover'].includes(img.fit)) fail('工程 image.fit 只允许 contain / cover')
+  if (img.src !== undefined || !assets[img.assetId]) fail('工程图片必须使用有效的嵌入资产')
+}
+
 function validateSnapshot(value, assets) {
   resolveTheme(value.theme); resolveLanguage(value.language)
   validateRawSlides(value.slides)
   validateDataSnapshot(value, normalizeSlides)
   if (value.brand != null) {
     if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
-    for (const key of ['primaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'name', 'footer']) {
+    for (const key of ['primaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'name', 'footer', 'chromeStyle']) {
       if (value.brand[key] !== undefined && typeof value.brand[key] !== 'string') fail('工程 brand.' + key + ' 必须为字符串')
     }
     normalizeBrand(value.brand, assets, '.')
   }
   for (const slide of value.slides) {
-    if (slide.image) {
-      if (slide.image.fit !== undefined && !['contain', 'cover'].includes(slide.image.fit)) fail('工程 image.fit 只允许 contain / cover')
-      if (slide.image.src !== undefined || !assets[slide.image.assetId]) fail('工程图片必须使用有效的嵌入资产')
+    if (slide.image) validateEmbeddedImgObject(slide.image, assets)
+    if (Array.isArray(slide.images)) {
+      for (const img of slide.images) validateEmbeddedImgObject(img, assets)
     }
     if (slide.chart) normalizeChart(slide.chart)
   }
 }
+
 function artifactProblem(manifest, paths) {
   if (!manifest.artifacts) return '旧工程没有成品校验记录，无法确认外部修改；请另存副本，保留原文件。'
   for (const kind of ['html', 'pptx']) {
@@ -356,25 +478,152 @@ function artifactProblem(manifest, paths) {
   }
 }
 
+const SKELETON_METRIC_RE = /(?:^|[^\d])[-+]?\d+(?:,\d{3})*(?:\.\d+)?\s*(?:[%％倍xX万亿千百元美元刀kKmMbB+家个席天周月年项次]|pp\b|bps\b|ms\b|pts?\b)/i
+
+function mapSlidesToAbsorbedSkeleton(slides, slideSkeleton, langId) {
+  if (!Array.isArray(slides) || !Array.isArray(slideSkeleton) || slideSkeleton.length === 0) return slides
+  const bodySkeleton = slideSkeleton.filter((entry) => entry && !['cover', 'closing', 'section'].includes(entry.inferredLayout))
+  const cyclePool = bodySkeleton.length > 0 ? bodySkeleton : slideSkeleton
+  let cursor = 0
+  const mapped = slides.map((slide, idx) => {
+    if (slide.layout === 'cover' || slide.layout === 'closing' || slide.layout === 'section' || slide.layout === 'agenda') {
+      return slide
+    }
+    const target = cyclePool[cursor % cyclePool.length]
+    cursor += 1
+    if (!target || !target.inferredLayout) return slide
+    const want = target.inferredLayout
+    const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
+    const n = bullets.length
+    const metricHits = bullets.filter((b) => SKELETON_METRIC_RE.test(stripInlineMarkdown(b))).length
+    const hasMetrics = n >= 2 && n <= 4 && (metricHits / n) >= 0.75
+    // Avoid breaking Markdown-only slides that lack media assets (chart/image) by mapping media slots to visual card equivalents
+    if (want === 'chart' || want === 'chart-split') {
+      return { ...slide, layout: hasMetrics ? 'kpi' : 'cards', variant: hasMetrics ? 'grid' : 'bento' }
+    }
+    if (want === 'image' || want === 'image-left' || want === 'image-right') {
+      return { ...slide, layout: n <= 2 ? 'callout' : 'cards', variant: n <= 2 ? 'takeaways' : 'pillars' }
+    }
+    if (want === 'matrix' && n !== 4) {
+      return { ...slide, layout: 'cards', variant: 'bento' }
+    }
+    if (want === 'kpi' && (!hasMetrics || n < 1 || n > 4)) {
+      return { ...slide, layout: 'cards', variant: 'pillars' }
+    }
+    if (want === 'table' && (!Array.isArray(slide.rows) || slide.rows.length === 0)) {
+      return { ...slide, layout: 'cards', variant: 'pillars' }
+    }
+    if (want === 'harvey' && (!Array.isArray(slide.rows) || slide.rows.length === 0)) {
+      return { ...slide, layout: 'comparison', variant: 'versus' }
+    }
+    if (['cards', 'kpi', 'comparison', 'matrix', 'process', 'callout', 'statement', 'bullets', 'gantt', 'architecture', 'tam', 'org'].includes(want)) {
+      return {
+        ...slide,
+        layout: want,
+        ...(target.variant ? { variant: target.variant } : {}),
+        ...(want === 'gantt' && !Array.isArray(slide.columns) ? { columns: ['Q1', 'Q2', 'Q3', 'Q4'] } : {}),
+      }
+    }
+    return slide
+  })
+  return normalizeSlides(mapped, 120, langId)
+}
+
 export async function buildDeckAsync(options = {}) {
   abort(options.signal)
   validateRawSlides(options.slides)
-  const scenario = options.template ? scenarios.find(s => s.id === options.template) : undefined
-  if (options.template && !scenario) fail('未知 template，请使用 weekly / defense / project / pitch')
-  const input = { ...options, theme: options.theme || scenario?.theme,
-    ...(!options.content?.trim() && !options.slides?.length && scenario ? { slides: templateSlides(scenario, String(options.title ?? ''), options.lang) } : {}) }
   const cwd = resolve(options.cwd || '.')
-  const dataModel = options.dataModel ? normalizeDataModel(options.dataModel, { cwd, allowFiles:true }) : undefined
+  const scenario = options.template ? findScenarioTemplate(options.template) : undefined
+  if (options.template && !scenario) fail('未知 template，请使用 ' + SCENARIO_TEMPLATES.map(s => s.id).join(' / '))
+
+  let absorbed = null
+  if (options.referencePptx !== undefined && options.referencePptx !== null && String(options.referencePptx).trim() !== '') {
+    absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
+  }
+
+  const rawThemeOpt = typeof options.theme === 'string' && options.theme.trim() ? options.theme.trim() : undefined
+  let chosenThemeId = rawThemeOpt
+  let directorHint = null
+  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario))) {
+    if (absorbed && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona && !scenario) {
+      chosenThemeId = absorbed.recommendedTheme
+    } else {
+      directorHint = inferThemeFromContent({
+        title: options.title,
+        content: options.content,
+        slides: options.slides,
+        template: scenario?.id,
+        persona: options.persona,
+      })
+      chosenThemeId = directorHint.theme
+    }
+  }
+
+  const langId = resolveLanguage(options.lang).id
+  const fromMarkdown = !options.slides?.length && !scenario && Boolean(options.content?.trim())
+  const input = {
+    ...options,
+    theme: chosenThemeId,
+    ...(!options.content?.trim() && !options.slides?.length && scenario
+      ? { slides: buildScenarioSlides(scenario, String(options.title ?? ''), langId === 'en' ? 'en' : 'zh') }
+      : {}),
+  }
+
+  const dataModel = options.dataModel ? normalizeDataModel(options.dataModel, { cwd, allowFiles: true }) : undefined
   if (dataModel && (!Array.isArray(input.slides) || !input.slides.length)) fail('数据绑定需使用结构化 slides / Data binding requires structured slides')
-  const prepared = dataModel ? prepareDataSlides(input.slides, dataModel, normalizeSlides, resolveLanguage(input.lang).id) : undefined
-  const normalized = normalizeBuildOptions({ ...input, ...(prepared ? { slides:prepared } : {}) })
-  if(prepared) normalized.deck.slides = prepared
+  const prepared = dataModel ? prepareDataSlides(input.slides, dataModel, normalizeSlides, langId) : undefined
+  const normalized = normalizeBuildOptions({ ...input, ...(prepared ? { slides: prepared } : {}) })
+  if (prepared) normalized.deck.slides = prepared
+
+  if (fromMarkdown) {
+    if (absorbed && options.cloneStructure === true && Array.isArray(absorbed.slideSkeleton) && absorbed.slideSkeleton.length > 0) {
+      normalized.deck.slides = mapSlidesToAbsorbedSkeleton(normalized.deck.slides, absorbed.slideSkeleton, langId)
+    } else {
+      const shouldPromote = options.smartLayout === true || (options.smartLayout !== false && (rawThemeOpt === 'auto' || Boolean(options.persona) || Boolean(absorbed)))
+      if (shouldPromote) {
+        normalized.deck.slides = promoteMarkdownSlides(normalized.deck.slides, { explicitSmartLayout: options.smartLayout === true })
+      }
+    }
+  }
+  if (directorHint?.tableStyle === 'booktabs') {
+    normalized.deck.slides = normalized.deck.slides.map(s => s.layout === 'table' && !s.tableStyle ? { ...s, tableStyle: 'booktabs' } : s)
+  }
+
   const assets = {}
-  const brand = normalizeBrand(options.brand, assets, cwd)
-  const manifest = { version: DECK_VERSION, schemaVersion: 1, deckId: randomUUID(), revision: 0,
-    title: normalized.title, theme: normalized.theme.id, language: normalized.language.id, motion: normalized.motion,
-    ...(scenario ? { template: scenario.id } : {}), ...(brand ? { brand } : {}), ...(dataModel ? {dataModel} : {}), assets, history: [],
-    slides: embedSlides(normalized.deck.slides, assets, cwd).map(s => ({ ...s, id: randomUUID() })) }
+  let brandInput = options.brand
+  if (absorbed) {
+    const baseAbsorbedBrand = {
+      ...absorbed.sanitizedBrand,
+      ...(options.cloneStructure === true && absorbed.recommendedChrome ? { chromeStyle: absorbed.recommendedChrome } : {}),
+    }
+    const targetTheme = resolveTheme(normalized.theme.id)
+    if (
+      absorbed.sanitizedTokens?.coverMode === 'inverted-accent' &&
+      targetTheme.tokens?.coverMode === 'inverted-accent' &&
+      !options.brand?.backgroundColor
+    ) {
+      delete baseAbsorbedBrand.backgroundColor
+    }
+    brandInput = options.brand === null ? null : { ...baseAbsorbedBrand, ...(options.brand || {}) }
+  }
+  const brand = normalizeBrand(brandInput, assets, cwd)
+
+  const manifest = {
+    version: DECK_VERSION,
+    schemaVersion: 1,
+    deckId: randomUUID(),
+    revision: 0,
+    title: normalized.title,
+    theme: normalized.theme.id,
+    language: normalized.language.id,
+    motion: normalized.motion,
+    ...(scenario ? { template: scenario.id } : {}),
+    ...(brand ? { brand } : {}),
+    ...(dataModel ? { dataModel } : {}),
+    assets,
+    history: [],
+    slides: embedSlides(normalized.deck.slides, assets, cwd).map(s => ({ ...s, id: randomUUID() })),
+  }
   const data = await generate(manifest, options.signal)
   mkdirSync(normalized.outputDir, { recursive: true })
   // Resolve collisions after asynchronous rendering; an earlier call may have committed meanwhile.
@@ -413,6 +662,7 @@ function readDocument(pathInput, cwd = '.') {
   }
   return { manifest: document, path, fingerprint: hash(bytes) }
 }
+
 /** Validated project snapshot for the operator workbench; no file is modified. */
 export function readDeckProject(options = {}) {
   abort(options.signal)
@@ -444,13 +694,30 @@ async function saveRevision(state, next, signal, saveAs = false, preserveUndo = 
 
 export async function editDeck(options = {}) {
   abort(options.signal)
+  const cwd = resolve(options.cwd || '.')
   const state = readDocument(options.deckPath, options.cwd), current = state.manifest
   expected(current, options.expectedRevision)
   const next = clone(current)
   if (!Array.isArray(options.edits) || !options.edits.length) {
-    if (options.brand === undefined && options.order === undefined && options.duplicate === undefined && options.remove === undefined && options.append === undefined && options.saveAs !== true) fail('请提供 edits、order、duplicate、remove、append 或 brand')
+    if (
+      options.brand === undefined &&
+      options.theme === undefined &&
+      options.referencePptx === undefined &&
+      options.order === undefined &&
+      options.duplicate === undefined &&
+      options.remove === undefined &&
+      options.append === undefined &&
+      options.saveAs !== true
+    ) {
+      fail('请提供 edits、theme、referencePptx、order、duplicate、remove、append 或 brand')
+    }
   }
-  const used = new Set(), allowed = new Set(['layout', 'title', 'subtitle', 'kicker', 'text', 'bullets', 'rows', 'notes', 'image', 'chart', 'visual'])
+  const used = new Set()
+  const allowed = new Set([
+    'layout', 'variant', 'chrome', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
+    'text', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
+    'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
+  ])
   for (const edit of options.edits ?? []) {
     const index = typeof edit.slide === 'number' && Number.isInteger(edit.slide) ? edit.slide - 1 : next.slides.findIndex(s => s.id === edit.slide)
     if (index < 0 || index >= next.slides.length) fail('找不到要修改的页面：' + edit.slide)
@@ -462,14 +729,28 @@ export async function editDeck(options = {}) {
     const changed = { ...next.slides[index], ...next.slides[index].dataTemplate, ...edit.patch }
     delete changed.dataTemplate
     for (const key of Object.keys(changed)) if (changed[key] === null) delete changed[key]
-    if (edit.patch.chart) { if (!edit.patch.layout) changed.layout = 'chart'; if (changed.layout === 'chart') delete changed.image }
-    if (edit.patch.image) { if (!edit.patch.layout && !['image', 'image-left', 'image-right'].includes(changed.layout)) changed.layout = 'image-right'; if (['image', 'image-left', 'image-right'].includes(changed.layout)) delete changed.chart }
-    if (edit.patch.layout && !MEDIA_LAYOUTS.has(edit.patch.layout)) { delete changed.image; delete changed.chart }
+    if (edit.patch.bullets && !edit.patch.items && !edit.patch.cards && !edit.patch.metrics && !edit.patch.steps && !edit.patch.columns && !edit.patch.quadrants && !next.slides[index].dataTemplate?.items) {
+      delete changed.items
+    }
+    if (edit.patch.chart) {
+      if (!edit.patch.layout && !['chart', 'chart-split', 'waterfall'].includes(changed.layout)) changed.layout = 'chart'
+      if (['chart', 'chart-split', 'waterfall'].includes(changed.layout)) { delete changed.image; delete changed.images }
+    }
+    if (edit.patch.image || edit.patch.images) {
+      if (!edit.patch.layout && !['image', 'image-left', 'image-right', 'gallery'].includes(changed.layout)) {
+        changed.layout = Array.isArray(edit.patch.images) && edit.patch.images.length > 1 ? 'image' : 'image-right'
+      }
+      if (['image', 'image-left', 'image-right', 'gallery'].includes(changed.layout)) delete changed.chart
+    }
+    if (edit.patch.layout) {
+      const eff = effectiveLayout(edit.patch.layout)
+      if (!MEDIA_LAYOUTS.has(eff)) { delete changed.image; delete changed.images; delete changed.chart }
+    }
     validateRawSlides([changed])
     let slides
     try { slides = next.dataModel ? prepareDataSlides([changed], next.dataModel, normalizeSlides, next.language) : normalizeSlides([changed], 120, next.language) } catch (error) { fail(`第 ${index + 1} 页修改失败：${error.message}`) }
     if (slides.length !== 1) fail(`第 ${index + 1} 页修改会产生分页，请减少表格行数或另建演示文稿`)
-    const embedded = embedSlides(slides, next.assets, resolve(options.cwd || '.'))[0]
+    const embedded = embedSlides(slides, next.assets, cwd)[0]
     next.slides[index] = { ...embedded, id: current.slides[index].id }
   }
   if (options.order !== undefined) {
@@ -501,10 +782,36 @@ export async function editDeck(options = {}) {
     validateRawSlides(options.append)
     const added = next.dataModel ? prepareDataSlides(options.append, next.dataModel, normalizeSlides, next.language) : normalizeSlides(options.append, 120, next.language)
     if (next.slides.length + added.length > 120) fail('工程页数超过 120')
-    next.slides.push(...embedSlides(added, next.assets, resolve(options.cwd || '.')).map(slide => ({ ...slide, id: randomUUID() })))
+    next.slides.push(...embedSlides(added, next.assets, cwd).map(slide => ({ ...slide, id: randomUUID() })))
   }
-  if (options.brand !== undefined) next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
-    ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, resolve(options.cwd || '.'))
+
+  if (options.theme !== undefined) {
+    const requestedTheme = String(options.theme ?? '').trim()
+    if (!requestedTheme) fail('theme 不能为空')
+    next.theme = requestedTheme === 'auto'
+      ? inferThemeFromContent({ title: next.title, slides: next.slides, template: next.template }).theme
+      : resolveTheme(requestedTheme).id
+  }
+
+  if (options.referencePptx !== undefined && options.referencePptx !== null && String(options.referencePptx).trim() !== '') {
+    const absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
+    if (options.theme === undefined) next.theme = absorbed.recommendedTheme
+    const absorbedBrand = { ...absorbed.sanitizedBrand }
+    if (
+      absorbed.sanitizedTokens?.coverMode === 'inverted-accent' &&
+      resolveTheme(next.theme).tokens?.coverMode === 'inverted-accent' &&
+      !options.brand?.backgroundColor
+    ) {
+      delete absorbedBrand.backgroundColor
+    }
+    next.brand = normalizeBrand({ ...next.brand, ...absorbedBrand }, next.assets, cwd)
+  }
+
+  if (options.brand !== undefined) {
+    next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
+      ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, cwd)
+    if (next.brand && Object.keys(next.brand).length === 0) delete next.brand
+  }
   if (options.saveAs !== true && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
   next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
   return { ...await saveRevision(state, next, options.signal, options.saveAs === true, options.preserveUndo === true), changed: true }
@@ -537,22 +844,22 @@ export async function undoDeck(options = {}) {
 
 function dataChange(state, options) {
   expected(state.manifest, options.expectedRevision)
-  const packet=options.scenario
-  if(packet && (packet.schemaVersion!==1||packet.deckId!==state.manifest.deckId||packet.revision!==state.manifest.revision||packet.fingerprint!==state.manifest.dataModel?.fingerprint))fail('推演参数来自其他工程或旧版本，请重新导出 / Scenario belongs to another project or revision')
-  return previewDataChange(state.manifest,{...options,...(packet?{parameters:packet.parameters}:{})},normalizeSlides)
+  const packet = options.scenario
+  if (packet && (packet.schemaVersion !== 1 || packet.deckId !== state.manifest.deckId || packet.revision !== state.manifest.revision || packet.fingerprint !== state.manifest.dataModel?.fingerprint)) fail('推演参数来自其他工程或旧版本，请重新导出 / Scenario belongs to another project or revision')
+  return previewDataChange(state.manifest, { ...options, ...(packet ? { parameters: packet.parameters } : {}) }, normalizeSlides)
 }
 export function previewDeckData(options = {}) {
   abort(options.signal)
-  const state=readDocument(options.deckPath, options.cwd)
-  return { ok:true, deckId:state.manifest.deckId, revision:state.manifest.revision, ...dataChange(state,options).preview }
+  const state = readDocument(options.deckPath, options.cwd)
+  return { ok: true, deckId: state.manifest.deckId, revision: state.manifest.revision, ...dataChange(state, options).preview }
 }
 export async function updateDeckData(options = {}) {
   abort(options.signal)
-  const state=readDocument(options.deckPath,options.cwd),change=dataChange(state,options)
-  if(options.confirmed!==true||options.expectedRevision===undefined||options.previewToken!==change.preview.token)fail('请先预览差异，再携带修订号与预览凭证确认 / Preview changes and confirm with the revision and preview token')
-  if(!change.preview.changed)return {...result(state.manifest,pathsFor(state.path)),changed:false}
-  const next={...clone(state.manifest),dataModel:change.model,slides:change.slides,history:[...state.manifest.history,snapshot(state.manifest)].slice(-MAX_HISTORY)}
-  return {...await saveRevision(state,next,options.signal,options.saveAs!==false,true),changed:true}
+  const state = readDocument(options.deckPath, options.cwd), change = dataChange(state, options)
+  if (options.confirmed !== true || options.expectedRevision === undefined || options.previewToken !== change.preview.token) fail('请先预览差异，再携带修订号与预览凭证确认 / Preview changes and confirm with the revision and preview token')
+  if (!change.preview.changed) return { ...result(state.manifest, pathsFor(state.path)), changed: false }
+  const next = { ...clone(state.manifest), dataModel: change.model, slides: change.slides, history: [...state.manifest.history, snapshot(state.manifest)].slice(-MAX_HISTORY) }
+  return { ...await saveRevision(state, next, options.signal, options.saveAs !== false, true), changed: true }
 }
 
 export function checkDeck(options = {}) {

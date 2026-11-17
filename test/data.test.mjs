@@ -26,9 +26,9 @@ async function inDir(run){const dir=mkdtempSync(join(root,'data-'));try{return a
 const load=path=>JSON.parse(readFileSync(path,'utf8'))
 const build=dir=>buildDeckAsync({title:'业务情景',outputDir:dir,slides:slides(),dataModel:model()})
 
-test('ordinary standalone text generation remains usable when optional data parsers are absent',()=>inDir(async dir=>{
+test('ordinary standalone text generation remains usable when optional data parsers and @office-kit/pptx are absent',()=>inDir(async dir=>{
   const engine=pathToFileURL(resolve('skills/dsh-ppt/scripts/deck-advanced.mjs')).href
-  const script=`import {registerHooks} from 'node:module';registerHooks({resolve(name,ctx,next){if(name==='jsep'||name==='csv-parse/sync'){const e=new Error('Absent optional parser');e.code='MODULE_NOT_FOUND';throw e}return next(name,ctx)}});const{buildDeckAsync}=await import(${JSON.stringify(engine)});const result=await buildDeckAsync({title:'Text only',content:'Actual content. No optional mode.',outputDir:${JSON.stringify(dir)}});if(!result.ok)throw Error('Plain generation failed');try{await buildDeckAsync({title:'Data',slides:[{title:'{{x}}'}],outputDir:${JSON.stringify(dir)},dataModel:{sources:[],metrics:[{id:'x',kind:'formula',formula:'1+2'}]}});throw Error('Expected missing dependency')}catch(e){if(!e.message.includes('npm install --ignore-scripts'))throw e}`
+  const script=`import {registerHooks} from 'node:module';registerHooks({resolve(name,ctx,next){if(name==='jsep'||name==='csv-parse/sync'||name==='@office-kit/pptx'){const e=new Error('Absent optional dependency: '+name);e.code='MODULE_NOT_FOUND';throw e}return next(name,ctx)}});const{buildDeckAsync}=await import(${JSON.stringify(engine)});const result=await buildDeckAsync({title:'Text only',theme:'auto',content:'# 季度总结\\n\\n## 核心指标\\n- 营收增长 32%\\n- 毛利率达 68%\\n\\n## 重点举措\\n- 第一步：渠道升级\\n- 第二步：自动化交付\\n- 第三步：客户成功闭环\\n\\n## 风险与对策\\n- 交付周期偏长：引入标准模板缩减 40%\\n- 续费触达滞后：建立提前 60 天预警\\n\\n## 下季度规划\\n- 拓展华南大区\\n- 发布 2.0 平台',outputDir:${JSON.stringify(dir)}});if(!result.ok)throw Error('Plain generation failed');try{await buildDeckAsync({title:'Data',slides:[{title:'{{x}}'}],outputDir:${JSON.stringify(dir)},dataModel:{sources:[],metrics:[{id:'x',kind:'formula',formula:'1+2'}]}});throw Error('Expected missing dependency')}catch(e){if(!e.message.includes('npm install --ignore-scripts'))throw e}`
   const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',windowsHide:true,timeout:15000});assert.equal(child.status,0,child.stderr);assert.equal(readdirSync(dir).length,3)
 }))
 
@@ -112,4 +112,26 @@ test('foreign or stale offline scenario packets and external Office modification
   assert.throws(()=>previewDeckData({deckPath:output.jsonPath,scenario:{...scenario,revision:1}}),/Scenario/);const preview=previewDeckData({deckPath:output.jsonPath,scenario})
   writeFileSync(output.pptxPath,'Externally edited');await assert.rejects(updateDeckData({deckPath:output.jsonPath,scenario,expectedRevision:0,previewToken:preview.token,confirmed:true,saveAs:false}),/外部修改/)
   const copy=await updateDeckData({deckPath:output.jsonPath,scenario,expectedRevision:0,previewToken:preview.token,confirmed:true});assert.equal(load(copy.jsonPath).dataModel.values.profit,900);assert.equal(readFileSync(output.pptxPath,'utf8'),'Externally edited')
+}))
+test('items, takeaway, source and vector waterfall charts bind {{metricId}} and synchronize across preview/apply/undo',()=>inDir(async dir=>{
+  const richSlides=[
+    {layout:'kpi',title:'利润推演 {{profit}}',items:[{title:'推演收入',value:'{{revenue}}',delta:'+{{growth}}',text:'基期 **{{base}}**'},{title:'推演利润',value:'{{profit}}',text:'成本 {{cost}}'}],takeaway:'当增长率为 **{{growth}}** 时，利润达 {{profit}}',source:'财务台账 · 基期 {{base}}'},
+    {layout:'waterfall',title:'利润桥接拆解',chart:{kind:'waterfall',categories:['推演收入','负向成本','推演利润'],series:[{name:'桥接',values:['{{revenue}}',-600,'{{profit}}']}],totalIndices:[0,2]},takeaway:'净利 {{profit}}'},
+  ]
+  const output=await buildDeckAsync({title:'结构化数据绑定',theme:'consulting',outputDir:dir,slides:richSlides,dataModel:model()})
+  const html0=readFileSync(output.htmlPath,'utf8')
+  assert.match(html0,/1,300万元/)
+  assert.match(html0,/700万元/)
+  const preview=previewDeckData({deckPath:output.jsonPath,parameters:{growth:.5},expectedRevision:0})
+  assert.deepEqual(preview.affectedSlides.map(s=>s.page),[1,2])
+  const updated=await updateDeckData({deckPath:output.jsonPath,parameters:{growth:.5},expectedRevision:0,previewToken:preview.token,confirmed:true})
+  const nextManifest=readDeckProject({deckPath:updated.jsonPath}).manifest
+  assert.equal(nextManifest.slides[0].items[0].value,'1,500万元')
+  assert.equal(nextManifest.slides[0].items[1].value,'900万元')
+  assert.match(nextManifest.slides[0].takeaway,/50%.*900万元/)
+  assert.equal(nextManifest.slides[1].chart.series[0].values[2],900)
+  const zip=unzipSync(readFileSync(updated.pptxPath))
+  assert.match(strFromU8(zip['ppt/slides/slide2.xml']),/Waterfall Bar 1/)
+  await undoDeck({deckPath:updated.jsonPath,expectedRevision:0})
+  assert.equal(readDeckProject({deckPath:updated.jsonPath}).manifest.slides[0].items[1].value,'700万元')
 }))

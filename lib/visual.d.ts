@@ -14,7 +14,7 @@ export type VisualContext = {
 type Action = {
     slideId: string;
     type: string;
-    value?: number;
+    value?: number | string;
 };
 type Finding = {
     slideId: string;
@@ -22,6 +22,7 @@ type Finding = {
     region: string;
     issue: string;
     box: number[];
+    severity?: 'error' | 'polish';
     action?: Action;
 };
 export declare class PptVisual {
@@ -116,6 +117,7 @@ export declare class PptVisual {
         reason?: string;
         error?: string;
     }>;
+    private validSwitchLayout;
     private findings;
     step(context: VisualContext, id: unknown, body: Record<string, unknown>, signal?: AbortSignal): Promise<{
         stale: boolean;

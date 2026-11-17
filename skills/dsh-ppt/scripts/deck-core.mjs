@@ -1,26 +1,107 @@
 #! /usr/bin/env node
 /**
- * deck-core.mjs —— dsh-ppt 的零依赖演示文稿引擎。
+ * deck-core.mjs —— dsh-ppt 的零依赖演示文稿核心协调引擎。
  *
  * 这是插件工具与裸 SKILL.md 共用的唯一事实源：
  *   - DSH 内：ppt_create 工具动态加载本文件
  *   - 其他 harness：直接运行同目录的 build-deck.mjs
  *
  * 能力：Markdown / 结构化 slides → 三件套
- *   deck.html  独立网页放映（键盘/触屏/打印，无外链）
- *   deck.pptx  可编辑 PPTX（16:9，OOXML 由本文件手写，zip 用 node:zlib）
+ *   deck.html  独立网页放映（键盘/触屏/演讲者视图/缩略图总览/打印，无外链）
+ *   deck.pptx  可编辑 PPTX（16:9，OOXML 由 deck-layouts 手写，zip 用 node:zlib）
  *   deck.json  结构化 deck manifest
  *
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { resolve as resolvePath, join as joinPath } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
-import { MEDIA_LAYOUTS, MEDIA_CSS, normalizeMediaSlide, renderMediaHtml, mediaBoxes } from './deck-media.mjs'
+import * as deckMedia from './deck-media.mjs'
 import { renderDelivery } from './deck-delivery.mjs'
 import { renderDataView } from './deck-data-view.mjs'
 import { normalizeVisual, visualHtmlStyle, visualShapeXml, VISUAL_CSS } from './deck-visual.mjs'
+import {
+  THEMES,
+  THEME_IDS,
+  CHROME_STYLES,
+  DEFAULT_THEME,
+  SMART_DEFAULT_THEME,
+  resolveTheme,
+  resolveChromeStyle,
+  listThemes,
+  deriveBrandedTheme,
+  sanitizeAbsorbedTheme,
+  pptxFontName,
+  pptxEastAsianFont,
+  contrastRatio,
+  ensureContrast,
+  hexToRgba,
+  renderThemeSvg as renderThemeSvgBase,
+  renderThemePreviewHtml as renderThemePreviewHtmlBase,
+  buildThemePreview as buildThemePreviewBase,
+} from './deck-themes.mjs'
+import {
+  CORE_LAYOUTS,
+  LAYOUT_ALIASES,
+  EMU_W,
+  EMU_H,
+  escapeXml,
+  escapeHtml,
+  stripInlineMarkdown,
+  cleanRichText,
+  parseInlineRuns,
+  renderInlineHtml,
+  computeTextFit,
+  normalizeSlideItems,
+  resolveEffectiveItems,
+  formatSourceLine,
+  computeBadgePillWidth,
+  roundRectAdj,
+  ooxmlShape,
+  ooxmlRichParagraph,
+  getChromeConfig,
+  parseHarveyValue,
+  renderSlideChromePptx,
+  renderCoreSlidePptx,
+  renderCoreSlideHtml,
+  LAYOUT_CSS,
+} from './deck-layouts.mjs'
+
+export {
+  THEMES,
+  THEME_IDS,
+  CHROME_STYLES,
+  DEFAULT_THEME,
+  SMART_DEFAULT_THEME,
+  resolveTheme,
+  resolveChromeStyle,
+  listThemes,
+  deriveBrandedTheme,
+  sanitizeAbsorbedTheme,
+  pptxFontName,
+  pptxEastAsianFont,
+  contrastRatio,
+  ensureContrast,
+  hexToRgba,
+  CORE_LAYOUTS,
+  LAYOUT_ALIASES,
+  escapeXml,
+  escapeHtml,
+  stripInlineMarkdown,
+  cleanRichText,
+  parseInlineRuns,
+  renderInlineHtml,
+  computeTextFit,
+  normalizeSlideItems,
+  resolveEffectiveItems,
+  formatSourceLine,
+  computeBadgePillWidth,
+  roundRectAdj,
+  getChromeConfig,
+  parseHarveyValue,
+  renderSlideChromePptx,
+}
 
 /**
  * manifest 版本跟随发布包 package.json；把 skills/dsh-ppt 独立复制到其他
@@ -41,109 +122,8 @@ function readDeckVersion() {
 export const DECK_VERSION = readDeckVersion()
 
 // ---------------------------------------------------------------------------
-// 主题
+// 多语言 UI 文案与参数解析
 // ---------------------------------------------------------------------------
-
-export const THEMES = {
-  swiss: {
-    id: 'swiss',
-    name: { zh: '瑞士脉冲', en: 'Swiss Pulse' },
-    mood: { zh: '精准、理性、数据', en: 'Precise, rational, data-driven' },
-    bestFor: { zh: 'SaaS、数据、开发者工具', en: 'SaaS, data, developer tools' },
-    dark: true,
-    palette: {
-      bg: '#10151B',
-      panel: '#161D26',
-      fg: '#F5F7FA',
-      muted: '#8E9AAA',
-      accent: '#2F6BFF',
-      accent2: '#FFB300',
-    },
-    fonts: {
-      heading: '"Helvetica Neue", Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
-      body: '"Helvetica Neue", Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
-    },
-  },
-  velvet: {
-    id: 'velvet',
-    name: { zh: '天鹅绒标准', en: 'Velvet Standard' },
-    mood: { zh: '高级、克制、可信', en: 'Premium, restrained, trustworthy' },
-    bestFor: { zh: '高管汇报、品牌、融资路演', en: 'Executive decks, brand, investor pitches' },
-    dark: true,
-    palette: {
-      bg: '#111316',
-      panel: '#1A1D22',
-      fg: '#F4EFE6',
-      muted: '#A79F91',
-      accent: '#C9A84C',
-      accent2: '#3D4A63',
-    },
-    fonts: {
-      heading: 'Georgia, "Times New Roman", "Songti SC", "SimSun", serif',
-      body: '"Helvetica Neue", Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
-    },
-  },
-  data: {
-    id: 'data',
-    name: { zh: '数据漂移', en: 'Data Drift' },
-    mood: { zh: '未来、沉浸、前沿', en: 'Futuristic, immersive, cutting-edge' },
-    bestFor: { zh: 'AI、数据、研究、技术发布', en: 'AI, data, research, tech launches' },
-    dark: true,
-    palette: {
-      bg: '#070B14',
-      panel: '#0D1424',
-      fg: '#E8F1FF',
-      muted: '#7E8BA8',
-      accent: '#7C3AED',
-      accent2: '#06B6D4',
-    },
-    fonts: {
-      heading: '"Space Grotesk", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-      body: '"Space Grotesk", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-    },
-  },
-  soft: {
-    id: 'soft',
-    name: { zh: '柔和信号', en: 'Soft Signal' },
-    mood: { zh: '温暖、亲近、人本', en: 'Warm, intimate, human' },
-    bestFor: { zh: '品牌故事、培训、个人分享', en: 'Brand stories, training, personal talks' },
-    dark: false,
-    palette: {
-      bg: '#FFF8EC',
-      panel: '#FFF2DE',
-      fg: '#3B2F2A',
-      muted: '#7E6F68',
-      accent: '#E58A2F',
-      accent2: '#8FAF8C',
-    },
-    fonts: {
-      heading: '"Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-      body: '"Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-    },
-  },
-  bold: {
-    id: 'bold',
-    name: { zh: '极繁大字', en: 'Maximalist Type' },
-    mood: { zh: '大声、动能、发布', en: 'Loud, kinetic, launch' },
-    bestFor: { zh: '产品发布、活动、品牌大事件', en: 'Product launches, events, brand moments' },
-    dark: true,
-    palette: {
-      bg: '#0D0D0D',
-      panel: '#181818',
-      fg: '#FFFFFF',
-      muted: '#B8B8B8',
-      accent: '#E63946',
-      accent2: '#FFD60A',
-    },
-    fonts: {
-      heading: 'Impact, "Arial Black", "PingFang SC", "Microsoft YaHei", sans-serif',
-      body: '"Helvetica Neue", Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
-    },
-  },
-}
-
-export const THEME_IDS = Object.keys(THEMES)
-export const DEFAULT_THEME = 'data'
 
 export const LANGUAGES = {
   zh: {
@@ -179,7 +159,7 @@ export const LANGUAGES = {
       popupBlocked: '浏览器拦截了演讲者窗口，请允许弹出窗口后按 V 重试',
       fullscreenUnavailable: '当前窗口无法进入全屏，请在浏览器中独立打开演示文件后重试。',
       notesCloseLabel: '关闭备注',
-      overviewHint: '点击缩略图跳页，方向键切换，Enter 进入，Esc 退出'
+      overviewHint: '点击缩略图跳页，方向键切换，Enter 进入，Esc 退出',
     },
   },
   en: {
@@ -215,7 +195,7 @@ export const LANGUAGES = {
       popupBlocked: 'The presenter window was blocked. Allow pop-ups and press V to retry.',
       fullscreenUnavailable: 'Fullscreen is unavailable here. Open the presentation in a browser tab and try again.',
       notesCloseLabel: 'Close notes',
-      overviewHint: 'Click a thumbnail to jump; arrows move, Enter opens, Esc exits'
+      overviewHint: 'Click a thumbnail to jump; arrows move, Enter opens, Esc exits',
     },
   },
   bilingual: {
@@ -251,127 +231,9 @@ export const LANGUAGES = {
       popupBlocked: '浏览器拦截了演讲者窗口 · Presenter window blocked; allow pop-ups and press V',
       fullscreenUnavailable: '当前窗口无法全屏，请独立打开演示文件 · Open this presentation in a browser tab for fullscreen.',
       notesCloseLabel: '关闭备注 · Close notes',
-      overviewHint: '点击缩略图跳页 · Click to jump, arrows move, Enter opens, Esc exits'
+      overviewHint: '点击缩略图跳页 · Click to jump, arrows move, Enter opens, Esc exits',
     },
   },
-}
-
- // ---------------------------------------------------------------------------
-// 主题预览（ppt_themes preview=true / buildThemePreview）
-// ---------------------------------------------------------------------------
-
-function themePages(lang) {
-  return lang === 'en'
-    ? { title: 'dsh-ppt theme gallery', hint: 'Pick a theme id for ppt_create', usage: 'theme', dark: 'dark', light: 'light', palette: 'Palette' }
-    : { title: 'dsh-ppt 主题预览', hint: '把 id 填给 ppt_create 的 theme 参数', usage: 'theme', dark: '深色', light: '浅色', palette: '色板' }
-}
-
-/** 单套主题的 960x540 SVG 色板卡：可直接放进 README / npm 首屏。 */
-export function renderThemeSvg(input, lang = 'zh') {
-  const theme = typeof input === 'string' ? resolveTheme(input) : input
-  const pick = (pair) => (lang === 'en' ? pair.en : pair.zh)
-  const p = theme.palette
-  const L = themePages(lang === 'en' ? 'en' : 'zh')
-  const font = theme.fonts.heading.replace(/"/g, "'")
-  const bodyFont = theme.fonts.body.replace(/"/g, "'")
-  const out = []
-  out.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="' + escapeXml(theme.id + ' ' + pick(theme.name)) + '">')
-  out.push('<rect width="960" height="540" fill="' + p.bg + '"/>')
-  out.push('<rect x="0" y="0" width="960" height="6" fill="' + p.accent + '"/><rect x="0" y="534" width="960" height="6" fill="' + p.accent2 + '"/>')
-  out.push('<rect x="36" y="40" width="560" height="360" rx="16" fill="' + p.panel + '" stroke="' + hexToRgba(p.muted, 0.45) + '"/>')
-  out.push('<text x="64" y="92" fill="' + p.accent + '" font-family="' + escapeXml(bodyFont) + '" font-size="14" font-weight="700" letter-spacing="3">' + escapeXml(pick(theme.mood).toUpperCase()) + '</text>')
-  out.push('<text x="64" y="158" fill="' + p.fg + '" font-family="' + escapeXml(font) + '" font-size="42" font-weight="800">' + escapeXml('Aa ' + pick(theme.name)) + '</text>')
-  out.push('<circle cx="72" cy="206" r="5" fill="' + p.accent + '"/><rect x="92" y="199" width="360" height="12" rx="6" fill="' + hexToRgba(p.fg, 0.75) + '"/>')
-  out.push('<circle cx="72" cy="240" r="5" fill="' + p.accent + '"/><rect x="92" y="233" width="300" height="12" rx="6" fill="' + hexToRgba(p.fg, 0.55) + '"/>')
-  out.push('<circle cx="72" cy="274" r="5" fill="' + p.accent + '"/><rect x="92" y="267" width="330" height="12" rx="6" fill="' + hexToRgba(p.fg, 0.55) + '"/>')
-  out.push('<rect x="64" y="312" width="500" height="34" rx="6" fill="' + p.accent + '"/>')
-  out.push('<text x="78" y="334" fill="' + p.bg + '" font-family="' + escapeXml(bodyFont) + '" font-size="14" font-weight="700">dsh-ppt</text>')
-  out.push('<text x="470" y="334" fill="' + p.bg + '" font-family="' + escapeXml(bodyFont) + '" font-size="14" font-weight="700" text-anchor="end">1,234</text>')
-  out.push('<rect x="64" y="346" width="500" height="2" fill="' + hexToRgba(p.muted, 0.5) + '"/>')
-  out.push('<text x="64" y="378" fill="' + p.muted + '" font-family="' + escapeXml(bodyFont) + '" font-size="13">' + escapeXml(theme.id + ' · ' + (theme.dark ? L.dark : L.light) + ' · v' + DECK_VERSION) + '</text>')
-  const swatches = ['bg', 'panel', 'fg', 'muted', 'accent', 'accent2']
-  const labels = ['bg', 'panel', 'fg', 'muted', 'accent', 'accent2']
-  out.push('<text x="632" y="76" fill="' + p.muted + '" font-family="' + escapeXml(bodyFont) + '" font-size="13" font-weight="700" letter-spacing="2">' + escapeXml(L.palette.toUpperCase()) + '</text>')
-  swatches.forEach((key, i) => {
-    const y = 96 + i * 62
-    out.push('<rect x="632" y="' + y + '" width="44" height="44" rx="10" fill="' + p[key] + '" stroke="' + hexToRgba(p.muted, 0.45) + '"/>')
-    out.push('<text x="692" y="' + (y + 20) + '" fill="' + p.fg + '" font-family="' + escapeXml(bodyFont) + '" font-size="14" font-weight="600">' + escapeXml(labels[i]) + '</text>')
-    out.push('<text x="692" y="' + (y + 38) + '" fill="' + p.muted + '" font-family="' + escapeXml(bodyFont) + '" font-size="13">' + escapeXml(String(p[key]).toUpperCase()) + '</text>')
-  })
-  out.push('<text x="632" y="508" fill="' + p.muted + '" font-family="' + escapeXml(bodyFont) + '" font-size="12">' + escapeXml(pick(theme.bestFor)).slice(0, 44) + '</text>')
-  out.push('</svg>')
-  return out.join('')
-}
-
-/** 自包含主题对比页：5 套主题并排，含色板与用法。 */
-export function renderThemePreviewHtml(lang = 'zh') {
-  const L = themePages(lang === 'en' ? 'en' : 'zh')
-  const cards = THEME_IDS.map((id) => {
-    const theme = THEMES[id]
-    const pick = (pair) => (lang === 'en' ? pair.en : pair.zh)
-    const chips = Object.keys(theme.palette).map((key) =>
-      '<span class="chip"><i style="background:' + theme.palette[key] + '"></i>' + escapeHtml(String(theme.palette[key]).toUpperCase()) + '</span>').join('')
-    return '<figure class="card" id="theme-' + escapeHtml(id) + '">' +
-      renderThemeSvg(theme, lang === 'en' ? 'en' : 'zh') +
-      '<figcaption><div class="row"><strong>' + escapeHtml(id) + '</strong><span class="badge">' + escapeHtml(pick(theme.name)) + '</span></div>' +
-      '<p class="muted">' + escapeHtml(pick(theme.mood)) + ' · ' + escapeHtml(pick(theme.bestFor)) + '</p>' +
-      '<p class="chips">' + chips + '</p>' +
-      '<p class="usage">' + escapeHtml(L.usage) + ': <code>' + escapeHtml(id) + '</code></p></figcaption></figure>'
-  }).join('')
-  return '<!DOCTYPE html>' + eolSafe('<html lang="zh-CN">') +
-    '<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-    '<title>' + escapeHtml(L.title) + '</title><style>' +
-    'body{margin:0;background:#0b0f17;color:#e8f1ff;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;padding:28px}' +
-    'h1{font-size:26px;margin:0 0 6px}p.sub{color:#8b98ad;margin:0 0 24px;font-size:14px}' +
-    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:22px}' +
-    '.card{margin:0;background:#111827;border:1px solid #263043;border-radius:16px;overflow:hidden}' +
-    '.card svg{display:block;width:100%;height:auto}' +
-    'figcaption{padding:14px 16px 16px}.row{display:flex;align-items:center;gap:10px;font-size:16px}' +
-    '.badge{color:#8b98ad;font-size:13px}.muted{color:#8b98ad;font-size:13px;margin:6px 0 10px;line-height:1.5}' +
-    '.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#aab6c9;background:#0b0f17;border:1px solid #263043;border-radius:99px;padding:3px 9px}' +
-    '.chip i{width:10px;height:10px;border-radius:3px;display:inline-block}' +
-    '.usage{margin:0;font-size:13px;color:#aab6c9}code{background:#0b0f17;border:1px solid #263043;border-radius:6px;padding:1px 6px}' +
-    '@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}' +
-    '</style></head><body><h1>' + escapeHtml(L.title) + '</h1><p class="sub">' + escapeHtml(L.hint) + ' · dsh-ppt v' + escapeHtml(DECK_VERSION) + '</p>' +
-    '<div class="grid">' + cards + '</div></body></html>'
-}
-
-function eolSafe(text) { return text }
-
-/** 写主题对比页 + 每套主题 SVG 色板卡；默认不覆盖同名文件。 */
-export function buildThemePreview(options = {}) {
-  const langInput = typeof options.lang === 'string' && options.lang.trim() !== '' ? options.lang.trim() : 'zh'
-  const language = resolveLanguage(langInput)
-  const outputDir = resolvePath(String(options.outputDir ?? '.'))
-  mkdirSync(outputDir, { recursive: true })
-  const overwrite = options.overwrite === true
-  const pickPath = (base, ext) => {
-    const first = resolvePath(joinPath(outputDir, base + ext))
-    if (overwrite || !existsSync(first)) return first
-    for (let i = 1; i < 1000; i += 1) {
-      const candidate = resolvePath(joinPath(outputDir, base + '-' + i + ext))
-      if (!existsSync(candidate)) return candidate
-    }
-    throw new Error('dsh-ppt：找不到可用的预览文件名（同名前缀超过 999 个），请允许 overwrite。')
-  }
-  const htmlPath = pickPath('themes-preview', '.html')
-  writeFileSync(htmlPath, renderThemePreviewHtml(language.id), 'utf8')
-  const svgs = THEME_IDS.map((id) => {
-    const svgPath = pickPath('theme-' + id, '.svg')
-    writeFileSync(svgPath, renderThemeSvg(id, language.id), 'utf8')
-    return { id, path: svgPath }
-  })
-  return { ok: true, outputDir, htmlPath, svgs, themeCount: THEME_IDS.length, language: language.id }
-}
-
-
-export function resolveTheme(input) {
-  const id = String(input ?? DEFAULT_THEME).trim().toLowerCase()
-  const theme = THEMES[id]
-  if (!theme) {
-    throw new Error('dsh-ppt：未知主题 "' + id + '"，可选：' + THEME_IDS.join(' / ') + '（默认 ' + DEFAULT_THEME + '）')
-  }
-  return theme
 }
 
 export function resolveLanguage(input) {
@@ -390,24 +252,27 @@ export function resolveMotion(input) {
   throw new Error('dsh-ppt：未知 motion 值 "' + String(input) + '"，可选：on / off（默认 on）')
 }
 
-export function listThemes(lang = 'zh') {
-  const pick = (pair) => (lang === 'en' ? pair.en : pair.zh)
-  return THEME_IDS.map((id) => {
-    const theme = THEMES[id]
-    return {
-      id,
-      name: pick(theme.name),
-      mood: pick(theme.mood),
-      bestFor: pick(theme.bestFor),
-      dark: theme.dark,
-      palette: { ...theme.palette },
-      fonts: { ...theme.fonts },
-    }
-  })
+// ---------------------------------------------------------------------------
+// 主题预览包装器（注入 DECK_VERSION 与语言校验）
+// ---------------------------------------------------------------------------
+
+/** 单套主题的 960x540 SVG 色板卡：可直接放进 README / npm 首屏。 */
+export function renderThemeSvg(input, lang = 'zh') {
+  return renderThemeSvgBase(input, lang, DECK_VERSION)
+}
+
+/** 自包含主题对比页：14 套主题并排，含色板与用法。 */
+export function renderThemePreviewHtml(lang = 'zh') {
+  return renderThemePreviewHtmlBase(lang, DECK_VERSION)
+}
+
+/** 写主题对比页 + 每套主题 SVG 色板卡；默认不覆盖同名文件。 */
+export function buildThemePreview(options = {}) {
+  return buildThemePreviewBase(options, resolveLanguage, DECK_VERSION)
 }
 
 // ---------------------------------------------------------------------------
-// 文本工具
+// 文本与文件名工具
 // ---------------------------------------------------------------------------
 
 export function clampInt(value, fallback, min, max) {
@@ -437,8 +302,6 @@ const DECK_ARTIFACT_EXTENSIONS = ['.html', '.pptx', '.json']
  * 整组改用 -1/-2… 后缀，避免新旧 deck 被静默混写。
  */
 export function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
-  // 一次 readdir 建集，替代逐个候选 existsSync 探测（最坏 ~3000 次 stat）；
-  // 统一小写比较，避免 Windows 大小写不敏感文件系统把已占用的名字判成可用。
   const existing = new Set(readdirSync(outputDir).map((name) => name.toLowerCase()))
   const isAvailable = (candidate) => DECK_ARTIFACT_EXTENSIONS.every((ext) => !existing.has((candidate + ext).toLowerCase()))
   if (overwrite || isAvailable(requestedFileName)) return requestedFileName
@@ -447,39 +310,6 @@ export function resolveDeckFileName(outputDir, requestedFileName, overwrite) {
     if (isAvailable(candidate)) return candidate
   }
   throw new Error('dsh-ppt：找不到可用的输出文件名（同名前缀超过 999 个），请更换 fileName 或显式允许 overwrite。')
-}
-
-export function escapeXml(value) {
-  return String(value ?? '')
-    .replace(/[\u000B\u000C]/g, '\n')
-    .replace(/[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
-export function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-export function stripInlineMarkdown(value) {
-  return String(value ?? '')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/`([^`]*)`/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/\*([^*\n]+)\*/g, '$1')
-    .replace(/_([^_\n]+)_/g, '$1')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 export function splitSentences(value) {
@@ -502,11 +332,23 @@ function chunk(items, size) {
 }
 
 // ---------------------------------------------------------------------------
-// Markdown → deck
+// Markdown → deck（兼容纯 Markdown，并原生支持 ::: 版式块、[!TAKEAWAY] 与 source 注释）
 // ---------------------------------------------------------------------------
 
 function createSection(heading = '', level = 0, coverOnly = false) {
-  return { heading, level, coverOnly, bullets: [], paragraphs: [], quote: [], table: null, notes: [] }
+  return {
+    heading,
+    level,
+    coverOnly,
+    bullets: [],
+    paragraphs: [],
+    quote: [],
+    table: null,
+    notes: [],
+    directive: null,
+    takeaway: '',
+    source: '',
+  }
 }
 
 function splitTableRow(line) {
@@ -520,7 +362,24 @@ function isTableSeparator(cells) {
   return cells.length > 0 && cells.every((cell) => /^:?-{2,}:?$/.test(cell) || /^:?-+:?$/.test(cell))
 }
 
-const NOTES_COMMENT = /^<!--\s*(?:notes?|备注)\s*[:：]\s*([\s\S]*?)\s*-->$/
+const NOTES_COMMENT = /^<!--\s*(?:notes?|备注)\s*[:：]\s*([\s\S]*?)\s*-->$/i
+const SOURCE_COMMENT = /^<!--\s*(?:source|来源|数据来源)\s*[:：]\s*([\s\S]*?)\s*-->$/i
+const TAKEAWAY_COMMENT = /^<!--\s*(?:takeaway|结论|核心结论)\s*[:：]\s*([\s\S]*?)\s*-->$/i
+const TAKEAWAY_CALLOUT = /^>\s*\[!(?:TAKEAWAY|结论|KEY)\]\s*(.*)$/i
+const DIRECTIVE_OPEN = /^:::\s*([a-zA-Z][\w-]*)(?:\s+([\w-]+))?\s*$/
+const DIRECTIVE_CLOSE = /^:::\s*$/
+
+function resolveDirectiveSpec(rawLayout, rawVariant = '') {
+  const key = String(rawLayout ?? '').trim().toLowerCase()
+  const alias = LAYOUT_ALIASES[key]
+  if (alias && CORE_LAYOUTS.has(alias.layout)) {
+    return { layout: alias.layout, variant: rawVariant || alias.variant || '' }
+  }
+  if (CORE_LAYOUTS.has(key)) {
+    return { layout: key, variant: rawVariant || '' }
+  }
+  return null
+}
 
 function quoteSlideFrom(section, ui) {
   const lines = [...section.quote]
@@ -530,25 +389,35 @@ function quoteSlideFrom(section, ui) {
     attribution = attrMatch[1]
     lines.pop()
   }
-  return { layout: 'quote', kicker: ui.quoteKicker, title: truncate(lines.join(' '), 220), subtitle: attribution }
+  return {
+    layout: 'quote',
+    kicker: ui.quoteKicker,
+    title: truncate(lines.join(' '), 220),
+    subtitle: attribution,
+    ...(section.source ? { source: section.source } : {}),
+  }
 }
 
 function paginateTable(slide, continuation = '（续）') {
   const rows = slide.rows
-  const columns = Math.max(...rows.map(row => row.length))
+  const columns = Math.max(...rows.map((row) => row.length))
   if (columns > 8) throw new Error('dsh-ppt：表格最多 8 列，请拆成多个表格后重试 / tables support up to 8 columns')
-  if (rows.some(row => row.some(cell => [...cell].length > 60))) {
+  if (rows.some((row) => row.some((cell) => [...stripInlineMarkdown(cell)].length > 60))) {
     throw new Error('dsh-ppt：表格单元格最多 60 个字符，请精简或拆分内容后重试 / cells support up to 60 characters')
   }
-  const padded = rows.map(row => Array.from({ length: columns }, (_, i) => row[i] ?? ''))
+  const padded = rows.map((row) => Array.from({ length: columns }, (_, i) => row[i] ?? ''))
   const pages = chunk(padded.slice(1), 8)
   if (pages.length === 0) pages.push([])
   return pages.map((body, index) => {
     const { notes, ...rest } = slide
     const title = slide.title + (index === 0 ? '' : continuation)
-    // 同名 kicker/title 共用紧凑标题；续页不能凭空多出一行大标题挤压表格。
-    return { ...rest, title, kicker: slide.kicker === slide.title ? title : slide.kicker, rows: [padded[0], ...body],
-      ...(index === 0 && notes ? { notes } : {}) }
+    return {
+      ...rest,
+      title,
+      kicker: slide.kicker === slide.title ? title : slide.kicker,
+      rows: [padded[0], ...body],
+      ...(index === 0 && notes ? { notes } : {}),
+    }
   })
 }
 
@@ -556,16 +425,50 @@ function tableSlidesFrom(section, ui) {
   const table = section.table
   const rows = [table.header, ...table.rows]
   const heading = section.heading || ui.tableKicker
-  return paginateTable({ layout: 'table', kicker: heading, title: heading, rows }, ui.continuation)
+  const tableStyle = section.directive?.layout === 'table' && section.directive.variant
+    ? section.directive.variant
+    : undefined
+  return paginateTable({
+    layout: 'table',
+    kicker: heading,
+    title: heading,
+    rows,
+    ...(tableStyle ? { tableStyle } : {}),
+    ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+    ...(section.source ? { source: section.source } : {}),
+  }, ui.continuation)
 }
 
-/** 把一个 section 里的金句/表格拆成独立页；备注附着到第一张产出页。 */
 function specialSlidesFor(section, ui) {
   const out = []
   if (section.quote.length > 0) out.push(quoteSlideFrom(section, ui))
   if (section.table !== null) out.push(...tableSlidesFrom(section, ui))
   if (out.length > 0 && section.notes.length > 0) out[0].notes = section.notes.join('\n')
   return out
+}
+
+function directiveSlideFrom(section, ui, pointIndexRef) {
+  const spec = section.directive
+  if (!spec || spec.layout === 'table') return null
+  const label = section.heading || (ui.pointKicker + ' ' + (++pointIndexRef.count))
+  const rawPoints = [
+    ...section.bullets,
+    ...section.paragraphs.slice(spec.layout === 'callout' ? 1 : 0),
+  ]
+  const items = normalizeSlideItems(rawPoints, spec.layout)
+  const slide = {
+    layout: spec.layout,
+    ...(spec.variant ? { variant: spec.variant } : {}),
+    kicker: label,
+    title: label,
+    ...(spec.layout === 'callout' && section.paragraphs[0] ? { text: section.paragraphs[0] } : {}),
+    ...(rawPoints.length > 0 ? { bullets: rawPoints } : {}),
+    ...(items ? { items } : {}),
+    ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+    ...(section.source ? { source: section.source } : {}),
+  }
+  if (section.notes.length > 0) slide.notes = section.notes.join('\n')
+  return slide
 }
 
 export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
@@ -579,27 +482,57 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   let body = String(content ?? '')
     .replace(/^\uFEFF/, '')
     .replace(/\r\n?/g, '\n')
-  // 去除文档级 YAML frontmatter（如果有）
   body = body.replace(/^---[ \t]*\n[\s\S]*?\n---[ \t]*\n?/, '')
 
   const sections = []
   let current = null
   let firstH1Seen = false
+  let inDirective = false
+  let awaitingTakeawayLine = false
 
   const flush = () => {
-    if (current !== null && (current.heading !== '' || current.bullets.length > 0 || current.paragraphs.length > 0
-      || current.table !== null || current.quote.length > 0)) {
+    if (
+      current !== null &&
+      (current.heading !== '' ||
+        current.bullets.length > 0 ||
+        current.paragraphs.length > 0 ||
+        current.table !== null ||
+        current.quote.length > 0 ||
+        current.directive !== null)
+    ) {
       sections.push(current)
     }
     current = null
+    inDirective = false
+    awaitingTakeawayLine = false
   }
 
   for (const rawLine of body.split('\n')) {
     const line = rawLine.trim()
     if (line === '') {
-      // 无标题分组按空行分段，保证「文档无标题」时按段落生成幻灯片
-      if (current !== null && current.heading === '') flush()
+      awaitingTakeawayLine = false
+      if (!inDirective && current !== null && current.heading === '') flush()
       continue
+    }
+
+    if (DIRECTIVE_CLOSE.test(line)) {
+      inDirective = false
+      continue
+    }
+
+    const dirOpen = DIRECTIVE_OPEN.exec(line)
+    if (dirOpen !== null) {
+      const resolved = resolveDirectiveSpec(dirOpen[1], dirOpen[2])
+      if (resolved) {
+        if (current === null) current = createSection()
+        if (current.coverOnly) {
+          flush()
+          current = createSection()
+        }
+        current.directive = resolved
+        inDirective = true
+        continue
+      }
     }
 
     const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line)
@@ -618,17 +551,6 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
-    const bulletMatch = /^\s*(?:[-*+]|\d+[.)])\s+(.+)$/.exec(line)
-    if (bulletMatch !== null) {
-      const bullet = stripInlineMarkdown(bulletMatch[1])
-      if (bullet !== '') {
-        if (current === null) current = createSection()
-        current.bullets.push(bullet)
-      }
-      continue
-    }
-
-    // 演讲者备注：`<!-- 备注: ... -->` / `<!-- note: ... -->` 附到当前页
     const notesMatch = NOTES_COMMENT.exec(line)
     if (notesMatch !== null && notesMatch[1].trim() !== '') {
       if (current === null) current = createSection()
@@ -636,23 +558,66 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
-    // Markdown 表格：连续的 | ... | 行，第二行是分隔线
+    const sourceMatch = SOURCE_COMMENT.exec(line)
+    if (sourceMatch !== null && sourceMatch[1].trim() !== '') {
+      if (current === null) current = createSection()
+      current.source = stripInlineMarkdown(sourceMatch[1])
+      continue
+    }
+
+    const takeawayCommentMatch = TAKEAWAY_COMMENT.exec(line)
+    if (takeawayCommentMatch !== null && takeawayCommentMatch[1].trim() !== '') {
+      if (current === null) current = createSection()
+      current.takeaway = cleanRichText(takeawayCommentMatch[1])
+      continue
+    }
+
+    const takeawayCalloutMatch = TAKEAWAY_CALLOUT.exec(line)
+    if (takeawayCalloutMatch !== null) {
+      if (current === null) current = createSection()
+      const inlineTakeaway = cleanRichText(takeawayCalloutMatch[1])
+      if (inlineTakeaway !== '') {
+        current.takeaway = inlineTakeaway
+        awaitingTakeawayLine = false
+      } else {
+        awaitingTakeawayLine = true
+      }
+      continue
+    }
+
+    if (awaitingTakeawayLine && line.startsWith('>')) {
+      const nextTakeaway = cleanRichText(line.replace(/^>\s?/, ''))
+      if (nextTakeaway !== '') current.takeaway = nextTakeaway
+      awaitingTakeawayLine = false
+      continue
+    }
+    awaitingTakeawayLine = false
+
+    const bulletMatch = /^\s*(?:[-*+]|\d+[.)])\s+(.+)$/.exec(line)
+    if (bulletMatch !== null) {
+      const bullet = cleanRichText(bulletMatch[1])
+      if (bullet !== '') {
+        if (current === null) current = createSection()
+        current.bullets.push(bullet)
+      }
+      continue
+    }
+
     const tableCells = splitTableRow(line)
     if (tableCells !== null) {
       if (current === null) current = createSection()
       if (isTableSeparator(tableCells)) continue
       if (current.table === null) {
-        current.table = { header: tableCells.map((cell) => stripInlineMarkdown(cell)), rows: [] }
+        current.table = { header: tableCells.map((cell) => cleanRichText(cell)), rows: [] }
       } else {
-        current.table.rows.push(tableCells.map((cell) => stripInlineMarkdown(cell)))
+        current.table.rows.push(tableCells.map((cell) => cleanRichText(cell)))
       }
       continue
     }
 
-    // 金句：`>` 引用块（最后一行 `—— 出处` 识别为署名）
     const quoteMatch = /^>\s?(.*)$/.exec(line)
     if (quoteMatch !== null) {
-      const quoted = stripInlineMarkdown(quoteMatch[1])
+      const quoted = cleanRichText(quoteMatch[1])
       if (quoted !== '') {
         if (current === null) current = createSection()
         current.quote.push(quoted)
@@ -660,7 +625,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
-    const paragraph = stripInlineMarkdown(line)
+    const paragraph = cleanRichText(line)
     if (paragraph === '') continue
     if (current === null) current = createSection()
     current.paragraphs.push(paragraph)
@@ -672,14 +637,12 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   if (coverSource !== null && coverSource !== undefined) {
     const coverText = coverSource.paragraphs[0] ?? coverSource.bullets[0] ?? ''
     if (coverSubtitle === '') {
-        coverSubtitle = truncate(coverText, 180)
-        coverSubtitleConsumed = true
-      }
+      coverSubtitle = truncate(stripInlineMarkdown(coverText), 180)
+      coverSubtitleConsumed = true
+    }
   }
 
   let bodySections = sections.filter((section) => section.coverOnly !== true)
-  // 首个 H1 既是封面又把所有要点收在封面节里时，把封面副标题之外的剩余要点
-  // 提升为一个无标题节，走下面的要点页生成逻辑，避免丢掉内容。
   if (bodySections.length === 0 && coverSource !== null && coverSource !== undefined) {
     const usedParagraph = coverSource.paragraphs.length > 0
     const extras = [
@@ -689,25 +652,27 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     if (extras.length > 0) {
       const synthetic = createSection()
       synthetic.bullets = extras
+      synthetic.takeaway = coverSource.takeaway
+      synthetic.source = coverSource.source
       bodySections = [synthetic]
     }
   }
 
-  // 表格和引用不能只挂在封面节上，否则首个 H1 后没有 H2 时会丢失。
   if (coverSource && (coverSource.table !== null || coverSource.quote.length > 0)) {
     const special = createSection()
     special.table = coverSource.table
     special.quote = coverSource.quote
     special.notes = coverSource.notes
+    special.takeaway = coverSource.takeaway
+    special.source = coverSource.source
     bodySections.unshift(special)
   }
 
   if (bodySections.length === 0) {
-    // 一句话 / 无结构输入：封面 + 核心观点 + 结束页（仍是完整的三页演示文稿）
     const allText = coverSource !== null && coverSource !== undefined
       ? [...coverSource.bullets, ...coverSource.paragraphs].join(' ')
       : String(content ?? '').trim()
-    if (coverSubtitle === '') coverSubtitle = truncate(splitSentences(allText)[0] ?? '', 180)
+    if (coverSubtitle === '') coverSubtitle = truncate(splitSentences(stripInlineMarkdown(allText))[0] ?? '', 180)
     slides.push({ layout: 'cover', kicker: ui.coverKicker, title: coverTitle || 'Untitled', subtitle: coverSubtitle })
     if (coverSubtitle !== '') {
       slides.push({ layout: 'statement', kicker: ui.statementKicker, title: coverSubtitle, subtitle: coverTitle })
@@ -716,16 +681,15 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
   }
 
-  const hadHeadings = bodySections.some((section) => section.heading !== '')
+  const hadHeadings = bodySections.some((section) => section.heading !== '' || section.directive !== null)
 
   if (!hadHeadings) {
-    // 无标题文档：第一段摘要作封面副标题，后续段落拆成要点页
     const ordered = bodySections.map((section) => ({
       section,
       sentences: [...section.bullets, ...section.paragraphs].flatMap((part) => splitSentences(part)),
     }))
     const firstSentence = ordered[0]?.sentences[0] ?? ''
-    if (coverSubtitle === '') coverSubtitle = truncate(firstSentence, 180)
+    if (coverSubtitle === '') coverSubtitle = truncate(stripInlineMarkdown(firstSentence), 180)
     const bodySlides = []
     let pointIndex = 0
     ordered.forEach((group, groupIndex) => {
@@ -737,8 +701,10 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
         const slide = {
           layout: 'bullets',
           kicker: ui.pointKicker + ' ' + pointIndex,
-          title: truncate(points[0], 40) || ui.pointKicker + ' ' + pointIndex,
+          title: truncate(stripInlineMarkdown(points[0]), 40) || ui.pointKicker + ' ' + pointIndex,
           bullets: points,
+          ...(group.section.takeaway ? { takeaway: group.section.takeaway } : {}),
+          ...(group.section.source ? { source: group.section.source } : {}),
         }
         if (specials.length === 0 && group.section.notes.length > 0) slide.notes = group.section.notes.join('\n')
         bodySlides.push(slide)
@@ -757,43 +723,62 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   }
 
   slides.push({ layout: 'cover', kicker: ui.coverKicker, title: coverTitle || 'Untitled', subtitle: coverSubtitle })
-  let pointIndex = 0
+  const pointRef = { count: 0 }
   for (const section of bodySections) {
     const notes = section.notes.join('\n')
     const specials = specialSlidesFor(section, ui)
     slides.push(...specials)
+
+    if (section.directive && section.directive.layout !== 'table') {
+      const dirSlide = directiveSlideFrom(section, ui, pointRef)
+      if (dirSlide) slides.push(dirSlide)
+      continue
+    }
+
     if (section.heading === '') {
-      const points = [...section.bullets, ...section.paragraphs]
-        .flatMap((part) => splitSentences(part))
-      // 超过 8 条自动续页，不再静默丢弃；备注只挂在第一页
+      const points = [...section.bullets, ...section.paragraphs].flatMap((part) => splitSentences(part))
       for (const [pageIndex, pagePoints] of chunk(points, 8).entries()) {
-        pointIndex += 1
+        pointRef.count += 1
         const slide = {
           layout: 'bullets',
-          kicker: ui.pointKicker + ' ' + pointIndex,
-          title: truncate(pagePoints[0], 40) || ui.pointKicker + ' ' + pointIndex,
+          kicker: ui.pointKicker + ' ' + pointRef.count,
+          title: truncate(stripInlineMarkdown(pagePoints[0]), 40) || ui.pointKicker + ' ' + pointRef.count,
           bullets: pagePoints,
+          ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+          ...(section.source ? { source: section.source } : {}),
         }
         if (pageIndex === 0 && specials.length === 0 && notes !== '') slide.notes = notes
         slides.push(slide)
       }
       continue
     }
+
     const points = [
       ...section.bullets,
       ...section.paragraphs.flatMap((part) => splitSentences(part)),
     ]
     const pages = chunk(points, 8)
     if (pages.length > 0) {
-      // 超过 8 条自动续页，不再静默丢弃；备注只挂在第一页
       pages.forEach((pagePoints, pageIndex) => {
         const label = pageIndex === 0 ? section.heading : section.heading + ui.continuation
-        const slide = { layout: 'bullets', kicker: label, title: label, bullets: pagePoints }
+        const slide = {
+          layout: 'bullets',
+          kicker: label,
+          title: label,
+          bullets: pagePoints,
+          ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+          ...(section.source ? { source: section.source } : {}),
+        }
         if (pageIndex === 0 && specials.length === 0 && notes !== '') slide.notes = notes
         slides.push(slide)
       })
     } else if (specials.length === 0) {
-      const slide = { layout: 'section', kicker: section.heading, title: section.heading }
+      const slide = {
+        layout: 'section',
+        kicker: section.heading,
+        title: section.heading,
+        ...(section.source ? { source: section.source } : {}),
+      }
       if (notes !== '') slide.notes = notes
       slides.push(slide)
     }
@@ -802,50 +787,151 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
 }
 
-const SLIDE_LAYOUTS = new Set(['cover', 'section', 'bullets', 'statement', 'closing', 'quote', 'table', ...MEDIA_LAYOUTS])
+// ---------------------------------------------------------------------------
+// 结构化幻灯片规范化
+// ---------------------------------------------------------------------------
+
+export const SLIDE_LAYOUTS = new Set([
+  ...CORE_LAYOUTS,
+  ...Object.keys(LAYOUT_ALIASES),
+  ...deckMedia.MEDIA_LAYOUTS,
+])
+
+const VALID_TABLE_STYLES = new Set(['consulting', 'booktabs', 'minimal', 'banded', 'harvey'])
+const VALID_CHROME_STYLES = new Set(CHROME_STYLES)
 
 function normalizeSlide(raw, index) {
-  const result = normalizeSlideContent(raw, index), visual = normalizeVisual(raw?.visual)
+  const result = normalizeSlideContent(raw, index)
+  const visual = normalizeVisual(raw?.visual)
   return visual ? { ...result, visual } : result
 }
+
 function normalizeSlideContent(raw, index) {
   const source = (raw !== null && typeof raw === 'object') ? raw : {}
-  const layout = SLIDE_LAYOUTS.has(source.layout) ? source.layout : source.chart ? 'chart' : source.image ? 'image-right' : 'bullets'
+  const rawLayoutKey = String(source.layout ?? '').trim().toLowerCase()
+  const alias = LAYOUT_ALIASES[rawLayoutKey]
+  const candidateLayout = alias ? alias.layout : rawLayoutKey
+  const layout = (CORE_LAYOUTS.has(candidateLayout) || deckMedia.MEDIA_LAYOUTS.has(candidateLayout))
+    ? candidateLayout
+    : source.chart
+      ? 'chart'
+      : (source.image || (Array.isArray(source.images) && source.images.length > 0))
+        ? 'image-right'
+        : 'bullets'
+
+  const variant = stripInlineMarkdown(source.variant ?? alias?.variant ?? '')
+  const rawChrome = typeof source.chrome === 'string' ? source.chrome.trim() : ''
+  const chrome = VALID_CHROME_STYLES.has(rawChrome) ? rawChrome : undefined
   const title = stripInlineMarkdown(source.title ?? '')
-  const subtitle = stripInlineMarkdown(source.subtitle ?? '')
+  const subtitle = cleanRichText(source.subtitle ?? '')
   const kicker = stripInlineMarkdown(source.kicker ?? '')
-  const text = stripInlineMarkdown(source.text ?? '')
-  // 备注保留换行（放映面板与备注页都按原文显示），只做转义，不做 Markdown 清洗
+  const text = cleanRichText(source.text ?? '')
+  const takeaway = cleanRichText(source.takeaway ?? '')
+  const slideSource = stripInlineMarkdown(source.source ?? '')
   const notes = String(source.notes ?? '').trim()
+  const activeIndex = Number.isInteger(source.activeIndex) && source.activeIndex >= 1 ? source.activeIndex : undefined
+  const rawTableStyle = String(source.tableStyle ?? '').trim().toLowerCase()
+  const tableStyle = VALID_TABLE_STYLES.has(rawTableStyle) ? rawTableStyle : undefined
+  const start = source.start !== undefined && source.start !== null && Number.isFinite(Number(source.start)) ? Number(source.start) : undefined
+  const span = source.span !== undefined && source.span !== null && Number.isFinite(Number(source.span)) ? Number(source.span) : undefined
+
   let bullets = []
   if (Array.isArray(source.bullets)) {
-    bullets = source.bullets.map((item) => stripInlineMarkdown(String(item))).filter(Boolean)
+    bullets = source.bullets.map((item) => cleanRichText(String(item))).filter(Boolean)
   } else if (typeof source.bullets === 'string' && source.bullets.trim() !== '') {
-    bullets = splitSentences(source.bullets)
+    bullets = splitSentences(cleanRichText(source.bullets))
   }
-  if (MEDIA_LAYOUTS.has(layout)) return normalizeMediaSlide(source, { layout, kicker, title, subtitle, text, bullets, ...(notes !== '' ? { notes } : {}) }, index)
+
+  const hasStringColumns = Array.isArray(source.columns) && source.columns.length > 0 && source.columns.every((c) => typeof c === 'string')
+  const columns = hasStringColumns
+    ? source.columns.map((c) => stripInlineMarkdown(c)).filter(Boolean)
+    : undefined
+
+  const rawItemsInput = source.items
+    ?? source.cards
+    ?? source.metrics
+    ?? (!hasStringColumns ? source.columns : undefined)
+    ?? source.steps
+    ?? source.quadrants
+  const items = normalizeSlideItems(rawItemsInput, layout)
+
+  const commonExtras = {
+    ...(variant !== '' ? { variant } : {}),
+    ...(chrome ? { chrome } : {}),
+    ...(takeaway !== '' ? { takeaway } : {}),
+    ...(slideSource !== '' ? { source: slideSource } : {}),
+    ...(activeIndex !== undefined ? { activeIndex } : {}),
+    ...(columns?.length ? { columns } : {}),
+    ...(start !== undefined ? { start } : {}),
+    ...(span !== undefined ? { span } : {}),
+    ...(items ? { items } : {}),
+    ...(notes !== '' ? { notes } : {}),
+  }
+
+  if (deckMedia.MEDIA_LAYOUTS.has(layout)) {
+    const mediaSource = alias?.chartKind && source.chart
+      ? { ...source, variant: variant || source.variant, chart: { ...source.chart, kind: alias.chartKind } }
+      : (variant ? { ...source, variant } : source)
+    return deckMedia.normalizeMediaSlide(
+      mediaSource,
+      { layout, kicker, title, subtitle, text, bullets, ...commonExtras },
+      index,
+    )
+  }
+
   if (layout === 'statement' && title === '' && text !== '') {
-    return { layout, kicker, title: text, subtitle: subtitle || '', bullets, ...(notes !== '' ? { notes } : {}) }
+    return { layout, kicker, title: stripInlineMarkdown(text), subtitle: subtitle || '', bullets, ...commonExtras }
   }
+
   if (layout === 'quote') {
-    const quoteText = title !== '' ? title : text
-    if (quoteText === '') return { layout: 'statement', kicker, title: subtitle, subtitle: '', bullets, ...(notes !== '' ? { notes } : {}) }
-    return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...(notes !== '' ? { notes } : {}) }
+    const quoteText = title !== '' ? title : stripInlineMarkdown(text)
+    if (quoteText === '') {
+      return { layout: 'statement', kicker, title: stripInlineMarkdown(subtitle), subtitle: '', bullets, ...commonExtras }
+    }
+    return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...commonExtras }
   }
+
+  if (layout === 'harvey') {
+    let rows = []
+    if (Array.isArray(source.rows)) {
+      rows = source.rows
+        .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => cleanRichText(String(cell))))
+        .filter((row) => row.some((cell) => cell !== ''))
+    }
+    return {
+      layout,
+      kicker: kicker || title,
+      title,
+      subtitle,
+      text,
+      bullets,
+      ...(rows.length ? { rows } : {}),
+      ...(tableStyle ? { tableStyle } : {}),
+      ...commonExtras,
+    }
+  }
+
   if (layout === 'table') {
     let rows = []
     if (Array.isArray(source.rows)) {
       rows = source.rows
-        .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => stripInlineMarkdown(String(cell))))
+        .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => cleanRichText(String(cell))))
         .filter((row) => row.some((cell) => cell !== ''))
     }
     if (rows.length === 0) {
-      // 没有表格数据的 table 页退化成要点页，避免产出空白版式
-      return { layout: 'bullets', kicker, title, subtitle, bullets, ...(notes !== '' ? { notes } : {}) }
+      return { layout: 'bullets', kicker, title, subtitle, bullets, ...commonExtras }
     }
-    return { layout, kicker: kicker || title, title, rows, ...(notes !== '' ? { notes } : {}) }
+    return {
+      layout,
+      kicker: kicker || title,
+      title,
+      rows,
+      ...(tableStyle ? { tableStyle } : {}),
+      ...commonExtras,
+    }
   }
-  return { layout, kicker, title, subtitle, text, bullets, ...(notes !== '' ? { notes } : {}) }
+
+  return { layout, kicker, title, subtitle, text, bullets, ...commonExtras }
 }
 
 function checkSlideLimit(slides, limit) {
@@ -861,15 +947,16 @@ export function normalizeSlides(rawSlides, maxSlides = 60, lang = 'zh') {
   }
   const limit = clampInt(maxSlides, 60, 1, 120)
   const ui = resolveLanguage(lang).ui
-  const slides = rawSlides.map(normalizeSlide).flatMap(slide => slide.layout === 'table'
-    ? paginateTable(slide, ui.continuation) : [slide])
+  const slides = rawSlides
+    .map(normalizeSlide)
+    .flatMap((slide) => (slide.layout === 'table' ? paginateTable(slide, ui.continuation) : [slide]))
   checkSlideLimit(slides, limit)
   if (slides.length === 0) throw new Error('dsh-ppt：slides 规范化后为空')
   return slides
 }
 
 // ---------------------------------------------------------------------------
-// 构建入口
+// 构建入口与原子落盘
 // ---------------------------------------------------------------------------
 
 export function normalizeBuildOptions(options = {}) {
@@ -913,7 +1000,6 @@ export function commitDeckArtifacts(artifacts) {
     } catch {}
   }
 
-  // 阶段 0：记下已有产物内容用于回滚；读不出来（如被同名目录占用）先报错，不碰任何文件。
   const previous = new Map()
   for (const item of items) {
     if (!existsSync(item.path)) continue
@@ -924,7 +1010,6 @@ export function commitDeckArtifacts(artifacts) {
     }
   }
 
-  // 阶段 1：全部写临时文件；这一步失败时目标文件尚未被改动。
   let written = 0
   try {
     for (const item of items) {
@@ -936,7 +1021,6 @@ export function commitDeckArtifacts(artifacts) {
     throw new Error('dsh-ppt：写入临时文件失败（' + items[written].path + '），原三件套未改动：' + error.message)
   }
 
-  // 阶段 2：逐个 rename 提交；中途失败则把已提交的目标回滚成旧内容。
   const committed = []
   try {
     for (const item of items) {
@@ -958,8 +1042,15 @@ export function commitDeckArtifacts(artifacts) {
 }
 
 export function buildDeck(options = {}) {
-  if(options.dataModel!==undefined)throw new Error('dsh-ppt：数据绑定请使用 deck-advanced.mjs 的 buildDeckAsync / Data models require buildDeckAsync from deck-advanced.mjs')
-  if (options.brand || options.template || options.slides?.some(slide => MEDIA_LAYOUTS.has(slide.layout) || slide.image || slide.chart)) {
+  if (options.dataModel !== undefined) {
+    throw new Error('dsh-ppt：数据绑定请使用 deck-advanced.mjs 的 buildDeckAsync / Data models require buildDeckAsync from deck-advanced.mjs')
+  }
+  if (
+    options.brand ||
+    options.template ||
+    options.referencePptx ||
+    options.slides?.some((slide) => deckMedia.MEDIA_LAYOUTS.has(slide.layout) || slide.image || slide.images?.length || slide.chart)
+  ) {
     throw new Error('dsh-ppt：图片、图表、模板与品牌请使用异步 buildDeckAsync 或 ppt_create / CLI')
   }
   const normalized = normalizeBuildOptions(options)
@@ -980,7 +1071,6 @@ export function buildDeck(options = {}) {
   const htmlPath = resolvePath(outputDir, fileName + '.html')
   const pptxPath = resolvePath(outputDir, fileName + '.pptx')
 
-  // 先生成三份内容再统一提交：生成阶段抛错时也不会留下半套文件。
   commitDeckArtifacts([
     { path: jsonPath, data: JSON.stringify(manifest, null, 2) + '\n', encoding: 'utf8' },
     { path: htmlPath, data: renderHtml(manifest, theme, language, { pptx: pptxPath, json: jsonPath }), encoding: 'utf8' },
@@ -1009,9 +1099,10 @@ export function buildDeck(options = {}) {
 // HTML 网页放映
 // ---------------------------------------------------------------------------
 
-export function renderHtml(manifest, theme, language, files = {}) {
-  const t = theme
-  const lang = language
+export function renderHtml(manifest, themeInput, languageInput, files = {}) {
+  const t = themeInput?.id ? themeInput : resolveTheme(themeInput)
+  const tk = t.tokens
+  const lang = languageInput?.id ? languageInput : resolveLanguage(languageInput)
   const ui = lang.ui
   const motion = manifest.motion !== false
   const motionCss = motion
@@ -1026,12 +1117,18 @@ body.motion .bullets li{
   const slides = manifest.slides.map((slide, index) => {
     const label = slide.title || slide.kicker || (ui.slide + ' ' + (index + 1))
     return '<div class="slide-frame" data-frame="' + (index + 1) + '" tabindex="-1" role="button" aria-label="' + escapeHtml(String(label)) + '">' +
-      renderHtmlSlide(slide, index, ui, lang.id, manifest, theme) + '</div>'
+      renderHtmlSlide(slide, index, ui, lang.id, manifest, t) + '</div>'
   }).join('\n')
   const themeLabel = t.name[lang.id] ?? t.name.en
   const total = manifest.slides.length
   const delivery = renderDelivery(manifest, files, lang.id)
   const dataView = renderDataView(manifest, t)
+
+  const ambientCss = t.dark
+    ? `radial-gradient(42% 34% at 82% 18%, ${hexToRgba(t.palette.accent, 0.16)}, transparent 70%),
+    radial-gradient(36% 30% at 12% 86%, ${hexToRgba(t.palette.accent2, 0.11)}, transparent 70%),
+    radial-gradient(70% 60% at 50% 50%, ${hexToRgba(t.palette.panel, 0.45)}, transparent 100%)`
+    : `radial-gradient(48% 36% at 90% 8%, ${hexToRgba(t.palette.accent, 0.045)}, transparent 72%)`
 
   return `<!DOCTYPE html>
 <html lang="${lang.attr}">
@@ -1048,6 +1145,18 @@ body.motion .bullets li{
   --muted:${t.palette.muted};
   --accent:${t.palette.accent};
   --accent2:${t.palette.accent2};
+  --surface1:${tk.surface1};
+  --surface2:${tk.surface2};
+  --hairline:${tk.hairline};
+  --ink-secondary:${tk.inkSecondary};
+  --ink-on-accent:${tk.inkOnAccent};
+  --accent-text:${tk.accentText};
+  --accent-soft:${tk.accentSoft};
+  --positive:${tk.positive};
+  --negative:${tk.negative};
+  --warning:${tk.warning};
+  --cover-bg:${tk.coverBg};
+  --radius:${t.radiusPx ?? 8}px;
   --font-heading:${t.fonts.heading};
   --font-body:${t.fonts.body};
 }
@@ -1063,77 +1172,62 @@ body{
 .slide-frame.is-current,body.overview .slide-frame{pointer-events:auto}
 .slide{
   position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;
-  padding:clamp(34px,7vw,110px);overflow:hidden;
+  padding:clamp(30px,4.6vw,68px) clamp(36px,5.4vw,88px);overflow:hidden;
 }
 .slide::before{
   content:"";position:absolute;inset:-20%;pointer-events:none;z-index:-1;
-  background:
-    radial-gradient(42% 34% at 82% 18%, ${hexToRgba(t.palette.accent, t.dark ? 0.22 : 0.12)}, transparent 70%),
-    radial-gradient(36% 30% at 12% 86%, ${hexToRgba(t.palette.accent2, t.dark ? 0.16 : 0.12)}, transparent 70%),
-    radial-gradient(70% 60% at 50% 50%, ${hexToRgba(t.palette.panel, 0.55)}, transparent 100%);
+  background:${ambientCss};
 }
 .slide.is-active{display:flex}
 ${motionCss}
-${MEDIA_CSS}
+${LAYOUT_CSS}
+${deckMedia.MEDIA_CSS}
 ${VISUAL_CSS}
 .kicker{
-  color:var(--accent);font-weight:700;letter-spacing:.18em;text-transform:uppercase;
-  font-size:clamp(12px,1.3vw,18px);margin-bottom:22px;
+  color:var(--accent-text);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  font-size:clamp(12px,1.15vw,16px);margin-bottom:14px;
 }
-h1,h2,.statement-title{font-family:var(--font-heading);line-height:1.06;letter-spacing:-.015em;margin:0}
-h1{font-size:clamp(44px,7.4vw,118px);max-width:20ch}
-h2{font-size:clamp(34px,5vw,82px);max-width:20ch}
+h1,h2,.statement-title{font-family:var(--font-heading);line-height:1.12;letter-spacing:-.018em;margin:0}
+h1{font-size:clamp(40px,5.8vw,86px);max-width:22ch;font-weight:800}
+h2{font-size:clamp(28px,3.6vw,56px);max-width:28ch;font-weight:750}
 .subtitle{
-  color:var(--muted);font-size:clamp(18px,2.3vw,34px);line-height:1.5;
-  max-width:46em;margin-top:28px;
+  color:var(--ink-secondary);font-size:clamp(17px,1.9vw,28px);line-height:1.5;
+  max-width:46em;margin-top:18px;
 }
 .meta{
-  color:var(--muted);font-size:clamp(12px,1.2vw,16px);margin-top:48px;
-  letter-spacing:.06em;
+  color:var(--muted);font-size:clamp(12px,1.1vw,15px);margin-top:32px;
+  letter-spacing:.04em;
 }
-.bullets ul{margin:30px 0 0;padding:0;list-style:none;display:grid;gap:clamp(12px,1.6vw,24px)}
-.bullets li{
-  position:relative;padding-left:clamp(28px,2.6vw,44px);
-  font-size:clamp(20px,2.6vw,40px);line-height:1.35;max-width:24em;
-}
-.bullets li::before{
-  content:"";position:absolute;left:0;top:.58em;width:.5em;height:.5em;
-  background:var(--accent);border-radius:2px;box-shadow:.28em .28em 0 color-mix(in srgb, var(--accent2) 78%, transparent);
-}
-.section .kicker{margin-bottom:10px}
-.section .accent-line{width:min(180px,18vw);height:6px;background:var(--accent);margin:28px 0}
+.section .kicker,.slide--section .kicker{margin-bottom:10px}
+.section .accent-line,.slide--section .accent-line{width:min(140px,14vw);height:5px;background:var(--accent);margin:18px 0;border-radius:2px}
 .statement-title{
-  font-size:clamp(34px,5.4vw,88px);max-width:22ch;font-weight:800;
-  border-left:6px solid var(--accent);padding-left:clamp(22px,3vw,48px);
+  font-size:clamp(30px,4.4vw,68px);max-width:24ch;font-weight:800;line-height:1.24;
 }
-.closing{text-align:center;align-items:center}
-.closing h1,.closing .statement-title{font-size:clamp(52px,9vw,148px)}
-.closing .subtitle{color:var(--accent);font-weight:700}
-.cover h1{font-weight:900}
+.slide--closing .subtitle{color:var(--accent-text);font-weight:600}
 .quote-mark{
-  font-family:var(--font-heading);font-size:clamp(90px,13vw,210px);line-height:.62;
-  color:var(--accent);margin-bottom:clamp(14px,2vw,30px);
+  font-family:var(--font-heading);font-size:clamp(68px,9vw,132px);line-height:.62;
+  color:var(--accent);margin-bottom:clamp(10px,1.4vw,20px);
 }
 .quote-text{
-  font-family:var(--font-heading);font-size:clamp(26px,4.2vw,62px);line-height:1.28;
-  font-weight:700;max-width:22ch;margin:0;
+  font-family:var(--font-heading);font-size:clamp(24px,3.4vw,48px);line-height:1.34;
+  font-weight:700;max-width:26ch;margin:0;
 }
-.quote-attr{color:var(--muted);margin-top:clamp(18px,2.6vw,34px);font-size:clamp(15px,1.8vw,26px);letter-spacing:.04em}
+.quote-attr{color:var(--muted);margin-top:clamp(14px,2vw,24px);font-size:clamp(14px,1.5vw,22px);letter-spacing:.03em}
 table.deck-table{
-  border-collapse:collapse;margin-top:clamp(20px,3vw,42px);width:100%;max-width:100%;
-  font-size:clamp(14px,1.55vw,23px);
+  border-collapse:collapse;margin-top:clamp(12px,1.8vw,24px);width:100%;max-width:100%;
+  font-size:clamp(14px,1.4vw,20px);
 }
 .deck-table th{
-  background:color-mix(in srgb, var(--accent) 26%, var(--bg));color:var(--fg);
-  text-align:left;font-weight:700;padding:.6em .9em;letter-spacing:.02em;
-  border-bottom:2px solid var(--accent);
+  background:var(--surface2);color:var(--fg);
+  text-align:left;font-weight:700;padding:.62em .9em;letter-spacing:.02em;
+  border-top:1.5px solid var(--accent);border-bottom:1.5px solid var(--accent);
 }
 .deck-table td{
-  padding:.55em .9em;border-bottom:1px solid color-mix(in srgb, var(--muted) 55%, transparent);
+  padding:.56em .9em;border-bottom:1px solid var(--hairline);
   color:var(--fg);
 }
 .deck-table .num{text-align:right;font-variant-numeric:tabular-nums}
-.deck-table tbody tr:nth-child(even){background:color-mix(in srgb, var(--panel) 62%, transparent)}
+.deck-table tbody tr:nth-child(even){background:var(--surface1)}
 #progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--accent);z-index:30;transition:width .25s}
 #hud{
   position:fixed;left:22px;right:22px;bottom:18px;z-index:50;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;align-items:center;
@@ -1159,7 +1253,7 @@ body.notes-open #notes-panel{display:block}
 }
 #notes-close:hover{color:var(--accent);border-color:var(--accent)}
 #notes-panel .notes-label{
-  color:var(--accent);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-text);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
   font-size:12px;margin-bottom:8px;
 }
 #notes-text{white-space:pre-wrap;line-height:1.65;font-size:clamp(15px,1.5vw,18px);color:var(--fg)}
@@ -1168,7 +1262,7 @@ body.notes-open #notes-panel{display:block}
   position:fixed;right:22px;bottom:64px;z-index:60;max-width:390px;
   background:color-mix(in srgb, var(--panel) 96%, black 4%);color:var(--fg);
   border:1px solid color-mix(in srgb, var(--accent) 55%, transparent);border-radius:14px;
-  padding:16px 20px;box-shadow:0 18px 50px rgba(0,0,0,.45);font-size:14px;line-height:1.8;
+  padding:16px 20px;box-shadow:0 18px 50px rgba(0,0,0,.28);font-size:14px;line-height:1.8;
 }
 #help-panel[hidden]{display:none}
 #help-panel kbd{
@@ -1671,328 +1765,84 @@ ${dataView.script}
 </body>
 </html>`
 }
+
 function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
-  const kicker = slide.kicker || (slide.layout === 'cover' ? ui.coverKicker : '')
-  const title = slide.title || ''
-  const subtitle = slide.subtitle || ''
-  const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
+  const layout = slide.layout || 'bullets'
+  const total = manifest.slides?.length ?? 1
   const number = String(index + 1).padStart(2, '0')
-  let inner = ''
-  switch (slide.layout) {
-    case 'image':
-    case 'image-left':
-    case 'image-right':
-    case 'chart':
-      inner = renderMediaHtml(slide, manifest, theme)
-      break
-    case 'cover':
-      inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<h1>' + escapeHtml(title) + '</h1>' +
-        (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '') +
-        '<div class="meta">' + escapeHtml(ui.generatedBy) + '</div>'
-      break
-    case 'section':
-      inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<h2>' + escapeHtml(title) + '</h2>' +
-        '<div class="accent-line"></div>' +
-        (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '')
-      break
-    case 'statement':
-      inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<div class="statement-title">' + escapeHtml(title || slide.text || '') + '</div>' +
-        (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '')
-      break
-    case 'quote':
-      inner = '<div class="kicker">' + escapeHtml(kicker || ui.quoteKicker) + '</div>' +
-        '<div class="quote-mark" aria-hidden="true">\u201C</div>' +
-        '<blockquote class="quote-text">' + escapeHtml(title || slide.text || '') + '</blockquote>' +
-        (subtitle !== '' ? '<div class="quote-attr">\u2014\u2014 ' + escapeHtml(subtitle) + '</div>' : '')
-      break
-    case 'table': {
-      const rows = Array.isArray(slide.rows) ? slide.rows : []
-      const head = rows[0] ?? []
-      const body = rows.slice(1)
-      const isNum = (cell) => /^\s*[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:%|％|次|页|个|人|元|天|小时|分钟)?\s*$/.test(String(cell ?? ''))
-      const headingText = title !== '' ? title : (kicker || ui.tableKicker)
-      const showKicker = kicker !== '' && kicker !== headingText
-      inner = (showKicker ? '<div class="kicker">' + escapeHtml(kicker) + '</div>' : '') +
-        '<h2>' + escapeHtml(headingText) + '</h2>' +
-        '<table class="deck-table"><thead><tr>' +
-        head.map((cell) => '<th' + (isNum(cell) ? ' class="num"' : '') + '>' + escapeHtml(cell) + '</th>').join('') +
-        '</tr></thead><tbody>' +
-        body.map((row) => '<tr>' + row.map((cell) => '<td' + (isNum(cell) ? ' class="num"' : '') + '>' + escapeHtml(cell) + '</td>').join('') + '</tr>').join('') +
-        '</tbody></table>'
-      break
-    }
-    case 'closing':
-      inner = '<h1>' + escapeHtml(title || ui.closingTitle) + '</h1>' +
-        (subtitle !== '' ? '<div class="subtitle">' + escapeHtml(subtitle) + '</div>' : '') +
-        '<div class="meta">' + escapeHtml(ui.generatedBy) + '</div>'
-      break
-    case 'bullets':
-    default:
-      inner = '<div class="kicker">' + escapeHtml(kicker) + '</div>' +
-        '<h2>' + escapeHtml(title) + '</h2>' +
-        '<ul>' + bullets.map((bullet, bulletIndex) => '<li style="--i:' + bulletIndex + '">' + escapeHtml(bullet) + '</li>').join('') + '</ul>'
-      break
-  }
+  const chromeStyle = resolveChromeStyle(theme, slide, manifest.brand)
+  const inner = deckMedia.MEDIA_LAYOUTS.has(layout)
+    ? deckMedia.renderMediaHtml(slide, manifest, theme)
+    : renderCoreSlideHtml(slide, index, total, ui, langId, manifest, theme)
+
   const notesAttr = typeof slide.notes === 'string' && slide.notes.trim() !== ''
     ? ' data-notes="' + escapeHtml(slide.notes) + '"'
     : ''
+  const densityAttr = slide.visual?.density
+    ? ' data-density="' + escapeHtml(slide.visual.density) + '"'
+    : ''
+  const tableStyleAttr = (layout === 'table' || layout === 'harvey')
+    ? ' data-table-style="' + escapeHtml(slide.tableStyle || slide.visual?.tableStyle || theme.defaultTableStyle || 'consulting') + '"'
+    : ''
+  const chromeAttr = ' data-chrome="' + escapeHtml(chromeStyle) + '"'
   const visualStyle = visualHtmlStyle(slide.visual)
-  return '<section class="slide slide--' + escapeHtml(slide.layout || 'bullets') + '" data-index="' + number + '"' + notesAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
+  const slideClasses = 'slide slide--' + escapeHtml(layout) + (layout === 'bullets' ? ' bullets' : '')
+
+  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
     '<div class="slide-inner">' + inner + '</div>' +
     (manifest.brand?.logoAssetId ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
     (manifest.brand?.footer ? '<div class="brand-footer">' + escapeHtml(manifest.brand.footer) + '</div>' : '') + '</section>'
 }
 
-function hexToRgba(hex, alpha) {
-  const value = String(hex).replace('#', '')
-  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value
-  const num = Number.parseInt(full, 16)
-  const r = (num >> 16) & 255
-  const g = (num >> 8) & 255
-  const b = num & 255
-  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')'
-}
-
 // ---------------------------------------------------------------------------
-// PPTX（OOXML 手写 + node:zlib zip）
+// PPTX（OOXML 组件装配 + node:zlib zip）
 // ---------------------------------------------------------------------------
-
-const EMU_W = 12192000
-const EMU_H = 6858000
 
 function hex(value) {
   return String(value).replace('#', '').toUpperCase()
 }
 
-export function pptxFontName(value) {
-  const names = String(value ?? '').split(',').map(name => name.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
-  // A CSS stack may start with an optional web font. Office receives one actual
-  // family, so select a platform fallback instead of copying the first name.
-  if (names.length === 1 && !['serif', 'sans-serif', 'system-ui'].includes(names[0])) return names[0]
-  const available = process.platform === 'win32'
-    ? ['Segoe UI', 'Arial', 'Arial Black', 'Impact', 'Georgia', 'Times New Roman', 'Microsoft YaHei', 'SimSun']
-    : process.platform === 'darwin'
-      ? ['Helvetica Neue', 'Arial', 'Impact', 'Georgia', 'Times New Roman', 'Avenir Next', 'PingFang SC', 'Songti SC']
-      : ['Liberation Sans', 'Liberation Serif', 'Noto Sans', 'Noto Sans CJK SC', 'Noto Serif CJK SC']
-  return names.find(name => available.includes(name)) || (names.includes('serif')
-    ? process.platform === 'linux' ? 'Liberation Serif' : 'Georgia'
-    : process.platform === 'win32' ? 'Segoe UI' : process.platform === 'darwin' ? 'Helvetica Neue' : 'Liberation Sans')
-}
-
-export function pptxEastAsianFont(value) {
-  const font = pptxFontName(value)
-  if (/Microsoft YaHei|SimSun|SimHei|PingFang|Songti|Heiti|Noto (Sans|Serif) CJK|[\u3400-\u9fff]/i.test(font)) return font
-  const serif = /Georgia|Times New Roman|Cambria|Liberation Serif/i.test(font)
-  return process.platform === 'win32' ? serif ? 'SimSun' : 'Microsoft YaHei'
-    : process.platform === 'darwin' ? serif ? 'Songti SC' : 'PingFang SC'
-    : serif ? 'Noto Serif CJK SC' : 'Noto Sans CJK SC'
-}
-
-function paragraphXml(text, options = {}) {
-  const {
-    size = 2000,
-    color = 'FFFFFF',
-    bold = false,
-    lang = 'zh-CN',
-    align = 'l',
-    bullet = false,
-    font = 'Arial',
-    spaceBefore = 0,
-    spaceAfter = 0,
-  } = options
-  const runFont = pptxFontName(font)
-  const spacing = (spaceBefore > 0 ? '<a:spcBef><a:spcPts val="' + spaceBefore + '"/></a:spcBef>' : '') +
-    (spaceAfter > 0 ? '<a:spcAft><a:spcPts val="' + spaceAfter + '"/></a:spcAft>' : '')
-  const pPr = '<a:pPr' + (bullet ? ' marL="285750" indent="-285750"' : align !== 'l' ? ' algn="' + align + '"' : '') + '>' + spacing +
-    (bullet ? '<a:buFont typeface="Arial" panose="020B0604020202020204"/><a:buChar char="•"/>' : '<a:buNone/>') + '</a:pPr>'
-  return '<a:p>' + pPr +
-    '<a:r><a:rPr lang="' + lang + '" sz="' + size + '" b="' + (bold ? 1 : 0) + '" dirty="0">' +
-    '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
-    '<a:latin typeface="' + escapeXml(runFont) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(font)) + '"/></a:rPr>' +
-    '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p>'
-}
-
-function textShapeXml(id, name, box, paragraphs, options = {}) {
-  const { x = 0, y = 0, w = EMU_W, h = EMU_H } = box
-  return '<p:sp>' +
-    '<p:nvSpPr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
-    '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm>' +
-    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln/></p:spPr>' +
-    '<p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:normAutofit/></a:bodyPr><a:lstStyle/>' +
-    paragraphs.join('') + '</p:txBody></p:sp>'
-}
-
-function accentBarXml(id, name, box, color) {
-  const { x = 0, y = 0, w = EMU_W, h = EMU_H } = box
-  return '<p:sp>' +
-    '<p:nvSpPr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
-    '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm>' +
-    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-    '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill><a:ln/></p:spPr>' +
-    '<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>'
-}
-
-/** 原生 OOXML 表格（graphicFrame + a:tbl）：首行主题色表头，隔行面板色。 */
-function tableGraphicXml(id, name, box, rows, theme, langId) {
-  const p = theme.palette
+function slideShapeList(slide, index, total, theme, langId, manifest = {}) {
   const lang = langId || 'zh-CN'
-  const font = pptxFontName(theme.fonts.body)
-  const safeRows = rows.length > 0 ? rows : [['']]
-  const cols = Math.max(1, safeRows[0].length)
-  const fontSize = cols <= 6 ? 1700 : 1400
-  const colW = Math.floor(box.w / cols)
-  const grid = Array.from({ length: cols }, () => '<a:gridCol w="' + colW + '"/>').join('')
-  const rowH = 420000
-  const cellXml = (text, fill, color, bold) =>
-    '<a:tc><a:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr>' +
-    '<a:r><a:rPr lang="' + lang + '" sz="' + fontSize + '" b="' + (bold ? 1 : 0) + '" dirty="0">' +
-    '<a:solidFill><a:srgbClr val="' + hex(color) + '"/></a:solidFill>' +
-    '<a:latin typeface="' + escapeXml(font) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(theme.fonts.body)) + '"/></a:rPr>' +
-    '<a:t>' + escapeXml(text) + '</a:t></a:r></a:p></a:txBody>' +
-    '<a:tcPr marL="91440" marR="91440" anchor="ctr">' +
-    (fill !== '' ? '<a:solidFill><a:srgbClr val="' + hex(fill) + '"/></a:solidFill>' : '<a:noFill/>') +
-    '</a:tcPr></a:tc>'
-  const trs = safeRows.map((row, rowIndex) => {
-    const padded = Array.from({ length: cols }, (_, i) => row[i] ?? '')
-    const cells = rowIndex === 0
-      ? padded.map((c) => cellXml(c, p.accent, p.bg, true)).join('')
-      : padded.map((c) => cellXml(c, rowIndex % 2 === 1 ? p.panel : '', p.fg, false)).join('')
-    return '<a:tr h="' + rowH + '">' + cells + '</a:tr>'
-  }).join('')
-  const height = Math.max(1, safeRows.length) * rowH
-  return '<p:graphicFrame>' +
-    '<p:nvGraphicFramePr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/>' +
-    '<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>' +
-    '<p:xfrm><a:off x="' + box.x + '" y="' + box.y + '"/><a:ext cx="' + box.w + '" cy="' + height + '"/></p:xfrm>' +
-    '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">' +
-    '<a:tbl><a:tblPr firstRow="1" bandRow="1"/>' +
-    '<a:tblGrid>' + grid + '</a:tblGrid>' + trs + '</a:tbl>' +
-    '</a:graphicData></a:graphic></p:graphicFrame>'
-}
-
-function slideShapeList(slide, index, total, theme, langId) {
-  const p = theme.palette
-  const font = pptxFontName(theme.fonts.heading)
-  const bodyFont = pptxFontName(theme.fonts.body) // 保留：v0.1 后续用于统一正文字体
-  const lang = langId || 'zh-CN'
-  // PPTX 每个文本 run 的语言跟随 deck.lang（zh-CN / en-US），不再写死中文
-  const para = (content, options = {}) => paragraphXml(content, { lang, ...options })
-  const shapes = []
-  const kicker = slide.kicker || ''
-  const title = slide.title || ''
-  const subtitle = slide.subtitle || ''
-  const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
   const idBase = (index + 1) * 10
-  const footer = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
+  let xml = ''
 
-  if (MEDIA_LAYOUTS.has(slide.layout)) {
-    const boxes = mediaBoxes(slide.layout)
-    const emu = box => Object.fromEntries(Object.entries(box).map(([key, value]) => [key, Math.round(value * 914400)]))
-    shapes.push(textShapeXml(idBase + 2, 'Title', emu(boxes.title), [para(title, { size: 3400, color: p.fg, bold: true, font })]))
-    if (boxes.body) shapes.push(textShapeXml(idBase + 3, 'Body', emu(boxes.body), [
-      ...(subtitle ? [para(subtitle, { size: 2000, color: p.fg, font: bodyFont })] : []),
-      ...bullets.map(bullet => para(bullet, { size: 2000, color: p.fg, bullet: true, font: bodyFont, spaceAfter: 600 })),
-    ]))
-    const caption = slide.chart?.caption || slide.image?.caption
-    if (caption) shapes.push(textShapeXml(idBase + 4, 'Caption', emu(boxes.caption), [para(caption, { size: 1400, color: p.muted, font: bodyFont })]))
-  } else if (slide.layout === 'cover') {
-    shapes.push(accentBarXml(idBase + 1, 'Accent bar', { x: 914400, y: 2250000, w: 240000, h: 1600000 }, p.accent))
-    shapes.push(textShapeXml(idBase + 2, 'Title', { x: 1550000, y: 2160000, w: 9250000, h: 1800000 }, [
-      para(title, { size: 4400, color: p.fg, bold: true, font }),
-    ]))
-    if (subtitle !== '') {
-      shapes.push(textShapeXml(idBase + 3, 'Subtitle', { x: 1570000, y: 4150000, w: 9000000, h: 1200000 }, [
-        para(subtitle, { size: 2200, color: p.muted, font: theme.fonts.body }),
-      ]))
+  if (deckMedia.MEDIA_LAYOUTS.has(slide.layout)) {
+    const fontHelpers = {
+      latinHeading: pptxFontName(theme.fonts.heading),
+      eaHeading: pptxEastAsianFont(theme.fonts.heading),
+      latinBody: pptxFontName(theme.fonts.body),
+      eaBody: pptxEastAsianFont(theme.fonts.body),
     }
-    if (kicker !== '') {
-      shapes.push(textShapeXml(idBase + 4, 'Kicker', { x: 1570000, y: 5800000, w: 7000000, h: 500000 }, [
-        para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
-      ]))
-    }
-  } else if (slide.layout === 'section') {
-    if (kicker !== '') {
-      shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 1050000, y: 2250000, w: 9000000, h: 500000 }, [
-        para(kicker, { size: 1600, color: p.accent, bold: true, font: theme.fonts.body }),
-      ]))
-    }
-    shapes.push(accentBarXml(idBase + 2, 'Accent bar', { x: 1050000, y: 2850000, w: 1600000, h: 160000 }, p.accent2))
-    shapes.push(textShapeXml(idBase + 3, 'Title', { x: 1050000, y: 3150000, w: 10200000, h: 1400000 }, [
-      para(title, { size: 4000, color: p.fg, bold: true, font }),
-    ]))
-    if (subtitle !== '') {
-      shapes.push(textShapeXml(idBase + 4, 'Subtitle', { x: 1070000, y: 4750000, w: 9000000, h: 900000 }, [
-        para(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
-      ]))
-    }
-  } else if (slide.layout === 'statement') {
-    shapes.push(accentBarXml(idBase + 1, 'Accent bar', { x: 914400, y: 1900000, w: 200000, h: 2800000 }, p.accent))
-    shapes.push(textShapeXml(idBase + 2, 'Statement', { x: 1500000, y: 1950000, w: 9400000, h: 2700000 }, [
-      para(title || slide.text || '', { size: 3600, color: p.fg, bold: true, font }),
-    ]))
-    if (subtitle !== '') {
-      shapes.push(textShapeXml(idBase + 3, 'Subtitle', { x: 1520000, y: 4900000, w: 9000000, h: 800000 }, [
-        para(subtitle, { size: 1800, color: p.muted, font: theme.fonts.body }),
-      ]))
-    }
-  } else if (slide.layout === 'quote') {
-    shapes.push(textShapeXml(idBase + 1, 'Quote mark', { x: 900000, y: 1050000, w: 1700000, h: 1900000 }, [
-      para('\u201C', { size: 9600, color: p.accent, bold: true, font }),
-    ]))
-    shapes.push(textShapeXml(idBase + 2, 'Quote', { x: 1050000, y: 2550000, w: 10100000, h: 2600000 }, [
-      para(title || slide.text || '', { size: 3000, color: p.fg, bold: true, font }),
-    ]))
-    if (subtitle !== '') {
-      shapes.push(textShapeXml(idBase + 3, 'Attribution', { x: 1070000, y: 5300000, w: 9000000, h: 600000 }, [
-        para('\u2014\u2014 ' + subtitle, { size: 1600, color: p.muted, font: theme.fonts.body }),
-      ]))
-    }
-  } else if (slide.layout === 'table') {
-    const hasTitle = title !== ''
-    if (kicker !== '' && kicker !== title) {
-      shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 900000, y: 420000, w: 10000000, h: 420000 }, [
-        para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
-      ]))
-    }
-    if (hasTitle) {
-      shapes.push(textShapeXml(idBase + 2, 'Title', { x: 900000, y: 920000, w: 10300000, h: 800000 }, [
-        para(title, { size: 3400, color: p.fg, bold: true, font }),
-      ]))
-    }
-    shapes.push(tableGraphicXml(idBase + 3, 'Table', { x: 900000, y: hasTitle ? 1950000 : 900000, w: 10300000 }, Array.isArray(slide.rows) ? slide.rows : [], theme, lang))
-  } else if (slide.layout === 'closing') {
-    shapes.push(textShapeXml(idBase + 1, 'Title', { x: 1050000, y: 2300000, w: 10200000, h: 1700000 }, [
-      para(title || '谢谢', { size: 5200, color: p.fg, bold: true, align: 'ctr', font }),
-    ]))
-    if (subtitle !== '') {
-      shapes.push(textShapeXml(idBase + 2, 'Subtitle', { x: 1050000, y: 4200000, w: 10200000, h: 900000 }, [
-        para(subtitle, { size: 2000, color: p.accent, bold: true, align: 'ctr', font: theme.fonts.body }),
-      ]))
+    const mediaShapes = typeof deckMedia.renderMediaPptxShapes === 'function'
+      ? deckMedia.renderMediaPptxShapes(slide, index, theme, lang, fontHelpers, total, manifest)
+      : ''
+    if (mediaShapes.includes('name="Page number"')) {
+      xml = mediaShapes
+    } else {
+      const folio = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
+      const folioShape = ooxmlShape(idBase + 9, 'Page number', { x: 10.65, y: 6.95, w: 2.06, h: 0.32 }, {
+        txBox: true,
+        anchor: 'ctr',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        paragraphs: [
+          ooxmlRichParagraph(folio, {
+            sizePt: 9.5,
+            color: theme.tokens.inkMuted,
+            lang,
+            align: 'r',
+            font: theme.fonts.body,
+            lineHeight: 1.15,
+          }),
+        ],
+      })
+      xml = mediaShapes + folioShape
     }
   } else {
-    // bullets（默认布局）
-    if (kicker !== '') {
-      shapes.push(textShapeXml(idBase + 1, 'Kicker', { x: 900000, y: 420000, w: 10000000, h: 420000 }, [
-        para(kicker, { size: 1400, color: p.accent, bold: true, font: theme.fonts.body }),
-      ]))
-    }
-    shapes.push(textShapeXml(idBase + 2, 'Title', { x: 900000, y: 920000, w: 10300000, h: 800000 }, [
-      para(title, { size: 3400, color: p.fg, bold: true, font }),
-    ]))
-    const bodyParagraphs = bullets.length > 0
-      ? bullets.map((bullet) => para(bullet, { size: 2000, color: p.fg, bullet: true, font: theme.fonts.body, spaceAfter: 600 }))
-      : [para(subtitle || '', { size: 2000, color: p.fg, font: theme.fonts.body })]
-    shapes.push(textShapeXml(idBase + 3, 'Body', { x: 1050000, y: 1850000, w: 10100000, h: 4500000 }, bodyParagraphs))
+    xml = renderCoreSlidePptx(slide, index, total, theme, lang, manifest)
   }
 
-  shapes.push(textShapeXml(idBase + 9, 'Page number', { x: 10600000, y: 6250000, w: 1200000, h: 400000 }, [
-    para(footer, { size: 1000, color: p.muted, align: 'r', font: theme.fonts.body }),
-  ]))
-
-  return visualShapeXml(shapes.join(''), slide.visual)
+  return visualShapeXml(xml, slide.visual)
 }
 
 /**
@@ -2027,7 +1877,7 @@ function bulletTimingXml(spid, clicks) {
     '<p:bldLst><p:bldP spid="' + spid + '" grpId="0"/></p:bldLst></p:timing>'
 }
 
-function slideXml(slide, index, total, theme, langId, motion) {
+function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
   const p = theme.palette
   let motionXml = ''
   if (motion) {
@@ -2044,7 +1894,7 @@ function slideXml(slide, index, total, theme, langId, motion) {
     '<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + hex(p.bg) + '"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>' +
     '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
     '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
-    slideShapeList(slide, index, total, theme, langId) +
+    slideShapeList(slide, index, total, theme, langId, manifest) +
     '</p:spTree></p:cSld>' +
     '<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>' +
     motionXml +
@@ -2146,7 +1996,7 @@ function slideMasterXml(theme) {
   const p = theme.palette
   const levels = Array.from({ length: 9 }, (_, i) => {
     const sz = Math.max(1100, 2000 - i * 100)
-    return '<a:lvl' + (i + 1) + 'pPr marL="' + (342900 + i * 342900) + '" indent="' + (-342900 - i * 0) + '">' +
+    return '<a:lvl' + (i + 1) + 'pPr marL="' + (342900 + i * 342900) + '" indent="' + (-342900) + '">' +
       '<a:defRPr sz="' + sz + '"><a:solidFill><a:srgbClr val="' + hex(p.fg) + '"/></a:solidFill><a:latin typeface="' + escapeXml(pptxFontName(theme.fonts.body)) + '"/><a:ea typeface="' + escapeXml(pptxEastAsianFont(theme.fonts.body)) + '"/></a:defRPr></a:lvl' + (i + 1) + 'pPr>'
   }).join('')
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -2170,7 +2020,7 @@ function slideMasterRelXml() {
     '</Relationships>'
 }
 
-function slideLayoutXml(theme) {
+function slideLayoutXml() {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
@@ -2191,14 +2041,15 @@ function slideLayoutRelXml() {
 
 function themeXml(theme) {
   const p = theme.palette
+  const series = theme.tokens?.chartSeries ?? [p.accent, p.accent2, p.fg, p.muted, p.accent, p.accent2]
   const color = (name, value) => '<a:' + name + '><a:srgbClr val="' + hex(value) + '"/></a:' + name + '>'
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="dsh-ppt ' + escapeXml(theme.name.en) + '">' +
+    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="dsh-ppt ' + escapeXml(theme.name?.en ?? theme.id ?? 'Theme') + '">' +
     '<a:themeElements>' +
     '<a:clrScheme name="dsh-ppt">' +
     color('dk1', p.fg) + color('lt1', p.bg) + color('dk2', p.muted) + color('lt2', p.panel) +
-    color('accent1', p.accent) + color('accent2', p.accent2) + color('accent3', p.fg) +
-    color('accent4', p.muted) + color('accent5', p.accent) + color('accent6', p.accent2) +
+    color('accent1', series[0] ?? p.accent) + color('accent2', series[1] ?? p.accent2) + color('accent3', series[2] ?? p.fg) +
+    color('accent4', series[3] ?? p.muted) + color('accent5', series[4] ?? p.accent) + color('accent6', series[5] ?? p.accent2) +
     color('hlink', p.accent) + color('folHlink', p.accent2) +
     '</a:clrScheme>' +
     '<a:fontScheme name="dsh-ppt">' +
@@ -2288,10 +2139,10 @@ function buildZip(entries) {
     const localHeader = Buffer.alloc(30)
     localHeader.writeUInt32LE(0x04034b50, 0)
     localHeader.writeUInt16LE(20, 4)
-    localHeader.writeUInt16LE(0x0800, 6) // UTF-8 文件名
+    localHeader.writeUInt16LE(0x0800, 6)
     localHeader.writeUInt16LE(method, 8)
-    localHeader.writeUInt16LE(0, 10) // DOS time
-    localHeader.writeUInt16LE(0x21, 12) // DOS date 1980-01-01
+    localHeader.writeUInt16LE(0, 10)
+    localHeader.writeUInt16LE(0x21, 12)
     localHeader.writeUInt32LE(crc, 14)
     localHeader.writeUInt32LE(compressed.length, 18)
     localHeader.writeUInt32LE(data.length, 22)
@@ -2384,7 +2235,7 @@ export function buildPptx(manifest, themeInput, languageInput) {
   }
   slides.forEach((slide, index) => {
     const hasNotes = noteIndexes.includes(index)
-    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.attr, motion) })
+    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.attr, motion, manifest) })
     entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml(hasNotes, index + 1) })
     if (hasNotes) {
       entries.push({ name: 'ppt/notesSlides/notesSlide' + (index + 1) + '.xml', data: notesSlideXml(slide.notes, language.attr) })

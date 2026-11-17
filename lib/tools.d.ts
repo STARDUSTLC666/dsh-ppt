@@ -1,4 +1,4 @@
-import type { ResolvedPptConfig } from './config.js';
+import { type ResolvedPptConfig } from './config.js';
 import { type PptExecution } from './execution.js';
 export interface ToolDefinition {
     name: string;

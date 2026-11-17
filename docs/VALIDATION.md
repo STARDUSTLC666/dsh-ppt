@@ -6,6 +6,8 @@
 
 ## 最新记录
 
+**0.22.0 深度换骨与实机渲染验收（2026-11-18）**：311 / 311 项自动化测试全部通过；`tsc` 与客户端打包 0 错误；`@office-kit/pptx` `validatePresentation()` 0 错误；实机 `@deepseek-ai/libreoffice-kit` 无头渲染（`missingFonts: []`）逐页目视核验全部 6 套母版骨架、5 大新增原生专业图示（`gantt`、`architecture`、`harvey`、`tam`、`org`）、`flywheel`/`funnel` 及 7 份野生 `.pptx` 深度骨架吸收（`cloneStructure: true`）。
+
 [0.19.0 分享成品包验收](validation-0.19.0.md)：208 项 Windows 测试、官方 DSH Web 实际保存与两种 ZIP 下载、离线 HTML、三页最终 PPTX 原生渲染及逐页目视检查、中英文与深色窄屏。Electron 专属行为与真实 Office 应用本轮未测。
 
 [0.16.0 看图检查与排版修复验收](validation-0.16.0.md)：200 项测试、真实 DSH 图片与模型接口、实际模型样例、修复副本复查、中文操作与英文深色窄屏、官方 CLI 全新安装。AI 检查结果与人工 / 桌面原生验收分开记录。

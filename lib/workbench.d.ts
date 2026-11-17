@@ -11,6 +11,7 @@ type WorkbenchEngine = DeckEngine & {
         manifest: any;
         path: string;
     };
+    absorbPptx?(options: any): Promise<any>;
 };
 type Options = {
     catalogPath?: string;
@@ -31,7 +32,11 @@ export declare class PptWorkbench {
     private project;
     private view;
     private revision;
+    private themeId;
+    private brandPatch;
+    private itemsPatch;
     private patch;
+    private pptxBytes;
     action(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
     fetchDownload(request: Request): Promise<Response>;
     fetch(request: Request): Promise<Response>;

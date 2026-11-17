@@ -2,6 +2,35 @@ import type { PptConfig } from './types.js'
 
 export const PPT_OUTPUT_DIR_ENV = 'DSH_PPT_OUTPUT_DIR'
 export const DEFAULT_MAX_SLIDES = 60
+export const ALLOWED_THEME_IDS = [
+  'swiss',
+  'velvet',
+  'data',
+  'soft',
+  'bold',
+  'consulting',
+  'cobalt-cream',
+  'exec-jilan',
+  'exec-palace',
+  'academic',
+  'editorial-forest',
+  'cartesian',
+  'course-sage',
+  'linear-dark',
+  'keynote-light',
+  'financial-ft',
+  'medical-clean',
+  'luxury-noir',
+] as const
+
+export const ALLOWED_CHROME_STYLES = [
+  'consulting-classic',
+  'keynote-spatial',
+  'editorial-folio',
+  'saas-bento',
+  'academic-minimal',
+  'gov-ceremonial',
+] as const
 
 export interface ResolvedPptConfig {
   outputDir: string
@@ -29,8 +58,8 @@ export function resolvePptConfig(config: PptConfig | undefined | null): Resolved
     || (process.env[PPT_OUTPUT_DIR_ENV] ?? '').trim()
   const defaultTheme = (typeof raw.defaultTheme === 'string' ? raw.defaultTheme : '').trim()
   const defaultLang = (typeof raw.defaultLang === 'string' ? raw.defaultLang : '').trim()
-  if (defaultTheme !== '' && !['swiss', 'velvet', 'data', 'soft', 'bold'].includes(defaultTheme)) {
-    throw new Error('defaultTheme 只支持 swiss / velvet / data / soft / bold。')
+  if (defaultTheme !== '' && defaultTheme !== 'auto' && !(ALLOWED_THEME_IDS as readonly string[]).includes(defaultTheme)) {
+    throw new Error('defaultTheme 只支持 auto 或内置主题（' + ALLOWED_THEME_IDS.join(' / ') + '）。')
   }
   if (defaultLang !== '' && defaultLang !== 'zh' && defaultLang !== 'en' && defaultLang !== 'bilingual') {
     throw new Error('defaultLang 只支持 zh / en / bilingual。')

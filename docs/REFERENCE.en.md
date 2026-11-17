@@ -6,7 +6,7 @@
 
 ![dsh-ppt whale girl plugin cover](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/cover-whale-girl.png)
 
-Turn source material into a finished HTML slideshow, editable PPTX and reusable project bundle. Edit in DSH, trace numeric sources and explore live scenarios; AI review, rehearsal and visual repair are optional, so you can download the finished deck directly.
+Turn source material into a publication-grade HTML slideshow, 100% native editable PPTX and reusable project bundle. Scenario Auto-Director automatically pairs your content with curated daylight/dark themes and varied slide archetypes — or use DSH's Style Studio to switch themes in one click, absorb a corporate `.pptx` template, edit structured cards and academic 3-line tables, trace numeric lineage, and run live what-if scenarios. AI review, rehearsal and visual repair remain optional so you can download finished files directly.
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
@@ -18,18 +18,14 @@ Open the workbench from the native DSH sidebar. See the [workbench guide](WORKBE
 
 ## What it does
 
-- Search projects and sort by update time or natural title; keep filters when returning to the library.
-Optional **visual review and repair** inspects images rendered from the actual PPTX, highlights problem regions, creates a formatting-only copy and renders it again for rechecking. The original stays intact. See [visual review](VISUAL.md#english).
-
-Optional **AI review** and **rehearsal** reuse models configured in DSH. Both are off by default: download the finished presentation directly, or explicitly start a bounded rehearsal. Compare proposed wording edits, save selected changes and backup Q&A slides to an undoable copy, and export Q&A with an evidence checklist. See [the rehearsal guide](COACHING.md#english). AI suggestions are not fact checks.
-
-- Create branded decks with text, images, tables and native charts.
-- Optionally trace numbers to material, CSV cells or formulas; adjust assumptions, preview affected slides, and save an undoable copy. HTML stays interactive; PPTX includes confirmed static values with formulas and assumptions. See the [data guide](DATA.md#english).
-- Edit text and images in Settings, reorder, duplicate or delete slides, and undo changes.
-- Check quality and optionally render the final PPTX as images or PDF.
-- Download Markdown speaker notes with each slide's current title and notes.
-- Choose a share bundle (PPTX, offline HTML and current speaker notes) or a project bundle (including the editable JSON). Share bundles retain bound source excerpts and authored content. See [download details](WORKBENCH.md#下载与分享--download-and-share).
-- Keyboard support: Ctrl/⌘+S save, Esc cancel or go back, Alt+←/→ switch slides; leaving with unsaved edits prompts first.
+- **Zero-taste-burden Auto-Director, 18 Master Themes & 6 Chrome Skeletons**: Ships 12 projector-safe daylight themes (`consulting`, `cobalt-cream`, `exec-jilan`, `exec-palace`, `academic`, `editorial-forest`, `cartesian`, `course-sage`, `soft`, `keynote-light`, `financial-ft`, `medical-clean`) and 6 stage dark themes (`linear-dark`, `swiss`, `velvet`, `data`, `bold`, `luxury-noir`), paired with **6 Master Chrome Skeletons** (`consulting-classic`, `keynote-spatial`, `editorial-folio`, `saas-bento`, `academic-minimal`, `gov-ceremonial`) and **16 industry scenario blueprints**. When `theme` is omitted in `ppt_create`, `auto` routes content to the best-fit persona theme and chrome.
+- **Deep Reference `.pptx` Skeleton Absorption**: Inspect or adopt external corporate `.pptx` templates via `ppt_absorb`, `referencePptx` (including `cloneStructure: true`), or drag-and-drop in **Style Studio** — resolving OOXML color modifiers, CJK/Latin fonts, master logos, skeleton geometry (`extractedSkeleton`, `recommendedChrome`), and slide-by-slide layout sequences (`slideSkeleton[]`) through `sanitizeAbsorbedTheme()` (enforcing WCAG ≥4.5:1 contrast).
+- **24 Native Editable Layouts/Diagrams & 13 Pro Chart Kinds**: Build Bento/pillar `cards`, hero `kpi` grids, `comparison`, `matrix` (2×2), `process` (steps / timeline / layers / funnel / flywheel), `callout`, `gantt` roadmaps, `architecture` layered diagrams, `harvey`-ball competitor matrices, `tam` concentric circles, `org`/team charts, `table` (`consulting | booktabs | minimal | banded | harvey`), `chart-split`, and 13 Economist/FT chart variants (including native vector `waterfall` bridges, `doughnut`, `combo`, direct value labels, and focal `highlight` bars).
+- **Rich Workbench & Style Studio**: Search and filter projects with theme/page metadata; switch slide archetypes and per-slide chrome skeletons in one click, edit Gantt timelines, Harvey matrices, structured `items`, and tables, add/duplicate/reorder slides, compare HTML ↔ rendered PPTX side-by-side, jump directly from quality findings to slides, and undo up to 20 revisions.
+- **Traceable Data & What-If Scenarios**: Bind `{{metricId}}` across titles, bullets, `items` (including `gantt`, `tam`, `architecture`, `org`), `harvey`/table `rows`, `takeaway`, `source`, and charts; adjust declared assumptions live in HTML and save confirmed snapshots to PPTX. See [the data guide](DATA.md#english).
+- **Optional 24-Slide Two-Tier Vision QA**: Inspect rendered PPTX images for both layout bugs and aesthetic hierarchy, apply 12 lossless formatting actions on a copy, and compare full-width before/after renders on the canvas. See [visual review](VISUAL.md#english).
+- **Optional Executive Storyline Review & Rehearsal**: Critique Action Titles, SCQA narrative flow, and missing evidence (up to 8 findings across 7 audience personas) or practice live Q&A. See [the rehearsal guide](COACHING.md#english).
+- **Share & Project Bundles**: Export a share ZIP (PPTX, offline HTML, Markdown speaker notes) or full project ZIP (including editable JSON), plus keyboard shortcuts (`Ctrl/⌘+S`, `Esc`, `Alt+←/→`). See [download details](WORKBENCH.md#下载与分享--download-and-share).
 
 ## Install
 
@@ -43,23 +39,25 @@ For the web version, replace `desktop` with `web`. Restart DSH after installatio
 
 ## Start using it
 
-1. Provide material, purpose, audience and slide count in the target workspace; request HTML, PPTX and project files.
+1. Provide material, purpose, audience, or a reference `.pptx` in the target workspace; request HTML, PPTX and project files.
 2. Open Presentations in the sidebar and search for or select the generated project.
-3. Edit slide text, images or order, save and inspect the preview; render the current PPTX when you need to inspect its actual output.
-4. Explicitly start optional AI review, rehearsal or visual repair when needed; direct download does not require them.
+3. Edit 24 slide archetypes, per-slide chrome skeletons, Gantt timelines, Harvey matrices, structured cards/tables, images or order in **Edit content**, or switch across 18 themes & 6 master skeletons and absorb a `.pptx` in **Style Studio**; render the current PPTX for side-by-side inspection when needed.
+4. Explicitly start optional AI storyline review, rehearsal or 24-slide visual repair when needed; direct download does not require them.
 5. Deliver the share bundle or retain editability with the project bundle; check the result in the target browser or Office application.
 
 Office changes do not sync back to JSON. Externally changed outputs and legacy projects without integrity records cannot be overwritten. Use **Save a copy** or `ppt_edit(saveAs:true)` to rebuild a new trio from JSON while preserving the originals. The copy does not import Office edits.
 
 ## Requirements and configuration
 
-Normal generation does not require Office. Final PPTX rendering uses the optional official LibreOffice Kit; see the guide for dependencies, fonts and installation.
-
-Detailed configuration, tool arguments and troubleshooting are in the [usage guide](USAGE.en.md). For standalone development, follow the Node requirement in [package.json](../package.json).
+Normal generation and `.pptx` style extraction do not require Office or LibreOffice. Final PPTX page PNG/PDF rendering uses the optional official LibreOffice Kit; see the [usage guide](USAGE.en.md) for dependencies, cross-platform CJK/Latin font safety, and installation. For standalone development, follow the Node requirement in [package.json](../package.json).
 
 ## Documentation
 
 - [Usage and troubleshooting](USAGE.en.md)
+- [Workbench & Style Studio](WORKBENCH.md)
+- [Visual review and repair](VISUAL.md#english)
+- [AI storyline review & rehearsal](COACHING.md#english)
+- [Data lineage & what-if](DATA.md#english)
 - [Changelog](../CHANGELOG.md)
 - [Validation scope and history](VALIDATION.md)
 - [Report a problem or suggest a feature](https://github.com/STARDUSTLC666/dsh-ppt/issues)

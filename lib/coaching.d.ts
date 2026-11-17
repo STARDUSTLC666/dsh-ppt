@@ -4,7 +4,7 @@ export type CoachingContext = {
     manifest: any;
     dataNotes?: Record<string, string>;
 };
-type Kind = 'expression' | 'logic' | 'evidence';
+type Kind = 'expression' | 'storyline' | 'logic' | 'evidence';
 type Finding = {
     id: string;
     slideId: string;

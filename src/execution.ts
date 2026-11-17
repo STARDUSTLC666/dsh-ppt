@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { ResolvedPptConfig } from './config.js'
-import type { DeckEngine, PptCreateArgs, PptThemesResult } from './types.js'
+import type { DeckEngine, PptAbsorbResult, PptCreateArgs, PptThemesResult } from './types.js'
 
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
@@ -63,7 +63,11 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         title: args.title.trim(),
         content: typeof args.content === 'string' ? args.content : '',
         slides: hasSlides ? args.slides : undefined,
-        theme: typeof args.theme === 'string' && args.theme.trim() !== '' ? args.theme.trim() : (config.defaultTheme || undefined),
+        theme: typeof args.theme === 'string' && args.theme.trim() !== '' ? args.theme.trim() : (config.defaultTheme || (typeof engine.absorbPptx === 'function' ? 'auto' : undefined)),
+        persona: typeof args.persona === 'string' && args.persona.trim() !== '' ? args.persona.trim() : undefined,
+        referencePptx: typeof args.referencePptx === 'string' && args.referencePptx.trim() !== '' ? args.referencePptx.trim() : undefined,
+        cloneStructure: typeof args.cloneStructure === 'boolean' ? args.cloneStructure : undefined,
+        smartLayout: typeof args.smartLayout === 'boolean' ? args.smartLayout : undefined,
         lang: typeof args.lang === 'string' && args.lang.trim() !== '' ? args.lang.trim() : (config.defaultLang || undefined),
         motion: args.motion,
         outputDir: resolve(cwd, outputDir || '.'),
@@ -73,6 +77,22 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         template: args.template,
         brand: args.brand,
         dataModel: args.dataModel,
+        cwd,
+        signal: exec?.signal,
+      })
+    },
+    async absorb(rawArgs: unknown, exec?: PptExecution): Promise<PptAbsorbResult> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs)
+      if (typeof args.pptxPath !== 'string' || args.pptxPath.trim() === '') {
+        throw new Error('dsh-ppt：pptxPath 不能为空')
+      }
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      const cwd = exec?.agent?.session.header.cwd ?? process.cwd()
+      return engine.absorbPptx({
+        pptxPath: args.pptxPath.trim(),
+        extractLogo: args.extractLogo !== false,
         cwd,
         signal: exec?.signal,
       })

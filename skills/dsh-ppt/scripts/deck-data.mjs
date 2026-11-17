@@ -13,7 +13,8 @@ const clone = value => structuredClone(value)
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const fail = (zh, en) => { throw new Error('dsh-ppt：' + zh + ' / ' + en) }
 const token = /\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g
-const fields = ['title','subtitle','kicker','text','bullets','rows','notes','chart']
+const fields = ['title','subtitle','kicker','text','takeaway','source','bullets','items','columns','rows','notes','chart']
+const itemAliases = ['cards','metrics','steps','columns','quadrants']
 const numericPattern = /[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?[%％]?/g
 export const dataFingerprint = model => digest({ sources: model.sources, metrics: model.metrics.map(({ ast, dependencies, evidence, ...m }) => m) })
 
@@ -119,19 +120,48 @@ function chartTemplate(chart) {
   if (!chart || !chart.rows) return clone(chart)
   return { ...chart, rows:undefined,categories:chart.rows.slice(1).map(r=>r[0]),series:chart.rows[0].slice(1).map((name,c)=>({name,values:chart.rows.slice(1).map(r=>r[c+1])})) }
 }
+function resolveItem(item, model) {
+  if (typeof item === 'string') return substituteData(item, model)
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item
+  const copy = clone(item)
+  for (const key of ['tag','badge','step','phase','title','label','heading','name','text','body','description','detail','unit','delta','change']) {
+    if (typeof copy[key] === 'string') copy[key] = substituteData(copy[key], model)
+  }
+  if (typeof copy.value === 'string') copy.value = substituteData(copy.value, model)
+  if (Array.isArray(copy.bullets)) copy.bullets = copy.bullets.map(v => typeof v === 'string' ? substituteData(v, model) : v)
+  if (Array.isArray(copy.items)) copy.items = copy.items.map(v => resolveItem(v, model))
+  return copy
+}
+function liftItemAliases(slide) {
+  const copy = { ...slide }
+  const preserveStringColumns = copy.layout === 'gantt' || (Array.isArray(copy.columns) && copy.columns.every(c => typeof c === 'string'))
+  if (!copy.items) {
+    for (const alias of itemAliases) {
+      if (alias === 'columns' && preserveStringColumns) continue
+      if (Array.isArray(copy[alias])) { copy.items = copy[alias]; break }
+    }
+  }
+  for (const alias of itemAliases) {
+    if (alias === 'columns' && preserveStringColumns) continue
+    delete copy[alias]
+  }
+  return copy
+}
 export function resolveTemplate(template, model) {
-  const next=clone(template)
-  for (const key of ['title','subtitle','kicker','text','notes']) if(typeof next[key]==='string')next[key]=substituteData(next[key],model)
+  const next=liftItemAliases(clone(template))
+  for (const key of ['title','subtitle','kicker','text','takeaway','source','notes']) if(typeof next[key]==='string')next[key]=substituteData(next[key],model)
   if(Array.isArray(next.bullets))next.bullets=next.bullets.map(v=>substituteData(v,model))
+  if(Array.isArray(next.items))next.items=next.items.map(v=>resolveItem(v,model))
+  if(Array.isArray(next.columns))next.columns=next.columns.map(v=>typeof v==='string'?substituteData(v,model):v)
   if(Array.isArray(next.rows))next.rows=next.rows.map(row=>row.map(v=>substituteData(v,model)))
-  if(next.chart){next.chart=chartTemplate(next.chart);next.chart.categories=next.chart.categories?.map(v=>substituteData(v,model));next.chart.series=next.chart.series?.map(s=>({...s,name:substituteData(s.name,model),values:s.values.map(v=>substituteData(v,model,true))}));for(const k of ['unit','caption'])if(next.chart[k])next.chart[k]=substituteData(next.chart[k],model)}
+  if(next.chart){next.chart=chartTemplate(next.chart);next.chart.categories=next.chart.categories?.map(v=>substituteData(v,model));next.chart.series=next.chart.series?.map(s=>({...s,name:substituteData(s.name,model),values:s.values.map(v=>substituteData(v,model,true))}));for(const k of ['unit','caption','source'])if(next.chart[k])next.chart[k]=substituteData(next.chart[k],model)}
   return next
 }
 function hasBinding(value){return typeof value==='string'?/\{\{[A-Za-z][A-Za-z0-9]*\}\}/.test(value):Array.isArray(value)?value.some(hasBinding):value&&typeof value==='object'?Object.values(value).some(hasBinding):false}
 export function prepareDataSlides(rawSlides, model, normalize, language='zh') {
   return rawSlides.flatMap(raw=>{
     if(raw.dataTemplate && (typeof raw.dataTemplate!=='object'||Array.isArray(raw.dataTemplate)||Object.keys(raw.dataTemplate).some(key=>!fields.includes(key))))fail('数据模板只允许文本、表格和图表字段','Data templates only support text, table and chart fields')
-    const original={...raw,...raw.dataTemplate};delete original.dataTemplate
+    const original=liftItemAliases({...raw,...raw.dataTemplate});delete original.dataTemplate
     if(original.chart)original.chart=chartTemplate(original.chart)
     const resolved=resolveTemplate(original,model), actual=normalize([resolved],120,language)
     // Normalize text/table templates using the same pagination as real output.

@@ -1,6 +1,6 @@
-import type { ResolvedPptConfig } from './config.js'
+import { ALLOWED_CHROME_STYLES, ALLOWED_THEME_IDS, type ResolvedPptConfig } from './config.js'
 import { createPptExecutors, type PptExecution } from './execution.js'
-import type { PptCreateResult, PptThemesResult, PptQualityResult, PptCheckResult, PptRenderResult } from './types.js'
+import type { PptAbsorbResult, PptCreateResult, PptThemesResult, PptQualityResult, PptCheckResult, PptRenderResult } from './types.js'
 
 export interface ToolDefinition {
   name: string
@@ -122,12 +122,26 @@ function oneText(text: string): TextBlock[] {
 function renderThemes(value: PptThemesResult): TextBlock[] {
   if (value.themes.length === 0) return oneText('dsh-ppt 没有可用主题。')
   const lines = value.themes.map((theme) =>
-    '- ' + theme.id + '：' + theme.name + '（' + theme.mood + '）｜适合：' + theme.bestFor + '｜' + (theme.dark ? '深色' : '浅色'))
-  const summary = 'dsh-ppt 内置主题：\n\n' + lines.join('\n') + '\n\nppt_create 的 theme 参数填其中的 id（默认 data）。'
+    '- ' + theme.id + '：' + theme.name + '（' + theme.mood + '）｜适合：' + theme.bestFor +
+    (theme.chromeStyle ? '｜骨架：' + theme.chromeStyle : '') + '｜' + (theme.dark ? '深色' : '浅色'))
+  const summary = 'dsh-ppt 内置主题（共 ' + value.themes.length + ' 套，配 6 套差异化母版骨架）：\n\n' + lines.join('\n') + '\n\nppt_create 的 theme 参数可填其中的 id，或省略 / 填 auto 由智能导演按场景自动匹配（通用默认 consulting）。'
   if (value.preview) {
     return oneText(summary + '\n\n主题预览已写入：' + value.preview.htmlPath + '\nSVG 色板卡：' + value.preview.svgs.map((svg) => svg.path).join(' / '))
   }
   return oneText(summary + '\n\n想要并排对比：ppt_themes { preview: true, outputDir: "..." } 会生成 themes-preview.html 和每套主题的 SVG 色板卡。')
+}
+
+function renderAbsorb(value: PptAbsorbResult): TextBlock[] {
+  const brand = value.sanitizedBrand ?? {}
+  const parts = [
+    'dsh-ppt 已解析参考演示文稿' + (value.pptxPath ? '：' + value.pptxPath : '') + '（共 ' + value.slideCount + ' 页）',
+    '推荐内置主题：' + value.recommendedTheme + (value.recommendedChrome ? ' ｜ 推荐母版骨架：' + value.recommendedChrome : ''),
+    '净化后品牌色板：主色 ' + (brand.primaryColor || '—') + ' ｜ 背景 ' + (brand.backgroundColor || '—') + ' ｜ 文字 ' + (brand.textColor || '—') +
+      (brand.fontFamily ? ' ｜ 字体 ' + brand.fontFamily : '') + (brand.chromeStyle ? ' ｜ 骨架 ' + brand.chromeStyle : '') + (brand.logo ? ' ｜ 已提取母版 Logo' : ''),
+    ...(value.slideSkeleton?.length ? ['提取页面骨架：' + value.slideSkeleton.slice(0, 8).map(s => `P${s.slideNumber}:${s.inferredLayout}`).join(' → ') + (value.slideSkeleton.length > 8 ? ' …' : '')] : []),
+    '可直接调用 ppt_create { title: "...", content: "...", referencePptx: ' + JSON.stringify(value.pptxPath || '<参考文件.pptx>') + ', cloneStructure: true } 自动套用净化后的色板、母版骨架与版式序列。',
+  ]
+  return oneText(parts.join('\n'))
 }
 
 function renderCreate(value: PptCreateResult): TextBlock[] {
@@ -164,27 +178,120 @@ function renderPreview(value: PptRenderResult): TextBlock[] {
     '\n请查看实际画面，确认文字、图片和图表后再交付。原可编辑 PPTX 保留。')
 }
 
-const imageSchema = { type: ['object', 'string', 'null'], properties: {
+const imageObjectProperties = {
   src: { type: 'string', description: 'Local PNG/JPEG path relative to the session cwd, or image data URI. Embedded into all output files.' },
   alt: { type: 'string' }, fit: { type: 'string', enum: ['contain', 'cover'] }, caption: { type: 'string' },
-}, additionalProperties: false }
+}
+const imageSchema = { type: ['object', 'string', 'null'], properties: imageObjectProperties, additionalProperties: false }
+const chartKinds = [
+  'column', 'bar', 'stacked-column', 'stacked-bar', 'percent-column', 'percent-bar',
+  'line', 'area', 'pie', 'doughnut', 'scatter', 'combo', 'waterfall',
+] as const
 const chartSchema = { type: ['object', 'null'], properties: {
-  kind: { type: 'string', enum: ['column', 'bar', 'line', 'pie'] },
+  kind: { type: 'string', enum: chartKinds },
   categories: { type: 'array', items: { type: ['string', 'number'] } },
-  series: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, values: { type: 'array', items: { type: ['number', 'string'] } } }, required: ['name', 'values'], additionalProperties: false } },
+  series: { type: 'array', items: { type: 'object', properties: {
+    name: { type: 'string' },
+    values: { type: 'array', items: { type: ['number', 'string'] } },
+    chartKind: { type: 'string', enum: ['column', 'line', 'area'] },
+    secondaryAxis: { type: 'boolean' },
+  }, required: ['name', 'values'], additionalProperties: false } },
   rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number'] } }, description: 'Alternative: header row [category, series names], then category/value rows.' },
-  unit: { type: 'string' }, caption: { type: 'string' },
+  unit: { type: 'string' }, caption: { type: 'string' }, source: { type: 'string' },
+  highlight: {
+    description: 'Focal bar/point highlight: 0-based category index, array of indices, or "max" | "last" | "none".',
+    oneOf: [
+      { type: 'integer' },
+      { type: 'array', items: { type: 'integer' } },
+      { type: 'string', enum: ['max', 'last', 'none'] },
+    ],
+  },
+  showValues: { type: 'boolean' },
+  totalIndices: { type: 'array', items: { type: 'integer' }, description: '0-based category indices treated as totals in waterfall charts.' },
 }, additionalProperties: false }
 const brandProperties = {
   name: { type: 'string' }, primaryColor: { type: 'string' }, backgroundColor: { type: 'string' }, textColor: { type: 'string' },
   fontFamily: { type: 'string', description: 'One installed font family; choose a font available on the recipient computer.' },
-  logo: { type: ['string', 'null'], description: 'Local PNG/JPEG logo path; null clears logo during edit.' }, footer: { type: 'string' },
+  logo: { type: ['string', 'null'], description: 'Local PNG/JPEG logo path or data URI; null clears logo during edit.' }, footer: { type: 'string' },
+  chromeStyle: {
+    description: 'Master chrome skeleton override: ' + ALLOWED_CHROME_STYLES.join(' | ') + ' (or null to clear during edit).',
+    oneOf: [
+      { type: 'string', enum: ALLOWED_CHROME_STYLES },
+      { type: 'null' },
+    ],
+  },
 }
+const slideItemSchema = {
+  type: 'object',
+  properties: {
+    tag: { type: 'string' }, badge: { type: 'string' },
+    title: { type: 'string' },
+    text: { type: 'string' }, body: { type: 'string' },
+    bullets: { type: 'array', items: { type: 'string' } },
+    value: { type: ['string', 'number'] },
+    unit: { type: 'string' },
+    delta: { type: 'string' },
+    start: { type: 'number', description: '0-based start column/slot index for gantt bars.' },
+    span: { type: 'number', description: 'Column span width (>=0; 0 or milestone:true renders a diamond milestone) for gantt bars.' },
+    milestone: { type: 'boolean' },
+    role: { type: 'string', description: 'Role/title badge for org/team cards.' },
+    conversion: { type: 'string', description: 'Stage conversion rate badge for funnel/flywheel process steps.' },
+    status: { type: 'string', enum: ['positive', 'negative', 'warning', 'neutral', 'accent'] },
+    tone: { type: 'string', enum: ['positive', 'negative', 'warning', 'neutral', 'accent'] },
+  },
+  additionalProperties: false,
+}
+const slideLayouts = [
+  'cover', 'agenda', 'section', 'bullets', 'statement', 'quote',
+  'kpi', 'cards', 'comparison', 'matrix', 'process', 'callout',
+  'gantt', 'architecture', 'harvey', 'tam', 'org',
+  'table', 'closing', 'image', 'image-left', 'image-right',
+  'chart', 'chart-split', 'gallery', 'waterfall', 'flywheel',
+  'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel',
+  'issue-action', 'before-after', 'matrix-2x2', 'kpi-grid', 'scorecard',
+  'formula-callout', 'takeaways', 'gallery-grid', 'ablation-compare', 'roadmap', 'swimlane', 'team',
+] as const
+const templateIds = [
+  'weekly', 'defense', 'project', 'pitch',
+  'consulting', 'keynote', 'gov-report', 'workshop',
+  'architecture-review', 'financial-earnings', 'medical-case', 'postmortem',
+  'marketing-campaign', 'promotion-review', 'legal-compliance', 'creative-lookbook',
+] as const
+const tableStyles = ['consulting', 'booktabs', 'minimal', 'banded', 'harvey'] as const
 const slideProperties = {
-  layout: { type: 'string', enum: ['cover', 'section', 'bullets', 'statement', 'quote', 'table', 'closing', 'image', 'image-left', 'image-right', 'chart'] },
-  title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' }, text: { type: 'string' }, notes: { type: 'string' },
-  bullets: { type: 'array', items: { type: 'string' } }, rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number'] } } },
-  image: imageSchema, chart: chartSchema,
+  layout: { type: 'string', enum: slideLayouts },
+  variant: { type: 'string', description: 'Layout sub-variant, e.g. pillars|bento|exec-summary (cards), versus|before-after|do-dont|issue-action (comparison), steps|timeline|layers|funnel|flywheel (process), quarters|months|weeks|swimlane (gantt), layered|platform (architecture), concentric (tam), tree|team (org), grid|hero-left|banner (kpi), framed|split-bleed (image-left/right), chart-left|chart-right (chart-split).' },
+  chrome: { type: 'string', enum: ALLOWED_CHROME_STYLES, description: 'Optional per-slide master chrome skeleton override.' },
+  title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' },
+  takeaway: { type: 'string', description: 'Bottom key-takeaway synthesis banner.' },
+  source: { type: 'string', description: 'Bottom-left data/citation source line.' },
+  text: { type: 'string' }, notes: { type: 'string' },
+  start: { type: 'number' }, span: { type: 'number' },
+  activeIndex: { type: 'integer' },
+  tableStyle: { type: 'string', enum: tableStyles },
+  bullets: { type: 'array', items: { type: 'string' } },
+  items: { type: 'array', items: slideItemSchema, description: 'Structured sub-elements for kpi, cards, comparison, matrix, process, callout, gantt, architecture, tam, org, or chart-split.' },
+  cards: { type: 'array', items: slideItemSchema },
+  metrics: { type: 'array', items: slideItemSchema },
+  columns: { type: 'array', items: { oneOf: [{ type: 'string' }, slideItemSchema] }, description: 'Time-header labels (string[]) for gantt slides, or column items (object[]) as an items alias.' },
+  steps: { type: 'array', items: slideItemSchema },
+  quadrants: { type: 'array', items: slideItemSchema },
+  rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number'] } } },
+  image: imageSchema,
+  images: { type: 'array', items: { oneOf: [{ type: 'object', properties: imageObjectProperties, additionalProperties: false }, { type: 'string' }] } },
+  chart: chartSchema,
+  visual: {
+    type: 'object',
+    properties: {
+      titleSize: { type: 'integer' },
+      bodySize: { type: 'integer' },
+      chartLabelSize: { type: 'integer' },
+      density: { type: 'string', enum: ['compact', 'balanced', 'airy'] },
+      tableStyle: { type: 'string', enum: tableStyles },
+      chrome: { type: 'string', enum: ALLOWED_CHROME_STYLES },
+    },
+    additionalProperties: false,
+  },
 }
 const projectParameters = {
   deckPath: { type: 'string', required: true, description: 'Path to a dsh-ppt .json project, relative to this session cwd or absolute. Arbitrary external PPTX editing is not supported.' },
@@ -211,7 +318,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
   return [
     {
       name: 'ppt_themes',
-      description: 'List the built-in visual themes of dsh-ppt (id, name, mood, best-for, light/dark palette) before building a deck. Pass preview: true with outputDir to also write a self-contained theme gallery HTML plus one SVG palette card per theme (ready for README/npm screenshots). Use a theme id as the theme argument of ppt_create. 中文：列出 dsh-ppt 内置视觉主题（id、名称、情绪、适用场景、明暗色板）；传 preview: true + outputDir 会额外生成主题对比页和每套主题的 SVG 色板卡（可直接放 README/npm 首屏），用于选择 ppt_create 的 theme 参数。',
+      description: 'List the 18 built-in visual themes of dsh-ppt (paired with 6 distinct master chrome skeletons: id, name, mood, best-for, chromeStyle, palette) before building a deck. Pass preview: true with outputDir to also write a self-contained theme gallery HTML plus one SVG palette card per theme. Use a theme id (or "auto") as the theme argument of ppt_create. 中文：列出 dsh-ppt 内置 18 套视觉主题与 6 套差异化母版骨架；传 preview: true + outputDir 会额外生成主题对比页和每套主题的 SVG 色板卡。',
       parameters: compileParameters({
         lang: { type: 'string', description: 'Theme description language: zh (default), en, or bilingual.' },
         preview: { type: 'boolean', description: 'Write a theme gallery HTML and one SVG palette card per theme into outputDir. Default false (list only).' },
@@ -225,18 +332,35 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
       execute: executors.themes,
     },
     {
+      name: 'ppt_absorb',
+      description: 'Inspect a local reference .pptx file (read-only, offline via @office-kit/pptx) to absorb its theme palette (including lumMod/tint/shade modifiers), Latin/East-Asian fonts, master logo, chrome skeleton geometry (extractedSkeleton, recommendedChrome), and per-slide layout sequence (slideSkeleton[]), returning WCAG-sanitized brand & semantic tokens for ppt_create. 中文：只读深度解析本地参考 .pptx 母版骨架、修饰色值、字体、Logo 与逐页版式序列，自动执行 WCAG 净化后供 ppt_create (referencePptx / cloneStructure) 或 ppt_edit 直接吸收复用。',
+      parameters: compileParameters({
+        pptxPath: { type: 'string', required: true, description: 'Local reference .pptx path, relative to session cwd or absolute. Read-only.' },
+        extractLogo: { type: 'boolean', description: 'Extract embedded master/cover logo as a PNG/JPEG data URI into sanitizedBrand.logo when present (default true).' },
+      }),
+      output: {
+        schema: { type: 'object', additionalProperties: true },
+        render: (_args: unknown, value: unknown) => renderAbsorb(value as PptAbsorbResult),
+      },
+      execute: executors.absorb,
+    },
+    {
       name: 'ppt_create',
-      description: 'Generate a standalone HTML slideshow, editable 16:9 PPTX and JSON project from prepared Markdown or structured slides. Organize actual facts and content before calling; this deterministic generator does not invent missing facts or research them. Supports five themes, local images, native editable charts and shared branding. Check and visually review artifacts before delivery; template-only output is an unfilled draft. 中文：先组织事实与内容，再生成可直接放映和继续编辑的三件套；支持图片、原生图表与品牌，交付前检查成品。',
+      description: 'Generate a standalone HTML slideshow, editable 16:9 PPTX and JSON project from prepared Markdown or structured slides. Supports 18 themes, 6 distinct master chrome skeletons, Scenario Auto-Director (theme: "auto"), 24 native editable layouts & pro diagrams (KPI, Bento/pillar cards, comparison, 2x2 matrix, process/timeline/flywheel, gantt roadmaps, layered architecture, Harvey-ball matrices, concentric TAM/SAM/SOM, org/team charts, academic booktabs 3-line tables, chart-split, waterfall bridges), deep reference .pptx skeleton absorption (cloneStructure), and shared branding. 中文：先组织事实与内容，再生成可直接放映和继续编辑的三件套；内置 18 套主题、6 套差异化母版骨架、24 种原生可编辑版式与专业图示、16 套行业蓝图、13 类出版级图表与外部 PPTX 深度骨架吸收。',
       parameters: compileParameters({
         title: { type: 'string', required: true, description: 'Deck title (used for the cover and file names).' },
-        content: { type: 'string', description: 'Markdown content: one sentence, a paragraph, or a full document. First # heading becomes the cover title; ## headings become slides; -/* lists become bullets; | ... | tables paginate with repeated headers (8 data rows/page, up to 8 columns and 60 characters/cell); > blockquotes become quote slides; <!-- 备注: ... --> comments become speaker notes. Required unless slides is provided.' },
-        theme: { type: 'string', description: 'Visual theme id: swiss / velvet / data / soft / bold. Default data. See ppt_themes.' },
+        content: { type: 'string', description: 'Markdown content: # cover title, ## slides, -/* bullets (supports **bold** lead-ins), | ... | tables, > quotes, > [!TAKEAWAY] bottom summary bar, ::: kpi|cards|comparison|process|matrix|callout|gantt|architecture|harvey|tam|org blocks, and <!-- 备注: ... --> speaker notes. Required unless slides or template is provided.' },
+        theme: { type: 'string', description: 'Visual theme id: auto (default: Scenario Auto-Director picks optimal theme & chrome) or ' + ALLOWED_THEME_IDS.join(' / ') + '. See ppt_themes.' },
+        persona: { type: 'string', enum: ['auto', 'consulting', 'tech-pitch', 'academic', 'gov-exec', 'education', 'editorial'], description: 'Optional scenario/audience persona for Auto-Art-Direction, layout rhythm promotion, and table/chart styling. Default auto.' },
+        referencePptx: { type: 'string', description: 'Optional local reference .pptx path; absorbs its sanitized palette, CJK/Latin fonts, chrome skeleton, and master logo before applying explicit brand overrides.' },
+        cloneStructure: { type: 'boolean', description: 'When referencePptx is provided, align generated slide archetypes and master chrome skeleton with the absorbed reference slideSkeleton[] where compatible (default false).' },
+        smartLayout: { type: 'boolean', description: 'Enable or disable automatic multi-archetype Markdown layout promotion on >=4-section decks. Default true in async tool mode.' },
         lang: { type: 'string', description: 'UI language of the generated player: zh (default), en, or bilingual. Content language is whatever you write.' },
         motion: { type: 'string', enum: ['on', 'off'], description: 'Slide transitions plus bullet entrance animations: on (default) or off for a fully static deck.' },
-        slides: { type: 'array', items: { type: 'object', properties: slideProperties, additionalProperties: true }, description: 'Structured slides including image/image-left/image-right and chart. Images: {src, alt, fit: contain|cover, caption}. Charts: {kind: column|bar|line|pie, categories, series:[{name,values}]} or rows with header. Tables paginate at 8 data rows. Keep full content editable; use images only for actual photos/screenshots/logos.' },
-        template: { type: 'string', enum: ['weekly', 'defense', 'project', 'pitch'], description: 'Scenario reference from ppt_templates. Provide finished content/slides following its outline. Template alone creates a clearly marked draft with unfilled slots, never a finished presentation.' },
-        brand: { type: 'object', properties: brandProperties, additionalProperties: false, description: 'Shared brand: #RRGGBB primary/background/text colors, fontFamily, logo and footer. Applied to HTML and PPTX.' },
-        dataModel: {type:'object',properties:{schemaVersion:{type:'integer',enum:[1]},sources:{type:'array',items:{type:'object',properties:sourceProperties,required:['id']}},metrics:{type:'array',items:{type:'object',properties:metricProperties,required:['id','kind']}}},additionalProperties:false,description:'Optional explicit lineage and what-if model. Use with structured slides containing {{metricId}} in text/tables or an exact token as chart values. Source facts reference a real cell or text line; assumptions require value/min/max/step. Formulas compute derived metrics. HTML offers live sliders; PPTX includes confirmed static values, formulas and assumptions in speaker notes. Leave absent for ordinary finished decks.'},
+        slides: { type: 'array', items: { type: 'object', properties: slideProperties, additionalProperties: true }, description: 'Structured slides across 24 native layouts & pro diagrams (cover, agenda, section, bullets, kpi, cards, comparison, matrix, process, callout, gantt, architecture, harvey, tam, org, statement, quote, table, chart, chart-split, waterfall, image, image-left, image-right, closing) with items[], columns[], takeaway, source, chrome, tableStyle (consulting|booktabs|minimal|banded|harvey), local images, and 13 chart kinds.' },
+        template: { type: 'string', enum: templateIds, description: 'Industry blueprint from ppt_templates (16 blueprints). Provide finished content/slides following its outline; template alone creates an unfilled draft.' },
+        brand: { type: 'object', properties: brandProperties, additionalProperties: false, description: 'Shared brand: #RRGGBB primary/background/text colors, fontFamily, logo, footer, and chromeStyle (' + ALLOWED_CHROME_STYLES.join('|') + '). Applied to HTML and PPTX.' },
+        dataModel: {type:'object',properties:{schemaVersion:{type:'integer',enum:[1]},sources:{type:'array',items:{type:'object',properties:sourceProperties,required:['id']}},metrics:{type:'array',items:{type:'object',properties:metricProperties,required:['id','kind']}}},additionalProperties:false,description:'Optional explicit lineage and what-if model. Use with structured slides containing {{metricId}} in text/items/takeaway/tables or an exact token as chart values. Source facts reference a real cell or text line; assumptions require value/min/max/step. Formulas compute derived metrics. HTML offers live sliders; PPTX includes confirmed static values, formulas and assumptions in speaker notes. Leave absent for ordinary finished decks.'},
         outputDir: { type: 'string', description: 'Directory to write the files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: sanitized deck title.' },
         overwrite: { type: 'boolean', description: 'Replace an existing same-name HTML/PPTX/JSON trio. Default false: choose a unique numeric suffix instead.' },
@@ -249,20 +373,23 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_templates',
-      description: 'List weekly report, thesis defense, project update and pitch scenario outlines and draft structures. Use as internal content planning references; fill actual facts before delivering a finished deck. 中文：查看周报、答辩、项目汇报和路演的结构参考，组织并填写真实内容后再调用 ppt_create 交付成品。',
+      description: 'List all 16 industry scenario blueprints (weekly, defense, project, pitch, consulting, keynote, gov-report, workshop, architecture-review, financial-earnings, medical-case, postmortem, marketing-campaign, promotion-review, legal-compliance, creative-lookbook) with recommended themes, chrome skeletons, and multi-archetype slide outlines. 中文：查看全部 16 套行业场景蓝图（含推荐主题、母版骨架与专业图示大纲），组织真实内容后再调用 ppt_create 交付成品。',
       parameters: compileParameters({ lang: { type: 'string', description: 'zh / en / bilingual, default zh.' } }),
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => oneText(JSON.stringify(value, null, 2)) },
       execute: executors.templates,
     },
     {
       name: 'ppt_edit',
-      description: 'Modify selected slides in an existing dsh-ppt JSON project, preserving other pages and stable IDs. Each edit uses a 1-based slide number or ID and a patch of changed fields. Regenerates the HTML/PPTX/JSON trio atomically, embeds new images, stores undo history. Use ppt_check first and expectedRevision. 中文：按页码或 ID 修改指定页，其他页不变，支持撤销；可同步调整品牌。',
+      description: 'Modify selected slides, switch visual theme, absorb a reference .pptx brand, or append/reorder/duplicate/remove pages in an existing dsh-ppt JSON project, preserving other pages and stable IDs. Regenerates the HTML/PPTX/JSON trio atomically and stores undo history. Use ppt_check first and expectedRevision. 中文：按页码或 ID 修改指定页、切换整套主题、吸收参考 PPTX 风格或增删重排页面，其他页不变，支持撤销。',
       parameters: compileParameters({ ...projectParameters,
         saveAs: { type: 'boolean', description: 'Save a new uniquely named trio, leaving the originals untouched. Rebuilds from JSON; does not import external Office edits. Required for legacy projects or externally changed outputs.' },
         edits: { type: 'array', items: { type: 'object', properties: { slide: { type: ['integer', 'string'], description: '1-based page number or stable slide ID' }, patch: { type: 'object', properties: slideProperties, additionalProperties: false } }, required: ['slide', 'patch'], additionalProperties: false } },
         order: { type: 'array', items: { type: 'string' }, description: 'Reorder pages using every stable slide ID exactly once. May be used alone or together with edits; one undo restores the previous content and order.' },
         duplicate: { type: 'array', items: { type: ['integer', 'string'] }, description: 'Copy selected existing slides immediately after their originals, including images/charts/notes. References are 1-based page numbers or stable IDs from before this edit. Copies get new IDs; undo restores the previous deck.' },
         remove: { type: 'array', items: { type: ['integer', 'string'] }, description: 'Remove selected slides by their original 1-based page number or stable ID. At least one page must remain. A slide cannot be copied and removed in the same edit.' },
+        append: { type: 'array', items: { type: 'object', properties: slideProperties, additionalProperties: false }, description: 'Append 1–5 new structured slides at the end of the deck in one undoable operation.' },
+        theme: { type: 'string', description: 'Optional built-in theme id (' + ALLOWED_THEME_IDS.join(' / ') + ') to restyle the entire project atomically (undoable).' },
+        referencePptx: { type: 'string', description: 'Optional local reference .pptx path to absorb sanitized palette/fonts/logo and chrome skeleton onto this project (undoable).' },
         brand: { type: ['object', 'null'], properties: brandProperties, additionalProperties: false, description: 'Merge shared branding. null clears all branding. Empty footer clears footer; logo:null clears logo.' },
       }),
       output: { schema: createResultSchema, render: (_args, value) => renderCreate(value as PptCreateResult) },

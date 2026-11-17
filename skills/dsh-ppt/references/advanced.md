@@ -1,41 +1,122 @@
-# 图文、图表、工程编辑与渲染
+# 出版级图表、图文精裱、母版吸收、编辑与视觉核验（高级参考）
 
-Agent 先准备实际内容，再生成可放映 HTML 与可编辑 PPTX。用户无需填写 JSON。以下是工具接口参考。
+Agent 先提炼真实内容与数据结论，再通过结构化参数生成可放映 HTML 与 100% 原生可编辑 PPTX。用户无需手写 JSON。
 
-## 创建
+---
 
-`ppt_templates` 提供 weekly、defense、project、pitch 四种结构参考。`ppt_create` 的 `template` 单独使用时生成待填草稿，返回 `deliveryStatus:draft`；提供完成的 content/slides 才能开始成品验收。
+## 一、16 套高品味行业结构蓝图（`ppt_templates`）
 
-`slides` 新增 image/image-left/image-right/chart 布局。图片示例：`{layout:"image-left",title:"新版流程更短",image:{src:"assets/flow.png",alt:"新版流程截图",fit:"contain"},bullets:["可直接生成","可修改指定页"]}`。PNG/JPEG 本地路径按会话 cwd 解析，亦支持 data URI；每张5MiB/3200万像素、合计32MiB。图片嵌入工程和输出，移动原文件后仍可使用。contain完整显示，cover居中裁切。外链/SVG需先由明确授权的其他工具准备，不自动下载。
+调 `ppt_templates` 可查看 16 套内置叙事与版式骨架（前 8 套兼容经典场景，后 8 套为高频垂直行业蓝图）：
+- **经典 8 套**：`weekly`（周报复盘）、`defense`（学术答辩）、`project`（项目汇报 · 含 `gantt` 排期）、`pitch`（创业路演 · 含 `tam` + `harvey`）、`consulting`（战略咨询）、`keynote`（产品发布）、`gov-report`（政务述职）、`workshop`（培训工坊）
+- **新增 8 套**：`architecture-review`（技术架构评审）、`financial-earnings`（季度财报与业绩会）、`medical-case`（临床病例研讨）、`postmortem`（线上故障复盘）、`marketing-campaign`（品牌营销与增长战役）、`promotion-review`（个人述职与晋升答辩）、`legal-compliance`（法务合规与风控审计）、`creative-lookbook`（高端品牌策展与画册）
 
-图表示例：`{layout:"chart",title:"完成量逐月增加",chart:{kind:"column",categories:["七月","八月","九月"],series:[{name:"完成量",values:[3,5,9]}],unit:"项"}}`。支持 column/bar/line/pie，也可用带表头 rows。长度必须一致，值必须有限；pie仅一个非负系列、正总和。原生PPTX图表包含编辑数据工作簿，HTML有SVG与读屏数据表。
+> 注意：`ppt_create` 仅传 `template` 而不提供实际 `content` / `slides` 时，仅生成带占位的待填草稿（返回 `deliveryStatus: "draft"`）；必须组织好真实业务内容再生成，方能进入成品验收（`ready`）。
 
-共享品牌 `brand:{primaryColor:"#2C9F87",fontFamily:"Microsoft YaHei",logo:"logo.png",footer:"产品团队 · 2026"}`。还可设背景/文字色及name。选择接收方可用字体；字体诊断不自动安装字体。
+---
 
-## 修改与撤销
+## 二、13 类出版级图表与图表洞察分栏（`chart` & `chart-split`）
 
-先 `ppt_check {deckPath:"report.json"}` 取得当前revision和页面ID。修改：`ppt_edit {deckPath:"report.json",expectedRevision:0,edits:[{slide:3,patch:{title:"新标题",bullets:["事实一","行动"]}}]}`。slide为1起始页码或ID，其他页保留；重复指定页拒绝。可单独修改brand；brand:null清空品牌，logo:null清空Logo，空footer清空页脚。
+支持 **13 种 `chart.kind`**：
+1. **柱条对比**：`column`（簇状柱形）、`bar`（横向条形）、`stacked-column`（堆积柱形）、`stacked-bar`（堆积条形）、`percent-column`（百分比堆积柱形）、`percent-bar`（百分比堆积条形）
+2. **趋势面积**：`line`（折线图）、`area`（面积图）
+3. **份额结构**：`doughnut`（**推荐**：62% 内径环形图，中心展示汇总指标）、`pie`（饼图，仅限单一非负系列且正总和）
+4. **相关性与双轴**：`scatter`（散点图）、`combo`（柱线复合双轴图：在 `series[i]` 上指定 `chartKind: 'column' | 'line'` 与 `secondaryAxis: true`）
+5. **咨询瀑布桥**：`waterfall`（财务/增长增减拆解桥：HTML 输出高精 SVG + 读屏数据表，PPTX 输出 **100% 原生可编辑矢量圆角柱 + 虚线连接桥 + 正负号数值标签**，跨 PowerPoint / WPS / LibreOffice 零兼容死角；可通过 `totalIndices: [0, 4]` 指定起止汇总柱）
 
-复制与删除：`ppt_edit {deckPath:"report.json",expectedRevision:0,duplicate:[2],remove:[3]}`。两组引用都按修改前的1起始页码或稳定ID解析；副本紧跟原页，获得新ID，并保留图片、图表和备注。同一页不能同时复制和删除，不能重复指定，最终保留1–120页。可与edits和order合为一次修改，先编辑/排序，再复制/删除；order仍需包含每个原始页面ID各一次。
+### 经济学人 / 麦肯锡图表造型法则（内置默认生效）
+```json
+{
+  "layout": "chart-split",
+  "variant": "chart-left",
+  "kicker": "02 · 渠道增长归因",
+  "title": "Q4 到馆人次较 Q1 翻倍，社区亲子活动贡献核心跃升",
+  "chart": {
+    "kind": "column",
+    "subtitle": "单位：人次 · 2026 年第 1–4 周实测",
+    "categories": ["第 1 周", "第 2 周", "第 3 周", "第 4 周"],
+    "series": [{ "name": "到馆人次", "values": [42, 55, 63, 78] }],
+    "unit": "人次",
+    "highlight": "max",
+    "showValues": true
+  },
+  "items": [
+    { "tag": "核心驱动", "title": "第 4 周峰值达 78 人次", "text": "周末亲子共读专场带动单周环比增长 **+23.8%**" },
+    { "tag": "复购留存", "title": "旧书流转率 68%", "text": "二次到馆家庭占比突破六成" }
+  ],
+  "takeaway": "建议将亲子共读固定为双周常设栏目，支撑下季度场均 85 人次目标。",
+  "source": "数据来源：社区图书馆门禁签到统计（2026.03）"
+}
+```
+- **去冗余图例**：`series.length === 1` 时自动隐藏单系列图例，彻底告别多余色块说明。
+- **一主多灰聚焦（`highlight`）**：支持传索引（如 `3` 或 `[0, 3]`）或 `'max' | 'last'`；焦点柱使用主题 `chartFocal` 高亮色，其余对照柱自动退为柔和 `chartNeutral` 灰阶。
+- **直接数值标签与淡化网格**：≤ 8 个类别默认开启柱顶直接数值标签（`showValues: true`），水平网格线精简至 ≤ 5 条 `0.75pt hairline` 细线。
+- **长标签防歪头**：当类别文字过长（中文 > 6 字 / 英文 > 10 字符）或类别数 > 7 时，自动或优先使用横向 `bar` 条形图，拒绝 45° 斜排字。
 
-编辑会原子更新整套HTML/PPTX/JSON，失败回滚。历史最多20次。`ppt_undo {deckPath:"report.json",expectedRevision:1}` 恢复上次状态，包含页面结构、图片/图表/品牌；revision继续增长，旧修改不可覆盖撤销。仅编辑本插件JSON工程，不导入任意外部PPTX进行修改。表格扩大到需要分页时会要求另建文稿。
+---
 
-## 检查与渲染
+## 三、图文精裱与多图画册（`image` / `image-left` / `image-right`）
 
-`ppt_check` 定位页面问题，包括密度、估计溢出、7–8列表格14pt、图片缺失/损坏/分辨率、图表标签和对比度。6列以内原生表格17pt。静态估算不能保证字体或视觉布局。
+- **本地嵌入与尺寸边界**：PNG / JPEG 本地路径按会话 `cwd` 解析（亦支持 `data:` URI）；单张 ≤ 5 MiB / 3200 万像素，全稿合计 ≤ 32 MiB。图片直接打包进 HTML 与 PPTX，移动原文件后仍可独立放映。外链或 SVG 请先用经授权的工具转为本地 PNG/JPEG，引擎不自动联网下载。
+- **版式变体**：
+  - `image-left` / `image-right`：`variant: 'framed'`（默认圆角细框精裱，正文列自动垂直居中）或 `'split-bleed'`（50% 半屏无边距出血大图，杂志大片感）。
+  - `image`：`variant: 'framed' | 'full-bleed' | 'gallery'`；传 `images: [{ src, alt, caption }, ...]`（2–3 张）可排版并列作品集或实验定性对比图。
 
-可选安装 `npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.2.3`（DSH 0.2.2 起内置该版本，0.1.5 亦兼容）。Windows还需相应架构的VC++v14运行库。`ppt_render {pptxPath:"report.pptx",format:"both"}` 读取最终PPTX，输出PNG/PDF/收据，不改源文件。默认png，width默认1440（320–3840），timeoutMs默认120000（1000–300000）；最多120页，输入64MiB、输出128MiB、单张16MP。缺失引擎返回unavailable及安装说明，普通创建仍可用。
+---
 
-查看每页PNG及HTML，必要时在实际PowerPoint/WPS检查编辑、备注和动画。LibreOffice不保证与Office逐像素一致，PNG/PDF不保留动画。成功渲染仍为 `visual:not-verified`，不会自动声称视觉通过。
+## 四、外部参考 `.pptx` 深层骨架吸收与品牌定制（`ppt_absorb` & `brand`）
 
-把返回receiptPath传给 `ppt_check {deckPath:"report.json",renderReceipt:".../render-receipt.json"}`。源文件与所有输出的摘要必须匹配；修改/删除后失效，重新渲染。收据是本地完整性记录，非签名证明。
+1. **提取外部 `.pptx` 母版风格与骨架（`ppt_absorb`）**：
+   - 调用：`ppt_absorb { pptxPath: "corp-template.pptx" }`（CLI：`--absorb corp-template.pptx`）。
+   - 纯离线读取主题 12 色槽（含 DrawingML `lumMod / lumOff / tint / shade / satMod` 子变换解析）、西文与东亚字体族、母版背景、内嵌 Logo、母版骨架特征（`extractedSkeleton: { cornerStyle, hasTopBanner, hasSideSpine, masterShapeCount }`）、推荐母版骨架（`recommendedChrome`）与逐页版式推演（`slideSkeleton[]`），经 `sanitizeAbsorbedTheme()` 自动完成 WCAG 对比度净化与刺眼大红底降级。
+2. **一键套用参考 `.pptx` 与结构克隆（`referencePptx` & `cloneStructure`）**：
+   - 在 `ppt_create` 或 `ppt_edit` 中直接传 `referencePptx: "corp-template.pptx"`（CLI：`--reference-pptx corp.pptx`），自动将该模板净化后的色板、字体与母版 Logo 应用到整套文稿。
+   - 若同时传 `cloneStructure: true`（CLI：`--clone-structure`），将把 `recommendedChrome` 写入 `brand.chromeStyle`，并把 Markdown 正文页面直接映射到吸收出的 `slideSkeleton` 版式序列！
+3. **显式共享品牌（`brand`）**：
+   - `brand: { name: "星尘科技", primaryColor: "#0057B8", backgroundColor: "#FFFFFF", textColor: "#0F172A", chromeStyle: "consulting-classic", fontFamily: "Microsoft YaHei", logo: "assets/logo.png", footer: "战略规划部 · 内部资料" }`。
+   - 引擎通过 `deriveBrandedTheme()` 自动重算表面层级、淡网格线与次级墨色，杜绝浅底黑网格线冲突。
 
-## CLI
+---
 
-`--slides @slides.json`、`--brand @brand.json`、`--template weekly`。
+## 五、按页编辑、整套换肤、追加页面与撤销（`ppt_edit` & `ppt_undo`）
 
-`--edit report.json --edits @edits.json --revision 0`、`--undo report.json --revision 1`。
+1. **先查后改**：调 `ppt_check { deckPath: "report.json" }` 获取当前 `revision` 与稳定页面 `id`。
+2. **原子编辑（`ppt_edit`）**：
+   - **单页局部补丁 `edits`**：支持修改 `title, subtitle, kicker, takeaway, source, layout, variant, chrome, tableStyle, bullets, items, columns, rows, image, images, chart, notes, visual`（`slide` 传 1 起始页码或稳定 ID）。
+   - **整套换肤与品牌更新**：顶层可传 `theme: "exec-jilan"`、`referencePptx: "ref.pptx"` 或 `brand`（`brand: null` 清空品牌，`logo: null` 清空 Logo）。
+   - **追加、复制、排序与删除**：`append: [slide1, ...]`（单次追加 1–5 页新页面）、`duplicate: [2]`、`remove: [4]`、`order: [id1, id2, ...]`（包含全部原始页面 ID 各一次；执行顺序：先编辑/排序，再复制/删除/追加，最终保留 1–120 页）。
+   - 每次修改原子重写 HTML / PPTX / JSON，失败自动回滚，保留最近 20 步历史。
+3. **一键撤销（`ppt_undo`）**：`ppt_undo { deckPath: "report.json", expectedRevision: 1 }` 完整恢复上一状态（含主题、页面结构、图表、图片与数据模型），`revision` 单调递增。
 
-`--check report.json`、`--render report.pptx --format both`、`--check report.json --render-receipt receipt.json`。
+---
 
-默认渲染目录在PPTX旁；显式 `--out` 指定基目录，已有目录追加后缀。引擎不可用/静态错误/显式收据失效返回非零退出码。
+## 六、渲染核验与双层 AI 视觉/叙事闭环（`ppt_check` & `ppt_render`）
+
+1. **静态与审美门禁（`ppt_check`）**：自动检测字数溢出估算、表格列宽、图片完整性、WCAG 对比度以及 `SLOP-01..10` 审美规范（名词弱标题、版式单一、冗余图例等）。
+2. **LibreOffice 真实画面渲染（`ppt_render`）**：
+   - 调用 `ppt_render { pptxPath: "report.pptx", format: "both" }` 输出逐页 PNG（默认宽 `1440px`）、PDF 与 `render-receipt.json`，不改动源 PPTX，并检查 `missingFonts`（验收要求 `missingFonts: []`）。
+   - 将 `receiptPath` 回传给 `ppt_check { deckPath: "report.json", renderReceipt: "..." }` 校验源文件与渲染图哈希一致；任何后续编辑都会使旧收据失效，必须重新渲染。
+3. **可选双层 Vision QA 与高管叙事教练（DSH 工作台按需开启）**：
+   - **Vision QA（最高 24 页全量看图修复）**：不仅检测溢出/裁切，还审查层级、留白、对比度与版式节奏，并通过 **12 种零文本篡改动作**（`title-size, body-size, chart-label-size, chart-horizontal, chart-highlight, image-contain, swap-image-side, density-mode, table-style, switch-layout, split-bullets, split-table`）自动另存精修副本，100% 不改动任何业务文字与数字。
+   - **AI 预审与答辩教练**：针对 `executive | investor | academic | technical | client | management | general` 听众画像，审查 `storyline`（Action Title 与金字塔逻辑）、`expression`、`logic` 与 `evidence`，严格遵守数字 Token 守恒锁。
+
+---
+
+## 七、CLI 速查（`scripts/build-deck.mjs`）
+
+```bash
+# 智能场景导演一键生成（CLI 建议显式传 --theme auto 或具体主题 ID）
+node scripts/build-deck.mjs --title "年度述职" --content deck.md --theme auto --lang zh --out dist
+
+# 结构化 slides + 吸收外部参考 PPTX 母版并克隆骨架与 chromeStyle
+node scripts/build-deck.mjs --title "战略规划" --content deck.md --reference-pptx corp.pptx --clone-structure --out dist
+node scripts/build-deck.mjs --title "学术答辩" --slides @slides.json --chrome academic-minimal --theme academic --out dist
+
+# 仅解析并查看外部 PPTX 的净化色板、字体与版式摘要
+node scripts/build-deck.mjs --absorb corp.pptx
+
+# 编辑、撤销、静态检查与渲染收据核验
+node scripts/build-deck.mjs --edit dist/deck.json --edits @edits.json --revision 0
+node scripts/build-deck.mjs --undo dist/deck.json --revision 1
+node scripts/build-deck.mjs --render dist/deck.pptx --format both
+node scripts/build-deck.mjs --check dist/deck.json --render-receipt dist/deck-render/render-receipt.json
+```

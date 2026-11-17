@@ -1,81 +1,83 @@
 ---
 name: dsh-ppt
-description: "Turn one sentence or a Markdown document into a complete, presentation-ready deck: a standalone HTML web slideshow plus an editable PPTX export, with 5 built-in visual themes (Swiss Pulse / Velvet Standard / Data Drift / Soft Signal / Maximalist Type), slide transitions + bullet entrance animations (motion, on by default), and bilingual Chinese/English support. Use when the user asks for a PPT, slides, deck, keynote, 演示文稿, 幻灯片, 汇报, 提案, 路演, 培训材料, or wants to turn a document into a presentation. 中文：把一句话或一篇文档变成完整演示文稿（HTML 网页放映 + PPTX 导出），内置 5 套视觉主题、页间转场与要点入场动画，中英双语。"
-compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts use @office-kit/pptx@0.21.0; optional data models use jsep@1.4.0 and csv-parse@6.1.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.2.3 (bundled by DSH 0.2.2+; 0.1.5 also supported). Cross-harness: copy the full directory and run npm install --ignore-scripts there."
+description: "Turn one sentence, a Markdown document, structured slides, or a reference .pptx into a world-class presentation deck: standalone HTML web slideshow + 100% native-editable PPTX + project manifest. Features Zero-Question Scenario Auto-Direction (theme: auto), 18 curated themes (12 daylight projector-safe + 6 dark elevation), 6 distinct Master Chrome Skeletons, 24 native-editable layouts & pro diagrams (Gantt, Architecture, Harvey Matrix, TAM Concentric, Org Tree, Bento, KPI, 2x2 Matrix, Timeline/Process/Flywheel, Booktabs 3-line tables, Chart-Split), 16 industry blueprints, 13 Economist/FT-grade charts (including vector Waterfall), deep external .pptx skeleton absorption (ppt_absorb / referencePptx / cloneStructure), data provenance, and bilingual ZH/EN support. 中文：把一句话、文档、数据或参考 PPTX 变成大师级演示文稿（独立 HTML 放映 + 100% 原生可编辑 PPTX），内置零追问智能审美导演、18 套明暗主题、6 套母版骨架、24 种原生版式与专业图示、16 套行业蓝图、13 类出版级图表与外部 PPTX 骨架吸收。"
+compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts/PPTX absorption use @office-kit/pptx@0.21.0; optional data models use jsep@1.4.0 and csv-parse@6.1.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.2.3 (bundled by DSH 0.2.2+; 0.1.5 also supported). Cross-harness: copy the full directory and run npm install --ignore-scripts there."
 allowed-tools: "Bash, Read, Write, Edit"
 ---
 
 # dsh-ppt
 
-一句话或一篇文档 → 完整演示文稿：**独立 HTML 网页放映 + 可编辑 PPTX**。本文件只做路由与纪律；具体规则按需读取 `references/`。
+一句话、一篇文档、一组数据或一份参考 `.pptx` → **大师级可交付演示文稿（独立 HTML 网页放映 + 100% 原生可编辑 PPTX + 工程 JSON）**。本文件负责审美总纲、路由与交付纪律；具体语法与色板按需读取 `references/`。
 
 ## 触发条件
 
-用户要做 PPT / 幻灯片 / 演示文稿 / deck / 汇报 / 提案 / 路演 / 培训材料，或给一句话、一段文字、一篇 Markdown 想变成可放映的演示。
+用户要做 PPT / 幻灯片 / 演示文稿 / deck / keynote / 汇报 / 述职 / 提案 / 路演 / 答辩 / 课件 / 培训材料，或希望吸收某份参考 `.pptx` 的母版配色与风格来制作新文稿。
+
+## 核心审美哲学：品味内建（零品味负担）
+
+普通用户无法分辨底层版式栅格、对比度或图表噪音——**你就是首席艺术总监，默认输出必须直接达到麦肯锡咨询 / Apple 发布会 / Nature 学术答辩 / 现代故宫霁蓝政务水准**：
+
+1. **零追问场景定调（Zero-Question Auto-Director）**：用户说“帮我做个汇报 PPT”时，**不要反问一堆设计参数**。直接根据内容语义识别六大画像（商业咨询、政务述职、学术答辩、科技路演、教育讲义、人文品牌），传 `theme: 'auto'` 或显式匹配 18 套大师主题（含 `keynote-light`、`financial-ft`、`medical-clean`、`luxury-noir`）。**明亮投影优先**：会议室汇报、政企述职、学术答辩、教学课件一律优先选用 12 套浅底主题（通用默认 `consulting` 蔚蓝战略），绝不在常规办公场景盲目套用纯黑赛博风 `data`！并按场景自动匹配 **6 套差异化母版骨架（`chromeStyle`：`consulting-classic` / `keynote-spatial` / `editorial-folio` / `saas-bento` / `academic-minimal` / `gov-ceremonial`）**，彻底告别「一套模板换 14 种颜色」。
+2. **结论先行（Action Titles）**：除封面、目录与章节页外，每页标题必须是**完整的结论判断句**（如「异步评审将工程师周均例会耗时压缩 75%」），严禁使用「项目背景」「数据分析」「周末到馆人次」等空洞名词标签。
+3. **版式节奏与反要点墙（Anti-Bullet-Wall）**：优先传**结构化 `slides`**（或使用 `::: kpi / cards / comparison / process / matrix / callout / gantt / architecture / harvey / tam / org` 指令）充分利用 **24 套原生版式与专业图示**。**整套文稿严禁连续超过 2 页使用普通 `bullets` 要点列表**；8 页以上文稿须有节奏地交替视觉密度（指标用 `kpi`、排期用 `gantt`、系统分层用 `architecture`、竞品能力用 `harvey`、市场空间用 `tam`、组织团队用 `org`、并列支柱用 `cards[pillars/bento]`、痛点整改用 `comparison[issue-action]`、演进/闭环用 `process[timeline/steps/flywheel]`、四象限用 `matrix`、数据配洞察用 `chart-split`、学术对比用 `table[booktabs]` 三线表）。
+4. **出版级图表与三线表**：单系列图表自动隐藏冗余图例，使用 `highlight: 'max' | 'last'` 突出焦点色柱、其余灰阶退后，直接显示数据标签，左下角附 `source` 数据来源；学术与严谨数据对比使用无竖线的 `booktabs` 三线表。
+5. **双轨深层吸收优质 PPT**：无外部模板时调用内置 **18 套大师主题**、**6 套母版骨架**与 **16 套行业结构蓝图**；用户提供参考 `.pptx` 时先调 `ppt_absorb` 或直接传 `referencePptx` 自动提取并净化母版色板、字体、Logo、骨架特征（`extractedSkeleton`）、推荐骨架（`recommendedChrome`）与逐页分布（`slideSkeleton`），传 `cloneStructure: true` 可将 Markdown 大纲直接映射到吸收出的逐页版式序列与母版骨架！
 
 ## 执行纪律（每次都要遵守）
 
-- 默认直接交付成品，不自动触发 AI 预审或答辩。用户可在设置页成品下载区主动开启两个可选模式；选择模型、范围与调用上限后再发送材料。AI 演练不等于事实核验，不编造实验、数据或引用；采纳建议另存副本，原件保留。
-- 用户需要 AI 看图检查时，可在 DSH 设置 → 演示文稿 → 视觉检查与修复主动开启。它需要支持图片输入的模型与官方渲染引擎，修复只调整排版、另存副本并复查。AI 未发现问题不等于人工验收；模型调用失败、输出截断、停止和未检查页面必须如实说明，不能声称视觉通过。
-- 数字溯源和现场推演也按需启用。提供 `dataModel` 与结构化 `slides` 的 `{{metricId}}` 绑定；先读 `references/data.md`。源事实必须对应真实材料行或单元格；用户假设用 `kind:input` 标注，禁止虚构来源。修改数据先 `ppt_data(action:preview)`，展示指标与页面差异，得到确认后携带原预览凭证和修订号保存；默认新副本。离线 HTML 参数必须回存确认后才能交付对应静态 PPTX。
-
-- 修改工程先 `ppt_check`。外部编辑过的 HTML/PPTX、缺少成品校验记录的旧工程不可覆盖；告知用户 `saveAs:true` 只从 JSON 另存新副本，原件保留，Office 手工修改不会导入。不得绕过校验或自行篡改校验值。
-
-- 一页一个观点；标题是判断句，不是名词短语。
-- 内容语言由你撰写；`lang` 只决定界面文字。
-- 先选主题再构建；不确定就用默认 `data`。
-- 交付前逐项过一遍文末「质量门禁」。
-- 目标是可用成品：先组织真实内容，再调用生成器；未填模板必须标注草稿，不编造缺失事实。
-- 渲染报告缺失字体时，替换为环境和接收方机器可用字体，重新生成并逐页检查；未解决需标注字体问题，不能声称已验收。
+- **默认零额外模型开销直接交付**：不自动触发 AI 预审、模拟答辩或视觉看图修复。用户可在 DSH 设置页主动开启可选 AI 预审/答辩或「视觉检查与修复」（支持最高 24 页全量审查与 12 种无损版式/字号修复）；AI 演练不等于事实核验，不编造实验、数据或引用；采纳建议默认另存副本，原件保留。模型失败、截断、停止或未检查页面必须如实说明，不能声称视觉通过。
+- **数字溯源与推演纪律**：需要解释数字来源或现场滑块推演时，提供 `dataModel` 并在 `slides`（含 `items`、`takeaway`、`source`、`chart`）绑定 `{{metricId}}`；先读 `references/data.md`。`source` 必须对应真实材料行或单元格，假设用 `kind: 'input'` 标注，禁止虚构来源。修改数据先 `ppt_data(action: 'preview')`，展示差异并获确认后带凭证 `apply`（默认 `saveAs: true`）。
+- **工程安全与版本锁**：修改已有工程先 `ppt_check` 获取当前 `revision` 与页面 ID。外部手工改过的 HTML/PPTX 或缺少校验记录的旧工程不可覆盖；告知用户 `saveAs: true` 仅从 JSON 另存新副本，Office 手工修改不会回导。严禁绕过校验或篡改摘要。仅吸收外部 `.pptx` 的视觉风格（`ppt_absorb` / `referencePptx`），不直接就地编辑任意外部 `.pptx` 正文。
+- **字体与跨平台零缺字**：正文最小字号硬底线 `13.5pt`，超长内容必须拆页而非强行缩字。若 `ppt_render` 报告 `missingFonts` 非空，必须替换为环境与接收方可用字体（Windows `Microsoft YaHei`、macOS `PingFang SC`/`Songti SC`、Linux `Noto Sans/Serif CJK SC`），重新生成并逐页复核；未解决前不得声称已验收。CLI 与工具报错信息统一为中文。
+- **语言分工**：`lang`（`zh | en | bilingual`）仅控制播放器界面与默认标签；正文与双语表达由你在写作阶段完成。
 
 ## 核心流水线
 
-1. **Probe 需求**：读入用户的句子/文档，确定听众、目标、语气。一句话输入不要反问，直接按发布场景推断。
-2. **Outline 大纲**：产出 5–12 页大纲（封面 → 问题/背景 → 方案/论点 3–6 页 → 证据 → 行动号召 → 结束页）。
-   → 写大纲与正文前先读 `references/copywriting.md`。
-3. **Theme 主题**：调 `ppt_themes`（DSH）或 `node scripts/build-deck.mjs --list-themes`（跨 harness）。
-   → 拿不准选哪套时读 `references/themes.md` 的情绪决策树。
-4. **Build 生成**：
-   - DSH 内：调 `ppt_create`，大纲写成 Markdown 传 `content`（推荐），或传结构化 `slides`。
-   - 跨 harness：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --content deck.md --theme data --lang zh --out dist`。
-   - 动效默认开（页间转场 + 要点逐条入场）；严肃/打印场景传 `motion: 'off'`。
-   → 用表格 / 金句 / 备注 / 结构化 slides 前读 `references/syntax.md`。
-5. **Verify 校验与修正**：调 `ppt_check` 检查具体页；在浏览器操作放映、总览和备注，查看图片/图表。若可选官方引擎可用，调 `ppt_render` 读取最终 PPTX 生成逐页 PNG/PDF，逐页看画面。修正用 `ppt_edit`，以 `expectedRevision` 防冲突；需要时 `ppt_undo`。修改后重新渲染，以收据复核当前文件。文件头/结构通过不等同于视觉验收，静态估算、渲染、视觉检查必须分开说明。
-6. **Deliver 交付**：给用户三个绝对路径，说明 HTML 直接放映（← → 翻页 · F 全屏 · G 总览 · S 备注 · P 打印），PPTX 用 PowerPoint / WPS / Keynote 打开（备注在演示者视图可见，bullets 页放映时逐条点击出现）。DSH 用户也可在「设置 → 演示文稿」修改文字、替换 PNG/JPEG、移动/复制/删除页面、撤销和下载最新文件；已有 JSON 工程先 `ppt_check` 才会出现在项目列表。`ppt_edit.order` 使用每个稳定页面 ID 各一次；`duplicate`、`remove` 使用修改前的页码或稳定 ID，复制保留图片/图表/备注，最终保留 1–120 页。结构与正文修改可合为一次撤销。
+1. **Probe & Auto-Direct 定调**：读入用户句子/文档/数据，静默判定听众与六大画像（见 `references/themes.md`）。若用户给了参考 `.pptx`，调 `ppt_absorb` 查看提取结果或在创建时传 `referencePptx`。一句话输入不反问，直接推断并生成完整成品。
+2. **Storyline & Choreography 叙事与排布**：先读 `references/copywriting.md`。按金字塔原理 / SCQA 组织 5–16 页大纲，为每页撰写结论先行 Action Title、章节面包屑 `kicker`（如 `01 · 市场诊断`，禁止满屏重复「要点」）、底栏核心结论 `takeaway` 与数据出处 `source`，并规划多版式交替节奏。可调 `ppt_templates` 参考 **16 套行业结构蓝图**（`weekly | defense | project | pitch | consulting | keynote | gov-report | workshop | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook`）。
+3. **Theme 选主题与骨架**：不确定时在 `ppt_create` 传 `theme: 'auto'`（自动路由至明亮高质感场景主题与匹配骨架），或从 **18 套内置主题**中精确指定（调 `ppt_themes` 查看），并可通过 `brand.chromeStyle` 或单页 `chrome` 覆盖 6 套母版骨架。
+   - **重要 CLI 差异**：跨 harness 直接运行 `build-deck.mjs` 时，裸 CLI 缺省 `--theme` 为兼容旧脚本仍回退 `data`，因此 **CLI 调用请务必显式传 `--theme auto` 或具体场景主题 ID（如 `--theme consulting` / `--theme exec-jilan`）**！
+4. **Build 生成**：先读 `references/syntax.md`（用到图表/多图/外源母版/编辑时读 `references/advanced.md`）。
+   - **推荐方式（DSH 内）**：调 `ppt_create`，优先传结构化 `slides`（精确控制 **24 种原生版式**含 `gantt / architecture / harvey / tam / org / kpi / cards / comparison / matrix / process / chart-split / table[booktabs] / callout`），或传带 `:::` 指令与 `**加粗引导词**：说明` 的 Markdown `content`。
+   - **跨 harness CLI**：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --slides @slides.json --theme auto --lang zh --out dist`（吸收参考模板并克隆结构可加 `--reference-pptx ref.pptx --clone-structure`；显式骨架用 `--chrome academic-minimal`；仅提取风格用 `--absorb ref.pptx`）。
+   - 动效默认 `motion: 'on'`（HTML 页间淡入 + PPTX 要点点击逐条出现）；严肃政企公文、学术打印或归档传 `motion: 'off'`。
+5. **Verify 校验与看图修正**：调 `ppt_check` 检查结构、字数密度、WCAG 对比度与 `SLOP-01..10` 审美告警。若安装了 `@deepseek-ai/libreoffice-kit`，调 `ppt_render` 生成逐页 PNG/PDF 并附 `renderReceipt` 复检，逐张用看图工具核查画面（0 缺字、0 溢出、0 遮挡、0 冗余图例）。微调文字、切换主题或版式用 `ppt_edit`（带 `expectedRevision`），需要时 `ppt_undo`。静态估算、渲染成功与视觉验收必须分开如实陈述。
+6. **Deliver 交付**：向用户提供 `.html`、`.pptx`、`.json` 三个绝对路径，说明 HTML 快捷键（`← →` 翻页 · `F` 全屏 · `G` 总览 · `S` 演讲者备注 · `P` 打印）及 PPTX 100% 原生可编辑特性（形状、卡片、三线表、图表工作簿、瀑布桥与备注均可在 PowerPoint / WPS / Keynote 直接编辑）；提示 DSH 工作台支持「风格与母版（Style Studio）」一键换肤、拖拽吸收 `.pptx` 与单页版式切换。
 
 ## 按需装载索引
 
-| 何时读 | 文件 | 内容 |
+| 何时必读 | 参考文件 | 核心内容 |
 | --- | --- | --- |
-| 写大纲 / 正文前 | `references/copywriting.md` | 叙事骨架、单页规则、双语规则 |
-| 选主题拿不准 | `references/themes.md` | 5 套主题色板 + 情绪决策树 |
-| 用表格/金句/备注/结构化 slides | `references/syntax.md` | Markdown 解析、进阶语法、slides JSON、motion 开关 |
-| 图片/图表/模板/品牌/编辑/渲染 | `references/advanced.md` | 参数、限制、草稿与成品、收据语义 |
-| 数字溯源与现场推演 | `references/data.md` | 来源绑定、公式、更新预览与离线参数回存 |
-| 交付异常 | `references/troubleshooting.md` | 症状 → 处理对照表 |
+| 写大纲、标题与正文前 | `references/copywriting.md` | 六大画像叙事骨架、Action Title 写法、字数预算、反空话与双语规范 |
+| 选主题、配色、骨架或吸收母版 | `references/themes.md` | 18 套大师主题色板（12 浅 6 深）、6 套母版骨架（Chrome）、18 语义 Token、六大画像选型树 |
+| 写结构化 `slides` 或扩展 Markdown | `references/syntax.md` | 24 套原生版式与专业图示 + `variant`、统一 `items` 结构、`:::` 容器指令、三线表与 `takeaway` |
+| 图表、图片、吸收 `.pptx`、编辑与渲染 | `references/advanced.md` | 13 类出版级图表、瀑布图、`ppt_absorb`/`referencePptx`/`cloneStructure`、16 套蓝图、Vision QA 与 CLI |
+| 数字溯源、公式与现场推演 | `references/data.md` | `dataModel` 源绑定、公式约束、全字段 `{{metricId}}` 联动与预览确认流 |
+| 遇到报错或渲染异常 | `references/troubleshooting.md` | 症状 → 根因与处理速查表 |
 
-## 质量门禁（交付前逐项确认）
+## 质量与反土味门禁（SLOP-01..10，交付前逐项核对）
 
-- [ ] 页数 3–60，首屏是封面，末屏是结束页。
-- [ ] 每页有明确标题；bullets 页 1–8 条，中文每条 ≤ 20 字、英文 ≤ 12 词。
-- [ ] HTML 与 PPTX 使用同一主题，配色一致。
-- [ ] 主题色对比度足够（深底浅字或浅底深字）。
-- [ ] 中文内容无错别字；英文标题用 Title Case。
-- [ ] 最后一页有可执行的行动号召，不只是「谢谢」。
-- [ ] 文件已写到用户工作区，路径为绝对路径。
-- [ ] 没有未填模板；保留真实数据来源，检查每页画面而非只检查生成成功。
-- [ ] 图片嵌入成功，图表与原始数据一致；渲染收据匹配最终 PPTX，说明尚未验证的部分。
+- [ ] **SLOP-01 结论标题**：内容页与图表页标题均为完整判断句（Action Title），无「项目背景 / 数据图表 / 总结」等纯名词短标题。
+- [ ] **SLOP-02 章节面包屑**：`kicker` 体现章节脉络（如 `01 · 增长引擎`），未连续多页硬编码重复「要点 / Point」。
+- [ ] **SLOP-03 拒绝要点墙**：单页普通 bullets ≤ 5 条；无连续 > 2 页 `bullets` 版式，并列信息已升格为 `kpi / cards / comparison / process / matrix`。
+- [ ] **SLOP-04 字号与字数底线**：正文绝不低于 `13.5pt`；单条要点中文 ≤ 24 字（英文 ≤ 14 词），卡片正文中文 ≤ 40 字，引导词使用 `**关键词**：说明` 形成层级。
+- [ ] **SLOP-05 图文对齐与呼吸感**：配图采用圆角细框对齐或 `split-bleed` 半屏出血，正文列垂直居中，无「左上角两行字 + 大片死白」。
+- [ ] **SLOP-06 出版级图表与三线表**：单系列图表无冗余图例，网格线 ≤ 5 条细灰线，关键柱已用 `highlight` 聚焦并带直接数值标签；学术表格采用 `booktabs` 无竖线三线表；数据页左下角有真实 `source` 说明（未虚构出处）。
+- [ ] **SLOP-07 投影安全与对比度**：会议/政务/学术/培训优先浅底主题；政务风杜绝刺眼纯红底配黄字；正文与背景对比度 ≥ 4.5:1，HTML 与 PPTX 主题完全一致。
+- [ ] **SLOP-08 版式多样性**：≥ 6 页的文稿至少组合 4 种不同版式原型，封面与封底不误印页码。
+- [ ] **SLOP-09 可执行收尾**：`closing` 页包含明确的下一步行动号召（CTA / 里程碑 / 联络方式），绝不仅写两个字「谢谢」。
+- [ ] **SLOP-10 真实性与跨平台完备**：无未填占位草稿（除非用户明确要求空模板并标注 `draft`），全部产物为工作区绝对路径；若已运行渲染，确认 `missingFonts: []` 且收据匹配最新 PPTX。
 
 ## 跨 harness 安装
 
-把整个 `dsh-ppt` 技能目录复制到目标 agent 的技能目录，使用 Node `^22.19.0 || >=24.0.0`，在该目录运行 `npm install --ignore-scripts`。纯文本可直接运行；图片/图表/品牌导出需要 Office Kit，PNG/PDF 需另外安装可选官方引擎：
+把整个 `skills/dsh-ppt` 目录复制到目标 Agent 的技能目录，在 Node `^22.19.0 || >=24.0.0` 下执行 `npm install --ignore-scripts`。18 套主题与 19 套零依赖原生版式/图示纯 Node 内置模块即可运行；图片、13 类图表与外部 `.pptx` 吸收使用已声明的 `@office-kit/pptx@0.21.0`；PNG/PDF 渲染按需安装 `@deepseek-ai/libreoffice-kit`：
 
-| Agent | 技能目录 |
+| Agent | 技能目录 / 安装命令 |
 | --- | --- |
-| DeepSeek Harness | `dsh plugin --profile web add dsh-ppt` |
-| Claude Code | `~/.claude/skills/` |
-| Cursor | `.cursor/skills/` |
-| Gemini CLI | `~/.gemini/skills/` |
-| OpenAI Codex | `~/.codex/skills/` |
+| DeepSeek Harness | `dsh plugin --profile desktop add dsh-ppt`（网页版用 `web`） |
+| Claude Code | `~/.claude/skills/dsh-ppt` |
+| Cursor | `.cursor/skills/dsh-ppt` |
+| Gemini CLI | `~/.gemini/skills/dsh-ppt` |
+| OpenAI Codex | `~/.codex/skills/dsh-ppt` |
 
-一次编写，处处可用。
+一次编写，处处交付大师级品味。

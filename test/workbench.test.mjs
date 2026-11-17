@@ -206,7 +206,256 @@ test('render preview invalidates when PPTX content or project revision changes',
 
 test('workbench client keeps keyboard shortcuts, dirty guard and retry affordance', () => {
   const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
-  for (const marker of ['handleShortcut', 'dsh-ppt-shortcut', 'beforeunload', 'badge-dirty', '复制示例', "aria-busy", 'Ctrl/⌘+S']) {
+  for (const marker of [
+    'handleShortcut', 'dsh-ppt-shortcut', 'beforeunload', 'badge-dirty', '复制示例', 'aria-busy', 'Ctrl/⌘+S',
+    'StyleStudioPanel', 'SlideArchetypeEditor', 'PPT_LAYOUT_CATALOG', 'PPT_CHROME_SKELETONS', 'Master Skeleton', '母版骨架',
+    'consulting-classic', 'keynote-spatial', 'editorial-folio', 'saas-bento', 'academic-minimal', 'gov-ceremonial',
+    'gantt', 'architecture', 'harvey', 'tam', 'org',
+    'absorb-upload', 'recommendedChrome', 'extractedSkeleton', 'slideSkeleton',
+    'ppt-split-preview', 'ppt-canvas-visual-diff', 'ppt-issue-row',
+  ]) {
     assert.ok(source.includes(marker), marker + ' missing from workbench client')
+  }
+})
+
+test('catalog caches theme/slideCount/revision and open exposes 18 daylight and dark themes', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const list = await wb.action({ operation: 'list' })
+  assert.equal(list.projects[0].theme, 'data')
+  assert.equal(list.projects[0].slideCount, 3)
+  assert.equal(list.projects[0].revision, 0)
+  const opened = await wb.action({ operation: 'open', id: list.projects[0].id })
+  assert.equal(opened.project.theme, 'data')
+  assert.equal(opened.project.brand, null)
+  assert.equal(opened.project.themes.length, 18)
+  assert.equal(opened.project.themes.filter(t => !t.dark).length, 12)
+  assert.equal(opened.project.themes.filter(t => t.dark).length, 6)
+}))
+
+test('workbench edits structured archetypes, tables, deck theme/brand, and starter slide append with undo', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const initial = (await wb.action({ operation: 'open', id })).project
+  const bodySlideId = initial.slides[1].id
+
+  const kpiUpdated = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 0,
+    slide: bodySlideId,
+    patch: {
+      layout: 'kpi',
+      variant: 'grid',
+      title: '核心经营指标稳步提升',
+      takeaway: '三大指标全部超越季度基准',
+      source: '来源：运营月报 2026Q3',
+      cards: [
+        { badge: 'SLA', title: '服务达成率', value: 98.5, unit: '%', delta: '+4.2%', tone: 'positive' },
+        { tag: 'EFF', title: '处理效率', value: '2.4x', delta: '核验通过', status: 'accent' },
+      ],
+      visual: { titleSize: 32, bodySize: 18, density: 'compact' },
+    },
+  })
+  const updatedSlide = kpiUpdated.project.slides[1]
+  assert.equal(updatedSlide.layout, 'kpi')
+  assert.equal(updatedSlide.takeaway, '三大指标全部超越季度基准')
+  assert.equal(updatedSlide.source, '来源：运营月报 2026Q3')
+  assert.equal(updatedSlide.items.length, 2)
+  assert.equal(updatedSlide.items[0].tag, 'SLA')
+  assert.equal(updatedSlide.items[0].value, '98.5')
+  assert.equal(updatedSlide.items[0].status, 'positive')
+  assert.equal(updatedSlide.visual.density, 'compact')
+
+  const tableUpdated = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 1,
+    slide: bodySlideId,
+    patch: {
+      layout: 'table',
+      tableStyle: 'booktabs',
+      rows: [['指标', 'Q2', 'Q3'], ['达成率', '94.3%', '98.5%']],
+    },
+  })
+  assert.equal(tableUpdated.project.slides[1].layout, 'table')
+  assert.equal(tableUpdated.project.slides[1].tableStyle, 'booktabs')
+  assert.deepEqual(tableUpdated.project.slides[1].rows[1], ['达成率', '94.3%', '98.5%'])
+
+  const styled = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 2,
+    theme: 'consulting',
+    brand: { name: 'Acme Advisory', primaryColor: '#0057b8', fontFamily: 'Microsoft YaHei', footer: 'Internal Review', chromeStyle: 'academic-minimal' },
+  })
+  assert.equal(styled.project.theme, 'consulting')
+  assert.equal(styled.project.brand.primaryColor, '#0057B8')
+  assert.equal(styled.project.brand.footer, 'Internal Review')
+  assert.equal(styled.project.brand.chromeStyle, 'academic-minimal')
+  assert.equal((await wb.action({ operation: 'list' })).projects[0].theme, 'consulting')
+
+  const ganttEdited = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 3,
+    slide: bodySlideId,
+    patch: {
+      layout: 'gantt',
+      variant: 'quarters',
+      chrome: 'editorial-folio',
+      columns: ['Q1', 'Q2', 'Q3', 'Q4'],
+      items: [
+        { tag: 'Core', title: 'Platform rollout', start: 0, span: 2, status: 'accent' },
+        { tag: 'GA', title: 'Release gate', start: 2, span: 0, milestone: true, status: 'positive' },
+      ],
+    },
+  })
+  assert.equal(ganttEdited.project.slides[1].layout, 'gantt')
+  assert.equal(ganttEdited.project.slides[1].chrome, 'editorial-folio')
+  assert.deepEqual(ganttEdited.project.slides[1].columns, ['Q1', 'Q2', 'Q3', 'Q4'])
+  assert.equal(ganttEdited.project.slides[1].items[0].start, 0)
+  assert.equal(ganttEdited.project.slides[1].items[0].span, 2)
+  assert.equal(ganttEdited.project.slides[1].items[1].milestone, true)
+
+  const harveyEdited = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 4,
+    slide: bodySlideId,
+    patch: {
+      layout: 'harvey',
+      tableStyle: 'harvey',
+      rows: [['Capability', 'Ours', 'Peer'], ['Speed', '●', '◑']],
+    },
+  })
+  assert.equal(harveyEdited.project.slides[1].layout, 'harvey')
+  assert.equal(harveyEdited.project.slides[1].tableStyle, 'harvey')
+
+  const appended = await wb.action({ operation: 'append', id, expectedRevision: 5, archetype: 'architecture' })
+  assert.equal(appended.project.slides.length, 4)
+  assert.equal(appended.project.slides[3].layout, 'architecture')
+  assert.equal(appended.selected, appended.project.slides[3].id)
+  assert.equal((await wb.action({ operation: 'list' })).projects[0].slideCount, 4)
+
+  const undone = await wb.action({ operation: 'undo', id, expectedRevision: 6 })
+  assert.equal(undone.project.slides.length, 3)
+}))
+
+test('absorb-upload parses in-memory PPTX bytes for 1-click apply and blocks host path or malformed inputs', () => fixture(async ({ dir, created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const slide = (await wb.action({ operation: 'open', id })).project.slides[1].id
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVcoAAAAASUVORK5CYII='
+  const refDir = join(dir, 'ref')
+  mkdirSync(refDir, { recursive: true })
+  const refDeck = await buildDeckAsync({
+    title: 'Corporate Ref',
+    theme: 'consulting',
+    brand: { name: 'RefCorp', primaryColor: '#1E3A8A', fontFamily: 'Microsoft YaHei', logo },
+    slides: [{ layout: 'cover', title: 'Reference Cover' }],
+    outputDir: refDir,
+  })
+  const pptxDataUrl = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + readFileSync(refDeck.pptxPath).toString('base64')
+
+  const absorbedRes = await wb.action({ operation: 'absorb-upload', id, expectedRevision: 0, data: pptxDataUrl })
+  assert.equal(absorbedRes.ok, true)
+  assert.equal(absorbedRes.absorbed.slideCount, 1)
+  assert.equal(absorbedRes.absorbed.extractedPalette.accent1, '#1E3A8A')
+  assert.match(absorbedRes.absorbed.sanitizedBrand.logo, /^data:image\/png;base64,/)
+  assert.ok(typeof absorbedRes.absorbed.recommendedTheme === 'string' && absorbedRes.absorbed.recommendedTheme.length > 0)
+  assert.ok(typeof absorbedRes.absorbed.recommendedChrome === 'string' && absorbedRes.absorbed.recommendedChrome.length > 0)
+  assert.ok(absorbedRes.absorbed.extractedSkeleton && typeof absorbedRes.absorbed.extractedSkeleton === 'object')
+  assert.ok(Array.isArray(absorbedRes.absorbed.slideSkeleton) && absorbedRes.absorbed.slideSkeleton.length === 1)
+
+  const beforeFiles = Object.values(created.files).map(p => readFileSync(p))
+  await assert.rejects(wb.action({ operation: 'absorb-upload', id, expectedRevision: 0, pptxPath: refDeck.pptxPath, data: pptxDataUrl }), /面板上传/)
+  await assert.rejects(wb.action({ operation: 'absorb-upload', id, expectedRevision: 0, path: refDeck.pptxPath, data: pptxDataUrl }), /面板上传/)
+  const badPptx = await wb.fetch(request({ operation: 'absorb-upload', id, expectedRevision: 0, data: Buffer.from('not-a-zip-archive-payload'.repeat(8)).toString('base64') }))
+  assert.equal(badPptx.status, 400)
+  assert.match((await badPptx.json()).messageEn, /reference PPTX/i)
+
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, referencePptx: refDeck.pptxPath }), /面板上传/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, brand: { logo: 'C:/secret.png' } }), /面板上传/)
+  const badBrand = await wb.fetch(request({ operation: 'edit', id, expectedRevision: 0, brand: { fontFamily: 'Bad"; url(x)' } }))
+  assert.equal(badBrand.status, 400)
+  assert.match((await badBrand.json()).messageEn, /Invalid brand settings/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { layout: 'unknown-layout' } }), /版式名称无效/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { tableStyle: 'rainbow' } }), /表格样式无效/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { items: [{ title: 'x', src: 'C:/secret.png' }] } }), /结构化卡片内容无效/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { items: [], cards: [] } }), /结构化卡片内容无效/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { rows: [['A', 'B'], ['only-one']] } }), /表格内容/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 0, slide, patch: { visual: { titleSize: 99 } } }), /排版设置无效/)
+  Object.values(created.files).forEach((p, i) => assert.deepEqual(readFileSync(p), beforeFiles[i]))
+
+  const applied = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 0,
+    theme: absorbedRes.absorbed.recommendedTheme,
+    brand: absorbedRes.absorbed.sanitizedBrand,
+  })
+  assert.equal(applied.project.theme, absorbedRes.absorbed.recommendedTheme)
+  assert.equal(applied.project.brand.primaryColor, absorbedRes.absorbed.sanitizedBrand.primaryColor)
+  assert.equal(Object.values(applied.project.assets).length, 1)
+}))
+
+test('workbench starterSlide append supports all 5 Phase-3 pro diagrams (gantt, architecture, harvey, tam, org)', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  let rev = 0
+  for (const [archetype, check] of [
+    ['gantt', s => { assert.deepEqual(s.columns, ['Q1', 'Q2', 'Q3', 'Q4']); assert.equal(s.items.length, 3); assert.equal(s.items[2].milestone, true) }],
+    ['architecture', s => { assert.equal(s.variant, 'layered'); assert.equal(s.items.length, 4); assert.equal(s.items[3].status, 'accent') }],
+    ['harvey', s => { assert.equal(s.tableStyle, 'harvey'); assert.ok(s.rows.length >= 3); assert.ok(s.rows[1].includes('●')) }],
+    ['tam', s => { assert.equal(s.variant, 'concentric'); assert.deepEqual(s.items.map(i => i.tag), ['TAM', 'SAM', 'SOM']) }],
+    ['org', s => { assert.equal(s.variant, 'tree'); assert.equal(s.items.length, 4); assert.ok(s.items[0].role) }],
+  ]) {
+    const res = await wb.action({ operation: 'append', id, expectedRevision: rev++, archetype })
+    const appended = res.project.slides.at(-1)
+    assert.equal(appended.layout, archetype)
+    check(appended)
+  }
+}))
+
+test('workbench patch validates chrome, brand.chromeStyle null reset, fractional gantt spans, and invalid bounds', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const slideId = (await wb.action({ operation: 'open', id })).project.slides[1].id
+
+  const setChrome = await wb.action({ operation: 'edit', id, expectedRevision: 0, brand: { chromeStyle: 'keynote-spatial' } })
+  assert.equal(setChrome.project.brand.chromeStyle, 'keynote-spatial')
+  const clearedChrome = await wb.action({ operation: 'edit', id, expectedRevision: 1, brand: { chromeStyle: null } })
+  assert.equal(clearedChrome.project.brand?.chromeStyle, undefined)
+
+  const fracGantt = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 2,
+    slide: slideId,
+    patch: {
+      layout: 'gantt',
+      chrome: 'consulting-classic',
+      columns: ['W1', 'W2', 'W3', 'W4'],
+      items: [{ tag: 'Prep', title: 'Discovery', start: 0.5, span: 1.5 }, { tag: 'Gate', title: 'Freeze', start: 3, span: 0, milestone: true }],
+    },
+  })
+  assert.equal(fracGantt.project.slides[1].chrome, 'consulting-classic')
+  assert.equal(fracGantt.project.slides[1].items[0].start, 0.5)
+  assert.equal(fracGantt.project.slides[1].items[0].span, 1.5)
+  assert.equal(fracGantt.project.slides[1].items[1].span, 0)
+
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 3, brand: { chromeStyle: 'unknown-chrome' } }), /母版骨架/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 3, slide: slideId, patch: { chrome: 'unknown-chrome' } }), /母版骨架/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 3, slide: slideId, patch: { columns: [] } }), /甘特图列头无效/)
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 3, slide: slideId, patch: { items: [{ title: 'Bad', span: -1 }] } }), /结构化卡片内容无效/)
+}))
+
+test('Style Studio bundle includes 6-Chrome Master Skeleton picker, 24 layouts, and absorb skeleton summary UI', () => {
+  const bundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  for (const label of [
+    '麦肯锡直角', 'Apple 空间留白', '杂志社论书脊', '黑曜石 Bento', '学术顶栏横幅', '东方政务双线',
+    'brand-chrome', '哈维球矩阵', 'Harvey balls', '时间轴列头', 'extractedSkeleton', 'recommendedChrome',
+  ]) {
+    assert.ok(bundle.includes(label), label + ' missing from Style Studio bundle')
   }
 })

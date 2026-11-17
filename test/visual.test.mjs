@@ -217,3 +217,117 @@ test('provider secrets and error bodies never enter visual model errors; output 
   llm.prepareCall=async config=>({config,inputModalities:['text','image'],async *stream(){yield {type:'finish',reason:{kind:'max-tokens'}}}})
   await assert.rejects(native.inspect(route,'policy','input',[{data:png,name:'slide.png'}],new AbortController().signal),/输出上限/)
 })
+
+test('24-slide full-deck scope computes maxCalls=84, persists cleanly, and rejects 25 slides',async t=>{
+  const directory=mkdtempSync(join(root,'visual-24-'));t.after(()=>rmSync(directory,{recursive:true,force:true}))
+  const slides24=Array.from({length:24},(_,i)=>({layout:'bullets',title:'第 '+(i+1)+' 页',bullets:['要点一','要点二']}))
+  const created24=await engine.buildDeckAsync({title:'24页全量检查',outputDir:directory,fileName:'deck24',slides:slides24})
+  const wb=new PptWorkbench({catalogPath:join(directory,'projects.jsonl'),loadEngine:async()=>({...engine,renderDeck:args=>renderDeck(args,fakeKit)}),visualModel:{routes:async()=>[route],inspect:async data=>JSON.stringify({slides:JSON.parse(data).slides.map(s=>({slideId:s.id,findings:[]}))})}})
+  t.after(()=>wb.visual.dispose())
+  await wb.remember(created24,{})
+  const id=(await wb.action({operation:'list'})).projects[0].id
+  const {run}=await wb.action({operation:'visual-create',id,expectedRevision:0,confirmed:true,...route,repairs:2})
+  assert.equal(run.maxCalls,84)
+  assert.equal(run.rounds[0].ids.length,24)
+  const reloaded=(await wb.action({operation:'visual-get',id,runId:run.id})).run
+  assert.equal(reloaded.maxCalls,84)
+  const created25=await engine.buildDeckAsync({title:'25页',outputDir:directory,fileName:'deck25',slides:[...slides24,{layout:'closing',title:'结束'}]})
+  await wb.remember(created25,{})
+  const id25=(await wb.action({operation:'list'})).projects[0].id
+  await assert.rejects(wb.action({operation:'visual-create',id:id25,expectedRevision:0,confirmed:true,...route,repairs:1}),/1–24/)
+})
+
+test('art-director rubric accepts aesthetic kinds/severity and applies 5 content-preserving layout/polish actions without mutating text or metrics',async t=>{
+  const f=await fixture(t,async data=>{
+    if(data.round>0)return {slides:data.slides.map(s=>({slideId:s.id,findings:[]}))}
+    return {slides:data.slides.map(s=>({slideId:s.id,findings:[
+      {kind:'rhythm',severity:'polish',region:'cards',issue:'四条结构化要点适合卡片展示',box:[.1,.2,.8,.5],action:{type:'switch-layout',value:'cards'}},
+      {kind:'whitespace',severity:'polish',region:'body',issue:'调整留白密度',box:[.1,.2,.8,.5],action:{type:'density-mode',value:'airy'}},
+    ]}))}
+  })
+  const {run}=await f.create({repairs:1}),done=await f.finish(run)
+  assert.equal(done.status,'complete');assert.equal(done.reason,'no-findings');assert.equal(done.canAdopt,true)
+  assert.equal(done.rounds[0].findings[0].severity,'polish')
+  const adopted=await f.act('adopt',{runId:run.id,confirmed:true})
+  const copy=engine.readDeckProject({deckPath:adopted.project.path}).manifest
+  assert.equal(copy.slides[0].layout,'cards')
+  assert.equal(copy.slides[0].visual.density,'airy')
+  assert.deepEqual(copy.slides[0].bullets,engine.readDeckProject({deckPath:f.created.jsonPath}).manifest.slides[0].bullets)
+  assert.equal(copy.slides[0].dataTemplate.bullets[0],'收入 {{revenue}} 万元')
+
+  const composite={slides:[
+    {id:'img',layout:'image-left',title:'图文',bullets:['保留'],image:{src:'data:image/png;base64,'+png.toString('base64'),fit:'contain'}},
+    {id:'cht',layout:'chart',title:'图表',chart:{kind:'column',categories:['Q1','Q2'],series:[{name:'收入',values:[10,25]}]}},
+    {id:'tbl',layout:'table',title:'三线表',rows:[['指标','数值'],['准确率','98.4%']]},
+    {id:'kpi',layout:'bullets',title:'核心指标',bullets:['收入增长 32%','留存率 94%']},
+  ]}
+  const updated=applyVisualActions(composite,[
+    {slideId:'img',type:'swap-image-side'},
+    {slideId:'cht',type:'chart-highlight',value:'max'},
+    {slideId:'tbl',type:'table-style',value:'booktabs'},
+    {slideId:'kpi',type:'switch-layout',value:'kpi'},
+  ])
+  assert.equal(updated[0].layout,'image-right')
+  assert.equal(updated[1].chart.highlight,'max')
+  assert.equal(updated[2].tableStyle,'booktabs')
+  assert.equal(updated[3].layout,'kpi')
+  assert.deepEqual(updated[3].bullets,['收入增长 32%','留存率 94%'])
+})
+
+test('visual inspection payload forwards slide chrome, columns, and pro-diagram layouts to vision model',async t=>{
+  const directory=mkdtempSync(join(root,'visual-pro-'));t.after(()=>rmSync(directory,{recursive:true,force:true}))
+  const seenSlides=[]
+  const created=await engine.buildDeckAsync({title:'专业图示与骨架检查',outputDir:directory,fileName:'pro-diagrams',theme:'consulting',brand:{chromeStyle:'consulting-classic'},slides:[
+    {layout:'gantt',chrome:'editorial-folio',title:'季度路线图',columns:['Q1','Q2','Q3','Q4'],items:[{tag:'R1',title:'平台底座',start:0,span:2,status:'accent'},{tag:'GA',title:'上线里程碑',start:3,span:0,milestone:true}]},
+    {layout:'architecture',chrome:'academic-minimal',title:'系统分层架构',items:[{tag:'API',title:'网关层',bullets:['鉴权','限流']},{tag:'SEC',title:'安全底座',status:'accent',bullets:['审计']}]},
+    {layout:'harvey',title:'竞品哈维球矩阵',rows:[['维度','本方案','竞品A'],['原生可编辑','●','◑']]},
+    {layout:'tam',title:'市场规模',items:[{tag:'TAM',value:'$12B',title:'总市场'},{tag:'SAM',value:'$3B',title:'可服务'},{tag:'SOM',value:'$300M',title:'可触达'}]},
+    {layout:'org',variant:'tree',title:'组织分工',items:[{tag:'CEO',role:'Lead',title:'总负责人'},{tag:'CTO',role:'Tech',title:'技术中心'}]},
+  ]})
+  const wb=new PptWorkbench({catalogPath:join(directory,'projects.jsonl'),loadEngine:async()=>({...engine,renderDeck:args=>renderDeck(args,fakeKit)}),visualModel:{routes:async()=>[route],inspect:async(_r,_s,input)=>{const parsed=JSON.parse(input);seenSlides.push(...parsed.slides);return JSON.stringify({slides:parsed.slides.map(s=>({slideId:s.id,findings:[]}))})}}})
+  t.after(()=>wb.visual.dispose())
+  await wb.remember(created,{})
+  const id=(await wb.action({operation:'list'})).projects[0].id
+  const {run}=await wb.action({operation:'visual-create',id,expectedRevision:0,confirmed:true,...route,repairs:0})
+  let cur=run;while(cur.status==='ready')cur=(await wb.action({operation:'visual-step',id,expectedRevision:0,runId:cur.id,confirmed:true})).run
+  assert.equal(cur.status,'complete')
+  assert.equal(seenSlides[0].chrome,'editorial-folio')
+  assert.deepEqual(seenSlides[0].columns,['Q1','Q2','Q3','Q4'])
+  assert.equal(seenSlides[1].chrome,'academic-minimal')
+  assert.equal(seenSlides[1].layout,'architecture')
+  assert.equal(seenSlides[2].layout,'harvey')
+  assert.equal(seenSlides[3].layout,'tam')
+  assert.equal(seenSlides[4].layout,'org')
+})
+
+test('visual repair preserves slide chrome, gantt columns, and pro-diagram items without mutating content',async t=>{
+  const directory=mkdtempSync(join(root,'visual-pro-repair-'));t.after(()=>rmSync(directory,{recursive:true,force:true}))
+  const created=await engine.buildDeckAsync({title:'修复保留骨架与图示',outputDir:directory,fileName:'pro-repair',slides:[
+    {layout:'gantt',chrome:'gov-ceremonial',title:'里程碑路线图',columns:['Q1','Q2','Q3'],items:[{tag:'M1',title:'基础设施',start:0,span:2},{tag:'M2',title:'发布门禁',start:2,span:0,milestone:true}]},
+    {layout:'harvey',title:'能力对比',rows:[['能力','本方案','竞品'],['导出','●','◑']]},
+  ]})
+  const before=engine.readDeckProject({deckPath:created.jsonPath}).manifest
+  const copy=await engine.repairDeckVisual({deckPath:created.jsonPath,expectedRevision:0,actions:[
+    {slideId:before.slides[0].id,type:'title-size',value:28},
+    {slideId:before.slides[0].id,type:'density-mode',value:'compact'},
+    {slideId:before.slides[1].id,type:'body-size',value:18},
+  ]})
+  const after=engine.readDeckProject({deckPath:copy.jsonPath}).manifest
+  assert.equal(after.slides[0].chrome,'gov-ceremonial')
+  assert.deepEqual(after.slides[0].columns,['Q1','Q2','Q3'])
+  assert.equal(after.slides[0].items[1].milestone,true)
+  assert.equal(after.slides[0].visual.titleSize,28)
+  assert.equal(after.slides[0].visual.density,'compact')
+  assert.deepEqual(after.slides[1].rows,before.slides[1].rows)
+})
+
+test('visual guardrails ignore invalid pro-diagram layout switches and unsupported table styles',async t=>{
+  const f=await fixture(t,async data=>({slides:data.slides.map(s=>({slideId:s.id,findings:[
+    {kind:'rhythm',severity:'polish',region:'body',issue:'尝试无效切版式',box:[.1,.2,.8,.5],action:{type:'switch-layout',value:'gantt'}},
+    {kind:'contrast',severity:'polish',region:'table',issue:'尝试非白名单表样',box:[.1,.2,.8,.5],action:{type:'table-style',value:'neon'}},
+  ]}))}))
+  const {run}=await f.create({repairs:1}),done=await f.finish(run)
+  assert.equal(done.reason,'manual')
+  assert.equal(done.rounds[0].findings[0].action,undefined)
+  assert.equal(done.rounds[0].findings[1].action,undefined)
+})

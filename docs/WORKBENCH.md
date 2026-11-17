@@ -1,8 +1,8 @@
 # dsh-ppt 工作台 / Workbench
 
-演示文稿主工作台，页面、画布与属性分栏；数据推演切页保留预览联动，未保存保护和画面内全屏退出更完整。
+演示文稿主工作台，提供页面栏、画布区与五栏属性面板（内容编辑、风格与母版、视觉检查、演练、数据与推演）；支持一键切换 18 套主题、6 套母版骨架与 24 种版式原型、拖拽深度吸收参考 `.pptx` 配色与骨架、HTML ↔ PPTX 并排对比及画布级视觉修复前后对照，保留跨栏推演联动、未保存保护和画面内全屏退出。
 
-Presentation workbench with slide outline, canvas and inspector; preserves live what-if previews across tabs, dirty navigation and visible fullscreen exit.
+Presentation workbench with slide rail, split-capable canvas, and five inspector tabs (Edit content, Style Studio, Visual review, Rehearsal, Data and what-if); supports 1-click switching across 18 themes, 6 master chrome skeletons, and 24 slide archetypes, in-memory deep `.pptx` style & skeleton absorption, HTML ↔ PPTX side-by-side comparison, and full-width Vision QA before/after diffs while preserving live what-if previews, dirty-edit guards, and fullscreen exit controls.
 
 ## 使用 / Use
 
@@ -13,6 +13,17 @@ Update the plugin, restart DSH and open its native sidebar panel (or More if it 
 界面跟随宿主中英文和深浅色，保留用户内容原文。窄窗口中先显示列表，打开详情后可返回；编辑器按可用宽度分栏或顺序排列。危险操作需要明确确认，未保存内容不会因切页而静默丢失。
 
 The UI follows host language and theme without translating user content. Narrow master/detail views have a Back action; editors adapt their columns to available space. Destructive actions require confirmation and edits are protected.
+
+## 五栏能力与风格母版 / Inspector tabs and Style Studio
+
+- **页面栏与新建页面 / Slide rail & New slide**：每张页面卡片显示当前版式标签与质量状态圆点；点击「+ 新建页面 / + New slide」可按 KPI、多栏卡片、双栏对比、四象限、流程、甘特图路线图、分层系统架构、哈维球竞品矩阵、TAM/SAM/SOM 同心圆、组织/团队图谱、三线表、核心结论等原型直接追加起始页（上限 120 页，支持排序、复制、删除与撤销）。
+  Each slide card shows its layout badge and quality status dot; **+ New slide** appends a localized starter slide for the chosen archetype (up to 120 slides, undoable alongside reorder, duplicate, and delete).
+- **内容编辑与一键换版式 / Content inspector & archetype switcher**：顶部一键切换 24 种版式原型、变体、单页母版骨架（`chrome`）与疏密模式（`compact | balanced | airy`），自动在要点列表、结构化卡片（`items`，含甘特图 `start`/`span`、时间轴列头 `columns`、团队 `role`、漏斗 `conversion`）和表格（`rows`）之间无损映射草稿；支持切换表格样式（咨询表 `consulting` / 学术三线表 `booktabs` / 极简 `minimal` / 条纹 `banded` / 哈维球矩阵 `harvey`）以及底部结论栏（`takeaway`）和来源角注（`source`）。
+  Switch across all 24 archetypes, variants, per-slide `chrome` skeleton, and density modes with lossless draft projection between bullets, structured `items` (including Gantt `start`/`span`, `columns`, `role`, `conversion`), and table `rows`; edit card fields, `tableStyle` (including `harvey`), `takeaway`, and `source` directly.
+- **风格与母版 / Style Studio**：按明亮主题（12 套）与深色主题（6 套）分区展示实时色板和场景标签，支持整套一键换肤、**6 套母版骨架（`brand.chromeStyle`：麦肯锡直角 / Apple 空间留白 / 杂志社论书脊 / 黑曜石 Bento / 学术顶栏横幅 / 东方政务双线）**一键切换、品牌色/字体/页脚/Logo（PNG/JPEG 面板上传）定制，以及拖拽上传参考 `.pptx`（≤10 MiB，仅在内存中解析色板、字体、嵌入 Logo、骨架几何 `extractedSkeleton`、推荐骨架 `recommendedChrome` 与逐页 `slideSkeleton`，绝不读取浏览器传入的任意宿主机本地路径）并一键应用。
+  Browse 12 daylight and 6 dark themes with live palette swatches, switch across **6 Master Chrome Skeletons** (`brand.chromeStyle`), edit brand tokens and uploaded PNG/JPEG logos, or drop a reference `.pptx` (`≤10 MiB`, parsed strictly in memory with zero host path access) to preview `extractedSkeleton`, `recommendedChrome`, `slideSkeleton`, and apply extracted colors and recommended styles in 1 click.
+- **画布并排对比与问题定位 / Split canvas & clickable findings**：画布顶部支持切换「HTML 预览」「PPTX 渲染页」与「HTML + PPTX 并排对比」；视觉检查记录可在画布中央展开大尺寸「修复前 / 修复后」对照图；点击底部质量问题行可直接跳到对应页码。
+  Toggle HTML preview, rendered PPTX pages, or **HTML + PPTX side-by-side** split view; inspect full-width Vision QA before/after comparisons in the center canvas, and click any quality finding row to jump directly to its slide.
 
 ## 下载与分享 / Download and share
 
@@ -28,9 +39,9 @@ Open **Download output** and save edits first. **Share bundle ZIP** contains the
 
 ## 源码 / Source
 
-编辑 templates/client.js、templates/panels/*.js 与 templates/workbench-ui.js，运行 pnpm run build。lib/client.js 是确定性产物，请随源码提交。公共组件的规范源位于 dsh-suite/ui/workbench-ui.js，Suite 的同步脚本显式分发副本；单个仓库可独立构建和安装。
+编辑 `templates/client.js`、`templates/panels/*.js`（含 `editor.js`、`library.js`、`style-studio.js`）与 `templates/workbench-ui.js`，运行 `pnpm run build`。`lib/client.js` 是确定性产物，请随源码提交。公共组件的规范源位于 `dsh-suite/ui/workbench-ui.js`，Suite 的同步脚本显式分发副本；单个仓库可独立构建和安装。
 
-Edit the template sources and run pnpm run build. Commit generated lib/client.js with source changes. The vendored UI has no Suite runtime dependency.
+Edit the template sources (`templates/client.js`, `templates/panels/*.js`, `templates/workbench-ui.js`) and run `pnpm run build`. Commit generated `lib/client.js` with source changes. The vendored UI has no Suite runtime dependency.
 
 ## 验收范围 / Validation boundary
 
@@ -42,6 +53,6 @@ Edit the template sources and run pnpm run build. Commit generated lib/client.js
 
 ## 工程查找 / Find projects
 
-工程列表可按关键词筛选，并按最近更新、最早更新或自然标题顺序排列；多个词需要同时匹配。PPT 只查目录中的标题和工程路径；视频查标题、正文和模板，当前列表与归档列表各自保留筛选条件。清空搜索会恢复完整列表，返回工程库会保留刚才的搜索和排序。筛选只在本机列表中执行，不读取未选工程的完整文件，也不修改工程内容。
+工程列表可按关键词筛选，并按最近更新、最早更新或自然标题顺序排列；多个词需要同时匹配。PPT 只查目录中的标题和工程路径（目录同时缓存主题、页数与修订号供快速预览）；视频查标题、正文和模板，当前列表与归档列表各自保留筛选条件。清空搜索会恢复完整列表，返回工程库会保留刚才的搜索和排序。筛选只在本机列表中执行，不读取未选工程的完整文件，也不修改工程内容。
 
-Search the local project list and sort by newest update, oldest update or natural title. Multiple terms must all match. PPT searches catalog titles and paths; video searches titles, text and templates, with separate active/archive filters. Clear restores the full list; returning from editing preserves filters. Filtering does not load unselected project files or change project contents.
+Search the local project list and sort by newest update, oldest update or natural title. Multiple terms must all match. PPT searches catalog titles and paths (while caching theme, slide count, and revision metadata in the catalog); video searches titles, text and templates, with separate active/archive filters. Clear restores the full list; returning from editing preserves filters. Filtering does not load unselected project files or change project contents.

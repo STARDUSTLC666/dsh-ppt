@@ -11,18 +11,40 @@ const messages: Record<string, string> = {
   '项目位置已改变，请在对话中重新检查': 'The project location changed. Run ppt_check in chat again.',
   '项目已被修改，请重新打开后再编辑；当前输入保留': 'The project changed. Load the latest version before editing; your input is preserved.',
   '项目已被修改，请重新打开后下载': 'The project changed. Open the latest version before downloading.',
-  '修改内容无效': 'The edits are invalid.', '文字字段过长或无效': 'A text field is invalid or exceeds 8,000 characters.',
+  '修改内容无效': 'The edits are invalid.',
+  '文字字段过长或无效': 'A text field is invalid or exceeds 8,000 characters.',
   '要点内容无效': 'Bullets must contain up to 50 lines, each no longer than 2,000 characters.',
+  '版式名称无效': 'The slide layout is invalid.',
+  '版式变体名称过长或无效': 'The layout variant is invalid.',
+  '表格样式无效': 'The table style is invalid.',
+  '甘特图列头无效': 'Timeline column headers must be 1–52 short labels.',
+  '结构化卡片内容无效': 'The structured card items are invalid.',
+  '表格内容需为 1–50 行、1–12 列的文字或有限数字，且每行格数一致': 'Tables require 1–50 rows and 1–12 equal-width columns of text or finite numbers.',
+  '排版设置无效或字号超出允许范围': 'The formatting settings are invalid or outside the allowed size range.',
+  '主题名称无效': 'The theme identifier is invalid.',
+  '品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo': 'Invalid brand settings. Check #RRGGBB colours, font family, footer length, or upload a PNG/JPEG logo from this panel.',
+  '请选择有效的参考 PPTX 文件（10 MiB 以内）': 'Choose a valid reference PPTX file up to 10 MiB.',
+  '当前引擎版本暂不支持参考 PPTX 吸收': 'Reference PPTX style extraction is unavailable in the current engine.',
+  '页数已达 120 页上限，无法继续新增页面': 'The presentation already has 120 slides and cannot add more.',
   '请选择 PNG 或 JPEG 图片': 'Choose a PNG or JPEG image.',
   '图片必须从面板上传，不能读取其他本地文件': 'Upload the image from this panel. Other local file paths cannot be read.',
   '图片说明或适应方式无效': 'The image description or fit setting is invalid.',
-  '不支持此文件类型': 'This file type is unsupported.', '请先渲染当前版本的 PPTX': 'Render the current PPTX version first.',
-  '页码无效': 'The slide number is invalid.', '渲染图片已变化，请重新渲染当前 PPTX': 'The rendered image changed. Render the current PPTX again.',
-  '项目已被修改，请重新渲染': 'The project changed. Render it again.', '页面不存在': 'This slide no longer exists.',
-  '不支持此操作': 'This operation is unsupported.', '请使用 GET': 'Use GET.', '请使用 POST': 'Use POST.',
-  '拒绝跨站操作': 'Cross-site operations are refused.', '拒绝跨源操作': 'Cross-origin operations are refused.', '无效来源': 'Invalid request origin.',
-  '请从演示文稿面板操作': 'Perform this operation from the presentation panel.', '缺少请求内容': 'The request body is missing.',
-  '图片或请求超过 12 MiB，请压缩后重试': 'The image or request exceeds 12 MiB. Reduce its size and try again.', '请求必须是对象': 'The request must be an object.',
+  '不支持此文件类型': 'This file type is unsupported.',
+  '请先渲染当前版本的 PPTX': 'Render the current PPTX version first.',
+  '页码无效': 'The slide number is invalid.',
+  '渲染图片已变化，请重新渲染当前 PPTX': 'The rendered image changed. Render the current PPTX again.',
+  '项目已被修改，请重新渲染': 'The project changed. Render it again.',
+  '页面不存在': 'This slide no longer exists.',
+  '不支持此操作': 'This operation is unsupported.',
+  '请使用 GET': 'Use GET.',
+  '请使用 POST': 'Use POST.',
+  '拒绝跨站操作': 'Cross-site operations are refused.',
+  '拒绝跨源操作': 'Cross-origin operations are refused.',
+  '无效来源': 'Invalid request origin.',
+  '请从演示文稿面板操作': 'Perform this operation from the presentation panel.',
+  '缺少请求内容': 'The request body is missing.',
+  '图片或请求超过 12 MiB，请压缩后重试': 'The image or request exceeds 12 MiB. Reduce its size and try again.',
+  '请求必须是对象': 'The request must be an object.',
 }
 
 export function englishWorkbenchMessage(message: string): string {
@@ -33,9 +55,10 @@ export function englishWorkbenchMessage(message: string): string {
   if (/渲染引擎不可用/.test(message)) return 'The optional PPTX renderer is unavailable. Install the supported LibreOffice Kit version and restart DSH.'
   if (/渲染超过|超时/.test(message)) return 'PPTX rendering timed out. Try a smaller presentation and check the renderer logs.'
   if (/面板不支持修改此字段/.test(message)) return 'This field cannot be edited from the panel.'
+  if (/未知主题|不支持的主题/.test(message)) return 'Unknown theme identifier. Choose one of the built-in themes.'
   if (/没有可撤销|无法撤销|历史记录为空/.test(message)) return 'No change is available to undo.'
   if (/至少保留一页/.test(message)) return 'Keep at least one slide in the presentation.'
-  if (/工程页数超过 120/.test(message)) return 'A presentation can contain at most 120 slides.'
+  if (/工程页数超过 120|超过 120/.test(message)) return 'A presentation can contain at most 120 slides.'
   if (/没有.*图片|超过.*MiB|图片.*无效/.test(message)) return 'The image is invalid or too large. Choose another PNG or JPEG image.'
   return /[\u3400-\u9fff]/.test(message) ? 'The operation failed. Check the project files and DSH logs, then try again.' : message
 }
@@ -59,7 +82,20 @@ const quality: Record<string, [string, string]> = {
   'low-contrast': ['Body text and background contrast is below 4.5:1.', 'Adjust the brand background or text colour.'],
   'missing-logo': ['The brand logo asset is missing.', 'Provide the logo again.'],
   'invalid-logo': ['The brand logo asset is invalid.', 'Replace the logo with a valid image.'],
+  'SLOP-01': ['The slide title reads like a generic topic label rather than a takeaway.', 'Rewrite the title as a clear, evidence-backed conclusion sentence.'],
+  'weak-title': ['The slide title reads like a generic topic label rather than a takeaway.', 'Rewrite the title as a clear, evidence-backed conclusion sentence.'],
+  'SLOP-02': ['Repeated generic kickers weaken chapter orientation.', 'Use meaningful chapter breadcrumbs instead of generic labels.'],
+  'repeated-kicker': ['Repeated generic kickers weaken chapter orientation.', 'Use meaningful chapter breadcrumbs instead of generic labels.'],
+  'SLOP-03': ['Too many bullet items compete for attention on one slide.', 'Split the slide or switch to cards, comparison, or process steps.'],
+  'SLOP-04': ['Card or body text is too dense for comfortable projection.', 'Trim each item to its core point so body text stays above 13.5pt.'],
+  'SLOP-06': ['Single-series legends or dense gridlines add visual clutter.', 'Prefer direct value labels, muted hairlines, and focal highlights.'],
+  'SLOP-07': ['Custom colours fall below recommended contrast thresholds.', 'Use the Style Studio sanitizer or increase foreground/background contrast.'],
+  'SLOP-08': ['Several consecutive slides repeat the same layout.', 'Vary slide archetypes (KPI, cards, comparison, process, chart) to improve pacing.'],
+  'monotonous-layout': ['Several consecutive slides repeat the same layout.', 'Vary slide archetypes (KPI, cards, comparison, process, chart) to improve pacing.'],
+  'SLOP-09': ['The closing slide lacks a concrete next step or call to action.', 'Add actionable next steps, owners, or contact details to the closing slide.'],
+  'weak-closing': ['The closing slide lacks a concrete next step or call to action.', 'Add actionable next steps, owners, or contact details to the closing slide.'],
 }
+
 export function bilingualQuality<T extends { issues?: any[] }>(report: T): T {
   return { ...report, issues: report.issues?.map(issue => {
     const entry = quality[issue.code]
