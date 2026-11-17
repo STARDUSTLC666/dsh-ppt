@@ -2,7 +2,7 @@
 
 # PPT
 
-**Bring your material. Leave with a presentation you can deliver.**
+**Turn source material into deliverable presentations in DeepSeek Harness—HTML playback, editable PPTX, and project bundles—in a 5-theme light workbench.**
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
@@ -20,6 +20,7 @@
 - Generate HTML slides, editable PPTX and a project bundle.
 - Optionally edit text, images and slide order with undo.
 - Choose traceable data, live scenarios, AI review or rehearsal when needed.
+- Adapted for DeepSeek Harness `>=0.2.2-rc.3` with 5 switchable studio themes (Native Airy / Warm Cream / Claude Warmth / Bright 8-Bit / Airy Mint).
 
 ## Style previews
 
