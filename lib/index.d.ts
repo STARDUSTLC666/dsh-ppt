@@ -15,6 +15,7 @@ export interface PptPluginContext {
     logger?: {
         warn?(message: string): void;
     };
+    effect?(fn: () => () => void): unknown;
     on?(event: string, listener: () => void): () => void;
     inject?(services: string[], callback: (ctx: any) => void): unknown;
 }

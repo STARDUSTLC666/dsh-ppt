@@ -35,6 +35,7 @@ export interface PptPluginContext {
   tools: { register(definition: ToolDefinition): () => void }
   skills: SkillsService
   logger?: { warn?(message: string): void }
+  effect?(fn: () => () => void): unknown
   on?(event: string, listener: () => void): () => void
   inject?(services: string[], callback: (ctx: any) => void): unknown
 }
@@ -75,10 +76,15 @@ export function apply(ctx: PptPluginContext, config: Config = {}): void {
     } }))
   }
 
+  let cleaned = false
+  const cleanup = (): void => {
+    if (cleaned) return
+    cleaned = true
+    for (const dispose of disposers.splice(0).reverse()) dispose()
+  }
+  ctx.effect?.(() => cleanup)
   if (typeof ctx.on === 'function') {
-    ctx.on('dispose', () => {
-      for (const dispose of disposers) dispose()
-    })
+    ctx.on('dispose', cleanup)
   }
 }
 

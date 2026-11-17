@@ -12,8 +12,10 @@ if (client.includes('__ENGINE__')) {
 }
 const directory = join(root, 'templates/panels')
 const parts = existsSync(directory) ? readdirSync(directory).filter(name => name.endsWith('.js')).sort().map(name => normalize(readFileSync(join(directory, name), 'utf8'))).join('\n') : ''
-const marker = 'const W = createWorkbenchUI(React);'
+const marker = client.includes('const W = createWorkbenchUI(React, require);')
+  ? 'const W = createWorkbenchUI(React, require);'
+  : 'const W = createWorkbenchUI(React);'
 if (!client.includes(marker)) throw new Error('Workbench source marker missing')
-client = client.replace(marker, marker + '\n' + parts)
+client = client.replace(marker, () => marker + '\n' + parts)
 mkdirSync(join(root, 'lib'), { recursive: true })
 writeFileSync(join(root, 'lib/client.js'), '// Generated from templates/client.js, templates/panels/ and templates/workbench-ui.js. Edit the sources.\n(function () {\n' + kit + '\n' + client + '\n})();\n')
