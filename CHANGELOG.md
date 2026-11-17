@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.20.8 (2026-11-17)
+
+- 在工作台单独检查和安装兼容版本。自动安装默认关闭，可为该插件开启空闲时的稳定补丁更新。
+- Check and install compatible versions separately from the workbench. Automatic installation is off by default. Enable it for this plugin to apply stable patches while idle.
+
 ## 0.20.7 (2026-11-16)
 
 - 修复 Windows 版 DeepSeek Harness 中 `ppt_render` 导出 PNG 和 PDF 时找不到 `dsoffice.exe` 的问题。使用桌面版已解包的 LibreOffice 引擎即可导出，无需另外安装（#8）。
