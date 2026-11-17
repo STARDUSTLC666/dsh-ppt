@@ -18,8 +18,8 @@ importers:
         specifier: 0.21.0
         version: 0.21.0
       '@stardustlc/dsh-updates':
-        specifier: 0.2.1
-        version: 0.2.1
+        specifier: 0.2.2
+        version: 0.2.2
       csv-parse:
         specifier: 6.1.0
         version: 6.1.0
@@ -152,8 +152,8 @@ packages:
     resolution: {integrity: sha512-m3E+DUw4KmnK1IMh87huvm84DUISjS4nxRZsGq4mJvVoqHmkqloZcZcxbFncwC8eLfpyHyHGk5x8OjN0LXcmLA==}
     engines: {node: '>=22.18.0'}
 
-  '@stardustlc/dsh-updates@0.2.1':
-    resolution: {integrity: sha512-mUld7eY3YvIxo0bsVxbL1JVmoTp6VwCdmYW842K8Q5EiwzeekU/8ZjTASlX0y//H1ouacFkWFnCcn+5Mv6l9PA==}
+  '@stardustlc/dsh-updates@0.2.2':
+    resolution: {integrity: sha512-fkrvINEzBIExAcdIgs7SgRqYdwsO3iW1OGSRkMZYLToAxWe8mYxGKp9KeGkLytA4v5mI1zxXAcUgr/maIq4MGA==}
     engines: {node: ^22.19.0 || >=24.0.0}
 
   '@swc/helpers@0.5.23':
@@ -329,7 +329,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@stardustlc/dsh-updates@0.2.1':
+  '@stardustlc/dsh-updates@0.2.2':
     dependencies:
       acorn: 8.15.0
       proper-lockfile: 4.1.2

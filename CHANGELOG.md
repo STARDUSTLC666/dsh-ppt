@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.22.1 (2026-11-18)
+
+- 更新区底部新增克制、无打扰的 GitHub 点赞与问题反馈快捷链接，并完善中英文检索关键词。
+- Add subtle, non-intrusive GitHub Star and issue feedback links in the update footer, and expand search keywords.
+
 ## 0.22.0 (2026-11-18)
 
 - **18 套大师主题与 6 套差异化母版骨架**：在保留原有 14 套主题的基础上新增 `keynote-light`（库比蒂诺留白）、`financial-ft`（金融时报）、`medical-clean`（仁心临床）、`luxury-noir`（黑金策展），共 12 套明亮 + 6 套深色主题；引入 6 套结构差异化的母版骨架（`consulting-classic`、`keynote-spatial`、`editorial-folio`、`saas-bento`、`academic-minimal`、`gov-ceremonial`），支持 `brand.chromeStyle` 整稿覆盖与 `slide.chrome` 单页覆盖，HTML 与 PPTX 原生 OOXML 100% 同源对齐。
