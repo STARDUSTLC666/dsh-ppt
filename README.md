@@ -24,27 +24,37 @@
 
 ## 风格预览
 
-这些画面来自插件生成的 PPTX。点击查看大图。
+这些画面来自插件生成的 PPTX（覆盖 6 套母版骨架与高密度专业图示）。点击查看大图。
 
 <table>
 <tr>
-  <th>森系社论封面</th>
-  <th>暖调精装图文页</th>
-  <th>焦点高亮数据页</th>
+  <th>系统架构评审（Architecture）</th>
+  <th>研发 PMO 跨季排期（Gantt）</th>
+  <th>医学临床三期试验（Beamer 三线表）</th>
 </tr>
 <tr>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-zh.webp" alt="森系社论暖白封面，墨绿竖线衬托标题：把街角图书馆变成邻里推门即入的周末精神客厅" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-zh.webp" alt="暖调精装左文右图页，结构化要点配阳光木桌阅读实景与底栏核心结论" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-zh.webp" alt="经济学人风格柱状图数据页，灰阶对照柱衬托第四周墨绿高亮峰值 780 人次与底栏洞察" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-arch-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-arch-zh.webp" alt="Consulting 直角母版三层解耦智能编排架构图与全域零信任安全侧翼" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gantt-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gantt-zh.webp" alt="四季度五泳道云原生重构甘特图，含条尾与独立菱形里程碑" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-clinical-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-clinical-zh.webp" alt="Medical Clean Beamer 通栏页眉配 NEJM 级临床终点三线表与三区学术底栏" width="100%"></a></td>
+</tr>
+<tr>
+  <th>CFO 财务利润桥与归因（FT Waterfall）</th>
+  <th>政企选型技术盲测矩阵（Harvey）</th>
+  <th>集团治理与双线政务章回（Org Tree）</th>
+</tr>
+<tr>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-finance-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-finance-zh.webp" alt="Financial FT 暖鲑底色配 EBIT 利润桥矢量瀑布图与财务动因拆解卡片" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-harvey-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-harvey-zh.webp" alt="6×4 政企技术盲测哈维球矩阵，含高亮主列与矢量饼形哈维球" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gov-org-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gov-org-zh.webp" alt="霁蓝政务双线页眉配【05 · 组织保障】绶带标签与 CDO 组织架构树" width="100%"></a></td>
 </tr>
 </table>
 
-图文页用了生成配图，图表用的是示例数据。
+以上画面均由原生可编辑 PPTX 经 LibreOffice 渲染生成，使用示例脱敏数据。
 
 <details>
 <summary>查看工作台界面</summary>
 
-![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-zh.webp)
+![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-zh.webp?v=0.22.0)
 
 图片来自验证环境的真实界面或示例 PPTX 渲染，使用示例数据。
 

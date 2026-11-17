@@ -24,27 +24,37 @@
 
 ## Style previews
 
-Rendered from PPTX files made with dsh-ppt. Select an image to enlarge it.
+Rendered from native editable PPTX files made with dsh-ppt across distinct master chrome skeletons and domain diagrams. Select an image to enlarge it.
 
 <table>
 <tr>
-  <th>Editorial forest cover</th>
-  <th>Framed photo & takeaway</th>
-  <th>Focal-highlight chart</th>
+  <th>Layered Architecture + Sidecar</th>
+  <th>Multi-Quarter PMO Gantt</th>
+  <th>Phase-III Clinical Booktabs</th>
 </tr>
 <tr>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/editorial-en.webp" alt="Editorial forest warm-ivory cover with a deep-green accent rule: Turning the Corner Library into a Sunlit Neighborhood Living Room" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/reading-corner-en.webp" alt="Warm ivory split layout pairing structured highlights and a bottom takeaway bar with a sunlit oak reading table" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/visits-chart-en.webp" alt="Publication-style column chart highlighting Week 4 peak attendance at 780 visits in deep forest green against muted baseline bars" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-arch-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-arch-en.webp" alt="Three-tier decoupled AI platform architecture diagram with full-height zero-trust observability sidecar" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gantt-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gantt-en.webp" alt="Four-quarter five-swimlane cloud-native migration Gantt roadmap with bar-end and standalone diamond milestones" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-clinical-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-clinical-en.webp" alt="Medical Clean Beamer header band with NEJM-grade three-line booktabs clinical endpoint table and 3-zone footer" width="100%"></a></td>
+</tr>
+<tr>
+  <th>CFO EBIT Waterfall (FT Salmon)</th>
+  <th>Enterprise Harvey Matrix</th>
+  <th>Governance &amp; Org Tree (Gov Chrome)</th>
+</tr>
+<tr>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-finance-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-finance-en.webp" alt="Financial FT Salmon theme pairing vector EBIT waterfall bridge with dense driver attribution cards" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-harvey-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-harvey-en.webp" alt="6x4 enterprise procurement Harvey ball capability matrix with highlighted Ours column and native vector symbols" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gov-org-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v22-gov-org-en.webp" alt="Gov Ceremonial double-rule header with bracketed ribbon kicker and CDO four-center organizational tree" width="100%"></a></td>
 </tr>
 </table>
 
-The photo was generated for the example, and the chart uses sample data.
+All previews are LibreOffice-rendered from native OOXML `.pptx` outputs using sample metrics.
 
 <details>
 <summary>View the workbench</summary>
 
-![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-en.webp)
+![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-en.webp?v=0.22.0)
 
 Actual interface with controlled validation data; the PPTX image is a rendered sample when shown.
 
