@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.24.1 (2026-11-18)
+
+- 升级共享更新组件至 `@stardustlc/dsh-updates@0.2.4`：对话页新增一键热更新提醒卡片，自动检查周期缩短至 6 小时，手动热更新后可顺手开启包含兼容功能小版本的空闲自动更新。
+- Upgrade `@stardustlc/dsh-updates` to `0.2.4`: add an actionable in-chat hot-update reminder card, 6-hour background update checks, compatible minor+patch idle auto-updates, and a post-update opt-in prompt.
+
 ## 0.24.0 (2026-11-18)
 
 - **原生 Office Math（`<m:oMath>` + MathML）公式引擎与四大巅峰商业图示**：新增零外部依赖 `deck-math.mjs`，支持将 `slide.formula` 与行内 `$...$` / `$$...$$` LaTeX 公式确定性编译为原生可编辑 ECMA-376 `<m:oMath>` / `<m:oMathPara>` 与 HTML W3C MathML（覆盖分式 `\frac`、上下标、根式 `\sqrt`、大型求和积分 `\sum`/`\int`、矩阵与希腊字母）；新增 **麦肯锡不等宽市场图（`marimekko`）**、**Apple/NVIDIA 财报级多层级桑基流向图（`sankey`）**、**真·波特价值链（`value-chain`，顶部辅助活动横梁 + 底部咬合基本活动箭头 + 右侧利润楔）** 与 **SWOT 战略十字矩阵（`swot`，含中心破局锚点）**，HTML 与原生 OOXML 100% 同源对齐。
