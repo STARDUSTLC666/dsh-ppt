@@ -1,6 +1,8 @@
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import type { ResolvedPptConfig } from './config.js'
-import type { DeckEngine, PptAbsorbResult, PptCreateArgs, PptThemesResult } from './types.js'
+import type { DeckEngine, PptAbsorbResult, PptCreateArgs, PptCreateResult, PptThemesResult } from './types.js'
 
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
@@ -23,6 +25,27 @@ export function getEngine(): Promise<DeckEngine> {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function resolveImportTarget(rawProjectId: string, cwd: string): { targetProjectDir: string; targetDeckPath?: string } {
+  const value = rawProjectId.trim()
+  if (/^[0-9a-f]{64}$/.test(value)) {
+    const catalogPath = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'plugins', 'dsh-ppt', 'projects.jsonl')
+    if (existsSync(catalogPath)) {
+      let matchedPath: string | undefined
+      for (const line of readFileSync(catalogPath, 'utf8').split('\n')) {
+        try {
+          const row = JSON.parse(line)
+          if (row?.id === value && typeof row?.path === 'string' && row.path.endsWith('.json')) matchedPath = row.path
+        } catch { /* ignore malformed trailing line */ }
+      }
+      if (matchedPath) return { targetProjectDir: dirname(matchedPath), targetDeckPath: matchedPath }
+    }
+    throw new Error('dsh-ppt：未在工作台索引中找到该 projectId，请传入工程 .json 路径或目录')
+  }
+  const abs = resolve(cwd, value)
+  if (value.toLowerCase().endsWith('.json')) return { targetProjectDir: dirname(abs), targetDeckPath: abs }
+  return { targetProjectDir: abs }
 }
 
 /** Build executors with a shared engine loader; resolve paths separately for each call. */
@@ -135,6 +158,35 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
       if(args.action === 'preview') return engine.previewDeckData(options)
       if(args.action === 'apply') return engine.updateDeckData(options)
       throw new Error('dsh-ppt：action 需为 preview 或 apply / Use preview or apply')
+    },
+    async importPptx(rawArgs: unknown, exec?: PptExecution): Promise<PptCreateResult> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs)
+      if (typeof args.pptxPath !== 'string' || args.pptxPath.trim() === '') {
+        throw new Error('dsh-ppt：pptxPath 不能为空')
+      }
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      const cwd = exec?.agent?.session.header.cwd ?? process.cwd()
+      const rawOut = typeof args.outputDir === 'string' && args.outputDir.trim() !== '' ? args.outputDir.trim() : config.outputDir
+      const resolvedOut = resolve(cwd, rawOut || '.')
+      const target = typeof args.projectId === 'string' && args.projectId.trim() !== ''
+        ? resolveImportTarget(args.projectId, cwd)
+        : undefined
+      return engine.importPptxDeck({
+        pptxPath: args.pptxPath.trim(),
+        cwd,
+        outDir: resolvedOut,
+        outputDir: resolvedOut,
+        ...(target ? { targetProjectDir: target.targetProjectDir, ...(target.targetDeckPath ? { deckPath: target.targetDeckPath } : {}) } : {}),
+        ...(typeof args.projectId === 'string' && args.projectId.trim() !== '' ? { projectId: args.projectId.trim() } : {}),
+        theme: typeof args.theme === 'string' && args.theme.trim() !== '' ? args.theme.trim() : (config.defaultTheme || 'auto'),
+        persona: typeof args.persona === 'string' && args.persona.trim() !== '' ? args.persona.trim() : 'auto',
+        ...(typeof args.chromeStyle === 'string' && args.chromeStyle.trim() !== '' ? { chromeStyle: args.chromeStyle.trim() } : {}),
+        modernize: args.modernize !== false,
+        preserveSourceTheme: args.preserveSourceTheme === true,
+        signal: exec?.signal,
+      })
     },
   }
 }

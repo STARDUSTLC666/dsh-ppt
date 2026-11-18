@@ -13,7 +13,7 @@ const clone = value => structuredClone(value)
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const fail = (zh, en) => { throw new Error('dsh-ppt：' + zh + ' / ' + en) }
 const token = /\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g
-const fields = ['title','subtitle','kicker','text','takeaway','source','bullets','items','columns','rows','notes','chart']
+const fields = ['title','subtitle','kicker','text','takeaway','source','formula','bullets','items','columns','rows','notes','chart']
 const itemAliases = ['cards','metrics','steps','columns','quadrants']
 const numericPattern = /[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?[%％]?/g
 export const dataFingerprint = model => digest({ sources: model.sources, metrics: model.metrics.map(({ ast, dependencies, evidence, ...m }) => m) })
@@ -116,6 +116,14 @@ export function substituteData(value, model, numericValue = false) {
     return math.format(model.values[id],metric)
   })
 }
+function substituteFormula(value, model) {
+  if (typeof value !== 'string') return value
+  return value.replace(token, (_, id) => {
+    const metric = model.metrics.find(m => m.id === id)
+    if (!metric) fail('未知指标：' + id, 'Unknown metric: ' + id)
+    return math.format(model.values[id], metric)
+  })
+}
 function chartTemplate(chart) {
   if (!chart || !chart.rows) return clone(chart)
   return { ...chart, rows:undefined,categories:chart.rows.slice(1).map(r=>r[0]),series:chart.rows[0].slice(1).map((name,c)=>({name,values:chart.rows.slice(1).map(r=>r[c+1])})) }
@@ -150,6 +158,7 @@ function liftItemAliases(slide) {
 export function resolveTemplate(template, model) {
   const next=liftItemAliases(clone(template))
   for (const key of ['title','subtitle','kicker','text','takeaway','source','notes']) if(typeof next[key]==='string')next[key]=substituteData(next[key],model)
+  if (typeof next.formula === 'string') next.formula = substituteFormula(next.formula, model)
   if(Array.isArray(next.bullets))next.bullets=next.bullets.map(v=>substituteData(v,model))
   if(Array.isArray(next.items))next.items=next.items.map(v=>resolveItem(v,model))
   if(Array.isArray(next.columns))next.columns=next.columns.map(v=>typeof v==='string'?substituteData(v,model):v)

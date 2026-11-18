@@ -54,6 +54,9 @@ export type PptSlideLayout =
   | 'harvey'
   | 'tam'
   | 'org'
+  | 'marimekko'
+  | 'sankey'
+  | 'swot'
   | 'table'
   | 'closing'
   | 'image'
@@ -201,6 +204,7 @@ export interface PptSlideSpec {
   takeaway?: string
   source?: string
   text?: string
+  formula?: string
   bullets?: string[]
   items?: PptSlideItem[]
   cards?: PptSlideItem[]
@@ -330,6 +334,17 @@ export interface PptAbsorbResult {
   layoutSummary?: Record<string, unknown>
 }
 
+export interface PptImportArgs {
+  pptxPath: string
+  projectId?: string
+  outputDir?: string
+  theme?: string
+  persona?: PptPersonaId | string
+  chromeStyle?: PptChromeStyle | string
+  modernize?: boolean
+  preserveSourceTheme?: boolean
+}
+
 export interface PptCreateResult {
   ok: boolean
   title: string
@@ -337,14 +352,17 @@ export interface PptCreateResult {
   language: string
   slideCount: number
   outputDir: string
-  files: { html: string; pptx: string; json: string }
+  files: { html: string; pptx: string; json: string; handout?: string }
   htmlPath: string
   pptxPath: string
   jsonPath: string
+  handoutPath?: string
   deckId?: string
   revision?: number
   undoAvailable?: number
   deliveryStatus?: 'draft' | 'ready-for-review'
+  importedFrom?: string
+  syncedProject?: boolean
   quality?: PptQualityResult
   verification?: PptVerification
 }
@@ -352,12 +370,14 @@ export interface PptCreateResult {
 /** Shared generator and optional renderer exposed to the plugin. */
 export interface DeckEngine {
   absorbPptx(options: Record<string, unknown>): Promise<PptAbsorbResult>
+  importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>
   repairDeckVisual(options: Record<string, unknown>): Promise<PptCreateResult>
   readRenderReceipt(pptxPath: string, receiptPath: string): PptRenderResult
   previewDeckData(options: Record<string, unknown>): Record<string, any>
   updateDeckData(options: Record<string, unknown>): Promise<PptCreateResult>
   dataReport(manifest: any): string
   dataNotes(manifest: any, slide: any): string
+  renderHandoutMarkdown?(manifest: any, lang?: string): string
   buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>
   listTemplates(lang?: string): unknown[]
   editDeck(options: Record<string, unknown>): Promise<PptCreateResult>

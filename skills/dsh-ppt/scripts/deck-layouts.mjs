@@ -6,6 +6,20 @@
  */
 
 import { pptxFontName, pptxEastAsianFont, hexToRgba, relativeLuminance, resolveChromeStyle, mixHex } from './deck-themes.mjs'
+import {
+  containsLatexMath,
+  looksLikeRawLatex,
+  unwrapOuterMathDelimiters,
+  maskMathSpans,
+  unmaskMathSpans,
+  splitMathSegments,
+  parseLatexMath,
+  latexToMathMl,
+  astToOmml,
+  astToOoxmlInlineRuns,
+  has2dMathConstruct,
+  fitFormulaBoxIn,
+} from './deck-math.mjs'
 
 // ---------------------------------------------------------------------------
 // 常量与坐标换算（16:9 画布：13.3333" × 7.5" = 12192000 × 6858000 EMU）
@@ -28,7 +42,11 @@ export const CORE_LAYOUTS = new Set([
   'cards',
   'comparison',
   'matrix',
+  'swot',
   'process',
+  'value-chain',
+  'marimekko',
+  'sankey',
   'callout',
   'gantt',
   'architecture',
@@ -51,7 +69,9 @@ export const LAYOUT_ALIASES = Object.freeze({
   funnel: { layout: 'process', variant: 'funnel' },
   flywheel: { layout: 'process', variant: 'flywheel' },
   chevron: { layout: 'process', variant: 'chevron' },
-  'value-chain': { layout: 'process', variant: 'chevron' },
+  porter: { layout: 'value-chain' },
+  mekko: { layout: 'marimekko' },
+  'swot-matrix': { layout: 'swot' },
   'issue-action': { layout: 'comparison', variant: 'issue-action' },
   'before-after': { layout: 'comparison', variant: 'before-after' },
   'matrix-2x2': { layout: 'matrix', variant: '2x2' },
@@ -126,7 +146,8 @@ export function escapeHtml(value) {
 }
 
 export function stripInlineMarkdown(value) {
-  return String(value ?? '')
+  const { masked, stash } = maskMathSpans(String(value ?? ''))
+  const stripped = masked
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/`([^`]*)`/g, '$1')
@@ -137,30 +158,28 @@ export function stripInlineMarkdown(value) {
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+  return unmaskMathSpans(stripped, stash).replace(/`([^`]*)`/g, '$1')
 }
 
 /**
- * 清理不安全标签与链接语法，但保留成对的 **粗体**、*斜体* 与 `代码` 标记。
+ * 清理不安全标签与链接语法，但保留成对的 **粗体**、*斜体*、`代码` 以及 $...$ / $$...$$ 公式标记。
  * 纯文本输入（无标记）输出与 stripInlineMarkdown 完全一致。
  */
 export function cleanRichText(value) {
-  return String(value ?? '')
+  const { masked, stash } = maskMathSpans(String(value ?? ''))
+  const cleaned = masked
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/<[^>]+>/g, '')
     .replace(/__([^_]+)__/g, '**$1**')
     .replace(/\s+/g, ' ')
     .trim()
+  return unmaskMathSpans(cleaned, stash)
 }
 
 const INLINE_TOKEN_RE = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*?\*)/g
 
-/**
- * 将单行富文本拆分为结构化 Run 数组，用于 HTML 与 PPTX 多 <a:r> 同构输出。
- * 支持可选 autoLeadBold：对「短前缀：正文说明」自动加粗前缀（不篡改源字符串）。
- */
-export function parseInlineRuns(input, options = {}) {
-  const text = String(input ?? '')
+function parseMarkdownRunsOnly(text, options = {}) {
   if (text === '') return []
   const hasExplicitMarkup = /\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*?\*/.test(text)
 
@@ -203,10 +222,55 @@ export function parseInlineRuns(input, options = {}) {
   return runs.filter((r) => r.text !== '')
 }
 
-export function renderInlineHtml(input, options = {}) {
+/**
+ * 将单行富文本拆分为结构化 Run 数组，用于 HTML 与 PPTX 多 <a:r> 同构输出。
+ * 支持可选 autoLeadBold 与内联 LaTeX 数学符号/上下标编译。
+ */
+export function parseInlineRuns(input, options = {}) {
   const text = String(input ?? '')
-  const runs = parseInlineRuns(text, options)
-  if (runs.length === 1 && !runs[0].bold && !runs[0].italic && !runs[0].code) {
+  if (text === '') return []
+  if (!containsLatexMath(text)) {
+    return parseMarkdownRunsOnly(text, options)
+  }
+
+  // 支持跨 $math$ 边界的 **粗体** 包裹（如 "**$Q, K, V$ 查询矩阵**"）
+  const out = []
+  let inBold = false
+  const boldParts = text.split('**')
+  const hasBalancedBold = boldParts.length >= 3 && boldParts.length % 2 === 1
+  if (hasBalancedBold) {
+    boldParts.forEach((chunkText, idx) => {
+      const boldActive = idx % 2 === 1
+      if (!chunkText) return
+      const segs = splitMathSegments(chunkText)
+      segs.forEach((seg, sIdx) => {
+        if (seg.type === 'math') {
+          const mathRuns = astToOoxmlInlineRuns(parseLatexMath(seg.latex))
+          out.push(...mathRuns.map((r) => (boldActive ? { ...r, bold: true } : r)))
+        } else {
+          const mdRuns = parseMarkdownRunsOnly(seg.value, idx === 0 && sIdx === 0 && !boldActive ? options : {})
+          out.push(...mdRuns.map((r) => (boldActive ? { ...r, bold: true } : r)))
+        }
+      })
+    })
+    return out.filter((r) => r.text !== '')
+  }
+
+  const segs = splitMathSegments(text)
+  segs.forEach((seg, sIdx) => {
+    if (seg.type === 'math') {
+      const mathRuns = astToOoxmlInlineRuns(parseLatexMath(seg.latex))
+      out.push(...mathRuns.map((r) => (inBold ? { ...r, bold: true } : r)))
+    } else {
+      const mdRuns = parseMarkdownRunsOnly(seg.value, sIdx === 0 ? options : {})
+      out.push(...mdRuns)
+    }
+  })
+  return out.filter((r) => r.text !== '')
+}
+
+function renderRunsToHtml(runs) {
+  if (runs.length === 1 && !runs[0].bold && !runs[0].italic && !runs[0].code && !runs[0].secondary) {
     return escapeHtml(runs[0].text)
   }
   return runs.map((run) => {
@@ -217,6 +281,39 @@ export function renderInlineHtml(input, options = {}) {
     if (run.italic) return '<em>' + escaped + '</em>'
     if (run.secondary) return '<span class="ink-sec">' + escaped + '</span>'
     return escaped
+  }).join('')
+}
+
+export function renderInlineHtml(input, options = {}) {
+  const text = String(input ?? '')
+  if (!containsLatexMath(text)) {
+    return renderRunsToHtml(parseMarkdownRunsOnly(text, options))
+  }
+  const boldParts = text.split('**')
+  if (boldParts.length >= 3 && boldParts.length % 2 === 1) {
+    return boldParts.map((chunkText, idx) => {
+      if (!chunkText) return ''
+      const innerHtml = splitMathSegments(chunkText).map((seg, sIdx) => {
+        if (seg.type === 'math') {
+          return latexToMathMl(seg.latex, {
+            display: seg.display,
+            className: seg.display ? 'deck-math is-block' : 'deck-math is-inline',
+          })
+        }
+        return renderRunsToHtml(parseMarkdownRunsOnly(seg.value, idx === 0 && sIdx === 0 ? options : {}))
+      }).join('')
+      return idx % 2 === 1 ? '<strong>' + innerHtml + '</strong>' : innerHtml
+    }).join('')
+  }
+  const segs = splitMathSegments(text)
+  return segs.map((seg, sIdx) => {
+    if (seg.type === 'math') {
+      return latexToMathMl(seg.latex, {
+        display: seg.display,
+        className: seg.display ? 'deck-math is-block' : 'deck-math is-inline',
+      })
+    }
+    return renderRunsToHtml(parseMarkdownRunsOnly(seg.value, sIdx === 0 ? options : {}))
   }).join('')
 }
 
@@ -356,6 +453,42 @@ function parseBulletToItem(rawBullet, index, layout) {
     }
   }
 
+  if (layout === 'sankey') {
+    const flowMatch = /^(.+?)\s*(?:->|→|=>|──>|——>)\s*([^:：|｜]+?)(?:\s*[:：|｜]\s*(.+))?$/.exec(clean)
+    if (flowMatch) {
+      const srcNode = stripInlineMarkdown(flowMatch[1])
+      const dstNode = stripInlineMarkdown(flowMatch[2])
+      const rest = stripInlineMarkdown(flowMatch[3] ?? '')
+      const statusTag = /\[(positive|negative|warning|accent|neutral)\]/i.exec(rest)
+      const cleanedRest = rest.replace(/\[(positive|negative|warning|accent|neutral)\]/gi, '').trim()
+      const deltaMatch = /\(([+-][^)]+)\)/.exec(cleanedRest)
+      const valMatch = /^([¥$€£]?\s*[+-]?\d[\d,.]*)\s*([^\s(（]*)/.exec(cleanedRest)
+      return {
+        tag: srcNode,
+        title: dstNode,
+        ...(valMatch ? { value: valMatch[1].replace(/\s+/g, ''), ...(valMatch[2] ? { unit: valMatch[2] } : {}) } : (cleanedRest ? { value: cleanedRest } : {})),
+        ...(deltaMatch ? { delta: deltaMatch[1].trim() } : {}),
+        ...(statusTag ? { status: statusTag[1].toLowerCase() } : {}),
+      }
+    }
+  }
+
+  if (layout === 'marimekko') {
+    // 识别形如 "华东政务 (450亿)：本方案 42% | 厂商B 33% | 其他 25%"
+    const mekkoMatch = /^([^:：]+?)[：:]\s*(.+)$/.exec(clean)
+    if (mekkoMatch) {
+      const rawHead = stripInlineMarkdown(mekkoMatch[1])
+      const sizeInHead = /^(.*?)\s*[（(]\s*([¥$€£]?\s*\d[\d,.]*)\s*([^)）]*)[)）]\s*$/.exec(rawHead)
+      const colTitle = sizeInHead ? (sizeInHead[1].trim() || rawHead) : rawHead
+      const segs = mekkoMatch[2].split(/\s*[|｜;；,，]\s*/).map((s) => s.trim()).filter(Boolean)
+      return {
+        title: colTitle,
+        ...(sizeInHead ? { value: sizeInHead[2].replace(/\s+/g, ''), ...(sizeInHead[3].trim() ? { unit: sizeInHead[3].trim() } : {}) } : {}),
+        ...(segs.length > 0 ? { bullets: segs } : {}),
+      }
+    }
+  }
+
   if (layout === 'comparison') {
     const arrowMatch = /^(.+?)\s*(?:->|→|=>|──>|——>|vs\.?|VS)\s*(.+)$/.exec(clean)
     if (arrowMatch) {
@@ -392,15 +525,18 @@ function parseBulletToItem(rawBullet, index, layout) {
   }
 }
 
+const EXTENDED_ITEM_LAYOUTS = new Set(['sankey', 'value-chain', 'marimekko', 'swot'])
+
 export function normalizeSlideItems(rawItems, layout) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) return undefined
+  const maxItems = EXTENDED_ITEM_LAYOUTS.has(layout) ? 12 : 8
   const out = rawItems
-    .slice(0, 8)
+    .slice(0, maxItems)
     .map((entry, idx) => {
       if (typeof entry === 'string') return parseBulletToItem(entry, idx, layout)
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
-      const tag = stripInlineMarkdown(entry.tag ?? entry.badge ?? entry.step ?? entry.phase ?? '')
-      const title = stripInlineMarkdown(entry.title ?? entry.label ?? entry.heading ?? entry.name ?? '')
+      const tag = stripInlineMarkdown(entry.tag ?? entry.badge ?? entry.step ?? entry.phase ?? entry.source ?? entry.from ?? '')
+      const title = stripInlineMarkdown(entry.title ?? entry.label ?? entry.heading ?? entry.name ?? entry.target ?? entry.to ?? '')
       const text = cleanRichText(entry.text ?? entry.body ?? entry.description ?? entry.detail ?? '')
       const value = entry.value !== undefined && entry.value !== null ? stripInlineMarkdown(String(entry.value)) : ''
       const unit = stripInlineMarkdown(entry.unit ?? '')
@@ -415,7 +551,7 @@ export function normalizeSlideItems(rawItems, layout) {
       const role = stripInlineMarkdown(entry.role ?? '')
       const conversion = stripInlineMarkdown(entry.conversion ?? '')
       const bullets = Array.isArray(entry.bullets ?? entry.items)
-        ? (entry.bullets ?? entry.items).map((b) => cleanRichText(String(b))).filter(Boolean).slice(0, 6)
+        ? (entry.bullets ?? entry.items).map((b) => cleanRichText(String(b))).filter(Boolean).slice(0, 8)
         : undefined
       if (!title && !text && !value && (!bullets || bullets.length === 0)) return null
       return {
@@ -440,9 +576,10 @@ export function normalizeSlideItems(rawItems, layout) {
 
 export function resolveEffectiveItems(slide) {
   if (Array.isArray(slide.items) && slide.items.length > 0) return slide.items
+  const maxItems = EXTENDED_ITEM_LAYOUTS.has(slide.layout) ? 12 : 8
   const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
   if (bullets.length > 0) {
-    return bullets.slice(0, 8).map((b, i) => parseBulletToItem(b, i, slide.layout))
+    return bullets.slice(0, maxItems).map((b, i) => parseBulletToItem(b, i, slide.layout))
   }
   if (slide.subtitle || slide.text) {
     return [parseBulletToItem(slide.text || slide.subtitle, 0, slide.layout)]
@@ -534,17 +671,22 @@ export function ooxmlRichParagraph(textOrRuns, options = {}) {
     const runItalic = Boolean(italic || run.italic)
     const runColor = run.accent ? accentColor : run.secondary ? secondaryColor : color
     const runSize = run.sizePt ? Math.round(run.sizePt * 100) : sz
-    const spcAttr = spc !== 0 ? ' spc="' + Math.round(spc) + '"' : ''
+    const effSpc = run.spcEm ? Math.round(spc + run.spcEm * (run.sizePt ?? sizePt) * 100) : spc
+    const spcAttr = effSpc !== 0 ? ' spc="' + Math.round(effSpc) + '"' : ''
+    const baselineAttr = run.baseline ? ' baseline="' + Math.round(run.baseline) + '"' : ''
+    const isPureMathNonCjk = Boolean(run.math && !/[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(run.text))
+    const runLang = isPureMathNonCjk ? 'en-US' : lang
+    const runLatin = isPureMathNonCjk ? 'Georgia' : latinFont
     const hlXml = run.code && codeHighlight
       ? '<a:highlight><a:srgbClr val="' + hex6(codeHighlight) + '"/></a:highlight>'
       : ''
     return (
-      '<a:r><a:rPr lang="' + lang + '" sz="' + runSize + '" b="' + (runBold ? 1 : 0) + '"' +
-      (runItalic ? ' i="1"' : '') + spcAttr + ' dirty="0">' +
+      '<a:r><a:rPr lang="' + runLang + '" sz="' + runSize + '" b="' + (runBold ? 1 : 0) + '"' +
+      (runItalic ? ' i="1"' : '') + baselineAttr + spcAttr + ' dirty="0">' +
       ooxmlSolidFill(runColor) +
       hlXml +
-      '<a:latin typeface="' + escapeXml(latinFont) + '"/>' +
-      '<a:ea typeface="' + escapeXml(eaFont) + '"/>' +
+      '<a:latin typeface="' + escapeXml(runLatin) + '"/>' +
+      '<a:ea typeface="' + escapeXml(isPureMathNonCjk ? runLatin : eaFont) + '"/>' +
       '</a:rPr><a:t>' + escapeXml(run.text) + '</a:t></a:r>'
     )
   }).join('')
@@ -611,6 +753,105 @@ export function ooxmlShape(id, name, boxIn, options = {}) {
     fitXml + '</a:bodyPr><a:lstStyle/>' + bodyContent + '</p:txBody>' +
     '</p:sp>'
   )
+}
+
+/**
+ * 原生自由矢量路径图元 <a:custGeom>（用于桑基图三次贝塞尔流向丝带等高精度几何绘制）。
+ */
+export function ooxmlCustGeomShape(id, name, boxIn, pathCommandsXml, options = {}) {
+  const {
+    pathW = 10000,
+    pathH = 10000,
+    fill = '',
+    fillAlpha = 1,
+    gradientStops = null,
+    gradientAngle = 0,
+    stroke = '',
+    strokePt = 0.75,
+  } = options
+  const b = boxToEmu(boxIn)
+  const fillXml = gradientStops
+    ? ooxmlLinearGradientFill(gradientStops, gradientAngle)
+    : fill
+      ? ooxmlSolidFill(fill, fillAlpha)
+      : '<a:noFill/>'
+  const lnXml = stroke
+    ? '<a:ln w="' + ptToEmu(strokePt) + '" cap="flat">' + ooxmlSolidFill(stroke) + '</a:ln>'
+    : '<a:ln><a:noFill/></a:ln>'
+
+  return (
+    '<p:sp>' +
+    '<p:nvSpPr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
+    '<p:spPr>' +
+    '<a:xfrm><a:off x="' + b.x + '" y="' + b.y + '"/><a:ext cx="' + Math.max(12700, b.w) + '" cy="' + Math.max(12700, b.h) + '"/></a:xfrm>' +
+    '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/>' +
+    '<a:pathLst><a:path w="' + Math.round(pathW) + '" h="' + Math.round(pathH) + '">' +
+    pathCommandsXml +
+    '</a:path></a:pathLst></a:custGeom>' +
+    fillXml + lnXml +
+    '</p:spPr>' +
+    '<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>' +
+    '</p:sp>'
+  )
+}
+
+/**
+ * 原生 ECMA-376 Office Math (<a14:m><m:oMathPara><m:oMath>) 公式卡片构建器。
+ * 为深色主题自动铺设高对比度学术象牙瓷板，确保 LibreOffice StarMath 与 PowerPoint 均呈现 15:1+ 锐利对比且 1:1 自然宽高比无拉伸。
+ */
+export function ooxmlMathShape(id, name, boxIn, latex, options = {}) {
+  const ast = parseLatexMath(latex)
+  const fit = fitFormulaBoxIn(ast, boxIn, {
+    padXIn: options.padXIn ?? 0.24,
+    padYIn: options.padYIn ?? 0.10,
+    emIn: options.emIn ?? 0.30,
+    align: options.align ?? 'ctr',
+  })
+  const b = boxToEmu(fit)
+  const ommlXml = astToOmml(ast, {
+    wrapDrawingMl: true,
+    sizePt: options.sizePt ?? 20,
+    color: options.color ?? '#0F172A',
+  })
+  const algn = options.align === 'l' ? 'l' : 'ctr'
+  return (
+    '<p:sp>' +
+    '<p:nvSpPr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
+    '<p:spPr><a:xfrm><a:off x="' + b.x + '" y="' + b.y + '"/><a:ext cx="' + b.w + '" cy="' + b.h + '"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr>' +
+    '<p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>' +
+    '<a:p><a:pPr algn="' + algn + '"><a:buNone/></a:pPr>' + ommlXml + '</a:p>' +
+    '</p:txBody></p:sp>'
+  )
+}
+
+function renderMathCardPptx(namePrefix, boxIn, latex, nextIdFn, chromeCfg, theme, options = {}) {
+  const tk = theme.tokens
+  const cardPreset = chromeCfg.cardRadiusPx > 0 ? 'roundRect' : 'rect'
+  // 深色主题下使用象牙白学术公式衬板，确保 LibreOffice StarMath 墨色与底板保持 >16:1 对比度
+  const plateFill = theme.dark ? '#F8FAFC' : tk.surface2
+  const out = [
+    ooxmlShape(nextIdFn(), namePrefix + ' Surface', boxIn, {
+      preset: cardPreset,
+      adj: roundRectAdj(boxIn.w, boxIn.h, chromeCfg.cardRadiusPx),
+      fill: plateFill,
+      stroke: chromeCfg.cardBorderless ? '' : tk.accentPrimary,
+      strokePt: 1.0,
+    }),
+    ooxmlShape(nextIdFn(), namePrefix + ' Accent Rail', { x: boxIn.x, y: boxIn.y, w: 0.07, h: boxIn.h }, {
+      preset: 'rect',
+      fill: tk.accentPrimary,
+    }),
+    ooxmlMathShape(nextIdFn(), namePrefix + ' Equation', boxIn, latex, {
+      padXIn: 0.34,
+      padYIn: 0.14,
+      emIn: options.emIn ?? 0.30,
+      sizePt: options.sizePt ?? 20,
+      color: '#0F172A',
+      align: options.align ?? 'ctr',
+    }),
+  ]
+  return out.join('')
 }
 
 export function ooxmlLine(id, name, fromIn, toIn, options = {}) {
@@ -1647,6 +1888,1657 @@ function monogramLetters(name) {
   return parts.length >= 2
     ? (parts[0][0] + parts[1][0]).toUpperCase()
     : clean.slice(0, 2).toUpperCase()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 Pinnacle Layouts 1..4（Marimekko / Sankey / Porter Value Chain / SWOT）
+// ---------------------------------------------------------------------------
+
+function extractNumberAndUnit(raw) {
+  const s = stripInlineMarkdown(String(raw ?? '')).trim()
+  if (!s) return { num: 0, unit: '', raw: '' }
+  const parenMatch = /[（(]\s*([¥$€£]?\s*[+-]?\d[\d,.]*)\s*([^)）]*)[)）]/.exec(s)
+  if (parenMatch) {
+    const num = parseFloat(parenMatch[1].replace(/[¥$€£,\s]/g, ''))
+    const prefixSym = /^[¥$€£]/.exec(parenMatch[1].trim())?.[0] ?? ''
+    const suffixUnit = parenMatch[2].trim()
+    return {
+      num: Number.isFinite(num) ? Math.abs(num) : 0,
+      unit: suffixUnit || prefixSym,
+      prefixSym,
+      label: parenMatch[1].trim() + (suffixUnit ? suffixUnit : ''),
+      cleanTitle: s.replace(parenMatch[0], '').trim(),
+    }
+  }
+  const direct = /([¥$€£]?\s*[+-]?\d[\d,.]*)\s*([%％万亿元美元BmkMKTb]*)/.exec(s)
+  if (direct) {
+    const num = parseFloat(direct[1].replace(/[¥$€£,\s]/g, ''))
+    const prefixSym = /^[¥$€£]/.exec(direct[1].trim())?.[0] ?? ''
+    const suffixUnit = direct[2].trim()
+    return {
+      num: Number.isFinite(num) ? Math.abs(num) : 0,
+      unit: suffixUnit || prefixSym,
+      prefixSym,
+      label: direct[1].trim() + suffixUnit,
+      cleanTitle: s.replace(direct[0], '').replace(/^[·:：\-—\s]+|[·:：\-—\s]+$/g, '').trim() || s,
+    }
+  }
+  return { num: 0, unit: '', prefixSym: '', label: '', cleanTitle: s }
+}
+
+const OURS_SERIES_RE = /本方案|我们|ours|dsh|推荐|自有|\bour\b|\bself\b/i
+
+export function computeMarimekkoModel(slide, langOrAttr = 'zh') {
+  const isEn = langOrAttr === 'en' || langOrAttr === 'en-US'
+  const rawRows = Array.isArray(slide.rows) ? slide.rows.filter((r) => Array.isArray(r) && r.length >= 2) : []
+
+  if (rawRows.length >= 2) {
+    const headerRow = rawRows[0].map((c) => stripInlineMarkdown(c))
+    const colCount = Math.min(7, headerRow.length - 1)
+    const parsedHeaders = Array.from({ length: colCount }, (_, i) => {
+      const cell = headerRow[i + 1] ?? ('S' + (i + 1))
+      const ext = extractNumberAndUnit(cell)
+      return {
+        title: ext.cleanTitle || cell,
+        weight: ext.num,
+        unit: ext.unit,
+        prefixSym: ext.prefixSym || '',
+        sizeLabel: ext.label,
+      }
+    })
+
+    // 判断第 1 行是否为独立市场规模/权重行
+    let seriesStartRow = 1
+    if (rawRows.length >= 3) {
+      const row1Label = stripInlineMarkdown(rawRows[1][0] ?? '')
+      const row1Cells = rawRows[1].slice(1, colCount + 1).map((c) => String(c ?? ''))
+      const explicitWeightRow = /规模|容量|体量|权重|总额|size|weight|tam|market|volume/i.test(row1Label)
+      const headersLackWeights = parsedHeaders.every((h) => h.weight <= 0)
+      const row1NoPct = !row1Cells.some((c) => /[%％]/.test(c))
+      const row1Nums = row1Cells.map((c) => extractNumberAndUnit(c))
+      const row1Sum = row1Nums.reduce((s, x) => s + x.num, 0)
+      if (explicitWeightRow || (headersLackWeights && row1NoPct && row1Sum > 105)) {
+        seriesStartRow = 2
+        row1Nums.forEach((n, idx) => {
+          if (n.num > 0) {
+            parsedHeaders[idx].weight = n.num
+            parsedHeaders[idx].unit = n.unit || parsedHeaders[idx].unit
+            parsedHeaders[idx].prefixSym = n.prefixSym || parsedHeaders[idx].prefixSym
+            parsedHeaders[idx].sizeLabel = n.label
+          }
+        })
+      }
+    }
+
+    const totalRawWeight = parsedHeaders.reduce((s, h) => s + (h.weight > 0 ? h.weight : 0), 0)
+    const effectiveWeights = parsedHeaders.map((h) => (totalRawWeight > 0 ? (h.weight > 0 ? h.weight : totalRawWeight / colCount * 0.35) : 100 / colCount))
+    const weightSum = effectiveWeights.reduce((a, b) => a + b, 0) || 1
+    const dominantUnit = parsedHeaders.find((h) => h.unit && h.unit !== '%')?.unit ?? ''
+    const dominantPrefix = parsedHeaders.find((h) => h.prefixSym)?.prefixSym ?? ''
+
+    const seriesRows = rawRows.slice(seriesStartRow, seriesStartRow + 6)
+    const seriesNames = seriesRows.map((r, idx) => stripInlineMarkdown(r[0] || (isEn ? 'Segment ' + (idx + 1) : '竞争方 ' + (idx + 1))))
+
+    let cursorX = 0
+    const columns = parsedHeaders.map((h, cIdx) => {
+      const widthRatio = effectiveWeights[cIdx] / weightSum
+      const colStart = cursorX
+      cursorX += widthRatio
+
+      const rawVals = seriesRows.map((r) => {
+        const num = extractNumberAndUnit(r[cIdx + 1] ?? '0').num
+        return num > 0 ? num : 0
+      })
+      const colSum = rawVals.reduce((a, b) => a + b, 0) || 1
+      let cursorY = 0
+      const segments = seriesNames.map((sName, sIdx) => {
+        const heightRatio = rawVals[sIdx] / colSum
+        const seg = {
+          seriesName: sName,
+          seriesIndex: sIdx,
+          rawVal: rawVals[sIdx],
+          heightRatio,
+          sharePct: Math.round(heightRatio * 100),
+          yRatio: cursorY,
+          isOurs: OURS_SERIES_RE.test(sName),
+        }
+        cursorY += heightRatio
+        return seg
+      })
+
+      return {
+        title: h.title,
+        weight: effectiveWeights[cIdx],
+        sizeLabel: h.sizeLabel || (Math.round(widthRatio * 100) + '%'),
+        widthRatio,
+        xRatio: colStart,
+        segments,
+      }
+    })
+
+    const seriesSummary = seriesNames.map((name, sIdx) => {
+      const weightedShare = columns.reduce((acc, col) => acc + col.widthRatio * (col.segments[sIdx]?.heightRatio ?? 0), 0)
+      return {
+        name,
+        index: sIdx,
+        weightedPct: Math.round(weightedShare * 100),
+        isOurs: OURS_SERIES_RE.test(name),
+      }
+    })
+
+    const totalLabel = totalRawWeight > 0
+      ? (dominantPrefix + (Number.isInteger(totalRawWeight) ? totalRawWeight.toLocaleString('en-US') : totalRawWeight.toFixed(1)) + (dominantUnit && dominantUnit !== dominantPrefix ? ' ' + dominantUnit : ''))
+      : '100%'
+
+    return { columns, seriesSummary, totalLabel, hasExplicitWeights: totalRawWeight > 0 }
+  }
+
+  // 从 items[] / bullets[] 归一构建 Marimekko 模型
+  const rawItems = resolveEffectiveItems(slide).slice(0, 7)
+  const items = rawItems.length > 0
+    ? rawItems
+    : [
+        { title: isEn ? 'Enterprise' : '政企市场', value: '450', unit: isEn ? 'B' : '亿', bullets: [(isEn ? 'Ours: 42%' : '本方案: 42%'), (isEn ? 'Peer B: 33%' : '厂商B: 33%'), (isEn ? 'Others: 25%' : '其他: 25%')] },
+        { title: isEn ? 'Finance' : '金融信创', value: '320', unit: isEn ? 'B' : '亿', bullets: [(isEn ? 'Ours: 36%' : '本方案: 36%'), (isEn ? 'Peer B: 39%' : '厂商B: 39%'), (isEn ? 'Others: 25%' : '其他: 25%')] },
+      ]
+
+  const seriesOrder = []
+  const ensureSeries = (name) => {
+    const key = name.trim()
+    let idx = seriesOrder.indexOf(key)
+    if (idx < 0 && seriesOrder.length < 6) {
+      idx = seriesOrder.length
+      seriesOrder.push(key)
+    }
+    return idx
+  }
+
+  const parsedCols = items.map((it, idx) => {
+    const valInfo = it.value
+      ? extractNumberAndUnit(it.value + (it.unit ? it.unit : ''))
+      : extractNumberAndUnit(it.title || '')
+    const rawSegLines = Array.isArray(it.bullets) && it.bullets.length > 0
+      ? it.bullets
+      : (it.text ? it.text.split(/\s*[|｜;；]\s*/) : [])
+    const segPairs = rawSegLines.map((line, lIdx) => {
+      const cleanLine = stripInlineMarkdown(line)
+      const kv = /^([^:：]+?)[：:\s]\s*([+-]?\d+(?:\.\d+)?)\s*[%％]?/.exec(cleanLine)
+        || /^(.+?)\s+([+-]?\d+(?:\.\d+)?)\s*[%％]$/.exec(cleanLine)
+      if (kv) {
+        const sName = kv[1].trim()
+        ensureSeries(sName)
+        return { name: sName, val: Math.max(0, parseFloat(kv[2]) || 0) }
+      }
+      const fallbackNum = extractNumberAndUnit(cleanLine)
+      const sName = fallbackNum.cleanTitle || (isEn ? 'Tier ' + (lIdx + 1) : '份额 ' + (lIdx + 1))
+      ensureSeries(sName)
+      return { name: sName, val: fallbackNum.num > 0 ? fallbackNum.num : 100 / Math.max(1, rawSegLines.length) }
+    })
+    if (segPairs.length === 0) {
+      const defaultName = isEn ? 'Ours' : '本方案'
+      const restName = isEn ? 'Others' : '其他厂商'
+      const pVal = valInfo.num > 0 && valInfo.unit === '%' ? Math.min(100, valInfo.num) : 45
+      ensureSeries(defaultName)
+      ensureSeries(restName)
+      segPairs.push({ name: defaultName, val: pVal }, { name: restName, val: Math.max(0, 100 - pVal) })
+    }
+    return {
+      title: (it.value ? (it.title || ('S' + (idx + 1))) : (valInfo.cleanTitle || it.title || ('S' + (idx + 1)))),
+      weight: valInfo.unit !== '%' && valInfo.num > 0 ? valInfo.num : 0,
+      unit: it.unit || (valInfo.unit !== '%' ? valInfo.unit : ''),
+      prefixSym: valInfo.prefixSym || '',
+      sizeLabel: it.value ? (it.value + (it.unit || '')) : (valInfo.unit !== '%' ? valInfo.label : ''),
+      segPairs,
+    }
+  })
+
+  const totalRawWeight = parsedCols.reduce((s, c) => s + (c.weight > 0 ? c.weight : 0), 0)
+  const effWeights = parsedCols.map((c) => (totalRawWeight > 0 ? (c.weight > 0 ? c.weight : totalRawWeight / parsedCols.length * 0.35) : 100 / parsedCols.length))
+  const weightSum = effWeights.reduce((a, b) => a + b, 0) || 1
+  const domUnit = parsedCols.find((c) => c.unit)?.unit ?? ''
+  const domPrefix = parsedCols.find((c) => c.prefixSym)?.prefixSym ?? ''
+
+  let cursorX = 0
+  const columns = parsedCols.map((col, cIdx) => {
+    const widthRatio = effWeights[cIdx] / weightSum
+    const xRatio = cursorX
+    cursorX += widthRatio
+
+    const valBySeries = seriesOrder.map((sName) => {
+      const hit = col.segPairs.find((p) => p.name === sName)
+      return hit ? hit.val : 0
+    })
+    const colSum = valBySeries.reduce((a, b) => a + b, 0) || 1
+    let cursorY = 0
+    const segments = seriesOrder.map((sName, sIdx) => {
+      const heightRatio = valBySeries[sIdx] / colSum
+      const seg = {
+        seriesName: sName,
+        seriesIndex: sIdx,
+        rawVal: valBySeries[sIdx],
+        heightRatio,
+        sharePct: Math.round(heightRatio * 100),
+        yRatio: cursorY,
+        isOurs: OURS_SERIES_RE.test(sName),
+      }
+      cursorY += heightRatio
+      return seg
+    })
+
+    return {
+      title: col.title,
+      weight: effWeights[cIdx],
+      sizeLabel: col.sizeLabel || (Math.round(widthRatio * 100) + '%'),
+      widthRatio,
+      xRatio,
+      segments,
+    }
+  })
+
+  const seriesSummary = seriesOrder.map((name, sIdx) => {
+    const weightedShare = columns.reduce((acc, col) => acc + col.widthRatio * (col.segments[sIdx]?.heightRatio ?? 0), 0)
+    return {
+      name,
+      index: sIdx,
+      weightedPct: Math.round(weightedShare * 100),
+      isOurs: OURS_SERIES_RE.test(name),
+    }
+  })
+
+  const totalLabel = totalRawWeight > 0
+    ? (domPrefix + (Number.isInteger(totalRawWeight) ? totalRawWeight.toLocaleString('en-US') : totalRawWeight.toFixed(1)) + (domUnit && domUnit !== domPrefix ? ' ' + domUnit : ''))
+    : '100%'
+
+  return { columns, seriesSummary, totalLabel, hasExplicitWeights: totalRawWeight > 0 }
+}
+
+function mekkoSeriesPalette(theme, seriesSummary) {
+  const tk = theme.tokens
+  const baseColors = [
+    tk.accentPrimary,
+    tk.accentSecondary,
+    mixHex(tk.accentPrimary, theme.dark ? '#94A3B8' : '#475569', 0.48),
+    mixHex(tk.accentSecondary, theme.dark ? '#334155' : '#CBD5E1', 0.45),
+    theme.dark ? '#334155' : '#CBD5E1',
+    theme.dark ? '#1E293B' : '#E2E8F0',
+  ]
+  return seriesSummary.map((s, idx) => {
+    const fill = s.isOurs ? tk.accentPrimary : baseColors[(idx + (seriesSummary[0]?.isOurs ? 0 : 1)) % baseColors.length]
+    const lum = relativeLuminance(fill)
+    const ink = lum < 0.40 ? '#FFFFFF' : '#0F172A'
+    return { fill, ink }
+  })
+}
+
+function renderMarimekkoPptx(slide, area, nextIdFn, chromeCfg, theme, langAttr) {
+  const tk = theme.tokens
+  const isEn = langAttr === 'en-US'
+  const model = computeMarimekkoModel(slide, langAttr)
+  const palette = mekkoSeriesPalette(theme, model.seriesSummary)
+  const shapes = []
+
+  const legendW = 2.34
+  const gapLegend = 0.26
+  const plotX = area.x
+  const plotW = area.w - legendW - gapLegend
+  const headerH = 0.58
+  const axisH = 0.38
+  const gridY = area.y + headerH + 0.04
+  const gridH = Math.max(2.2, area.h - headerH - axisH - 0.08)
+
+  // 1. 顶部列宽市场容量标题 + 不等宽 100% 堆叠矩形网格
+  model.columns.forEach((col, cIdx) => {
+    const cx = plotX + col.xRatio * plotW
+    const cw = Math.max(0.28, col.widthRatio * plotW)
+
+    // 列顶标题 + 规模标签（窄列自动收敛至 8pt 零内边距，确保 5 字区域名如“中东及拉美”单行不折字）
+    const isNarrowCol = cw < 0.95
+    const headFontPt = cw >= 1.65 ? 11.5 : cw >= 1.15 ? 10 : cw >= 0.95 ? 9 : cw >= 0.60 ? 8 : 7.5
+    shapes.push(ooxmlShape(nextIdFn(), 'Mekko Col Header ' + (cIdx + 1), {
+      x: isNarrowCol ? cx : cx + 0.02,
+      y: area.y,
+      w: isNarrowCol ? Math.max(0.28, cw) : Math.max(0.24, cw - 0.04),
+      h: headerH,
+    }, {
+      txBox: true,
+      anchor: 'b',
+      marginsIn: { l: isNarrowCol ? 0 : 0.02, r: isNarrowCol ? 0 : 0.02, t: 0, b: 0.03 },
+      paragraphs: [
+        ooxmlRichParagraph(col.title, {
+          sizePt: headFontPt,
+          color: tk.inkPrimary,
+          bold: true,
+          lang: langAttr,
+          align: 'ctr',
+          font: theme.fonts.heading,
+          lineHeight: 1.12,
+          spaceAfterPt: 1,
+        }),
+        ooxmlRichParagraph(col.sizeLabel, {
+          sizePt: isNarrowCol ? 7.5 : Math.max(8.5, headFontPt - 1),
+          color: tk.accentText,
+          bold: true,
+          lang: langAttr,
+          align: 'ctr',
+          font: theme.fonts.body,
+          lineHeight: 1.08,
+        }),
+      ],
+    }))
+
+    col.segments.forEach((seg, sIdx) => {
+      if (seg.heightRatio <= 0.002) return
+      const sy = gridY + seg.yRatio * gridH
+      const sh = Math.max(0.04, seg.heightRatio * gridH)
+      const pal = palette[sIdx] ?? { fill: tk.surface2, ink: tk.inkPrimary }
+      const pctText = seg.sharePct + '%'
+      const showTwoLines = sh >= 0.50 && cw >= 1.22
+      const showPctOnly = !showTwoLines && sh >= 0.25 && cw >= 0.72
+
+      const paras = showTwoLines
+        ? [
+            ooxmlRichParagraph(seg.seriesName, {
+              sizePt: cw >= 1.6 ? 11 : 10,
+              color: pal.ink,
+              bold: true,
+              lang: langAttr,
+              align: 'ctr',
+              font: theme.fonts.body,
+              lineHeight: 1.1,
+              spaceAfterPt: 1,
+            }),
+            ooxmlRichParagraph(pctText, {
+              sizePt: cw >= 1.6 ? 12 : 10.5,
+              color: pal.ink,
+              bold: true,
+              lang: langAttr,
+              align: 'ctr',
+              font: theme.fonts.heading,
+              lineHeight: 1.05,
+            }),
+          ]
+        : showPctOnly
+          ? [
+              ooxmlRichParagraph(pctText, {
+                sizePt: 10,
+                color: pal.ink,
+                bold: true,
+                lang: langAttr,
+                align: 'ctr',
+                font: theme.fonts.heading,
+                lineHeight: 1.0,
+              }),
+            ]
+          : []
+
+      shapes.push(ooxmlShape(nextIdFn(), 'Mekko Cell ' + (cIdx + 1) + '-' + (sIdx + 1), { x: cx, y: sy, w: cw, h: sh }, {
+        preset: 'rect',
+        fill: pal.fill,
+        stroke: tk.canvas,
+        strokePt: 1.5,
+        anchor: 'ctr',
+        autofit: false,
+        marginsIn: { l: 0.04, r: 0.04, t: 0.02, b: 0.02 },
+        paragraphs: paras,
+      }))
+    })
+  })
+
+  // 2. 底部 0%..100% 市场宽度累计坐标轴
+  const axisY = gridY + gridH + 0.08
+  shapes.push(ooxmlLine(nextIdFn(), 'Mekko Width Axis', { x: plotX, y: axisY }, { x: plotX + plotW, y: axisY }, {
+    color: tk.inkMuted,
+    widthPt: 1.0,
+  }))
+  ;[0, 25, 50, 75, 100].forEach((tick) => {
+    const tx = plotX + (tick / 100) * plotW
+    shapes.push(ooxmlLine(nextIdFn(), 'Mekko Tick ' + tick, { x: tx, y: axisY }, { x: tx, y: axisY + 0.06 }, {
+      color: tk.inkMuted,
+      widthPt: 0.75,
+    }))
+    const lblW = 0.68
+    const lblX = tick === 0 ? tx : tick === 100 ? tx - lblW : tx - lblW / 2
+    const algn = tick === 0 ? 'l' : tick === 100 ? 'r' : 'ctr'
+    shapes.push(ooxmlShape(nextIdFn(), 'Mekko Tick Label ' + tick, { x: lblX, y: axisY + 0.07, w: lblW, h: 0.24 }, {
+      txBox: true,
+      anchor: 'ctr',
+      marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+      paragraphs: [
+        ooxmlRichParagraph(tick + '%', {
+          sizePt: 9.5,
+          color: tk.inkMuted,
+          lang: langAttr,
+          align: algn,
+          font: theme.fonts.body,
+          lineHeight: 1.0,
+        }),
+      ],
+    }))
+  })
+
+  // 3. 右侧总市场规模 + 系列图例卡片
+  const legX = plotX + plotW + gapLegend
+  const legBox = { x: legX, y: gridY, w: legendW, h: gridH }
+  shapes.push(renderSurfaceCardPptx('Mekko Legend Card', legBox, {
+    fill: tk.surface1,
+    focal: false,
+  }, nextIdFn, chromeCfg, theme))
+
+  shapes.push(ooxmlShape(nextIdFn(), 'Mekko Total Summary', { x: legX + 0.16, y: gridY + 0.14, w: legendW - 0.32, h: 0.78 }, {
+    txBox: true,
+    anchor: 't',
+    marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+    paragraphs: [
+      ooxmlRichParagraph(isEn ? 'TOTAL MARKET' : '总市场规模', {
+        sizePt: 9.5,
+        color: tk.inkMuted,
+        bold: true,
+        lang: langAttr,
+        font: theme.fonts.body,
+        spc: 90,
+        spaceAfterPt: 2,
+      }),
+      ooxmlRichParagraph(model.totalLabel, {
+        sizePt: 20,
+        color: tk.accentText,
+        bold: true,
+        lang: langAttr,
+        font: theme.fonts.heading,
+        lineHeight: 1.1,
+      }),
+    ],
+  }))
+  shapes.push(ooxmlLine(nextIdFn(), 'Mekko Legend Rule', { x: legX + 0.16, y: gridY + 0.98 }, { x: legX + legendW - 0.16, y: gridY + 0.98 }, {
+    color: tk.hairline,
+    widthPt: 0.75,
+  }))
+
+  const itemStartY = gridY + 1.12
+  const availLegH = Math.max(1.0, gridH - 1.24)
+  const itemStepY = Math.min(0.46, availLegH / Math.max(1, model.seriesSummary.length))
+  model.seriesSummary.forEach((s, idx) => {
+    const iy = itemStartY + idx * itemStepY
+    const pal = palette[idx] ?? { fill: tk.surface2 }
+    shapes.push(ooxmlShape(nextIdFn(), 'Mekko Swatch ' + (idx + 1), { x: legX + 0.18, y: iy + 0.08, w: 0.18, h: 0.18 }, {
+      preset: 'rect',
+      fill: pal.fill,
+      stroke: tk.hairline,
+      strokePt: 0.5,
+    }))
+    shapes.push(ooxmlShape(nextIdFn(), 'Mekko Series Label ' + (idx + 1), { x: legX + 0.44, y: iy, w: legendW - 0.58, h: 0.34 }, {
+      txBox: true,
+      anchor: 'ctr',
+      marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+      paragraphs: [
+        ooxmlRichParagraph(s.name + '  **' + s.weightedPct + '%**', {
+          sizePt: 11,
+          color: s.isOurs ? tk.accentText : tk.inkPrimary,
+          bold: s.isOurs,
+          lang: langAttr,
+          font: theme.fonts.body,
+          lineHeight: 1.15,
+        }),
+      ],
+    }))
+  })
+
+  return shapes.join('')
+}
+
+function renderMarimekkoHtml(slide, theme, langId) {
+  const isEn = langId === 'en'
+  const model = computeMarimekkoModel(slide, langId)
+  const palette = mekkoSeriesPalette(theme, model.seriesSummary)
+
+  return (
+    '<div class="mekko-board">' +
+    '<div class="mekko-main">' +
+    '<div class="mekko-headers">' +
+    model.columns.map((col) =>
+      '<div class="mekko-col-head" style="flex:' + col.widthRatio.toFixed(5) + ' 0 0%">' +
+      '<strong class="mekko-col-title">' + escapeHtml(col.title) + '</strong>' +
+      '<span class="mekko-col-size">' + escapeHtml(col.sizeLabel) + '</span>' +
+      '</div>',
+    ).join('') +
+    '</div>' +
+    '<div class="mekko-columns">' +
+    model.columns.map((col, cIdx) =>
+      '<div class="mekko-col" data-col-index="' + cIdx + '" style="flex:' + col.widthRatio.toFixed(5) + ' 0 0%">' +
+      col.segments.filter((s) => s.heightRatio > 0.002).map((seg) => {
+        const pal = palette[seg.seriesIndex] ?? { fill: theme.tokens.surface2, ink: theme.tokens.inkPrimary }
+        const showFull = seg.heightRatio >= 0.14 && col.widthRatio >= 0.14
+        const showPct = seg.heightRatio >= 0.07 && col.widthRatio >= 0.08
+        return (
+          '<div class="mekko-cell' + (seg.isOurs ? ' is-ours' : '') + '" style="flex:' + seg.heightRatio.toFixed(5) + ' 0 0%;background:' + pal.fill + ';color:' + pal.ink + '">' +
+          (showFull ? '<span class="mekko-seg-name">' + escapeHtml(seg.seriesName) + '</span>' : '') +
+          (showFull || showPct ? '<strong class="mekko-seg-pct">' + seg.sharePct + '%</strong>' : '') +
+          '</div>'
+        )
+      }).join('') +
+      '</div>',
+    ).join('') +
+    '</div>' +
+    '<div class="mekko-axis"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>' +
+    '</div>' +
+    '<aside class="surface-card mekko-legend">' +
+    '<div class="mekko-total"><span class="kicker">' + (isEn ? 'TOTAL MARKET' : '总市场规模') + '</span><strong>' + escapeHtml(model.totalLabel) + '</strong></div>' +
+    '<ul class="mekko-legend-list">' +
+    model.seriesSummary.map((s, idx) => {
+      const pal = palette[idx] ?? { fill: theme.tokens.surface2 }
+      return (
+        '<li class="' + (s.isOurs ? 'is-ours' : '') + '">' +
+        '<span class="mekko-swatch" style="background:' + pal.fill + '"></span>' +
+        '<span class="mekko-leg-name">' + escapeHtml(s.name) + '</span>' +
+        '<strong class="mekko-leg-pct">' + s.weightedPct + '%</strong>' +
+        '</li>'
+      )
+    }).join('') +
+    '</ul></aside></div>'
+  )
+}
+
+function classifySankeyNodeTone(name, explicitStatus) {
+  if (explicitStatus && VALID_STATUS.has(explicitStatus)) return explicitStatus
+  const s = String(name ?? '')
+  if (/成本|费用|支出|损耗|流失|税|折旧|研发投入|营销|管理费|cost|cogs|opex|expense|tax|loss|churn/i.test(s)) return 'negative'
+  if (/净利润|营业利润|毛利润|毛利|净利|盈余|自由现金流|留存|profit|income|ebitda|margin|fcf/i.test(s)) return 'positive'
+  return 'accent'
+}
+
+export function computeSankeyLayout(slide, areaBox = { x: 0.62, y: 1.88, w: 12.09, h: 4.50 }, langOrAttr = 'zh') {
+  const isEn = langOrAttr === 'en' || langOrAttr === 'en-US'
+  const rawEdges = []
+
+  const effItems = resolveEffectiveItems(slide)
+  if (effItems.length > 0 && effItems.some((it) => it.tag && it.title && !/^\d+$/.test(it.tag))) {
+    for (const it of effItems) {
+      const src = (it.tag || '').trim()
+      const dst = (it.title || '').trim()
+      if (!src || !dst || src === dst) continue
+      const parsed = extractNumberAndUnit((it.value ?? '') + (it.unit ?? ''))
+      const val = parsed.num > 0 ? parsed.num : 10
+      const unit = it.unit || parsed.unit || ''
+      const valLabel = it.value
+        ? (it.value + (it.unit && !String(it.value).endsWith(it.unit) ? it.unit : ''))
+        : (parsed.label || String(val))
+      rawEdges.push({
+        source: src,
+        target: dst,
+        value: val,
+        unit,
+        valueLabel: valLabel,
+        delta: it.delta || '',
+        status: it.status,
+      })
+    }
+  } else if (Array.isArray(slide.rows) && slide.rows.length >= 2) {
+    const startIdx = isNumericCell(slide.rows[0]?.[2] ?? '') ? 0 : 1
+    for (const r of slide.rows.slice(startIdx)) {
+      const src = stripInlineMarkdown(r[0] ?? '')
+      const dst = stripInlineMarkdown(r[1] ?? '')
+      if (!src || !dst || src === dst) continue
+      const parsed = extractNumberAndUnit(r[2] ?? '10')
+      rawEdges.push({
+        source: src,
+        target: dst,
+        value: parsed.num > 0 ? parsed.num : 10,
+        unit: parsed.unit,
+        valueLabel: parsed.label || stripInlineMarkdown(r[2] ?? ''),
+        delta: stripInlineMarkdown(r[3] ?? ''),
+        status: undefined,
+      })
+    }
+  }
+
+  if (rawEdges.length === 0) {
+    if (isEn) {
+      rawEdges.push(
+        { source: 'Total Revenue', target: 'Gross Profit', value: 68.5, unit: 'B', valueLabel: '$68.5B', status: 'positive' },
+        { source: 'Total Revenue', target: 'Cost of Revenue', value: 31.5, unit: 'B', valueLabel: '$31.5B', status: 'negative' },
+        { source: 'Gross Profit', target: 'Operating Income', value: 34.5, unit: 'B', valueLabel: '$34.5B', status: 'positive' },
+        { source: 'Gross Profit', target: 'R&D', value: 22.0, unit: 'B', valueLabel: '$22.0B', status: 'negative' },
+        { source: 'Gross Profit', target: 'SG&A', value: 12.0, unit: 'B', valueLabel: '$12.0B', status: 'negative' },
+      )
+    } else {
+      rawEdges.push(
+        { source: '总营收', target: '毛利润', value: 68.5, unit: '亿', valueLabel: '68.5亿', status: 'positive' },
+        { source: '总营收', target: '营业成本', value: 31.5, unit: '亿', valueLabel: '31.5亿', status: 'negative' },
+        { source: '毛利润', target: '营业利润', value: 34.5, unit: '亿', valueLabel: '34.5亿', status: 'positive' },
+        { source: '毛利润', target: '研发投入', value: 22.0, unit: '亿', valueLabel: '22.0亿', status: 'negative' },
+        { source: '毛利润', target: '营销及管理', value: 12.0, unit: '亿', valueLabel: '12.0亿', status: 'negative' },
+      )
+    }
+  }
+
+  const nodeMap = new Map()
+  const getOrCreate = (name) => {
+    if (!nodeMap.has(name)) {
+      nodeMap.set(name, {
+        name,
+        inEdges: [],
+        outEdges: [],
+        inSum: 0,
+        outSum: 0,
+        layer: 0,
+        tone: 'accent',
+        unit: '',
+        delta: '',
+      })
+    }
+    return nodeMap.get(name)
+  }
+
+  const edges = []
+  for (const e of rawEdges) {
+    const u = getOrCreate(e.source)
+    const v = getOrCreate(e.target)
+    const edgeObj = { ...e, sourceNode: u, targetNode: v }
+    u.outEdges.push(edgeObj)
+    v.inEdges.push(edgeObj)
+    u.outSum += e.value
+    v.inSum += e.value
+    if (!v.unit && e.unit) v.unit = e.unit
+    if (!u.unit && e.unit) u.unit = e.unit
+    if (e.delta && !v.delta) v.delta = e.delta
+    if (e.status) v.tone = e.status
+    edges.push(edgeObj)
+  }
+
+  const nodes = [...nodeMap.values()]
+  // 拓扑分层（防环最多迭代 nodes.length 次，最多 4 列）
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    let changed = false
+    for (const e of edges) {
+      if (e.targetNode.layer <= e.sourceNode.layer && e.sourceNode.layer < 3) {
+        const nextL = Math.min(3, e.sourceNode.layer + 1)
+        if (nextL > e.targetNode.layer) {
+          e.targetNode.layer = nextL
+          changed = true
+        }
+      }
+    }
+    if (!changed) break
+  }
+
+  const maxLayer = Math.max(1, ...nodes.map((n) => n.layer))
+  const layerCount = maxLayer + 1
+
+  for (const n of nodes) {
+    n.val = Math.max(n.inSum, n.outSum, 0.01)
+    n.tone = classifySankeyNodeTone(n.name, n.inEdges[0]?.status)
+    const formattedNum = Number.isInteger(n.val) ? String(n.val) : n.val.toFixed(1).replace(/\.0$/, '')
+    n.displayValue = (n.inEdges.length === 1 && n.outEdges.length === 0 && n.inEdges[0].valueLabel)
+      ? n.inEdges[0].valueLabel
+      : formattedNum + (n.unit || '')
+  }
+
+  const layers = Array.from({ length: layerCount }, (_, l) => nodes.filter((n) => n.layer === l))
+  // 预留顶部浮动标签高度 + 左右标签栏宽度
+  const leftLabelW = 2.02
+  const rightLabelW = 2.62
+  const topPad = 0.46
+  const botPad = 0.14
+  const plotX = areaBox.x + leftLabelW
+  const plotW = Math.max(3.6, areaBox.w - leftLabelW - rightLabelW)
+  const plotY = areaBox.y + topPad
+  const plotH = Math.max(2.0, areaBox.h - topPad - botPad)
+  const barW = 0.24
+  const nodeGap = 0.30
+
+  // 能量守恒全局比例尺 ky（英寸/单位数值）
+  let ky = Infinity
+  for (const col of layers) {
+    if (col.length === 0) continue
+    const valSum = col.reduce((s, n) => s + n.val, 0)
+    const avail = Math.max(0.8, plotH * 0.84 - Math.max(0, col.length - 1) * nodeGap)
+    ky = Math.min(ky, avail / Math.max(valSum, 1e-6))
+  }
+  if (!Number.isFinite(ky) || ky <= 0) ky = 0.03
+
+  // 在同层内将正向/主干节点排上方、负向成本节点排下方，减少交叉且符合损益表视觉直觉
+  const toneRank = (n) => (n.outEdges.length > 0 ? 0 : n.tone === 'positive' ? 1 : n.tone === 'accent' ? 2 : 3)
+  layers[0].sort((a, b) => toneRank(a) - toneRank(b) || b.val - a.val)
+
+  // Layer 0 垂直居中排布
+  {
+    const col0 = layers[0]
+    col0.forEach((n) => {
+      n.x = plotX
+      n.w = barW
+      n.h = Math.max(0.16, n.val * ky)
+    })
+    const totalH0 = col0.reduce((s, n) => s + n.h, 0) + Math.max(0, col0.length - 1) * nodeGap
+    let cy = plotY + Math.max(0, (plotH - totalH0) / 2)
+    for (const n of col0) {
+      n.y = cy
+      cy += n.h + nodeGap
+    }
+  }
+
+  // 逐层计算父节点出港端口，再用父端口加权重心法定位子层节点 Y（使毛利润拆解保持在上半带、营业成本独占下半带！）
+  const assignOutPorts = (col) => {
+    for (const u of col) {
+      u.outEdges.sort((a, b) => toneRank(a.targetNode) - toneRank(b.targetNode) || a.targetNode.layer - b.targetNode.layer)
+      const outTotal = u.outEdges.reduce((s, e) => s + e.value, 0) || u.val
+      const scale = u.h / Math.max(outTotal, u.val)
+      let py = u.y
+      for (const e of u.outEdges) {
+        const eh = Math.max(0.03, e.value * scale)
+        e.sy0 = py
+        e.sy1 = py + eh
+        py += eh
+      }
+    }
+  }
+
+  assignOutPorts(layers[0])
+
+  for (let l = 1; l < layerCount; l += 1) {
+    const col = layers[l]
+    const colX = plotX + (l / Math.max(1, layerCount - 1)) * (plotW - barW)
+    for (const n of col) {
+      n.x = colX
+      n.w = barW
+      n.h = Math.max(0.16, n.val * ky)
+      if (n.inEdges.length > 0) {
+        const wSum = n.inEdges.reduce((s, e) => s + e.value, 0) || 1
+        const targetMid = n.inEdges.reduce((s, e) => s + ((e.sy0 + e.sy1) / 2) * e.value, 0) / wSum
+        n.idealY = targetMid - n.h / 2
+      } else {
+        n.idealY = plotY
+      }
+    }
+    col.sort((a, b) => a.idealY - b.idealY || toneRank(a) - toneRank(b))
+
+    // 自顶向下与自底向上碰撞消解，严格守住画布上下界与最小节点间距
+    let cursor = plotY
+    for (const n of col) {
+      n.y = Math.max(cursor, n.idealY)
+      cursor = n.y + n.h + nodeGap
+    }
+    let bottomLimit = plotY + plotH
+    for (let i = col.length - 1; i >= 0; i -= 1) {
+      const n = col[i]
+      if (n.y + n.h > bottomLimit) {
+        n.y = Math.max(plotY, bottomLimit - n.h)
+      }
+      bottomLimit = n.y - nodeGap
+    }
+    assignOutPorts(col)
+  }
+
+  // 计算每个目标节点的入港端口 [ty0, ty1]
+  for (const v of nodes) {
+    v.inEdges.sort((a, b) => a.sourceNode.y - b.sourceNode.y)
+    const inTotal = v.inEdges.reduce((s, e) => s + e.value, 0) || v.val
+    const scale = v.h / Math.max(inTotal, v.val)
+    let py = v.y
+    for (const e of v.inEdges) {
+      const eh = Math.max(0.03, e.value * scale)
+      e.ty0 = py
+      e.ty1 = py + eh
+      py += eh
+    }
+  }
+
+  return { nodes, edges, layers, layerCount, areaBox, plotX, plotW, plotY, plotH, leftLabelW, rightLabelW }
+}
+
+function sankeyNodeColor(node, theme) {
+  const tk = theme.tokens
+  if (node.layer === 0) return tk.accentPrimary
+  if (node.tone === 'positive') return tk.positive
+  if (node.tone === 'negative') return tk.negative
+  if (node.tone === 'warning') return tk.warning
+  return tk.accentSecondary
+}
+
+function renderSankeyPptx(slide, area, nextIdFn, chromeCfg, theme, langAttr) {
+  const tk = theme.tokens
+  const model = computeSankeyLayout(slide, area, langAttr)
+  const shapes = []
+
+  // 1. 先绘制平滑三次贝塞尔闭合流向丝带 (<a:custGeom>)
+  model.edges.forEach((e, idx) => {
+    const x0 = e.sourceNode.x + e.sourceNode.w
+    const x1 = e.targetNode.x
+    const rw = Math.max(0.08, x1 - x0)
+    const ry = Math.min(e.sy0, e.ty0)
+    const maxBottom = Math.max(e.sy1, e.ty1)
+    const rh = Math.max(0.04, maxBottom - ry)
+
+    const W = 10000
+    const H = 10000
+    const sy0 = Math.round(((e.sy0 - ry) / rh) * H)
+    const sy1 = Math.round(((e.sy1 - ry) / rh) * H)
+    const ty0 = Math.round(((e.ty0 - ry) / rh) * H)
+    const ty1 = Math.round(((e.ty1 - ry) / rh) * H)
+
+    const pathXml =
+      '<a:moveTo><a:pt x="0" y="' + sy0 + '"/></a:moveTo>' +
+      '<a:cubicBezTo><a:pt x="4600" y="' + sy0 + '"/><a:pt x="5400" y="' + ty0 + '"/><a:pt x="' + W + '" y="' + ty0 + '"/></a:cubicBezTo>' +
+      '<a:lnTo><a:pt x="' + W + '" y="' + ty1 + '"/></a:lnTo>' +
+      '<a:cubicBezTo><a:pt x="5400" y="' + ty1 + '"/><a:pt x="4600" y="' + sy1 + '"/><a:pt x="0" y="' + sy1 + '"/></a:cubicBezTo>' +
+      '<a:close/>'
+
+    const ribbonColor = sankeyNodeColor(e.targetNode, theme)
+    shapes.push(ooxmlCustGeomShape(nextIdFn(), 'Sankey Ribbon ' + (idx + 1), { x: x0, y: ry, w: rw, h: rh }, pathXml, {
+      pathW: W,
+      pathH: H,
+      fill: ribbonColor,
+      fillAlpha: theme.dark ? 0.42 : 0.32,
+    }))
+  })
+
+  // 2. 绘制守恒节点立柱 + 零碰撞语义数值标签
+  model.nodes.forEach((n, idx) => {
+    const barColor = sankeyNodeColor(n, theme)
+    shapes.push(ooxmlShape(nextIdFn(), 'Sankey Node ' + (idx + 1), { x: n.x, y: n.y, w: n.w, h: n.h }, {
+      preset: chromeCfg.cardRadiusPx > 0 ? 'roundRect' : 'rect',
+      adj: roundRectAdj(n.w, n.h, Math.min(4, chromeCfg.cardRadiusPx)),
+      fill: barColor,
+    }))
+
+    const valColor = n.tone === 'positive'
+      ? tk.positive
+      : n.tone === 'negative'
+        ? tk.negative
+        : tk.accentText
+    const valLine = n.displayValue + (n.delta ? ' (' + n.delta + ')' : '')
+    const isLeftRoot = n.layer === 0
+    const isLeaf = n.outEdges.length === 0
+
+    if (isLeftRoot) {
+      const lblBox = {
+        x: area.x,
+        y: n.y + n.h / 2 - 0.32,
+        w: Math.max(1.2, n.x - area.x - 0.12),
+        h: 0.64,
+      }
+      shapes.push(ooxmlShape(nextIdFn(), 'Sankey Label ' + (idx + 1), lblBox, {
+        txBox: true,
+        anchor: 'ctr',
+        marginsIn: { l: 0, r: 0.02, t: 0, b: 0 },
+        paragraphs: [
+          ooxmlRichParagraph(n.name, { sizePt: 12.5, color: tk.inkPrimary, bold: true, lang: langAttr, align: 'r', font: theme.fonts.heading, lineHeight: 1.12, spaceAfterPt: 1 }),
+          ooxmlRichParagraph(valLine, { sizePt: 13.5, color: tk.accentText, bold: true, lang: langAttr, align: 'r', font: theme.fonts.heading, lineHeight: 1.08 }),
+        ],
+      }))
+    } else if (isLeaf) {
+      const rightEdge = area.x + area.w
+      const lx = n.x + n.w + 0.12
+      const maxLeafW = model.layerCount >= 4 && n.layer < model.layerCount - 1 ? 2.02 : 2.6
+      const lw = Math.min(maxLeafW, Math.max(1.3, rightEdge - lx))
+      const lblBox = {
+        x: lx,
+        y: n.y + n.h / 2 - 0.28,
+        w: lw,
+        h: 0.56,
+      }
+      shapes.push(ooxmlShape(nextIdFn(), 'Sankey Label ' + (idx + 1), lblBox, {
+        txBox: true,
+        anchor: 'ctr',
+        marginsIn: { l: 0.02, r: 0, t: 0, b: 0 },
+        paragraphs: [
+          ooxmlRichParagraph(n.name + '  **' + valLine + '**', {
+            sizePt: model.layerCount >= 4 && n.layer < model.layerCount - 1 ? 10.5 : 11.5,
+            color: tk.inkPrimary,
+            accentColor: valColor,
+            bold: false,
+            lang: langAttr,
+            align: 'l',
+            font: theme.fonts.body,
+            lineHeight: 1.15,
+          }),
+        ],
+      }))
+    } else {
+      // 中间枢纽节点（既有入流又有出流）：置于立柱正上方胶囊标签，彻底避开左右两侧流向丝带！
+      const pillFontPt = model.layerCount >= 4 ? 10 : 11
+      const pillMaxW = model.layerCount >= 4 ? 2.22 : 2.8
+      const pillText = n.name + ' · ' + valLine
+      const pillW = computeBadgePillWidth(pillText, pillFontPt, pillMaxW, 1.30)
+      const pillBox = {
+        x: n.x + n.w / 2 - pillW / 2,
+        y: Math.max(area.y, n.y - 0.40),
+        w: pillW,
+        h: 0.34,
+      }
+      shapes.push(ooxmlShape(nextIdFn(), 'Sankey Label ' + (idx + 1), pillBox, {
+        preset: chromeCfg.cardRadiusPx > 0 ? 'roundRect' : 'rect',
+        adj: roundRectAdj(pillBox.w, pillBox.h, Math.min(8, chromeCfg.cardRadiusPx)),
+        fill: tk.surface2,
+        stroke: barColor,
+        strokePt: 0.75,
+        anchor: 'ctr',
+        marginsIn: { l: 0.06, r: 0.06, t: 0.02, b: 0.02 },
+        paragraphs: [
+          ooxmlRichParagraph(n.name + '  **' + valLine + '**', {
+            sizePt: pillFontPt,
+            color: tk.inkPrimary,
+            bold: true,
+            lang: langAttr,
+            align: 'ctr',
+            font: theme.fonts.heading,
+            lineHeight: 1.05,
+          }),
+        ],
+      }))
+    }
+  })
+
+  return shapes.join('')
+}
+
+function renderSankeyHtml(slide, theme, langId) {
+  const tk = theme.tokens
+  const area = { x: 0, y: 0, w: 12.0, h: 4.5 }
+  const model = computeSankeyLayout(slide, area, langId)
+  const scale = 100 // 1200 x 450 SVG 视口
+
+  const ribbonsSvg = model.edges.map((e) => {
+    const x0 = (e.sourceNode.x + e.sourceNode.w) * scale
+    const x1 = e.targetNode.x * scale
+    const cx0 = x0 + (x1 - x0) * 0.46
+    const cx1 = x0 + (x1 - x0) * 0.54
+    const sy0 = e.sy0 * scale
+    const sy1 = e.sy1 * scale
+    const ty0 = e.ty0 * scale
+    const ty1 = e.ty1 * scale
+    const d =
+      'M ' + x0.toFixed(1) + ' ' + sy0.toFixed(1) +
+      ' C ' + cx0.toFixed(1) + ' ' + sy0.toFixed(1) + ', ' + cx1.toFixed(1) + ' ' + ty0.toFixed(1) + ', ' + x1.toFixed(1) + ' ' + ty0.toFixed(1) +
+      ' L ' + x1.toFixed(1) + ' ' + ty1.toFixed(1) +
+      ' C ' + cx1.toFixed(1) + ' ' + ty1.toFixed(1) + ', ' + cx0.toFixed(1) + ' ' + sy1.toFixed(1) + ', ' + x0.toFixed(1) + ' ' + sy1.toFixed(1) +
+      ' Z'
+    const fill = sankeyNodeColor(e.targetNode, theme)
+    const op = theme.dark ? '0.42' : '0.32'
+    return '<path class="sankey-ribbon" d="' + d + '" fill="' + fill + '" fill-opacity="' + op + '"/>'
+  }).join('')
+
+  const nodesSvg = model.nodes.map((n) => {
+    const barColor = sankeyNodeColor(n, theme)
+    const rx = n.x * scale
+    const ry = n.y * scale
+    const rw = n.w * scale
+    const rh = n.h * scale
+    const valLine = n.displayValue + (n.delta ? ' (' + n.delta + ')' : '')
+    const isLeftRoot = n.layer === 0
+    const isLeaf = n.outEdges.length === 0
+
+    let labelSvg = ''
+    if (isLeftRoot) {
+      const lx = (rx - 12).toFixed(1)
+      const ly = (ry + rh / 2).toFixed(1)
+      labelSvg =
+        '<text x="' + lx + '" y="' + (Number(ly) - 7).toFixed(1) + '" text-anchor="end" fill="' + tk.inkPrimary + '" font-size="15" font-weight="700">' + escapeHtml(n.name) + '</text>' +
+        '<text x="' + lx + '" y="' + (Number(ly) + 14).toFixed(1) + '" text-anchor="end" fill="' + tk.accentText + '" font-size="16" font-weight="800">' + escapeHtml(valLine) + '</text>'
+    } else if (isLeaf) {
+      const lx = (rx + rw + 12).toFixed(1)
+      const ly = (ry + rh / 2 + 5).toFixed(1)
+      labelSvg =
+        '<text x="' + lx + '" y="' + ly + '" text-anchor="start" fill="' + tk.inkPrimary + '" font-size="14" font-weight="600">' +
+        escapeHtml(n.name) + ' <tspan fill="' + barColor + '" font-weight="800">' + escapeHtml(valLine) + '</tspan></text>'
+    } else {
+      const cx = (rx + rw / 2).toFixed(1)
+      const cy = Math.max(20, ry - 12).toFixed(1)
+      labelSvg =
+        '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" fill="' + tk.inkPrimary + '" font-size="14" font-weight="700">' +
+        escapeHtml(n.name + ' · ' + valLine) + '</text>'
+    }
+
+    return (
+      '<g class="sankey-node">' +
+      '<rect x="' + rx.toFixed(1) + '" y="' + ry.toFixed(1) + '" width="' + rw.toFixed(1) + '" height="' + rh.toFixed(1) + '" rx="3" fill="' + barColor + '"/>' +
+      labelSvg +
+      '</g>'
+    )
+  }).join('')
+
+  return (
+    '<div class="sankey-board">' +
+    '<svg class="sankey-svg" viewBox="0 0 1200 450" role="img" aria-label="' + escapeHtml(slide.title || 'Sankey Flow') + '">' +
+    ribbonsSvg +
+    nodesSvg +
+    '</svg></div>'
+  )
+}
+
+const SUPPORT_ACTIVITY_RE = /辅助|支撑|基础|治理|平台|人才|人力|采购|财务|法务|support|infra|hr|talent|procure|governance|admin/i
+
+export function partitionValueChainItems(slide, langOrAttr = 'zh') {
+  const isEn = langOrAttr === 'en' || langOrAttr === 'en-US'
+  const all = resolveEffectiveItems(slide)
+
+  const taggedSupport = all.filter((it) => SUPPORT_ACTIVITY_RE.test(String(it.tag || '')) || SUPPORT_ACTIVITY_RE.test(String(it.role || '')))
+  const taggedPrimary = all.filter((it) => !taggedSupport.includes(it))
+
+  let supportItems = []
+  let primaryItems = []
+
+  if (taggedSupport.length >= 1 && taggedPrimary.length >= 2) {
+    supportItems = taggedSupport.slice(0, 4)
+    primaryItems = taggedPrimary.slice(0, 5)
+  } else if (all.length >= 6) {
+    const k = Math.min(4, Math.max(2, all.length - 5))
+    supportItems = all.slice(0, k)
+    primaryItems = all.slice(k, k + 5)
+  } else if (Array.isArray(slide.columns) && slide.columns.length >= 1 && all.length >= 2) {
+    supportItems = slide.columns.slice(0, 3).map((col, idx) => ({
+      tag: isEn ? 'SUPPORT ' + (idx + 1) : '辅助 ' + (idx + 1),
+      title: col,
+    }))
+    primaryItems = all.slice(0, 5)
+  } else if (all.length >= 4) {
+    // 若用户仅传 4–5 条核心活动，自动保留为底部基本活动并补齐顶部 2 条标准波特辅助支撑横梁
+    primaryItems = all.slice(0, 5)
+    supportItems = isEn
+      ? [
+          { tag: 'SUPPORT', title: 'Firm Infrastructure & Governance', text: 'Unified strategy, compliance & financial control' },
+          { tag: 'SUPPORT', title: 'Technology R&D & Talent Enablement', text: 'Core platform engineering & organization capability' },
+        ]
+      : [
+          { tag: '辅助活动', title: '企业基础设施与数字化治理', text: '统一战略管控、合规风控与业财一体底座' },
+          { tag: '辅助活动', title: '核心技术研发与组织人才支撑', text: '共性平台研发复用与复合型人才梯队赋能' },
+        ]
+  } else {
+    supportItems = all.length >= 3 ? all.slice(0, 1) : [
+      { tag: isEn ? 'SUPPORT' : '辅助活动', title: isEn ? 'Platform & Governance' : '平台与治理支撑' },
+    ]
+    primaryItems = (all.length >= 3 ? all.slice(1) : all).length > 0
+      ? (all.length >= 3 ? all.slice(1) : all)
+      : [
+          { tag: '01', title: isEn ? 'Inbound' : '供给接入' },
+          { tag: '02', title: isEn ? 'Operations' : '核心交付' },
+          { tag: '03', title: isEn ? 'Distribution' : '渠道触达' },
+          { tag: '04', title: isEn ? 'Service' : '持续增值' },
+        ]
+  }
+
+  const rawMargin = (slide.text && slide.text.trim().length <= 22 ? slide.text.trim() : '')
+    || (slide.subtitle && slide.subtitle.trim().length <= 22 ? slide.subtitle.trim() : '')
+  const marginLabel = rawMargin || (isEn ? 'MARGIN' : '利润池\nMARGIN')
+
+  return { supportItems, primaryItems, marginLabel }
+}
+
+function renderPorterValueChainPptx(slide, area, nextIdFn, chromeCfg, theme, langAttr) {
+  const tk = theme.tokens
+  const isEn = langAttr === 'en-US'
+  const { supportItems, primaryItems, marginLabel } = partitionValueChainItems(slide, langAttr)
+  const shapes = []
+  const cardPreset = chromeCfg.cardRadiusPx > 0 ? 'roundRect' : 'rect'
+
+  const marginW = 1.66
+  const marginGap = 0.14
+  const mainW = area.w - marginW - marginGap
+  const mainX = area.x
+
+  // 顶部辅助活动横梁区
+  const nSup = Math.max(1, supportItems.length)
+  const supGap = 0.08
+  const supZoneH = Math.min(1.88, Math.max(1.10, area.h * (nSup >= 3 ? 0.42 : 0.34)))
+  const beamH = (supZoneH - supGap * (nSup - 1)) / nSup
+
+  // 左侧“辅助活动”竖向标签轨（分行独立居中段落，杜绝单段落换行缩进错位）
+  const railW = 0.92
+  const railLines = isEn ? ['SUPPORT'] : ['辅助', '活动']
+  shapes.push(ooxmlShape(nextIdFn(), 'Porter Support Rail', { x: mainX, y: area.y, w: railW, h: supZoneH }, {
+    preset: cardPreset,
+    adj: roundRectAdj(railW, supZoneH, Math.min(6, chromeCfg.cardRadiusPx)),
+    fill: tk.accentSoft,
+    stroke: tk.accentPrimary,
+    strokePt: 0.75,
+    anchor: 'ctr',
+    marginsIn: { l: 0.06, r: 0.06, t: 0.06, b: 0.06 },
+    paragraphs: railLines.map((ln) =>
+      ooxmlRichParagraph(ln, {
+        sizePt: 11.5,
+        color: tk.accentText,
+        bold: true,
+        lang: langAttr,
+        align: 'ctr',
+        font: theme.fonts.heading,
+        lineHeight: 1.16,
+      }),
+    ),
+  }))
+
+  const beamX = mainX + railW + 0.10
+  const beamW = mainW - railW - 0.10
+  supportItems.forEach((sup, sIdx) => {
+    const by = area.y + sIdx * (beamH + supGap)
+    const detail = [sup.text, ...(sup.bullets ?? [])].filter(Boolean).join(' · ')
+    const beamCopy = '**' + (sup.title || '') + '**' + (detail ? '  —  ' + detail : '')
+    shapes.push(ooxmlShape(nextIdFn(), 'Porter Support Beam ' + (sIdx + 1), { x: beamX, y: by, w: beamW, h: beamH }, {
+      preset: cardPreset,
+      adj: roundRectAdj(beamW, beamH, Math.min(6, chromeCfg.cardRadiusPx)),
+      fill: sIdx % 2 === 0 ? tk.surface2 : tk.surface1,
+      stroke: chromeCfg.cardBorderless ? '' : tk.hairline,
+      strokePt: 0.75,
+      anchor: 'ctr',
+      marginsIn: { l: 0.18, r: 0.16, t: 0.03, b: 0.03 },
+      paragraphs: [
+        ooxmlRichParagraph(beamCopy, {
+          sizePt: nSup >= 3 ? 11.5 : 12.5,
+          color: tk.inkPrimary,
+          secondaryColor: tk.inkSecondary,
+          lang: langAttr,
+          font: theme.fonts.body,
+          lineHeight: 1.18,
+        }),
+      ],
+    }))
+    shapes.push(ooxmlShape(nextIdFn(), 'Porter Support Stripe ' + (sIdx + 1), { x: beamX, y: by, w: 0.06, h: beamH }, {
+      preset: 'rect',
+      fill: tk.accentSecondary,
+    }))
+  })
+
+  // 底部基本活动互锁 Chevron + 支撑明细卡片
+  const primTopY = area.y + supZoneH + 0.16
+  const primZoneH = Math.max(1.85, area.y + area.h - primTopY)
+  const nPrim = Math.max(1, primaryItems.length)
+  const overlap = nPrim > 1 ? 0.07 : 0
+  const chevW = (mainW + (nPrim - 1) * overlap) / nPrim
+  const chevH = Math.min(0.84, primZoneH * 0.36)
+  const detailGap = 0.12
+  const colW = (mainW - detailGap * (nPrim - 1)) / nPrim
+  const detailY = primTopY + chevH + 0.12
+  const detailH = Math.max(0.95, area.y + area.h - detailY)
+
+  primaryItems.forEach((it, idx) => {
+    const isFirst = idx === 0
+    const isLast = idx === nPrim - 1 && nPrim >= 3
+    const cx = mainX + idx * (chevW - overlap)
+    const fillHex = isFirst ? tk.accentPrimary : isLast ? tk.accentSecondary : tk.surface2
+    const inkHex = isFirst
+      ? tk.inkOnAccent
+      : isLast
+        ? (relativeLuminance(tk.accentSecondary) > 0.38 ? '#0F172A' : '#FFFFFF')
+        : tk.inkPrimary
+    const stageTag = (it.tag && !SUPPORT_ACTIVITY_RE.test(it.tag)) ? it.tag : String(idx + 1).padStart(2, '0')
+    const titleStr = it.title || ''
+    const titlePt = titleStr.length >= 7 ? 11 : nPrim >= 5 ? 11.5 : 12.5
+    const chevParas = [
+      ...(stageTag
+        ? [ooxmlRichParagraph(stageTag, {
+            sizePt: 9,
+            color: inkHex,
+            bold: true,
+            lang: langAttr,
+            align: 'ctr',
+            font: theme.fonts.heading,
+            lineHeight: 1.05,
+            spaceAfterPt: 1,
+          })]
+        : []),
+      ooxmlRichParagraph(titleStr, {
+        sizePt: titlePt,
+        color: inkHex,
+        bold: true,
+        lang: langAttr,
+        align: 'ctr',
+        font: theme.fonts.heading,
+        lineHeight: 1.12,
+      }),
+    ]
+
+    shapes.push(ooxmlShape(nextIdFn(), 'Porter Primary Chevron ' + (idx + 1), { x: cx, y: primTopY, w: chevW, h: chevH }, {
+      preset: isFirst ? 'homePlate' : 'chevron',
+      adjs: { adj: 18000 },
+      fill: fillHex,
+      stroke: tk.canvas,
+      strokePt: 1.75,
+      anchor: 'ctr',
+      marginsIn: { l: isFirst ? 0.10 : 0.22, r: 0.18, t: 0.03, b: 0.03 },
+      paragraphs: chevParas,
+    }))
+
+    const dx = mainX + idx * (colW + detailGap)
+    const cardBox = { x: dx, y: detailY, w: colW, h: detailH }
+    shapes.push(renderSurfaceCardPptx('Porter Detail Surface ' + (idx + 1), cardBox, {
+      fill: isFirst ? tk.accentSoft : tk.surface1,
+      focal: isFirst,
+    }, nextIdFn, chromeCfg, theme))
+
+    const metric = it.conversion || it.delta || (it.value ? it.value + (it.unit ? ' ' + it.unit : '') : '')
+    const lines = [
+      ...(metric ? ['**' + metric + '**'] : []),
+      ...(it.text ? [it.text] : []),
+      ...(Array.isArray(it.bullets) ? it.bullets : []),
+    ]
+    if (lines.length > 0) {
+      const innerBox = { x: cardBox.x + 0.12, y: cardBox.y + 0.12, w: cardBox.w - 0.24, h: cardBox.h - 0.22 }
+      const fit = computeTextFit(lines, innerBox, 'cardBody', { maxPt: 12.5, minPt: 11 })
+      shapes.push(ooxmlShape(nextIdFn(), 'Porter Detail ' + (idx + 1), innerBox, {
+        txBox: true,
+        anchor: 't',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        fontScale: fit.fontScale,
+        paragraphs: lines.map((line, lIdx) =>
+          ooxmlRichParagraph(line, {
+            sizePt: fit.fontPt,
+            color: lIdx === 0 && metric ? tk.accentText : tk.inkSecondary,
+            lang: langAttr,
+            font: theme.fonts.body,
+            lineHeight: 1.3,
+            spaceAfterPt: 3,
+          }),
+        ),
+      }))
+    }
+  })
+
+  // 右侧贯通全高的“利润池 / MARGIN”箭头尖楔
+  const wedgeBox = { x: mainX + mainW + marginGap, y: area.y, w: marginW, h: area.h }
+  shapes.push(ooxmlShape(nextIdFn(), 'Porter Margin Wedge', wedgeBox, {
+    preset: 'homePlate',
+    adjs: { adj: 28000 },
+    fill: tk.accentPrimary,
+    stroke: tk.canvas,
+    strokePt: 2.0,
+    anchor: 'ctr',
+    marginsIn: { l: 0.12, r: 0.26, t: 0.16, b: 0.16 },
+    paragraphs: String(marginLabel).split('\n').map((ln, lIdx) =>
+      ooxmlRichParagraph(ln, {
+        sizePt: lIdx === 0 ? 15.5 : 11.5,
+        color: tk.inkOnAccent,
+        bold: true,
+        lang: langAttr,
+        align: 'ctr',
+        font: theme.fonts.heading,
+        lineHeight: 1.2,
+        spaceAfterPt: 2,
+      }),
+    ),
+  }))
+
+  return shapes.join('')
+}
+
+function renderPorterValueChainHtml(slide, langId) {
+  const isEn = langId === 'en'
+  const { supportItems, primaryItems, marginLabel } = partitionValueChainItems(slide, langId)
+
+  return (
+    '<div class="porter-board">' +
+    '<div class="porter-main">' +
+    '<div class="porter-support-zone">' +
+    '<div class="porter-support-rail">' + (isEn ? 'SUPPORT' : '辅助活动') + '</div>' +
+    '<div class="porter-support-beams">' +
+    supportItems.map((sup) => {
+      const detail = [sup.text, ...(sup.bullets ?? [])].filter(Boolean).join(' · ')
+      return (
+        '<div class="surface-card porter-beam">' +
+        '<strong>' + renderInlineHtml(sup.title || '') + '</strong>' +
+        (detail ? '<span>' + renderInlineHtml(detail) + '</span>' : '') +
+        '</div>'
+      )
+    }).join('') +
+    '</div></div>' +
+    '<ol class="layout-grid chevron-board porter-primary-zone cols-' + Math.max(1, primaryItems.length) + '">' +
+    primaryItems.map((it, idx) => {
+      const isFirst = idx === 0
+      const isLast = idx === primaryItems.length - 1 && primaryItems.length >= 3
+      const stageTag = (it.tag && !SUPPORT_ACTIVITY_RE.test(it.tag)) ? it.tag : String(idx + 1).padStart(2, '0')
+      const metric = it.conversion || it.delta || (it.value ? it.value + (it.unit ? ' ' + it.unit : '') : '')
+      const lines = [...(it.text ? [it.text] : []), ...(Array.isArray(it.bullets) ? it.bullets : [])]
+      return (
+        '<li class="chevron-col" data-item-index="' + idx + '">' +
+        '<div class="chevron-arrow' + (isFirst ? ' is-first' : isLast ? ' is-last' : '') + '">' +
+        '<span class="chevron-tag">' + escapeHtml(stageTag) + '</span>' +
+        '<span class="chevron-title">' + renderInlineHtml(it.title || '') + '</span>' +
+        '</div>' +
+        '<div class="surface-card chevron-detail' + (isFirst ? ' is-focal' : '') + '">' +
+        (metric ? '<span class="funnel-conversion-badge chevron-metric">' + escapeHtml(metric) + '</span>' : '') +
+        (lines.length ? '<div class="card-body">' + lines.map((l) => renderInlineHtml(l)).join('<br>') + '</div>' : '') +
+        '</div></li>'
+      )
+    }).join('') +
+    '</ol>' +
+    '</div>' +
+    '<aside class="porter-margin-wedge"><span>' + escapeHtml(marginLabel).replace(/\n/g, '<br>') + '</span></aside>' +
+    '</div>'
+  )
+}
+
+function formatSwotAnchorText(raw, isEn) {
+  const cleaned = stripInlineMarkdown(String(raw ?? '')).trim()
+  if (!cleaned) return isEn ? 'Strategic\nCore' : '破局核心'
+  const rawLines = String(raw ?? '')
+    .split(/\n+/)
+    .map((ln) => stripInlineMarkdown(ln).trim())
+    .filter(Boolean)
+  if (rawLines.length >= 2) return rawLines.slice(0, 2).join('\n')
+
+  const sepParts = cleaned.split(/\s*[·｜|／/—\-]\s*/).filter(Boolean)
+  if (sepParts.length >= 2) return [sepParts[0], sepParts.slice(1).join('·')].join('\n')
+
+  const hasCjk = /[\u4E00-\u9FFF]/.test(cleaned)
+  if (hasCjk) {
+    const wsParts = cleaned.split(/\s+/).filter(Boolean)
+    if (wsParts.length >= 2) {
+      return [wsParts[0], wsParts.slice(1).join('')].join('\n')
+    }
+    if (cleaned.length > 5) {
+      const mid = Math.ceil(cleaned.length / 2)
+      return cleaned.slice(0, mid) + '\n' + cleaned.slice(mid)
+    }
+    return cleaned
+  }
+
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (cleaned.length > 10 && words.length >= 2) {
+    let bestIdx = 1
+    let bestDiff = Infinity
+    for (let i = 1; i < words.length; i += 1) {
+      const l1 = words.slice(0, i).join(' ').length
+      const l2 = words.slice(i).join(' ').length
+      const diff = Math.abs(l1 - l2)
+      if (diff < bestDiff) { bestDiff = diff; bestIdx = i }
+    }
+    return words.slice(0, bestIdx).join(' ') + '\n' + words.slice(bestIdx).join(' ')
+  }
+  return cleaned
+}
+
+export function computeSwotModel(slide, langOrAttr = 'zh') {
+  const isEn = langOrAttr === 'en' || langOrAttr === 'en-US'
+  const items = resolveEffectiveItems(slide)
+
+  const quadrantMeta = [
+    { key: 'S', badge: 'S', header: isEn ? 'S · Core Strengths' : 'S · 核心优势', role: 'positive', match: /^(?:s\b|strength|优势|强项|长板)/i },
+    { key: 'W', badge: 'W', header: isEn ? 'W · Key Weaknesses' : 'W · 关键短板', role: 'warning', match: /^(?:w\b|weakness|劣势|短板|不足|痛点)/i },
+    { key: 'O', badge: 'O', header: isEn ? 'O · External Opportunities' : 'O · 外部机遇', role: 'accent', match: /^(?:o\b|opportunit|机遇|机会|红利)/i },
+    { key: 'T', badge: 'T', header: isEn ? 'T · Potential Threats' : 'T · 潜在威胁', role: 'negative', match: /^(?:t\b|threat|威胁|风险|挑战)/i },
+  ]
+
+  const towsMeta = [
+    { key: 'SO', label: isEn ? 'SO · Growth Offense' : 'SO · 乘势增长', match: /^so\b/i },
+    { key: 'WO', label: isEn ? 'WO · Capability Turnaround' : 'WO · 借势补短', match: /^wo\b/i },
+    { key: 'ST', label: isEn ? 'ST · Moat Defense' : 'ST · 壁垒防御', match: /^st\b/i },
+    { key: 'WT', label: isEn ? 'WT · Risk Containment' : 'WT · 风险收敛', match: /^wt\b/i },
+  ]
+
+  // 提取显式 SO/WO/ST/WT 行动策略项与 S/W/O/T 四象限项
+  const towsExplicit = new Map()
+  const quadPool = []
+  for (const it of items) {
+    const probe = ((it.tag || '') + ' ' + (it.title || '')).trim()
+    const hitTows = towsMeta.find((tm) => tm.match.test(probe))
+    if (hitTows && !towsExplicit.has(hitTows.key)) {
+      towsExplicit.set(hitTows.key, it.text || (it.bullets ?? [])[0] || it.title || '')
+    } else {
+      quadPool.push(it)
+    }
+  }
+
+  const used = new Set()
+  const quadrants = quadrantMeta.map((qm, qIdx) => {
+    let hit = quadPool.find((it, idx) => !used.has(idx) && (qm.match.test(it.tag || '') || qm.match.test(it.title || '')))
+    if (hit) {
+      used.add(quadPool.indexOf(hit))
+    } else {
+      const nextIdx = quadPool.findIndex((_, idx) => !used.has(idx))
+      if (nextIdx >= 0) {
+        hit = quadPool[nextIdx]
+        used.add(nextIdx)
+      }
+    }
+    const cleanTitle = hit?.title ? hit.title.replace(/^[SWOT]\s*[·:：\-—]\s*/i, '').trim() : ''
+    return {
+      ...qm,
+      title: cleanTitle,
+      text: hit?.text || '',
+      bullets: hit?.bullets ?? [],
+    }
+  })
+
+  const rawAnchor = (slide.text && slide.text.trim().length <= 24 ? slide.text.trim() : '')
+    || (slide.subtitle && slide.subtitle.trim().length <= 24 ? slide.subtitle.trim() : '')
+  const anchorText = formatSwotAnchorText(rawAnchor, isEn)
+
+  // 生成底部 SO / WO / ST / WT 行动策略条（优先采用显式策略或 slide.columns，否则根据四象限标题智能凝练）
+  const shortPhrase = (q, fallbackZh, fallbackEn) => {
+    const cand = q.title || (q.bullets[0] ? stripInlineMarkdown(q.bullets[0]).split(/[：:，,；;]/)[0] : '') || stripInlineMarkdown(q.text).split(/[：:，,；;]/)[0]
+    if (cand && cand.length <= 14) return cand
+    if (cand) return cand.slice(0, 12) + '…'
+    return isEn ? fallbackEn : fallbackZh
+  }
+  const sShort = shortPhrase(quadrants[0], '核心壁垒', 'core strength')
+  const wShort = shortPhrase(quadrants[1], '关键短板', 'gap')
+  const oShort = shortPhrase(quadrants[2], '市场窗口', 'market window')
+  const tShort = shortPhrase(quadrants[3], '外部冲击', 'headwinds')
+
+  const synthesizedDefaults = isEn
+    ? [
+        'Leverage ' + sShort + ' to capture ' + oShort,
+        'Use ' + oShort + ' to close ' + wShort,
+        'Reinforce ' + sShort + ' against ' + tShort,
+        'Hedge ' + wShort + ' & ' + tShort,
+      ]
+    : [
+        '以「' + sShort + '」抢占「' + oShort + '」',
+        '借「' + oShort + '」补齐「' + wShort + '」',
+        '凭「' + sShort + '」抵御「' + tShort + '」',
+        '收敛「' + wShort + '」严防「' + tShort + '」',
+      ]
+
+  const strategies = towsMeta.map((tm, idx) => {
+    const fromCol = Array.isArray(slide.columns) && slide.columns[idx] ? slide.columns[idx].replace(/^(?:SO|WO|ST|WT)\s*[·:：\-—]\s*/i, '') : ''
+    return {
+      key: tm.key,
+      label: tm.label,
+      action: towsExplicit.get(tm.key) || fromCol || synthesizedDefaults[idx],
+    }
+  })
+
+  return { quadrants, anchorText, strategies }
+}
+
+function swotRoleColor(role, tk) {
+  if (role === 'positive') return tk.positive
+  if (role === 'warning') return tk.warning
+  if (role === 'negative') return tk.negative
+  return tk.accentPrimary
+}
+
+function renderSwotPptx(slide, area, nextIdFn, chromeCfg, theme, langAttr) {
+  const tk = theme.tokens
+  const model = computeSwotModel(slide, langAttr)
+  const shapes = []
+  const cardPreset = chromeCfg.cardRadiusPx > 0 ? 'roundRect' : 'rect'
+
+  const stripH = 0.62
+  const stripGap = 0.14
+  const gridH = Math.max(2.6, area.h - stripH - stripGap)
+  const gapX = 0.24
+  const gapY = 0.20
+  const qW = (area.w - gapX) / 2
+  const qH = (gridH - gapY) / 2
+
+  const anchorW = 2.16
+  const anchorH = 0.92
+  const anchorHalfOverlap = Math.max(0.95, anchorW / 2 - gapX / 2 + 0.10)
+
+  model.quadrants.forEach((q, idx) => {
+    const col = idx % 2
+    const row = Math.floor(idx / 2)
+    const qx = area.x + col * (qW + gapX)
+    const qy = area.y + row * (qH + gapY)
+    const toneColor = swotRoleColor(q.role, tk)
+
+    shapes.push(ooxmlShape(nextIdFn(), 'SWOT Quadrant ' + q.key, { x: qx, y: qy, w: qW, h: qH }, {
+      preset: cardPreset,
+      adj: roundRectAdj(qW, qH, chromeCfg.cardRadiusPx),
+      fill: idx === 2 ? tk.accentSoft : tk.surface1,
+      stroke: chromeCfg.cardBorderless ? '' : (idx === 0 || idx === 2 ? toneColor : tk.hairline),
+      strokePt: idx === 0 || idx === 2 ? 1.0 : 0.75,
+    }))
+
+    // 象限顶部语义色带标题栏（全部左对齐，下排 O/T 自动避让中央战略锚点）
+    const headH = 0.40
+    const headLeftIn = row === 1 && col === 1 ? anchorHalfOverlap : 0.18
+    const headRightIn = row === 1 && col === 0 ? anchorHalfOverlap : 0.18
+    shapes.push(ooxmlShape(nextIdFn(), 'SWOT Header ' + q.key, { x: qx, y: qy, w: qW, h: headH }, {
+      preset: 'rect',
+      fill: toneColor,
+      anchor: 'ctr',
+      marginsIn: { l: headLeftIn, r: headRightIn, t: 0.02, b: 0.02 },
+      paragraphs: [
+        ooxmlRichParagraph(q.header + (q.title && q.title !== q.header ? '  ·  ' + q.title : ''), {
+          sizePt: 12.5,
+          color: relativeLuminance(toneColor) > 0.42 ? '#0F172A' : '#FFFFFF',
+          bold: true,
+          lang: langAttr,
+          align: 'l',
+          font: theme.fonts.heading,
+          lineHeight: 1.1,
+        }),
+      ],
+    }))
+
+    // 象限内容框（上排顶对齐且左边缘与标题严格对齐；密集多条要点时内侧避让中央锚点）
+    const lines = [
+      ...(q.text ? [q.text] : []),
+      ...(q.bullets ?? []),
+    ]
+    const needInnerClearance = row === 0 && lines.length >= 4
+    const leftPad = needInnerClearance && col === 1 ? anchorHalfOverlap : 0.18
+    const rightPad = needInnerClearance && col === 0 ? anchorHalfOverlap : 0.22
+    const contentBox = {
+      x: qx + leftPad,
+      y: qy + headH + 0.08,
+      w: Math.max(1.8, qW - leftPad - rightPad),
+      h: Math.max(0.6, qH - headH - 0.14),
+    }
+    if (lines.length > 0) {
+      const fit = computeTextFit(lines, contentBox, 'cardBody', { maxPt: 13.5, minPt: 11.5 })
+      const paras = []
+      if (q.text) {
+        paras.push(ooxmlRichParagraph(q.text, {
+          sizePt: fit.fontPt,
+          color: tk.inkPrimary,
+          secondaryColor: tk.inkSecondary,
+          lang: langAttr,
+          font: theme.fonts.body,
+          lineHeight: 1.32,
+          spaceAfterPt: q.bullets?.length ? 4 : 0,
+          autoLeadBold: true,
+        }))
+      }
+      for (const b of q.bullets ?? []) {
+        paras.push(ooxmlRichParagraph(b, {
+          sizePt: fit.fontPt,
+          color: tk.inkPrimary,
+          secondaryColor: tk.inkSecondary,
+          bullet: true,
+          bulletColor: toneColor,
+          lang: langAttr,
+          font: theme.fonts.body,
+          lineHeight: 1.3,
+          spaceAfterPt: 3,
+          autoLeadBold: true,
+        }))
+      }
+      shapes.push(ooxmlShape(nextIdFn(), 'SWOT Body ' + q.key, contentBox, {
+        txBox: true,
+        anchor: row === 0 ? 't' : 'ctr',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        fontScale: fit.fontScale,
+        paragraphs: paras,
+      }))
+    }
+  })
+
+  // 中央十字交汇“破局核心”八角徽章战略锚点（宽阔内切文本框，4~6 字词组绝不半词折行）
+  const midX = area.x + area.w / 2
+  const midY = area.y + gridH / 2
+  const anchorLines = String(model.anchorText).split('\n').filter(Boolean)
+  const maxAnchorLen = Math.max(1, ...anchorLines.map((ln) => ln.length))
+  shapes.push(ooxmlShape(nextIdFn(), 'SWOT Strategic Anchor', {
+    x: midX - anchorW / 2,
+    y: midY - anchorH / 2,
+    w: anchorW,
+    h: anchorH,
+  }, {
+    preset: 'octagon',
+    adjs: { adj: 22000 },
+    fill: tk.accentPrimary,
+    stroke: tk.canvas,
+    strokePt: 2.5,
+    shadow: true,
+    anchor: 'ctr',
+    marginsIn: { l: 0.14, r: 0.14, t: 0.06, b: 0.06 },
+    paragraphs: anchorLines.map((ln) =>
+      ooxmlRichParagraph(ln, {
+        sizePt: maxAnchorLen >= 7 ? 10.5 : 11.5,
+        color: tk.inkOnAccent,
+        bold: true,
+        lang: langAttr,
+        align: 'ctr',
+        font: theme.fonts.heading,
+        lineHeight: 1.15,
+      }),
+    ),
+  }))
+
+  // 底部 SO / WO / ST / WT 四栏可执行策略合成条
+  const stripY = area.y + gridH + stripGap
+  const stGap = 0.16
+  const stW = (area.w - stGap * 3) / 4
+  model.strategies.forEach((st, idx) => {
+    const sx = area.x + idx * (stW + stGap)
+    shapes.push(ooxmlShape(nextIdFn(), 'SWOT Strategy ' + st.key, { x: sx, y: stripY, w: stW, h: stripH }, {
+      preset: cardPreset,
+      adj: roundRectAdj(stW, stripH, Math.min(8, chromeCfg.cardRadiusPx)),
+      fill: idx === 0 ? tk.accentSoft : tk.surface2,
+      stroke: idx === 0 ? tk.accentPrimary : tk.hairline,
+      strokePt: 0.75,
+      anchor: 'ctr',
+      marginsIn: { l: 0.12, r: 0.12, t: 0.04, b: 0.04 },
+      paragraphs: [
+        ooxmlRichParagraph('**' + st.key + '** · ' + st.action, {
+          sizePt: 11,
+          color: tk.inkPrimary,
+          accentColor: tk.accentText,
+          lang: langAttr,
+          font: theme.fonts.body,
+          lineHeight: 1.2,
+        }),
+      ],
+    }))
+  })
+
+  return shapes.join('')
+}
+
+function renderSwotHtml(slide, langId) {
+  const model = computeSwotModel(slide, langId)
+
+  return (
+    '<div class="swot-board">' +
+    '<div class="swot-cross">' +
+    model.quadrants.map((q, idx) =>
+      '<article class="surface-card swot-quad swot-' + q.key.toLowerCase() + ' tone-' + q.role + '" data-item-index="' + idx + '">' +
+      '<div class="swot-quad-head">' + escapeHtml(q.header + (q.title && q.title !== q.header ? ' · ' + q.title : '')) + '</div>' +
+      '<div class="swot-quad-body">' +
+      (q.text ? '<p class="card-body">' + renderInlineHtml(q.text, { autoLeadBold: true }) + '</p>' : '') +
+      (q.bullets?.length ? '<ul class="card-bullets">' + q.bullets.map((b) => '<li>' + renderInlineHtml(b, { autoLeadBold: true }) + '</li>').join('') + '</ul>' : '') +
+      '</div></article>',
+    ).join('') +
+    '<div class="swot-anchor"><span>' + escapeHtml(model.anchorText).replace(/\n/g, '<br>') + '</span></div>' +
+    '</div>' +
+    '<div class="layout-grid cols-4 swot-tows-strip">' +
+    model.strategies.map((st) =>
+      '<div class="surface-card swot-tows-pill">' +
+      '<span class="item-badge">' + escapeHtml(st.key) + '</span>' +
+      '<span class="swot-tows-text">' + renderInlineHtml(st.action) + '</span>' +
+      '</div>',
+    ).join('') +
+    '</div></div>'
+  )
 }
 
 export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manifest = {}) {
@@ -3264,6 +5156,30 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
     return shapes.join('')
   }
 
+  if (layout === 'marimekko') {
+    shapes.push(renderMarimekkoPptx(slide, { x: 0.62, y: bodyTopY + 0.04, w: 12.09, h: bodyH - 0.10 }, nextId, chromeCfg, theme, langAttr))
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  if (layout === 'sankey') {
+    shapes.push(renderSankeyPptx(slide, { x: 0.62, y: bodyTopY + 0.04, w: 12.09, h: bodyH - 0.10 }, nextId, chromeCfg, theme, langAttr))
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  if (layout === 'value-chain') {
+    shapes.push(renderPorterValueChainPptx(slide, { x: 0.62, y: bodyTopY + 0.04, w: 12.09, h: bodyH - 0.10 }, nextId, chromeCfg, theme, langAttr))
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  if (layout === 'swot' || (layout === 'matrix' && variant === 'swot')) {
+    shapes.push(renderSwotPptx(slide, { x: 0.62, y: bodyTopY + 0.04, w: 12.09, h: bodyH - 0.10 }, nextId, chromeCfg, theme, langAttr))
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
   if (layout === 'matrix') {
     const items = resolveEffectiveItems(slide).slice(0, 4)
     const plotX = 1.18
@@ -3702,11 +5618,46 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   if (layout === 'callout') {
     const heroText = slide.text || subtitle || ''
+    const explicitFormula = typeof slide.formula === 'string' ? slide.formula.trim() : ''
     const items = resolveEffectiveItems(slide)
-    const hasHero = heroText !== ''
-    if (hasHero) {
+    const heroSegs = splitMathSegments(heroText)
+    const isSingleMathHero = heroSegs.length === 1 && heroSegs[0].type === 'math'
+    const formulaSource = explicitFormula
+      || (isSingleMathHero ? heroSegs[0].latex : '')
+      || (variant === 'formula' && looksLikeRawLatex(heroText) ? unwrapOuterMathDelimiters(heroText) : '')
+
+    let cursorY = bodyTopY + 0.06
+    if (formulaSource !== '') {
+      const hasDistinctCaption = explicitFormula !== '' && heroText !== '' && unwrapOuterMathDelimiters(heroText) !== unwrapOuterMathDelimiters(explicitFormula)
+      const calloutH = items.length > 0
+        ? (hasDistinctCaption ? 1.54 : 1.76)
+        : Math.min(3.10, bodyH - (hasDistinctCaption ? 0.68 : 0.16))
+      const box = { x: 0.62, y: cursorY, w: 12.09, h: calloutH }
+      shapes.push(renderMathCardPptx('Callout Formula', box, formulaSource, nextId, chromeCfg, theme, {
+        emIn: items.length > 0 ? 0.28 : 0.34,
+        sizePt: 20,
+      }))
+      cursorY += calloutH + 0.14
+      if (hasDistinctCaption) {
+        shapes.push(ooxmlShape(nextId(), 'Callout Formula Caption', { x: 0.62, y: cursorY, w: 12.09, h: 0.42 }, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0.12, r: 0.12, t: 0.02, b: 0.02 },
+          paragraphs: [
+            ooxmlRichParagraph(heroText, {
+              sizePt: 14.5,
+              color: tk.inkSecondary,
+              lang: langAttr,
+              align: 'ctr',
+              font: theme.fonts.body,
+            }),
+          ],
+        }))
+        cursorY += 0.50
+      }
+    } else if (heroText !== '') {
       const calloutH = items.length > 0 ? 1.55 : 2.85
-      const box = { x: 0.62, y: bodyTopY + 0.06, w: 12.09, h: calloutH }
+      const box = { x: 0.62, y: cursorY, w: 12.09, h: calloutH }
       shapes.push(ooxmlShape(nextId(), 'Callout surface', box, {
         preset: cardPreset,
         adj: roundRectAdj(box.w, box.h, chromeCfg.cardRadiusPx),
@@ -3728,10 +5679,18 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
           }),
         ],
       }))
+      cursorY += calloutH + 0.20
     }
+
     if (items.length > 0) {
-      const listTop = hasHero ? bodyTopY + 1.82 : bodyTopY + 0.08
-      const listBox = { x: 0.62, y: listTop, w: 12.09, h: Math.max(1.2, bodyBottomY - listTop) }
+      const listTop = Math.max(cursorY, bodyTopY + 0.08)
+      const listBox = { x: 0.62, y: listTop, w: 12.09, h: Math.max(1.0, bodyBottomY - listTop) }
+      const normalizeLegendPart = (val) => {
+        const s = String(val ?? '').trim()
+        if (!s) return ''
+        if (variant === 'formula' && looksLikeRawLatex(s) && !containsLatexMath(s)) return '$' + s + '$'
+        return s
+      }
       const lines = items.map((it, idx) => (it.tag || (idx + 1) + '.') + ' ' + [it.title, it.text].filter(Boolean).join('：'))
       const fit = computeTextFit(lines, listBox, 'body', { maxPt: 16.5, minPt: 13.5 })
       shapes.push(ooxmlShape(nextId(), 'Callout 1', listBox, {
@@ -3739,9 +5698,11 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         anchor: 't',
         marginsIn: { l: 0.08, r: 0.08, t: 0.04, b: 0.04 },
         fontScale: fit.fontScale,
-        paragraphs: items.map((it, idx) =>
-          ooxmlRichParagraph(
-            '**' + (it.tag || String(idx + 1).padStart(2, '0')) + (it.title ? '  ' + it.title : '') + '**' + (it.text ? '：' + it.text : ''),
+        paragraphs: items.map((it, idx) => {
+          const tagPart = normalizeLegendPart(it.tag || String(idx + 1).padStart(2, '0'))
+          const titlePart = normalizeLegendPart(it.title || '')
+          return ooxmlRichParagraph(
+            '**' + tagPart + (titlePart ? '  ' + titlePart : '') + '**' + (it.text ? '：' + it.text : ''),
             {
               sizePt: fit.fontPt,
               color: tk.inkPrimary,
@@ -3751,16 +5712,26 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
               lineHeight: 1.44,
               spaceAfterPt: 8,
             },
-          ),
-        ),
+          )
+        }),
       }))
     }
     shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
     return shapes.join('')
   }
 
-  // 默认版式：bullets（保留 idBase + 3 Body 以严格兼容逐条点击动画 spid）
-  const surfaceBox = { x: 0.62, y: bodyTopY + 0.06, w: 12.09, h: bodyH - 0.12 }
+  // 默认版式：bullets（若带 slide.formula 先渲染顶部原生公式条；保留 idBase + 3 Body 兼容逐条点击动画 spid）
+  let bulletsAreaTopY = bodyTopY + 0.06
+  if (typeof slide.formula === 'string' && slide.formula.trim() !== '') {
+    const fBox = { x: 0.62, y: bulletsAreaTopY, w: 12.09, h: 1.42 }
+    shapes.push(renderMathCardPptx('Bullets Formula', fBox, slide.formula.trim(), nextId, chromeCfg, theme, {
+      emIn: 0.27,
+      sizePt: 19,
+    }))
+    bulletsAreaTopY += 1.56
+  }
+
+  const surfaceBox = { x: 0.62, y: bulletsAreaTopY, w: 12.09, h: Math.max(1.4, bodyBottomY - bulletsAreaTopY - 0.06) }
   shapes.push(ooxmlShape(nextId(), 'Bullets container', surfaceBox, {
     preset: cardPreset,
     adj: roundRectAdj(surfaceBox.w, surfaceBox.h, chromeCfg.cardRadiusPx),
@@ -3769,13 +5740,116 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
     strokePt: 0.75,
   }))
   if (chromeCfg.cardLeftBar || chromeCfg.chrome === 'saas-bento' || chromeCfg.chrome === 'gov-ceremonial') {
-    shapes.push(ooxmlShape(nextId(), 'Bullets accent rail', { x: 0.62, y: bodyTopY + 0.06, w: 0.07, h: surfaceBox.h }, {
+    shapes.push(ooxmlShape(nextId(), 'Bullets accent rail', { x: 0.62, y: bulletsAreaTopY, w: 0.07, h: surfaceBox.h }, {
       preset: 'rect',
       fill: tk.accentPrimary,
     }))
   }
 
-  const bodyBox = { x: 0.98, y: bodyTopY + 0.24, w: 11.42, h: surfaceBox.h - 0.36 }
+  const has2dMathBullets = bullets.length > 0 && bullets.some((b) => {
+    const segs = splitMathSegments(b)
+    return segs.some((s) => s.type === 'math' && (s.display || has2dMathConstruct(parseLatexMath(s.latex))))
+  })
+
+  if (has2dMathBullets) {
+    const innerTop = bulletsAreaTopY + 0.16
+    const innerH = surfaceBox.h - 0.32
+    const rowGap = 0.10
+    const nRows = Math.min(6, bullets.length)
+    const rowH = Math.max(0.52, (innerH - rowGap * (nRows - 1)) / nRows)
+    bullets.slice(0, nRows).forEach((b, bIdx) => {
+      const ry = innerTop + bIdx * (rowH + rowGap)
+      const segs = splitMathSegments(b)
+      const firstMathIdx = segs.findIndex((s) => s.type === 'math' && (s.display || has2dMathConstruct(parseLatexMath(s.latex))))
+      if (firstMathIdx >= 0) {
+        const prefixText = segs.slice(0, firstMathIdx).map((s) => s.type === 'text' ? s.value : ('$' + s.latex + '$')).join('').trim()
+        const suffixText = segs.slice(firstMathIdx + 1).map((s) => s.type === 'text' ? s.value : ('$' + s.latex + '$')).join('').trim()
+        const mathSeg = segs[firstMathIdx]
+        if (!prefixText && !suffixText) {
+          const eqBox = { x: 0.98, y: ry, w: 11.42, h: rowH }
+          if (theme.dark) {
+            shapes.push(ooxmlShape(nextId(), 'Bullet Math Plate ' + (bIdx + 1), eqBox, {
+              preset: cardPreset,
+              adj: roundRectAdj(eqBox.w, eqBox.h, Math.min(6, chromeCfg.cardRadiusPx)),
+              fill: '#F8FAFC',
+            }))
+          }
+          shapes.push(ooxmlMathShape(nextId(), 'Bullet Equation ' + (bIdx + 1), eqBox, mathSeg.latex, {
+            emIn: Math.min(0.28, rowH * 0.34),
+            sizePt: 18,
+            align: 'ctr',
+          }))
+        } else {
+          const labelStr = [prefixText, suffixText].filter(Boolean).join(' ')
+          const labelW = Math.min(4.6, Math.max(2.4, measureEmWidth(labelStr, true) * 0.24 + 0.45))
+          shapes.push(ooxmlShape(nextId(), 'Bullet Math Label ' + (bIdx + 1), { x: 0.94, y: ry, w: labelW, h: rowH }, {
+            txBox: true,
+            anchor: 'ctr',
+            marginsIn: { l: 0.04, r: 0.06, t: 0.02, b: 0.02 },
+            paragraphs: [
+              ooxmlRichParagraph(prefixText || labelStr, {
+                sizePt: 14.5,
+                color: tk.inkPrimary,
+                secondaryColor: tk.inkSecondary,
+                bullet: true,
+                bulletChar: '▪',
+                bulletColor: tk.accentPrimary,
+                lang: langAttr,
+                font: theme.fonts.body,
+                autoLeadBold: true,
+              }),
+            ],
+          }))
+          const eqBox = { x: 0.94 + labelW + 0.12, y: ry, w: Math.max(2.4, 12.42 - (0.94 + labelW + 0.12)), h: rowH }
+          if (theme.dark) {
+            const astPreview = parseLatexMath(mathSeg.latex)
+            const fittedEq = fitFormulaBoxIn(astPreview, eqBox, {
+              padXIn: 0.24,
+              padYIn: 0.10,
+              emIn: Math.min(0.27, rowH * 0.34),
+              align: 'l',
+            })
+            const plateW = Math.min(eqBox.w, Math.max(2.2, fittedEq.w + 0.48))
+            shapes.push(ooxmlShape(nextId(), 'Bullet Math Plate ' + (bIdx + 1), { x: eqBox.x, y: ry + 0.04, w: plateW, h: rowH - 0.08 }, {
+              preset: cardPreset,
+              adj: roundRectAdj(plateW, rowH - 0.08, Math.min(8, chromeCfg.cardRadiusPx)),
+              fill: '#F8FAFC',
+              stroke: tk.accentPrimary,
+              strokePt: 0.75,
+            }))
+          }
+          shapes.push(ooxmlMathShape(nextId(), 'Bullet Equation ' + (bIdx + 1), eqBox, mathSeg.latex, {
+            emIn: Math.min(0.27, rowH * 0.34),
+            sizePt: 18,
+            align: 'l',
+          }))
+        }
+      } else {
+        shapes.push(ooxmlShape(nextId(), 'Bullet Row ' + (bIdx + 1), { x: 0.94, y: ry, w: 11.46, h: rowH }, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0.04, r: 0.04, t: 0.02, b: 0.02 },
+          paragraphs: [
+            ooxmlRichParagraph(b, {
+              sizePt: 15.5,
+              color: tk.inkPrimary,
+              secondaryColor: tk.inkSecondary,
+              bullet: true,
+              bulletChar: '▪',
+              bulletColor: tk.accentPrimary,
+              lang: langAttr,
+              font: theme.fonts.body,
+              autoLeadBold: true,
+            }),
+          ],
+        }))
+      }
+    })
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  const bodyBox = { x: 0.98, y: bulletsAreaTopY + 0.18, w: 11.42, h: surfaceBox.h - 0.36 }
   const sourceLines = bullets.length > 0 ? bullets : [subtitle || slide.text || '']
   const bodyFit = computeTextFit(sourceLines, bodyBox, 'body', { maxPt: bullets.length <= 4 ? 19 : 17.5, minPt: 13.5 })
   const bodyParagraphs = bullets.length > 0
@@ -4296,6 +6370,14 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
         }).join('') +
         '</div>'
     }
+  } else if (layout === 'marimekko') {
+    inner = renderHeader() + renderMarimekkoHtml(slide, theme, langId)
+  } else if (layout === 'sankey') {
+    inner = renderHeader() + renderSankeyHtml(slide, theme, langId)
+  } else if (layout === 'value-chain') {
+    inner = renderHeader() + renderPorterValueChainHtml(slide, langId)
+  } else if (layout === 'swot' || (layout === 'matrix' && variant === 'swot')) {
+    inner = renderHeader() + renderSwotHtml(slide, langId)
   } else if (layout === 'matrix') {
     const items = resolveEffectiveItems(slide).slice(0, 4)
     inner =
@@ -4387,15 +6469,31 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     }
   } else if (layout === 'callout') {
     const heroText = slide.text || subtitle || ''
+    const explicitFormula = typeof slide.formula === 'string' ? slide.formula.trim() : ''
+    const heroSegs = splitMathSegments(heroText)
+    const isSingleMathHero = heroSegs.length === 1 && heroSegs[0].type === 'math'
+    const formulaSource = explicitFormula
+      || (isSingleMathHero ? heroSegs[0].latex : '')
+      || (variant === 'formula' && looksLikeRawLatex(heroText) ? unwrapOuterMathDelimiters(heroText) : '')
+    const hasDistinctCaption = explicitFormula !== '' && heroText !== '' && unwrapOuterMathDelimiters(heroText) !== unwrapOuterMathDelimiters(explicitFormula)
     const items = resolveEffectiveItems(slide)
+    const renderLegendBadge = (rawBadge) => {
+      if (variant === 'formula' && looksLikeRawLatex(rawBadge) && !containsLatexMath(rawBadge)) {
+        return latexToMathMl(rawBadge, { display: false, className: 'deck-math is-inline' })
+      }
+      return containsLatexMath(rawBadge) ? renderInlineHtml(rawBadge) : escapeHtml(rawBadge)
+    }
     inner =
       renderHeader() +
-      (heroText ? '<div class="callout-hero' + (variant === 'formula' ? ' is-formula' : '') + '">' + renderInlineHtml(heroText) + '</div>' : '') +
+      (formulaSource !== ''
+        ? '<div class="callout-hero is-formula is-omath callout-formula formula-plate">' + latexToMathMl(formulaSource, { display: true, className: 'deck-math is-block' }) + '</div>' +
+          (hasDistinctCaption ? '<div class="formula-caption">' + renderInlineHtml(heroText) + '</div>' : '')
+        : (heroText ? '<div class="callout-hero' + (variant === 'formula' ? ' is-formula callout-formula' : '') + '">' + renderInlineHtml(heroText) + '</div>' : '')) +
       (items.length
         ? '<ul class="layout-grid callout-list">' +
           items.map((it, idx) =>
             '<li class="surface-card callout-row" data-item-index="' + idx + '">' +
-            '<span class="item-badge">' + escapeHtml(it.tag || String(idx + 1).padStart(2, '0')) + '</span>' +
+            '<span class="item-badge">' + renderLegendBadge(it.tag || String(idx + 1).padStart(2, '0')) + '</span>' +
             '<div class="card-body"><strong data-item-field="title">' + renderInlineHtml(it.title || '') + '</strong>' +
             (it.text ? ' <span data-item-field="text">' + renderInlineHtml(it.text) + '</span>' : '') +
             '</div></li>',
@@ -4404,8 +6502,12 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
         : '')
   } else {
     // bullets 默认版式（严格保持 <li style="--i:0">纯文本</li> 无多余包裹，兼容 test/features.test.mjs:202）
+    const topFormulaBanner = typeof slide.formula === 'string' && slide.formula.trim() !== ''
+      ? '<div class="callout-hero is-formula is-omath callout-formula formula-plate">' + latexToMathMl(slide.formula.trim(), { display: true, className: 'deck-math is-block' }) + '</div>'
+      : ''
     inner =
       renderHeader() +
+      topFormulaBanner +
       (subtitle !== '' && bullets.length === 0 ? '<div class="subtitle">' + renderInlineHtml(subtitle) + '</div>' : '') +
       (bullets.length > 0
         ? '<ul class="bullets-list' + (variant === 'two-column' ? ' cols-2' : '') + '">' +
@@ -4664,10 +6766,62 @@ export const LAYOUT_CSS = `
 .slide[data-chrome="academic-minimal"] .slide-takeaway{background:transparent;border:0;border-top:1px solid var(--accent);border-bottom:1px solid var(--hairline);border-radius:0;padding:8px 0}
 .slide[data-chrome="gov-ceremonial"] .gov-header{border-bottom:2px solid var(--accent);box-shadow:0 4px 0 0 var(--bg),0 5.5px 0 0 var(--accent2);padding-bottom:12px;margin-bottom:4px}
 .slide[data-chrome="gov-ceremonial"] .gov-ribbon{letter-spacing:.08em}
+/* Phase 4 MathML & 4 Pinnacle Consulting Layouts CSS */
+math.deck-math{font-family:"Cambria Math","Latin Modern Math",Georgia,serif}
+math.deck-math.is-block{display:block;font-size:clamp(20px,2.2vw,32px);margin:4px auto;overflow-x:auto}
+math.deck-math.is-inline{font-size:1.06em;vertical-align:middle}
+.callout-hero.is-omath{padding:22px 30px;display:flex;align-items:center;justify-content:center}
+.formula-caption{text-align:center;color:var(--ink-secondary);font-size:clamp(14px,1.35vw,18px);margin-top:-6px}
+.mekko-board{display:grid;grid-template-columns:1fr minmax(190px,21%);gap:20px;width:100%;min-height:360px;align-items:stretch}
+.mekko-main{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mekko-headers{display:flex;width:100%;align-items:flex-end}
+.mekko-col-head{display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 4px;min-width:0;overflow:hidden}
+.mekko-col-title{font-family:var(--font-heading);font-size:clamp(11px,1.05vw,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mekko-col-size{font-size:11px;font-weight:700;color:var(--accent-text);font-variant-numeric:tabular-nums}
+.mekko-columns{display:flex;width:100%;flex:1;min-height:290px;border:1px solid var(--hairline)}
+.mekko-col{display:flex;flex-direction:column;min-width:0}
+.mekko-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1.5px solid var(--bg);padding:2px 4px;overflow:hidden;font-variant-numeric:tabular-nums}
+.mekko-seg-name{font-size:12px;font-weight:600;line-height:1.15;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mekko-seg-pct{font-family:var(--font-heading);font-size:13px;font-weight:800}
+.mekko-axis{display:flex;justify-content:space-between;border-top:1.5px solid var(--muted);padding-top:4px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mekko-legend{justify-content:flex-start;gap:14px}
+.mekko-total{display:flex;flex-direction:column;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--hairline)}
+.mekko-total strong{font-family:var(--font-heading);font-size:clamp(22px,2.3vw,32px);color:var(--accent-text);font-variant-numeric:tabular-nums}
+.mekko-legend-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.mekko-legend-list li{display:flex;align-items:center;gap:8px;font-size:13px}
+.mekko-legend-list li.is-ours{color:var(--accent-text);font-weight:700}
+.mekko-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;border:1px solid var(--hairline)}
+.mekko-leg-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mekko-leg-pct{font-variant-numeric:tabular-nums}
+.sankey-board{width:100%;display:flex;align-items:center;justify-content:center}
+.sankey-svg{width:100%;height:auto;max-height:430px;overflow:visible;font-family:var(--font-body)}
+.porter-board{display:grid;grid-template-columns:1fr minmax(120px,13.5%);gap:12px;width:100%;align-items:stretch}
+.porter-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.porter-support-zone{display:grid;grid-template-columns:84px 1fr;gap:10px;align-items:stretch}
+.porter-support-rail{background:var(--accent-soft);border:1px solid var(--accent);border-radius:calc(var(--radius) * .7);color:var(--accent-text);font-family:var(--font-heading);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px}
+.porter-support-beams{display:flex;flex-direction:column;gap:8px}
+.porter-beam{flex-direction:row;align-items:center;gap:12px;padding:10px 16px;border-left:4px solid var(--accent2)}
+.porter-beam strong{font-family:var(--font-heading);font-size:14px;white-space:nowrap}
+.porter-beam span{font-size:13px;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis}
+.porter-margin-wedge{background:var(--accent);color:var(--ink-on-accent);font-family:var(--font-heading);font-weight:800;font-size:clamp(15px,1.5vw,21px);display:flex;align-items:center;justify-content:center;text-align:center;padding:16px 24px 16px 12px;clip-path:polygon(0 0,74% 0,100% 50%,74% 100%,0 100%,14% 50%)}
+.swot-board{display:flex;flex-direction:column;gap:14px;width:100%}
+.swot-cross{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%}
+.swot-quad{padding:0;overflow:hidden;gap:0}
+.swot-quad-head{padding:9px 18px;font-family:var(--font-heading);font-weight:800;font-size:14px;color:#FFF;background:var(--accent)}
+.swot-quad.tone-positive .swot-quad-head{background:var(--positive)}
+.swot-quad.tone-warning .swot-quad-head{background:var(--warning);color:#0F172A}
+.swot-quad.tone-negative .swot-quad-head{background:var(--negative)}
+.swot-quad.swot-o .swot-quad-head{padding-right:108px}
+.swot-quad.swot-t .swot-quad-head{padding-left:108px}
+.swot-quad-body{padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+.swot-anchor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;background:var(--accent);color:var(--ink-on-accent);border:4px solid var(--bg);border-radius:999px;padding:10px 24px;min-width:168px;font-family:var(--font-heading);font-weight:800;font-size:14px;line-height:1.25;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.16)}
+.swot-tows-strip{gap:12px}
+.swot-tows-pill{flex-direction:row;align-items:center;gap:10px;padding:10px 14px}
+.swot-tows-text{font-size:13px;color:var(--fg);font-weight:600}
 @media (max-width:900px){
-  .cols-3,.cols-4,.cols-5,.cols-6,.bento-grid.bento-3,.bento-grid.bento-4,.bento-grid.bento-5,.bento-grid.bento-6,.tam-board,.arch-board.has-sidecar,.org-children,.flywheel-stage{grid-template-columns:1fr}
+  .cols-3,.cols-4,.cols-5,.cols-6,.bento-grid.bento-3,.bento-grid.bento-4,.bento-grid.bento-5,.bento-grid.bento-6,.tam-board,.arch-board.has-sidecar,.org-children,.flywheel-stage,.mekko-board,.porter-board,.swot-cross{grid-template-columns:1fr}
   .bento-grid.bento-3 > :first-child,.bento-grid.bento-4 > *{grid-row:auto;grid-column:auto}
-  .issue-action-row,.gantt-head,.gantt-row,.arch-tier{grid-template-columns:1fr}
-  .flywheel-hub{position:static;transform:none;margin:0 auto}
+  .issue-action-row,.gantt-head,.gantt-row,.arch-tier,.porter-support-zone{grid-template-columns:1fr}
+  .flywheel-hub,.swot-anchor{position:static;transform:none;margin:0 auto}
 }
 `

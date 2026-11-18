@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, statSync, openSync, closeSync, rmSync } from 'node:fs'
-import { resolve, dirname, extname, basename } from 'node:path'
+import { mkdirSync, readdirSync, readFileSync, statSync, openSync, closeSync, rmSync, writeFileSync } from 'node:fs'
+import { resolve, dirname, extname, basename, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, buildDeck } from './deck-core.mjs'
@@ -9,12 +9,16 @@ import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, normalizeChart, buildO
 import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
 import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
 import { absorbPptx, CHROME_STYLE_IDS } from './deck-absorb.mjs'
+import { extractPptxSlides } from './deck-import.mjs'
+import { renderHandoutMarkdown } from './deck-delivery.mjs'
 import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, auditSlideAesthetics } from './deck-director.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
 export { listThemes, listMasterPresets, resolveTheme } from './deck-themes.mjs'
 export { absorbPptx } from './deck-absorb.mjs'
+export { extractPptxSlides } from './deck-import.mjs'
+export { renderHandoutMarkdown } from './deck-delivery.mjs'
 export { inferThemeFromContent } from './deck-director.mjs'
 
 export function buildThemePreview(options = {}) {
@@ -65,7 +69,14 @@ function imageInfo(bytes, page) {
       offset += length
     }
     if (!bytes.subarray(-2).equals(Buffer.from([0xff, 0xd9]))) fail(`${page} JPEG 文件不完整`)
-  } else fail(`${page} 图片仅支持 PNG / JPEG，请先转换格式`)
+  } else if (bytes.length >= 30 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
+    mime = 'image/webp'
+    const chunk = bytes.toString('ascii', 12, 16)
+    if (chunk === 'VP8 ' && bytes.length >= 30) { width = bytes.readUInt16LE(26) & 0x3fff; height = bytes.readUInt16LE(28) & 0x3fff }
+    else if (chunk === 'VP8L' && bytes.length >= 25) { const bits = bytes.readUInt32LE(21); width = (bits & 0x3fff) + 1; height = ((bits >> 14) & 0x3fff) + 1 }
+    else if (chunk === 'VP8X' && bytes.length >= 30) { width = 1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)); height = 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16)) }
+    else fail(`${page} WebP 文件头无效`)
+  } else fail(`${page} 图片仅支持 PNG / JPEG / WebP，请先转换格式`)
   if (!width || !height || width > 16000 || height > 16000 || width * height > 32_000_000) fail(`${page} 图片尺寸无效或超过 3200 万像素`)
   return { width, height, mime }
 }
@@ -78,11 +89,11 @@ function addAsset(image, assets, cwd, page) {
   const source = String(image.src ?? '').trim()
   let bytes
   if (/^data:/i.test(source)) {
-    const match = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(source)
+    const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(source)
     if (!match || source.length > MAX_IMAGE * 1.4) fail(`${page} 图片 data URI 无效或超过 5 MiB`)
     bytes = Buffer.from(match[2], 'base64')
   } else {
-    if (!source || /^[a-z][a-z0-9+.-]*:/i.test(source) && !/^[a-z]:[\\/]/i.test(source)) fail(`${page} 图片需本地路径或 PNG/JPEG data URI，不支持外链`)
+    if (!source || /^[a-z][a-z0-9+.-]*:/i.test(source) && !/^[a-z]:[\\/]/i.test(source)) fail(`${page} 图片需本地路径或 PNG/JPEG/WebP data URI，不支持外链`)
     const path = resolve(cwd, source)
     let size
     try { size = statSync(path).size } catch { fail(`${page} 图片不存在：${path}`) }
@@ -209,7 +220,7 @@ function collectAssets(manifest) {
 function embeddedAssetError(asset, id) {
   try {
     if (!asset || typeof asset.data !== 'string' || asset.data.length > MAX_IMAGE * 1.4) fail('嵌入图片数据缺失或过大')
-    const match = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(asset.data)
+    const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(asset.data)
     if (!match) fail('嵌入图片格式无效')
     const bytes = Buffer.from(match[2], 'base64')
     if (bytes.length > MAX_IMAGE || bytes.toString('base64') !== match[2]) fail('嵌入图片编码无效或过大')
@@ -415,13 +426,15 @@ function documentBytes(manifest) {
   if (Buffer.byteLength(text) > MAX_DOCUMENT) fail('JSON 工程含历史超过 64 MiB，请缩减图片或清理历史后另存工程')
   return text
 }
-function result(manifest, paths) {
+function result(manifest, paths, writeHandout = false) {
+  const handoutPath = paths.json.slice(0, -5) + '.handout.md'
   return { ok: true, title: manifest.title, theme: manifest.theme, language: manifest.language,
     slideCount: manifest.slides.length, deckId: manifest.deckId, revision: manifest.revision,
     slides: manifest.slides.map((s, i) => ({ slide: i + 1, id: s.id, title: s.title, layout: s.layout })),
     undoAvailable: manifest.history.length, deliveryStatus: manifest.quality?.issues.some(i => i.code === 'template-unfilled') ? 'draft' : 'ready-for-review',
     quality: manifest.quality, verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' }, outputDir: dirname(paths.json),
-    files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json }
+    files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json,
+    ...(writeHandout ? { handoutPath } : {}) }
 }
 function pathsFor(jsonPath) {
   const base = jsonPath.slice(0, -5)
@@ -446,10 +459,19 @@ async function generate(manifest, signal) {
   abort(signal)
   return { json, pptx, manifest, theme, language }
 }
-function commit(paths, data) {
-  const html = renderHtml(data.manifest, data.theme, data.language, paths)
+function commit(paths, data, writeHandout = false) {
+  const handoutPath = paths.json.slice(0, -5) + '.handout.md'
+  const html = renderHtml(data.manifest, data.theme, data.language, { ...paths, ...(writeHandout ? { handout: handoutPath } : {}) })
   data.manifest.artifacts = { html: hash(html), pptx: hash(data.pptx) }
-  commitDeckArtifacts([{ path: paths.json, data: documentBytes(data.manifest), encoding: 'utf8' }, { path: paths.html, data: html, encoding: 'utf8' }, { path: paths.pptx, data: data.pptx }])
+  const artifacts = [
+    { path: paths.json, data: documentBytes(data.manifest), encoding: 'utf8' },
+    { path: paths.html, data: html, encoding: 'utf8' },
+    { path: paths.pptx, data: data.pptx },
+  ]
+  if (writeHandout) {
+    artifacts.push({ path: handoutPath, data: renderHandoutMarkdown(data.manifest, data.language.id), encoding: 'utf8' })
+  }
+  commitDeckArtifacts(artifacts)
 }
 
 function validateEmbeddedImgObject(img, assets) {
@@ -636,8 +658,9 @@ export async function buildDeckAsync(options = {}) {
   // Resolve collisions after asynchronous rendering; an earlier call may have committed meanwhile.
   const file = resolveDeckFileName(normalized.outputDir, normalized.fileName, normalized.overwrite)
   const paths = pathsFor(resolve(normalized.outputDir, file + '.json'))
-  withLock(paths.json, () => { abort(options.signal); commit(paths, data) })
-  return result(manifest, paths)
+  const writeHandout = options.handout === true
+  withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout) })
+  return result(manifest, paths, writeHandout)
 }
 
 function readDocument(pathInput, cwd = '.') {
@@ -722,7 +745,7 @@ export async function editDeck(options = {}) {
   const used = new Set()
   const allowed = new Set([
     'layout', 'variant', 'chrome', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
-    'text', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
+    'text', 'formula', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
     'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])
   for (const edit of options.edits ?? []) {
@@ -905,4 +928,225 @@ export async function renderDeck(options = {}) {
   const cwd = options.cwd || '.'
   return renderer.renderDeck({ ...options, pptxPath: resolve(cwd, options.pptxPath),
     ...(options.outputDir !== undefined ? { outputDir: resolve(cwd, options.outputDir) } : {}) })
+}
+
+function detectSlidesLanguage(slides, title) {
+  const sample = [title, ...(slides || []).flatMap(s => [s.title, s.subtitle, ...(s.bullets || [])])].filter(Boolean).join(' ')
+  const cjkCount = (sample.match(/[\u3400-\u9fff]/g) || []).length
+  return cjkCount >= 4 ? 'zh' : 'en'
+}
+
+function findProjectJsonInDir(targetDir, cwd) {
+  const dir = resolve(cwd, String(targetDir))
+  if (extname(dir).toLowerCase() === '.json') return readDocument(dir, cwd)
+  let entries
+  try {
+    entries = readdirSync(dir).filter(f => f.endsWith('.json') && !f.startsWith('.'))
+  } catch {
+    fail('找不到目标工程目录：' + dir)
+  }
+  entries.sort((a, b) => (a === 'project.json' ? -1 : b === 'project.json' ? 1 : a.localeCompare(b)))
+  for (const name of entries) {
+    try { return readDocument(join(dir, name), cwd) } catch { /* skip non-manifest json */ }
+  }
+  fail('目标目录中未找到有效的 dsh-ppt .json 工程：' + dir)
+}
+
+function sanitizeImportedSlideForSync(extractedSlide, priorSlide) {
+  if (!priorSlide) return extractedSlide
+  const merged = {
+    ...extractedSlide,
+    id: priorSlide.id,
+  }
+  // Keep prior visual/chrome/tableStyle tuning when layout category matches
+  if (priorSlide.chrome && !merged.chrome) merged.chrome = priorSlide.chrome
+  if (priorSlide.visual && !merged.visual) merged.visual = clone(priorSlide.visual)
+  if (priorSlide.tableStyle && merged.layout === 'table' && !merged.tableStyle) merged.tableStyle = priorSlide.tableStyle
+  if (priorSlide.variant && merged.layout === priorSlide.layout && !merged.variant) merged.variant = priorSlide.variant
+  // Preserve dataTemplate provenance only if Office edits left bound content untouched
+  if (priorSlide.dataTemplate) {
+    const unchanged =
+      merged.title === priorSlide.title &&
+      JSON.stringify(merged.bullets ?? null) === JSON.stringify(priorSlide.bullets ?? null) &&
+      JSON.stringify(merged.rows ?? null) === JSON.stringify(priorSlide.rows ?? null) &&
+      JSON.stringify(merged.chart ?? null) === JSON.stringify(priorSlide.chart ?? null)
+    if (unchanged) merged.dataTemplate = clone(priorSlide.dataTemplate)
+  }
+  return merged
+}
+
+/**
+ * Full .pptx content importer, legacy deck refurbisher, and Office round-trip sync.
+ * Mode A (new import / legacy modernization): writes standalone HTML, refurbished PPTX, JSON project (and optional .handout.md).
+ * Mode B (sync onto targetProjectDir / deckPath): snapshots prior manifest into .history/ + manifest.history, updates slides, rebuilds deliverables.
+ */
+export async function importPptxDeck(options = {}) {
+  abort(options.signal)
+  const cwd = resolve(String(options.cwd ?? '.'))
+  const hasTarget = Boolean(
+    (typeof options.deckPath === 'string' && options.deckPath.trim()) ||
+    (typeof options.targetProjectDir === 'string' && options.targetProjectDir.trim())
+  )
+  const modernize = options.modernize !== false
+  const preserveSourceTheme = options.preserveSourceTheme === true
+  const writeHandout = options.handout === true
+
+  if (hasTarget) {
+    // Mode B: Office Round-Trip Sync onto existing dsh-ppt project
+    const state = options.deckPath
+      ? readDocument(options.deckPath, cwd)
+      : findProjectJsonInDir(options.targetProjectDir, cwd)
+    const current = state.manifest
+    const projectDir = dirname(state.path)
+    const assetOutDir = options.assetOutDir ? resolve(cwd, String(options.assetOutDir)) : join(projectDir, 'assets')
+
+    const extracted = await extractPptxSlides({
+      pptxPath: options.pptxPath,
+      bytes: options.bytes,
+      cwd,
+      assetOutDir,
+      signal: options.signal,
+    })
+
+    // Write disk snapshot to .history/ AND push onto manifest.history so undoDeck / ppt_undo works 100%
+    const historyDir = join(projectDir, '.history')
+    mkdirSync(historyDir, { recursive: true })
+    const histFile = join(historyDir, `${basename(state.path, '.json')}-rev${current.revision}-${Date.now()}.json`)
+    writeFileSync(histFile, documentBytes(current), 'utf8')
+
+    const next = clone(current)
+    next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
+
+    let syncSlides = extracted.slides
+    if (modernize) {
+      syncSlides = promoteMarkdownSlides(syncSlides, { explicitSmartLayout: false })
+    }
+    const mergedRaw = syncSlides.map((s, idx) => {
+      const prior = current.slides[idx] || current.slides.find(p => p.title && p.title === s.title)
+      return sanitizeImportedSlideForSync(s, prior)
+    })
+    validateRawSlides(mergedRaw)
+    const normalizedSlides = normalizeSlides(mergedRaw, 120, next.language)
+    const usedIds = new Set()
+    const embedded = embedSlides(normalizedSlides, next.assets, cwd).map((s, idx) => {
+      let id = mergedRaw[idx]?.id || randomUUID()
+      if (usedIds.has(id)) id = randomUUID()
+      usedIds.add(id)
+      const dataTemplate = mergedRaw[idx]?.dataTemplate
+      return { ...s, id, ...(dataTemplate ? { dataTemplate } : {}) }
+    })
+    next.slides = embedded
+
+    if (options.theme && options.theme !== 'auto') {
+      next.theme = resolveTheme(options.theme).id
+    }
+    if (options.chromeStyle) {
+      next.brand = normalizeBrand({ ...(next.brand || {}), chromeStyle: options.chromeStyle }, next.assets, cwd)
+    }
+    if (preserveSourceTheme) {
+      const absorbed = await absorbPptx({ pptxPath: options.pptxPath, bytes: options.bytes, cwd, extractLogo: true, signal: options.signal })
+      next.brand = normalizeBrand({ ...(next.brand || {}), ...absorbed.sanitizedBrand, ...(options.chromeStyle ? { chromeStyle: options.chromeStyle } : {}) }, next.assets, cwd)
+    }
+
+    next.version = DECK_VERSION
+    next.schemaVersion = 1
+    next.revision = current.revision + 1
+
+    const data = await generate(next, options.signal)
+    const paths = pathsFor(state.path)
+    withLock(state.path, () => {
+      abort(options.signal)
+      if (hash(readFileSync(state.path)) !== state.fingerprint) fail('工程已被其他操作修改，请重新读取后重试')
+      commit(paths, data, writeHandout)
+    })
+
+    return {
+      ...result(next, paths, writeHandout),
+      importedFrom: options.pptxPath ? resolve(cwd, String(options.pptxPath)) : 'memory.pptx',
+      syncedProject: true,
+      historySnapshotPath: histFile,
+      extractedStats: extracted.stats,
+    }
+  }
+
+  // Mode A: New Import & Legacy Deck Modernization
+  const rawOut = options.outDir ?? options.outputDir ?? (options.pptxPath ? dirname(resolve(cwd, String(options.pptxPath))) : '.')
+  const resolvedOutDir = resolve(cwd, String(rawOut))
+  const assetOutDir = options.assetOutDir ? resolve(cwd, String(options.assetOutDir)) : join(resolvedOutDir, 'assets')
+
+  const extracted = await extractPptxSlides({
+    pptxPath: options.pptxPath,
+    bytes: options.bytes,
+    cwd,
+    assetOutDir,
+    signal: options.signal,
+  })
+
+  let absorbed = null
+  if (preserveSourceTheme) {
+    absorbed = await absorbPptx({
+      pptxPath: options.pptxPath,
+      bytes: options.bytes,
+      cwd,
+      extractLogo: true,
+      signal: options.signal,
+    })
+  }
+
+  const rawSlides = modernize
+    ? promoteMarkdownSlides(extracted.slides, { explicitSmartLayout: false })
+    : extracted.slides
+
+  const baseFileName = typeof options.pptxPath === 'string' && options.pptxPath.trim() && !basename(options.pptxPath).startsWith('.import-')
+    ? basename(options.pptxPath, extname(options.pptxPath))
+    : ''
+  const title = (typeof options.title === 'string' && options.title.trim()) ||
+    (extracted.title && extracted.title !== 'Imported Presentation' ? extracted.title : '') ||
+    baseFileName ||
+    'Imported Presentation'
+
+  const lang = options.lang || detectSlidesLanguage(rawSlides, title)
+  const requestedTheme = typeof options.theme === 'string' && options.theme.trim() ? options.theme.trim() : 'auto'
+  const effectiveTheme = requestedTheme === 'auto' && preserveSourceTheme && absorbed
+    ? absorbed.recommendedTheme
+    : requestedTheme
+
+  let brand = options.brand
+  if (preserveSourceTheme && absorbed) {
+    brand = {
+      ...absorbed.sanitizedBrand,
+      ...(absorbed.recommendedChrome ? { chromeStyle: absorbed.recommendedChrome } : {}),
+      ...(options.chromeStyle ? { chromeStyle: options.chromeStyle } : {}),
+      ...(options.brand && typeof options.brand === 'object' ? options.brand : {}),
+    }
+  } else if (options.chromeStyle) {
+    brand = {
+      ...(options.brand && typeof options.brand === 'object' ? options.brand : {}),
+      chromeStyle: options.chromeStyle,
+    }
+  }
+
+  const built = await buildDeckAsync({
+    title,
+    slides: rawSlides,
+    theme: effectiveTheme,
+    persona: options.persona || 'auto',
+    lang,
+    motion: options.motion,
+    brand,
+    outputDir: resolvedOutDir,
+    fileName: options.fileName || baseFileName || title,
+    overwrite: options.overwrite === true,
+    smartLayout: false,
+    handout: writeHandout,
+    cwd,
+    signal: options.signal,
+  })
+
+  return {
+    ...built,
+    importedFrom: options.pptxPath ? resolve(cwd, String(options.pptxPath)) : 'memory.pptx',
+    syncedProject: false,
+    extractedStats: extracted.stats,
+  }
 }

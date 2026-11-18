@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as officeKit from '@office-kit/pptx'
@@ -259,6 +259,62 @@ test('CLI --absorb、--reference-pptx 与 --edit --theme 完整闭环且互斥�
       '--theme', 'course-sage',
     ], { log() {} }), 0)
     assert.equal(JSON.parse(readFileSync(builtJson, 'utf8')).theme, 'course-sage')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI --import-pptx、--preserve-theme、--handout 与 --sync-pptx 闭环', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-cli-import-'))
+  try {
+    const parsed = parseArgv(['--import-pptx', 'old.pptx', '--preserve-theme', '--handout'])
+    assert.equal(parsed.importPptx, 'old.pptx')
+    assert.equal(parsed.preserveTheme, true)
+    assert.equal(parsed.handout, true)
+
+    const pres = await officeKit.createPresentation({ title: 'Legacy CLI' })
+    const s1 = officeKit.addBlankSlide(pres)
+    officeKit.addSlideTextBox(s1, { x: 914400, y: 1200000, w: 8000000, h: 1000000, text: 'CLI 导入翻新标题' })
+    const s2 = officeKit.addBlankSlide(pres)
+    officeKit.addSlideTextBox(s2, { x: 914400, y: 500000, w: 8000000, h: 800000, text: '关键实验指标' })
+    officeKit.addSlideTextBox(s2, { x: 914400, y: 1500000, w: 8000000, h: 2000000, text: '准确率提升 18%' })
+    officeKit.setSlideNotes(s2, 'CLI 导入的演讲者备注')
+    const srcPptx = join(dir, 'src.pptx')
+    writeFileSync(srcPptx, await officeKit.savePresentation(pres))
+
+    await assert.rejects(main(['--import-pptx', srcPptx, '--sync-pptx', srcPptx], { log() {} }), /只能选择一项/)
+
+    const outDir = join(dir, 'out')
+    const logs = []
+    assert.equal(await main([
+      '--import-pptx', srcPptx,
+      '--theme', 'consulting',
+      '--handout',
+      '--out', outDir,
+      '--file', 'imported-cli',
+    ], { log: (l) => logs.push(l) }), 0)
+    const imported = JSON.parse(logs.join('\n'))
+    assert.equal(imported.ok, true)
+    assert.equal(imported.syncedProject, false)
+    assert.ok(imported.handoutPath && existsSync(imported.handoutPath))
+    assert.match(readFileSync(imported.handoutPath, 'utf8'), /CLI 导入的演讲者备注/)
+
+    // Office round-trip sync via --sync-pptx + --edit
+    const p2 = await officeKit.loadPresentation(readFileSync(imported.pptxPath))
+    officeKit.replaceTextInSlide(officeKit.getSlides(p2)[1], '关键实验指标', 'CLI 同步后新标题')
+    const editedPath = join(dir, 'edited.pptx')
+    writeFileSync(editedPath, await officeKit.savePresentation(p2))
+
+    const syncLogs = []
+    assert.equal(await main([
+      '--sync-pptx', editedPath,
+      '--edit', imported.jsonPath,
+      '--handout',
+    ], { log: (l) => syncLogs.push(l) }), 0)
+    const synced = JSON.parse(syncLogs.join('\n'))
+    assert.equal(synced.syncedProject, true)
+    assert.equal(synced.revision, 1)
+    assert.equal(JSON.parse(readFileSync(imported.jsonPath, 'utf8')).slides[1].title, 'CLI 同步后新标题')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

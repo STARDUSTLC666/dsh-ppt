@@ -18,9 +18,24 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 import * as deckMedia from './deck-media.mjs'
-import { renderDelivery } from './deck-delivery.mjs'
+import { renderDelivery, renderHandoutMarkdown } from './deck-delivery.mjs'
 import { renderDataView } from './deck-data-view.mjs'
 import { normalizeVisual, visualHtmlStyle, visualShapeXml, VISUAL_CSS } from './deck-visual.mjs'
+import {
+  containsLatexMath,
+  looksLikeRawLatex,
+  unwrapOuterMathDelimiters,
+  splitMathSegments,
+  parseLatexMath,
+  astToMathMl,
+  latexToMathMl,
+  astToOmml,
+  latexToOmml,
+  astToOoxmlInlineRuns,
+  has2dMathConstruct,
+  measureMathAst,
+  fitFormulaBoxIn,
+} from './deck-math.mjs'
 import {
   THEMES,
   THEME_IDS,
@@ -61,9 +76,15 @@ import {
   computeBadgePillWidth,
   roundRectAdj,
   ooxmlShape,
+  ooxmlCustGeomShape,
+  ooxmlMathShape,
   ooxmlRichParagraph,
   getChromeConfig,
   parseHarveyValue,
+  computeMarimekkoModel,
+  computeSankeyLayout,
+  partitionValueChainItems,
+  computeSwotModel,
   renderSlideChromePptx,
   renderCoreSlidePptx,
   renderCoreSlideHtml,
@@ -102,9 +123,28 @@ export {
   formatSourceLine,
   computeBadgePillWidth,
   roundRectAdj,
+  ooxmlCustGeomShape,
+  ooxmlMathShape,
   getChromeConfig,
   parseHarveyValue,
+  computeMarimekkoModel,
+  computeSankeyLayout,
+  partitionValueChainItems,
+  computeSwotModel,
   renderSlideChromePptx,
+  containsLatexMath,
+  looksLikeRawLatex,
+  unwrapOuterMathDelimiters,
+  splitMathSegments,
+  parseLatexMath,
+  astToMathMl,
+  latexToMathMl,
+  astToOmml,
+  latexToOmml,
+  astToOoxmlInlineRuns,
+  has2dMathConstruct,
+  measureMathAst,
+  fitFormulaBoxIn,
 }
 
 /**
@@ -350,6 +390,7 @@ function createSection(heading = '', level = 0, coverOnly = false) {
     table: null,
     notes: [],
     directive: null,
+    formula: '',
     takeaway: '',
     source: '',
   }
@@ -446,7 +487,9 @@ function tableSlidesFrom(section, ui) {
 function specialSlidesFor(section, ui) {
   const out = []
   if (section.quote.length > 0) out.push(quoteSlideFrom(section, ui))
-  if (section.table !== null) out.push(...tableSlidesFrom(section, ui))
+  const dirLayout = section.directive?.layout
+  const tableOwnedByDirective = dirLayout && ['marimekko', 'harvey', 'sankey'].includes(dirLayout)
+  if (section.table !== null && !tableOwnedByDirective) out.push(...tableSlidesFrom(section, ui))
   if (out.length > 0 && section.notes.length > 0) out[0].notes = section.notes.join('\n')
   return out
 }
@@ -460,12 +503,17 @@ function directiveSlideFrom(section, ui, pointIndexRef) {
     ...section.paragraphs.slice(spec.layout === 'callout' ? 1 : 0),
   ]
   const items = normalizeSlideItems(rawPoints, spec.layout)
+  const dirRows = section.table && ['marimekko', 'harvey', 'sankey'].includes(spec.layout)
+    ? [section.table.header, ...section.table.rows]
+    : undefined
   const slide = {
     layout: spec.layout,
     ...(spec.variant ? { variant: spec.variant } : {}),
     kicker: label,
     title: label,
+    ...(section.formula ? { formula: section.formula } : {}),
     ...(spec.layout === 'callout' && section.paragraphs[0] ? { text: section.paragraphs[0] } : {}),
+    ...(dirRows ? { rows: dirRows } : {}),
     ...(rawPoints.length > 0 ? { bullets: rawPoints } : {}),
     ...(items ? { items } : {}),
     ...(section.takeaway ? { takeaway: section.takeaway } : {}),
@@ -493,6 +541,8 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   let firstH1Seen = false
   let inDirective = false
   let awaitingTakeawayLine = false
+  let inMathBlock = false
+  let mathBlockLines = []
 
   const flush = () => {
     if (
@@ -500,6 +550,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       (current.heading !== '' ||
         current.bullets.length > 0 ||
         current.paragraphs.length > 0 ||
+        current.formula !== '' ||
         current.table !== null ||
         current.quote.length > 0 ||
         current.directive !== null)
@@ -509,10 +560,43 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     current = null
     inDirective = false
     awaitingTakeawayLine = false
+    inMathBlock = false
+    mathBlockLines = []
   }
 
   for (const rawLine of body.split('\n')) {
     const line = rawLine.trim()
+    if (inMathBlock) {
+      if (line === '$$') {
+        if (current === null) current = createSection()
+        const joinedFormula = mathBlockLines.join(' ').trim()
+        if (joinedFormula !== '') {
+          current.formula = current.formula ? current.formula + ' ; ' + joinedFormula : joinedFormula
+        }
+        inMathBlock = false
+        mathBlockLines = []
+      } else {
+        mathBlockLines.push(line)
+      }
+      continue
+    }
+
+    if (line === '$$') {
+      if (current === null) current = createSection()
+      inMathBlock = true
+      mathBlockLines = []
+      continue
+    }
+
+    if (line.startsWith('$$') && line.endsWith('$$') && line.length > 4) {
+      if (current === null) current = createSection()
+      const inlineDisplayFormula = line.slice(2, -2).trim()
+      if (inlineDisplayFormula !== '') {
+        current.formula = current.formula ? current.formula + ' ; ' + inlineDisplayFormula : inlineDisplayFormula
+      }
+      continue
+    }
+
     if (line === '') {
       awaitingTakeawayLine = false
       if (!inDirective && current !== null && current.heading === '') flush()
@@ -739,6 +823,26 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
+    if (section.formula !== '') {
+      const label = section.heading || (ui.pointKicker + ' ' + (++pointRef.count))
+      const rawPoints = [...section.bullets, ...section.paragraphs]
+      const items = normalizeSlideItems(rawPoints, 'callout')
+      const slide = {
+        layout: 'callout',
+        variant: 'formula',
+        kicker: label,
+        title: label,
+        formula: section.formula,
+        ...(rawPoints.length > 0 ? { bullets: rawPoints } : {}),
+        ...(items ? { items } : {}),
+        ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+        ...(section.source ? { source: section.source } : {}),
+      }
+      if (specials.length === 0 && notes !== '') slide.notes = notes
+      slides.push(slide)
+      continue
+    }
+
     if (section.heading === '') {
       const points = [...section.bullets, ...section.paragraphs].flatMap((part) => splitSentences(part))
       for (const [pageIndex, pagePoints] of chunk(points, 8).entries()) {
@@ -830,6 +934,9 @@ function normalizeSlideContent(raw, index) {
   const subtitle = cleanRichText(source.subtitle ?? '')
   const kicker = stripInlineMarkdown(source.kicker ?? '')
   const text = cleanRichText(source.text ?? '')
+  const formula = typeof source.formula === 'string'
+    ? source.formula.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
+    : ''
   const takeaway = cleanRichText(source.takeaway ?? '')
   const slideSource = stripInlineMarkdown(source.source ?? '')
   const notes = String(source.notes ?? '').trim()
@@ -857,11 +964,13 @@ function normalizeSlideContent(raw, index) {
     ?? (!hasStringColumns ? source.columns : undefined)
     ?? source.steps
     ?? source.quadrants
+    ?? (layout === 'sankey' && bullets.length > 0 ? bullets : undefined)
   const items = normalizeSlideItems(rawItemsInput, layout)
 
   const commonExtras = {
     ...(variant !== '' ? { variant } : {}),
     ...(chrome ? { chrome } : {}),
+    ...(formula !== '' ? { formula } : {}),
     ...(takeaway !== '' ? { takeaway } : {}),
     ...(slideSource !== '' ? { source: slideSource } : {}),
     ...(activeIndex !== undefined ? { activeIndex } : {}),
@@ -895,7 +1004,7 @@ function normalizeSlideContent(raw, index) {
     return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...commonExtras }
   }
 
-  if (layout === 'harvey') {
+  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey') {
     let rows = []
     if (Array.isArray(source.rows)) {
       rows = source.rows
@@ -1074,12 +1183,17 @@ export function buildDeck(options = {}) {
   const jsonPath = resolvePath(outputDir, fileName + '.json')
   const htmlPath = resolvePath(outputDir, fileName + '.html')
   const pptxPath = resolvePath(outputDir, fileName + '.pptx')
+  const handoutPath = options.handout === true ? resolvePath(outputDir, fileName + '.handout.md') : undefined
 
-  commitDeckArtifacts([
+  const artifacts = [
     { path: jsonPath, data: JSON.stringify(manifest, null, 2) + '\n', encoding: 'utf8' },
-    { path: htmlPath, data: renderHtml(manifest, theme, language, { pptx: pptxPath, json: jsonPath }), encoding: 'utf8' },
+    { path: htmlPath, data: renderHtml(manifest, theme, language, { pptx: pptxPath, json: jsonPath, ...(handoutPath ? { handout: handoutPath } : {}) }), encoding: 'utf8' },
     { path: pptxPath, data: buildPptx(manifest, theme, language) },
-  ])
+  ]
+  if (handoutPath) {
+    artifacts.push({ path: handoutPath, data: renderHandoutMarkdown(manifest, language.id), encoding: 'utf8' })
+  }
+  commitDeckArtifacts(artifacts)
 
   return {
     ok: true,
@@ -1096,6 +1210,7 @@ export function buildDeck(options = {}) {
     htmlPath,
     pptxPath,
     jsonPath,
+    ...(handoutPath ? { handoutPath } : {}),
   }
 }
 
@@ -1708,15 +1823,15 @@ ${slides}
     } else if (lower === 's') {
       if (document.body.classList.contains('presenting')) { toast(ui.presenterHint); }
       else { document.body.classList.toggle('notes-open'); syncNotes(); }
-    } else if (lower === 'v') {
-      if (presenterOpen()) closePresenter();
+    } else if (lower === 'v' || lower === 'p') {
+      event.preventDefault();
+      if (typeof window.__dshTogglePresenter === 'function') window.__dshTogglePresenter();
+      else if (presenterOpen()) closePresenter();
       else openPresenter();
     } else if (lower === 'b') {
       setBlank(document.body.classList.contains('blank-black') ? null : 'black');
     } else if (lower === 'w') {
       setBlank(document.body.classList.contains('blank-white') ? null : 'white');
-    } else if (lower === 'p') {
-      window.print();
     } else if (key === '?') {
       helpPanel.hidden = !helpPanel.hidden;
     }
@@ -1745,7 +1860,11 @@ ${slides}
     setNotes(!notesOpen());
   });
   notesClose.addEventListener('click', () => setNotes(false));
-  presenterBtn.addEventListener('click', () => { if (presenterOpen()) closePresenter(); else openPresenter(); });
+  presenterBtn.addEventListener('click', () => {
+    if (typeof window.__dshTogglePresenter === 'function') window.__dshTogglePresenter();
+    else if (presenterOpen()) closePresenter();
+    else openPresenter();
+  });
   overviewBtn.addEventListener('click', () => setOverview(!document.body.classList.contains('overview')));
   helpBtn.addEventListener('click', () => { helpPanel.hidden = !helpPanel.hidden; });
   frames.forEach((frame, i) => {
@@ -1883,12 +2002,14 @@ function bulletTimingXml(spid, clicks) {
 
 function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
   const p = theme.palette
+  const shapesXml = slideShapeList(slide, index, total, theme, langId, manifest)
   let motionXml = ''
   if (motion) {
     motionXml = '<p:transition spd="med"><p:fade/></p:transition>'
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
-    if (slide.layout === 'bullets' && bullets.length >= 2) {
-      motionXml += bulletTimingXml((index + 1) * 10 + 3, bullets.length)
+    const bodySpid = (index + 1) * 10 + 3
+    if (slide.layout === 'bullets' && bullets.length >= 2 && shapesXml.includes('id="' + bodySpid + '"')) {
+      motionXml += bulletTimingXml(bodySpid, bullets.length)
     }
   }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -1898,7 +2019,7 @@ function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
     '<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + hex(p.bg) + '"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>' +
     '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
     '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
-    slideShapeList(slide, index, total, theme, langId, manifest) +
+    shapesXml +
     '</p:spTree></p:cSld>' +
     '<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>' +
     motionXml +

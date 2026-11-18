@@ -20,7 +20,8 @@
 
 - **零品味负担自动导演、24 套大师主题与 6 套母版骨架**：内建 16 套明亮投影友好主题（含新增翡翠战略 `bcg-emerald`、经济学人简报 `economist-brief`、红杉创投简报 `venture-daylight`、云靛工坊 `stripe-craft`，以及 `consulting`、`cobalt-cream`、`exec-jilan`、`exec-palace`、`academic`、`editorial-forest`、`cartesian`、`course-sage`、`soft`、`keynote-light`、`financial-ft`、`medical-clean`）与 8 套深色舞台主题（含新增极光发布会 `aurora-stage`、黑曜终端 `obsidian-amber`，以及 `linear-dark`、`swiss`、`velvet`、`data`、`bold`、`luxury-noir`），匹配 **6 套差异化母版骨架**与 **20 套行业场景蓝图**。未指定主题时 `ppt_create` 默认启用 `auto` 场景导演。
 - **深度吸收外部 `.pptx` 骨架与名家范本**：内置 **8 套名家范本一键直吸**，并支持 `ppt_absorb` 工具、`referencePptx`（含 `cloneStructure: true` 结构复刻）或工作台「风格与母版」面板直接上传参考 `.pptx`（≤24 MiB），自动递归拆解嵌套组合形状 `<p:grpSp>`、解析 OOXML `sysClr`/`prstClr`/`hueMod` 修饰色板、主辅双强调色、标题/正文字体配对、深色封面+浅色正文极性、母版 Logo、骨架几何（`extractedSkeleton` / `recommendedChrome`）与 24 版式逐页序列（`slideSkeleton[]`），支持收藏到工作台品牌库复用。
-- **24+ 种原生可编辑版式/专业图示与 13 种出版级图表**：新增咨询价值链五边形咬合箭头（`chevron` / `process[chevron]`），并覆盖 Bento/支柱卡片（`cards`）、大数字指标（`kpi`）、双栏/痛点举措对比（`comparison`）、四象限矩阵（`matrix`）、流程/里程碑轴/漏斗/飞轮（`process`）、定理/行动清单（`callout`）、甘特图路线图（`gantt`）、分层系统架构（`architecture`）、哈维球竞品矩阵（`harvey`）、TAM/SAM/SOM 同心圆（`tam`）、组织架构/团队图谱（`org`）、咨询表与学术三线表（`table` `booktabs` `harvey`）、图表+洞察分栏（`chart-split`）及矢量瀑布桥（`waterfall`）等。
+- **28+ 种原生可编辑版式/专业图示与原生 `<m:oMath>` 数学公式**：新增 **不等宽市场图（`marimekko`）**、**多层桑基流向图（`sankey`）**、**真·波特价值链（`value-chain`）**、**SWOT 战略十字矩阵（`swot`）** 及基于 `deck-math.mjs` 的原生 Office Math（`<m:oMath>`）+ W3C MathML LaTeX 公式编译（`slide.formula` / `$...$`），覆盖咨询价值链五边形咬合箭头（`chevron`）、Bento/支柱卡片（`cards`）、大数字指标（`kpi`）、双栏/痛点举措对比（`comparison`）、四象限矩阵（`matrix`）、流程/里程碑轴/漏斗/飞轮（`process`）、定理/行动清单（`callout`）、甘特图路线图（`gantt`）、分层系统架构（`architecture`）、哈维球竞品矩阵（`harvey`）、TAM/SAM/SOM 同心圆（`tam`）、组织架构/团队图谱（`org`）、咨询表与学术三线表（`table` `booktabs` `harvey`）、图表+洞察分栏（`chart-split`）及矢量瀑布桥（`waterfall`）等。
+- **第 10 个工具 `ppt_import`、PPTX 一键翻新与 Office 双向导回**：支持通过 `ppt_import`（或工作台「导入 PPTX 翻新 / 导入 Office 修改稿」）从任意 `.pptx` 提取正文、表格、原生 `<c:chart>` 图表、嵌入图片与演讲备注，既可全新翻新为高颜值工程，也可在 PowerPoint / WPS 微调后导回既有工程更新（保留 `.history/` 撤销历史）；同时支持双屏演讲者提词台（HTML 按 `P` 开启、`L` 键虚拟激光笔）与 `.handout.md` 演讲讲义导出。
 - **工程库与增强工作台**：按关键词/主题搜索排序，展示主题与页数标签；支持单页版式与单页母版骨架一键无损切换、结构化卡片/甘特图时间轴/哈维球与表格编辑、新增页面、HTML ↔ PPTX 并排分屏对比、点击质量提醒直接跳页，以及最多 20 步撤销。
 - **可选数字溯源与现场推演**：点击数字追到原始材料、CSV 单元格或公式（全面支持 `items`、甘特图、`tam`、架构、哈维球矩阵、`takeaway`、`source` 与图表绑定）；调整假设、预览影响并确认保存。见[数据说明](DATA.md)。
 - **可选双层 AI 视觉检查（最多 24 页）**：看实际 PPTX 渲染图，兼顾排版溢出检测与审美层级把关，支持 12 种零文本篡改排版动作、全宽画布前后对比、停止与撤销。见[看图修复](VISUAL.md)。
@@ -45,7 +46,7 @@ dsh plugin --profile desktop add dsh-ppt
 4. 按需要主动开启 AI 预审、模拟答辩或看图修复；直接下载成品不要求这些步骤。
 5. 下载“分享成品包”交付，或下载“完整工程包”保留编辑能力；在目标播放器或 Office 中再核对一次。
 
-Office 中的修改不会同步回 JSON。插件检测到成品在外部修改，或旧工程没有校验记录时，会拒绝直接覆盖；可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 生成新文件，保留原成品。副本不包含 Office 手工修改。
+支持通过 `ppt_import` 或工作台「导入 Office 修改稿」将 PowerPoint / WPS 中的修改导回工程（保留撤销历史）。若外部直接修改成品且未走导回，可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 重建新文件，保留原成品。
 
 ## 依赖与配置
 

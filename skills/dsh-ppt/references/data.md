@@ -68,7 +68,7 @@
    - `input`：汇报现场可通过滑块调节的敏感性假设（必须如实标注 `note` 说明假设性质）。
    - `formula`：由前两者推导出的确定性算术结果。
 2. **全字段 `{{metricId}}` 占位绑定**：
-   - 文本类绑定：支持在 `title`、`subtitle`、`kicker`、`bullets[]`、**`items[]`（含 `gantt / tam / architecture / org / kpi / cards` 的 `tag / value / title / text / delta / bullets`）**、**`columns[]`（`gantt` 时间列）**、**`takeaway`**、**`source`**、`rows[][]`（含 `table` 与 `harvey` 矩阵）与 `notes` 中嵌入一个或多个 `{{metricId}}`（保留内联 `**加粗**` 富文本样式，HTML 放映中渲染为可点击溯源与实时联动更新的数字徽章）。
+   - 文本类绑定：支持在 `title`、`subtitle`、`kicker`、`formula`、`bullets[]`、**`items[]`（含 `gantt / tam / architecture / org / kpi / cards / marimekko / sankey / swot / value-chain` 的 `tag / value / title / text / delta / bullets`）**、**`columns[]`（`gantt` 时间列）**、**`takeaway`**、**`source`**、`rows[][]`（含 `table`、`harvey` 与 `marimekko` 矩阵）与 `notes` 中嵌入一个或多个 `{{metricId}}`（保留内联 `**加粗**` 富文本样式，HTML 放映中渲染为可点击溯源与实时联动更新的数字徽章）。
    - 图表数值绑定：`chart.series[i].values` 中的绑定项必须是完整独立的 `"{{metricId}}"` 字符串（计算与绘图仍使用未舍入的精确原始数值，支持全部 13 类图表及矢量 `waterfall` 实时重绘）。
    - 格式约定：百分比在模型中以比例存储（`30%` 存为 `0.3`）；`format.style` 支持 `'number'`（默认）或 `'percent'`，`digits` 为 `0–6` 位小数，可选 `unit`。指标 ID 以字母开头，仅含字母与数字，最长 48 字符。
 

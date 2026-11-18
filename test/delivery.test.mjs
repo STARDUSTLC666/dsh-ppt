@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { buildDeckAsync, editDeck, undoDeck } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
+import { buildDeckAsync, editDeck, undoDeck, renderHandoutMarkdown } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { renderHtml, resolveLanguage, resolveTheme } from '../skills/dsh-ppt/scripts/deck-core.mjs'
 
 const link = (html, id) => new RegExp(`id="${id}" href="([^"]+)"`).exec(html)?.[1]
@@ -45,4 +45,41 @@ test('outline and quality report cannot inject executable markup', () => {
   const html = renderHtml(manifest, resolveTheme('data'), resolveLanguage('zh'))
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>|<img src=x/)
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
+})
+
+test('delivery includes Presenter Console (BroadcastChannel, Laser, Pace, A+/A-) and Handout download', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'ppt-handout-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const output = await buildDeckAsync({
+    title: '双屏提词测试',
+    slides: [
+      { layout: 'cover', title: '双屏提词测试', subtitle: '副标题' },
+      { layout: 'bullets', title: '无备注自动回退要点', bullets: ['**核心指标**：增长 28%'], takeaway: '重点强调环比加速' },
+      { layout: 'table', title: '核心数据表', rows: [['项目', '数值'], ['营收', '100万']], notes: '手写备注优先显示' },
+    ],
+    handout: true,
+    outputDir: dir,
+    fileName: 'presenter-handout',
+  })
+  assert.ok(output.handoutPath && existsSync(output.handoutPath), 'explicit handout:true writes .handout.md')
+  const md = readFileSync(output.handoutPath, 'utf8')
+  assert.match(md, /演讲者讲义|Speaker Handout/)
+  assert.match(md, /预计演讲时长|Estimated Speaking Time/)
+  assert.match(md, /\| 项目 \| 数值 \|/)
+  assert.match(md, /手写备注优先显示/)
+  assert.match(md, /重点强调环比加速/)
+
+  const html = readFileSync(output.htmlPath, 'utf8')
+  assert.match(html, /id="download-handout"/)
+  assert.match(html, /id="dsh-laser-dot"/)
+  assert.match(html, /BroadcastChannel/)
+  assert.match(html, /window\.opener\.postMessage/)
+  assert.match(html, /dsh-ppt-presenter/)
+  assert.match(html, /id="ppace"/)
+  assert.match(html, /id="font-plus"/)
+  assert.match(html, /__dshTogglePresenter/)
+
+  const standaloneMd = renderHandoutMarkdown({ title: 'Standalone', slides: [{ layout: 'bullets', title: 'Slide A', bullets: ['Fact 1'] }] }, 'en')
+  assert.match(standaloneMd, /Speaker Handout & Script/)
+  assert.match(standaloneMd, /Fact 1/)
 })

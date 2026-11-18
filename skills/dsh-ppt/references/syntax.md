@@ -20,8 +20,12 @@
 | `cards` | `pillars \| bento \| exec-summary \| numbered` | `kicker, title, subtitle, items`（2–6 项）, `takeaway` | **主力去要点墙版式**：并列支柱卡、Apple/Linear 非对称 Bento 网格、麦肯锡顶部总论断+三支柱 `exec-summary` |
 | `comparison` | `versus \| before-after \| do-dont \| issue-action` | `kicker, title, items`（2 列或 2–4 对配对行）, `takeaway` | A/B 方案对比、改造前后、✓ 推荐 vs ✗ 误区、政企「痛点 ──▶ 整改举措」原生箭头配对 |
 | `matrix` | `2x2 \| grid` | `kicker, title, items`（4 象限）, `takeaway` | 咨询四象限矩阵（带原生 X/Y 坐标轴箭头与象限卡片） |
-| `process` | `steps \| timeline \| chevron \| layers \| funnel \| flywheel` | `kicker, title, items`（3–6 步）, `takeaway` | 方法管线步骤、里程碑时间轴、**咨询价值链咬合五边形箭头（`chevron`，亦支持 `layout: "chevron" \| "value-chain"` 别名）**、技术分层、转化漏斗、4 节点增长飞轮 |
-| `callout` | `formula \| definition \| takeaways` | `kicker, title, subtitle, items / bullets, source` | 学术公式/算法定理框、核心概念定义卡、复盘行动清单 |
+| `process` | `steps \| timeline \| chevron \| layers \| funnel \| flywheel` | `kicker, title, items`（3–6 步）, `takeaway` | 方法管线步骤、里程碑时间轴、咬合五边形箭头（`chevron`）、技术分层、转化漏斗、4 节点增长飞轮 |
+| **`value-chain`** | — | `kicker, title, items[]`（支持辅助活动 + 基本活动 + 右侧利润池 Wedge）, `takeaway` | **正宗波特价值链（Porter Value Chain）**：顶部横向支撑活动（`Support Activities`）横梁 + 底部咬合基本活动（`Primary Activities`）五边形箭头 + 右侧利润池三角楔形 |
+| **`marimekko`** | — | `kicker, title, rows[][]` 或 `items[]`（`value` 权重 + `bullets[]` 份额）, `takeaway, source` | **麦肯锡不等宽市场地图（Marimekko）**：按各赛道规模比例切分列宽 + 100% 堆叠份额块 + 顶部规模标签 + 底部 0%–100% 标尺 |
+| **`sankey`** | — | `kicker, title, items[]`（`tag -> title, value, status`）或 `bullets[]`（`"A -> B: 68.5亿"`）, `takeaway, source` | **财报级桑基流向图（Sankey）**：多层拓扑守恒节点柱 + 原生三次贝塞尔丝带（`<a:custGeom>` / SVG），清晰呈现营收拆分与资金流向 |
+| **`swot`** | — | `kicker, title, items[]`（4 项 S/W/O/T）, `takeaway` | **咨询级 SWOT 十字矩阵**：四象限语义色卡（优势/短板/机遇/威胁）+ 中央「破局核心」战略锚点 + 底部 `SO/WO/ST/WT` 行动洞察 |
+| `callout` | `formula \| definition \| takeaways` | `kicker, title, subtitle, formula?, items / bullets, source` | **原生公式（`<m:oMath>` + MathML，支持 `formula` 或 `$...$`/`$$...$$` LaTeX）**、算法定理框、核心概念定义卡与复盘清单 |
 | `table` | `tableStyle`: `consulting \| booktabs \| minimal \| banded \| harvey` | `kicker, title, rows`（首行表头）, `takeaway, source` | 原生可编辑对比表（`booktabs` 为**无竖线学术三线表**；`harvey` 支持哈维球；数值列右对齐；> 8 行自动分页） |
 | **`gantt`** | `quarters \| months \| weeks \| swimlane` | `kicker, title, columns[], items[]`（`start, span, milestone?`）, `takeaway` | **原生甘特排期图**：自动时间刻度栅格、泳道标签、比例条形块与菱形里程碑节点 |
 | **`architecture`** | `layered \| platform` | `kicker, title, items[]`（`bullets[]` 子模块，`status:'accent'` 侧边纵列） | **原生系统架构图**：多层技术栈横向模块 + 右侧跨层安全/治理纵栏 + 双向数据流箭头 |

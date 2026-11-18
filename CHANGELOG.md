@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.24.0 (2026-11-18)
+
+- **原生 Office Math（`<m:oMath>` + MathML）公式引擎与四大巅峰商业图示**：新增零外部依赖 `deck-math.mjs`，支持将 `slide.formula` 与行内 `$...$` / `$$...$$` LaTeX 公式确定性编译为原生可编辑 ECMA-376 `<m:oMath>` / `<m:oMathPara>` 与 HTML W3C MathML（覆盖分式 `\frac`、上下标、根式 `\sqrt`、大型求和积分 `\sum`/`\int`、矩阵与希腊字母）；新增 **麦肯锡不等宽市场图（`marimekko`）**、**Apple/NVIDIA 财报级多层级桑基流向图（`sankey`）**、**真·波特价值链（`value-chain`，顶部辅助活动横梁 + 底部咬合基本活动箭头 + 右侧利润楔）** 与 **SWOT 战略十字矩阵（`swot`，含中心破局锚点）**，HTML 与原生 OOXML 100% 同源对齐。
+- **第 10 个 Agent 工具 `ppt_import`、存量 `.pptx` 一键翻新与 Office 双向导回**：支持导入任意外部 `.pptx`（提取文字/加粗重点、表格、原生 `<c:chart>` 图表、嵌入图片与演讲备注）一键翻新为全新可编辑 `dsh-ppt` 工程（可选自动现代焕新主题或保留原稿品牌配色），或将 PowerPoint / WPS 修改后的 `.pptx` 导回既有工程更新（自动保留 `.history/` 撤销历史，支持 `ppt_undo` / 工作台「撤销上次修改」）。
+- **独立双屏演讲者提词台与演讲讲义导出**：HTML 放映内置 **`P` 键双屏演讲者提词台**（`BroadcastChannel` + `postMessage` 双向同步当前页、下一页预览、可调字号提词器、计时器与 **`L` 键虚拟激光笔**），并新增结构化演讲讲义 `.handout.md` 客户端/工作台下载（`kind: 'handout'`）。
+- **工作台同步升级**：首页工程库与新建向导新增「导入 PPTX 翻新 / Import & Modernize .pptx」，打开工程顶栏与「风格与母版」新增「导入 Office 修改稿 / Sync Edited .pptx」，内容编辑器新增 `marimekko` / `sankey` / `swot` / `value-chain` 与 LaTeX `formula` 编辑框，下载面板新增「下载演讲讲义 (.md) / Download Handout」。
+- Ship a zero-dependency LaTeX math engine (`deck-math.mjs`) compiling `slide.formula` and `$...$` / `$$...$$` expressions into native editable Office Math (`<m:oMath>`) in PPTX and W3C MathML in HTML, alongside 4 pinnacle consulting/financial layouts: variable-width **Marimekko (`marimekko`)**, multi-layer cubic-Bezier **Sankey (`sankey`)**, authentic **Porter Value Chain (`value-chain`)**, and **SWOT Cross Matrix (`swot`)**.
+- Add the **10th agent tool `ppt_import`** (`importPptxDeck`, CLI `--import-pptx` / `--sync-pptx`) and Workbench `import-pptx` action (`≤24 MiB` in-memory upload) to extract slides, tables, live native charts, images, and speaker notes from external `.pptx` files — either creating a modernized editable project or syncing Office-edited `.pptx` changes back into an existing project with full undo history.
+- Add **Dual-Screen Presenter View** (`P` shortcut / `#presenter-toggle` with next-slide preview, resizable teleprompter, pace timer, and `L`-key virtual laser pointer) and **Speaker Handout (`.handout.md`)** export across standalone HTML (`#download-handout`) and Workbench (`kind: 'handout'`).
+
 ## 0.23.1 (2026-11-18)
 
 - 同步 `@stardustlc/dsh-updates` 0.2.3：侧边栏工作台平时默认隐藏底部更新栏（零高度占用），仅在检测到兼容新版本或执行更新时浮现单行精简提示条；完整更新设置与检查入口统一保留在 DSH「插件」详情页底部。

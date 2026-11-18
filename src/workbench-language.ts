@@ -28,6 +28,7 @@ const messages: Record<string, string> = {
   '请输入演示文稿标题（1–200 字符）': 'Enter a presentation title (1–200 characters).',
   '大纲正文超过 200,000 字符上限，请精简后重试': 'The outline exceeds 200,000 characters. Shorten it and try again.',
   '当前引擎版本暂不支持参考 PPTX 吸收': 'Reference PPTX style extraction is unavailable in the current engine.',
+  '当前引擎版本暂不支持导入 PPTX': 'PPTX import is unavailable in the current engine.',
   '页数已达 120 页上限，无法继续新增页面': 'The presentation already has 120 slides and cannot add more.',
   '请选择 PNG 或 JPEG 图片': 'Choose a PNG or JPEG image.',
   '图片必须从面板上传，不能读取其他本地文件': 'Upload the image from this panel. Other local file paths cannot be read.',

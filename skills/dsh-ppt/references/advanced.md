@@ -64,25 +64,33 @@ Agent 先提炼真实内容与数据结论，再通过结构化参数生成可�
 
 ---
 
-## 四、外部参考 `.pptx` 深层骨架吸收与品牌定制（`ppt_absorb` & `brand`）
+## 四、外部 `.pptx` 风格吸收、全量导入翻新与 Office 双向同步（`ppt_absorb` / `ppt_import`）
 
 1. **提取外部 `.pptx` 母版风格与骨架（`ppt_absorb`）**：
    - 调用：`ppt_absorb { pptxPath: "corp-template.pptx" }`（CLI：`--absorb corp-template.pptx`）。
    - 纯离线读取主题 12 色槽（含 DrawingML `lumMod / lumOff / tint / shade / satMod` 子变换解析）、西文与东亚字体族、母版背景、内嵌 Logo、母版骨架特征（`extractedSkeleton: { cornerStyle, hasTopBanner, hasSideSpine, masterShapeCount }`）、推荐母版骨架（`recommendedChrome`）与逐页版式推演（`slideSkeleton[]`），经 `sanitizeAbsorbedTheme()` 自动完成 WCAG 对比度净化与刺眼大红底降级。
-2. **一键套用参考 `.pptx` 与结构克隆（`referencePptx` & `cloneStructure`）**：
+2. **外部 `.pptx` 全量内容导入与老旧 PPT 一键翻新（`ppt_import` / `--import-pptx`）**：
+   - 调用：`ppt_import { pptxPath: "legacy.pptx", theme: "auto", modernize: true }`（CLI：`--import-pptx legacy.pptx --theme auto --out dist`；保留原品牌色与 Logo 可加 `preserveSourceTheme: true` / `--preserve-theme`）。
+   - 自动解析每页真实内容：标题、Kicker、副标题、正文与要点（保留粗体引导词为 `**bold**`）、原生表格（`<a:tbl>`）、原生图表（`ppt/charts/chart*.xml` `<c:cat>/<c:val>` 保留为可编辑图表）、嵌入位图（PNG/JPEG/WebP 安全导出至 `assets/imported-sN-M.<ext>`）及演讲者备注（自动剥离页码占位符），并智能映射为 `dsh-ppt` 原生版式，输出完整可放映 HTML（含按 `P` 启动的双屏演讲者提词台、按 `L` 激光笔与讲义下载）、可编辑 PPTX 与 JSON 工程。
+3. **Office 改稿双向回导同步（`ppt_import` + `projectId` / `--sync-pptx`）**：
+   - 在 PowerPoint / WPS 微调 `.pptx` 后，传 `projectId`（CLI：`--sync-pptx edited.pptx --edit dist/deck.json` 或 `--target-project dist`）即可将最新文字、表格、图表、图片与备注导回工程；同步前自动把原 `project.json` 快照写入 `.history/` 并压入撤回栈（`ppt_undo` 可完整恢复），同时保留原主题、品牌与匹配的数据溯源。
+4. **一键套用参考 `.pptx` 与结构克隆（`referencePptx` & `cloneStructure`）**：
    - 在 `ppt_create` 或 `ppt_edit` 中直接传 `referencePptx: "corp-template.pptx"`（CLI：`--reference-pptx corp.pptx`），自动将该模板净化后的色板、字体与母版 Logo 应用到整套文稿。
    - 若同时传 `cloneStructure: true`（CLI：`--clone-structure`），将把 `recommendedChrome` 写入 `brand.chromeStyle`，并把 Markdown 正文页面直接映射到吸收出的 `slideSkeleton` 版式序列！
-3. **显式共享品牌（`brand`）**：
+5. **显式共享品牌（`brand`）**：
    - `brand: { name: "星尘科技", primaryColor: "#0057B8", backgroundColor: "#FFFFFF", textColor: "#0F172A", chromeStyle: "consulting-classic", fontFamily: "Microsoft YaHei", logo: "assets/logo.png", footer: "战略规划部 · 内部资料" }`。
    - 引擎通过 `deriveBrandedTheme()` 自动重算表面层级、淡网格线与次级墨色，杜绝浅底黑网格线冲突。
 
 ---
 
-## 五、按页编辑、整套换肤、追加页面与撤销（`ppt_edit` & `ppt_undo`）
+## 五、双屏演讲者提词台、演讲讲义、按页编辑与撤销
+
+- **双屏演讲者提词台（独立 HTML 放映内置）**：按 **`P`** 或点击 `#presenter-toggle` 打开双屏控制窗口（通过 `BroadcastChannel` + `postMessage` 双向实时同步），支持当前页与下一页预览、大字号提词器（`A+ / A-` 缩放，无手写备注时自动回退为 `takeaway` 与要点提示）、正计时与目标配速倒计时、缩略图条快速跳页，以及按 **`L`** 在观众主屏同步投射虚拟激光笔！
+- **演讲讲义导出（`<slug>.handout.md`）**：HTML 检查面板内置「下载讲义 (.md)」按钮（客户端离线生成下载）；CLI 传 `--handout`（或 API `handout: true`）可同时落盘 `<slug>.handout.md`，包含演示概览、预计总时长、每页核心指标/表格/要点与逐页演讲手稿。
 
 1. **先查后改**：调 `ppt_check { deckPath: "report.json" }` 获取当前 `revision` 与稳定页面 `id`。
 2. **原子编辑（`ppt_edit`）**：
-   - **单页局部补丁 `edits`**：支持修改 `title, subtitle, kicker, takeaway, source, layout, variant, chrome, tableStyle, bullets, items, columns, rows, image, images, chart, notes, visual`（`slide` 传 1 起始页码或稳定 ID）。
+   - **单页局部补丁 `edits`**：支持修改 `title, subtitle, kicker, takeaway, source, formula, layout, variant, chrome, tableStyle, bullets, items, columns, rows, image, images, chart, notes, visual`（`slide` 传 1 起始页码或稳定 ID）。
    - **整套换肤与品牌更新**：顶层可传 `theme: "exec-jilan"`、`referencePptx: "ref.pptx"` 或 `brand`（`brand: null` 清空品牌，`logo: null` 清空 Logo）。
    - **追加、复制、排序与删除**：`append: [slide1, ...]`（单次追加 1–5 页新页面）、`duplicate: [2]`、`remove: [4]`、`order: [id1, id2, ...]`（包含全部原始页面 ID 各一次；执行顺序：先编辑/排序，再复制/删除/追加，最终保留 1–120 页）。
    - 每次修改原子重写 HTML / PPTX / JSON，失败自动回滚，保留最近 20 步历史。
@@ -114,6 +122,12 @@ node scripts/build-deck.mjs --title "学术答辩" --slides @slides.json --chrom
 
 # 仅解析并查看外部 PPTX 的净化色板、字体与版式摘要
 node scripts/build-deck.mjs --absorb corp.pptx
+
+# 全量导入旧 PPTX 并一键翻新（支持 --preserve-theme 与 --handout）
+node scripts/build-deck.mjs --import-pptx legacy.pptx --theme auto --handout --out dist
+
+# 将 Office 修改后的 PPTX 导回已有工程（自动快照至 .history/ 支持撤销）
+node scripts/build-deck.mjs --sync-pptx dist/deck.pptx --edit dist/deck.json
 
 # 编辑、撤销、静态检查与渲染收据核验
 node scripts/build-deck.mjs --edit dist/deck.json --edits @edits.json --revision 0

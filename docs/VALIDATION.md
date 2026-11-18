@@ -6,6 +6,10 @@
 
 ## 最新记录
 
+**0.24.0 原生公式、巅峰图示、PPTX 双向往返与双屏提词台验收（2026-11-18）**：全量 `tsc`、客户端打包、`test/*.test.mjs` 全部通过（0 失败，Wire Schema 0 `type` 数组）；`@office-kit/pptx` `validatePresentation()` 0 错误；实机 `@deepseek-ai/libreoffice-kit` 无头渲染（`missingFonts: []`）逐页目视核验 `marimekko` 不等宽市场图、`sankey` 多层流向桑基图、`value-chain` 波特价值链、`swot` 十字矩阵、原生 `<m:oMath>` 数学公式、老旧 `.pptx` 一键翻新导入与 `.handout.md` / 双屏提词台脚本。
+
+- **0.24.0 Bilingual Validation Record (2026-11-18)**: Full `tsc`, client bundle build, and `test/*.test.mjs` suite passed with 0 failures and 0 `type` arrays on tool wire schemas; `@office-kit/pptx` `validatePresentation()` passed with 0 errors; real `@deepseek-ai/libreoffice-kit` headless rendering (`missingFonts: []`) visually verified `marimekko`, `sankey`, Porter `value-chain`, `swot`, native `<m:oMath>` equations, legacy `.pptx` round-trip refurbishment, `.handout.md`, and Dual-Screen Presenter Console.
+
 **0.22.0 深度换骨与实机渲染验收（2026-11-18）**：311 / 311 项自动化测试全部通过；`tsc` 与客户端打包 0 错误；`@office-kit/pptx` `validatePresentation()` 0 错误；实机 `@deepseek-ai/libreoffice-kit` 无头渲染（`missingFonts: []`）逐页目视核验全部 6 套母版骨架、5 大新增原生专业图示（`gantt`、`architecture`、`harvey`、`tam`、`org`）、`flywheel`/`funnel` 及 7 份野生 `.pptx` 深度骨架吸收（`cloneStructure: true`）。
 
 [0.19.0 分享成品包验收](validation-0.19.0.md)：208 项 Windows 测试、官方 DSH Web 实际保存与两种 ZIP 下载、离线 HTML、三页最终 PPTX 原生渲染及逐页目视检查、中英文与深色窄屏。Electron 专属行为与真实 Office 应用本轮未测。

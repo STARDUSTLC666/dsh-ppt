@@ -47,10 +47,10 @@ function PptWorkflowGuide({ defaultOpen = false, onOpenCreate, onCopied }) {
     h('summary', null, pptText('使用流程指引与一句话提问模板（4 步快速交付）', 'How humans use this workbench · 4-step workflow & prompt templates')),
     h('div', { className: 'ppt-workflow-body' },
       h('ol', { className: 'ppt-workflow-steps' },
-        h('li', null, h('strong', null, pptText('1. 起稿定调：', '1. Start fast: ')), pptText('点右上角「新建演示文稿」选 20 套蓝图 / 贴大纲 / 拖入参考 .pptx 直接出稿；或在对话中把原始文档交给助手自动导演。', 'Click New presentation to build from 20 blueprints, pasted notes, or a reference .pptx — or ask the chat assistant with your files.')),
-        h('li', null, h('strong', null, pptText('2. 精修结构：', '2. Shape slides: ')), pptText('点击画面文字直接定位输入框；在「内容编辑」一键切换 Bento、KPI、价值链箭头、甘特图、架构图、哈维球与学术三线表。', 'Click slide text to focus its field; switch among 24+ native layouts including Bento, KPI, chevrons, Gantt, architecture, Harvey balls, and 3-line tables.')),
-        h('li', null, h('strong', null, pptText('3. 换肤与吸收母版：', '3. Restyle & absorb: ')), pptText('在「风格与母版」一键直吸 8 套名家范本、切换 24 套明暗主题，或拖入企业 .pptx 吸收主辅色、双字体、Logo 并收藏到品牌库长期复用。', 'Apply 8 world-class deck presets, switch 24 themes, or drop a corporate .pptx to absorb colours, fonts, and logo into your reusable Brand Library.')),
-        h('li', null, h('strong', null, pptText('4. 核对与交付：', '4. Verify & deliver: ')), pptText('按需点「渲染当前 PPTX」并排核对真实排版；发给外部听众选「分享成品包」，留底继续编辑选「完整工程包」。', 'Optionally render the actual PPTX for side-by-side inspection; export the Share bundle for recipients or the Project bundle to keep editing.'))),
+        h('li', null, h('strong', null, pptText('1. 起稿或导入翻新：', '1. Start or import: ')), pptText('点右上角「新建演示文稿」选 20 套蓝图 / 贴大纲出稿，或点击「导入 PPTX 翻新」一键把存量老旧 .pptx 变成高颜值可编辑工程。', 'Click New presentation for 20 blueprints or notes, or Import & Modernize .pptx to turn legacy slides into an editable deck.')),
+        h('li', null, h('strong', null, pptText('2. 精修结构与公式：', '2. Shape slides & math: ')), pptText('点击画面文字直接定位输入框；在「内容编辑」一键切换 Bento、KPI、不等宽市场图、桑基图、SWOT、波特价值链、甘特图、架构图、哈维球与学术三线表，支持 LaTeX 原生公式。', 'Click slide text to focus its field; switch among Bento, KPI, Marimekko, Sankey, SWOT, Porter value chain, Gantt, architecture, Harvey balls, 3-line tables & native LaTeX math.')),
+        h('li', null, h('strong', null, pptText('3. 换肤与 Office 导回：', '3. Restyle & Office sync: ')), pptText('在「风格与母版」一键套用名家范本、切换 24 套主题，或上传「Office 修改稿」把外部微调导回工作台更新（支持撤销）。', 'Apply 8 master presets, switch 24 themes, or sync an Office-edited .pptx back into this project with full undo support.')),
+        h('li', null, h('strong', null, pptText('4. 演讲提词与交付：', '4. Present & deliver: ')), pptText('按需渲染并排核对真实 PPTX；HTML 放映按 P 开启双屏演讲者提词台（含 L 键激光笔），下载 panel 可导出「演讲讲义 (.md)」与分享成品包。', 'Inspect rendered PPTX side-by-side; press P in HTML playback for Dual-Screen Presenter View (with L laser pointer), and export Handout (.md) or Share ZIP.'))),
       h('div', { className: 'ppt-workflow-prompts' },
         h('span', { className: 'w-muted' }, pptText('复制对话指令：', 'Copy chat prompt:')),
         PPT_QUICK_PROMPTS.map(item => h(W.Button, {
@@ -63,19 +63,23 @@ function PptWorkflowGuide({ defaultOpen = false, onOpenCreate, onCopied }) {
         onOpenCreate ? h(W.Button, { size: 'sm', variant: 'primary', icon: 'plus', onClick: onOpenCreate }, pptText('直接新建演示文稿', 'Create in workbench')) : null)));
 }
 
-function PptCreateDialog({ open, busy, onClose, onCreate, onError }) {
+function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate, onImport, onError }) {
   const fieldId = React.useId();
   const [meta, setMeta] = React.useState({ themes: [], templates: [] });
+  const [dialogMode, setDialogMode] = React.useState(initialMode);
   const [title, setTitle] = React.useState('');
   const [template, setTemplate] = React.useState('');
   const [theme, setTheme] = React.useState('auto');
   const [content, setContent] = React.useState('');
   const [refFile, setRefFile] = React.useState(null);
   const [cloneStructure, setCloneStructure] = React.useState(true);
+  const [importFile, setImportFile] = React.useState(null);
+  const [preserveSourceTheme, setPreserveSourceTheme] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
+    setDialogMode(initialMode || 'create');
     let cancelled = false;
     action({ operation: 'catalog-meta', lang: languageOf() }).then(res => {
       if (!cancelled && res?.ok) {
@@ -86,7 +90,7 @@ function PptCreateDialog({ open, busy, onClose, onCreate, onError }) {
       }
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, initialMode]);
 
   if (!open) return null;
   const disabled = busy || submitting;
@@ -112,6 +116,35 @@ function PptCreateDialog({ open, busy, onClose, onCreate, onError }) {
     reader.readAsDataURL(file);
   }
 
+  function handleImportSelect(file) {
+    if (!file) { setImportFile(null); return; }
+    if (!/\.pptx$/i.test(file.name) || file.size > 24 * 1024 * 1024) {
+      onError?.(pptText('请选择 24 MiB 以内的 .pptx 文件。', 'Choose a .pptx file up to 24 MiB.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImportFile({ name: file.name, data: String(reader.result || '') });
+    };
+    reader.onerror = () => onError?.(pptText('无法读取 PPTX 文件，请重试。', 'Could not read the PPTX file.'));
+    reader.readAsDataURL(file);
+  }
+
+  async function submitImport() {
+    if (!importFile?.data || !onImport) return;
+    setSubmitting(true);
+    try {
+      await onImport({
+        data: importFile.data,
+        modernize: true,
+        preserveSourceTheme,
+        theme: preserveSourceTheme ? 'auto' : (theme || 'auto'),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function submitCreate() {
     const effectiveTitle = title.trim() || (template ? (meta.templates.find(tp => tp.id === template)?.name || template) : pptText('新建演示文稿', 'New Presentation'));
     setSubmitting(true);
@@ -131,12 +164,49 @@ function PptCreateDialog({ open, busy, onClose, onCreate, onError }) {
 
   return h(W.Dialog, {
     className: 'pptw ppt-dialog',
-    title: pptText('新建演示文稿', 'New presentation'),
+    title: dialogMode === 'import' ? pptText('导入 PPTX 翻新', 'Import & Modernize .pptx') : pptText('新建演示文稿', 'New presentation'),
     closeLabel: pptText('关闭', 'Close'),
     busy: disabled,
     onClose,
   },
     h('div', { className: 'ppt-create-wizard' },
+      h('div', { className: 'ppt-archetype-pills', role: 'tablist', 'aria-label': pptText('创建方式', 'Creation mode') },
+        h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'create' ? 'true' : 'false', 'aria-pressed': dialogMode === 'create' ? 'true' : 'false', disabled, onClick: () => setDialogMode('create') }, pptText('从蓝图 / 大纲新建', 'New from blueprint / notes')),
+        onImport ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'import' ? 'true' : 'false', 'aria-pressed': dialogMode === 'import' ? 'true' : 'false', disabled, onClick: () => setDialogMode('import') }, pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')) : null),
+      dialogMode === 'import' ? h(React.Fragment, null,
+        h('p', { className: 'muted' }, pptText('上传外部 .pptx（≤24 MiB），自动提取每页文字、表格、原生图表、图片与演讲备注并重排版为可编辑工程，同时生成演讲讲义（.handout.md）。', 'Upload an external .pptx (≤24 MiB) to extract slides, tables, live charts, images, and speaker notes into an editable dsh-ppt project with speaker handout (.handout.md).')),
+        h('div', { className: 'ppt-create-refbox' },
+          h('label', { htmlFor: fieldId + '-import-file' }, pptText('选择需要导入翻新的 .pptx 文件（≤24 MiB）', 'Choose a .pptx file to import & modernize (≤24 MiB)')),
+          h('input', {
+            id: fieldId + '-import-file',
+            type: 'file',
+            accept: '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            disabled,
+            onChange: e => { const f = e.target.files?.[0]; e.target.value = ''; handleImportSelect(f); },
+          }),
+          importFile ? h('div', { className: 'ppt-create-refmeta' },
+            h('span', { className: 'w-tag' }, importFile.name),
+            h(W.Button, { size: 'sm', variant: 'ghost', icon: 'close', disabled, onClick: () => setImportFile(null) }, pptText('移除文件', 'Clear'))) : null),
+        h('div', { className: 'ppt-create-grid' },
+          h('div', null,
+            h('label', { htmlFor: fieldId + '-import-mode' }, pptText('翻新视觉策略', 'Visual refurbishment mode')),
+            h('select', {
+              id: fieldId + '-import-mode',
+              value: preserveSourceTheme ? 'preserve' : 'modernize',
+              disabled,
+              onChange: e => setPreserveSourceTheme(e.target.value === 'preserve'),
+            },
+              h('option', { value: 'modernize' }, pptText('自动焕新现代主题 (Auto-Modernize Theme)', 'Auto-Modernize Theme')),
+              h('option', { value: 'preserve' }, pptText('保留原稿品牌配色 (Keep Original Brand Colors)', 'Keep Original Brand Colors')))),
+          !preserveSourceTheme ? h('div', null,
+            h('label', { htmlFor: fieldId + '-import-theme' }, pptText('目标主题（24 套大师主题）', 'Target theme (24 curated themes)')),
+            h('select', { id: fieldId + '-import-theme', value: theme, disabled, onChange: e => setTheme(e.target.value) },
+              h('option', { value: 'auto' }, pptText('自动导演智能匹配', 'Auto-Director match')),
+              meta.themes.map(th => h('option', { key: th.id, value: th.id }, (th.name || th.id) + (th.dark ? pptText(' · 深色', ' · Dark') : pptText(' · 浅色', ' · Light')))))) : null),
+        h('div', { className: 'w-toolbar' },
+          h(W.Button, { variant: 'primary', icon: 'upload', disabled: disabled || !importFile?.data, onClick: submitImport }, submitting ? pptText('正在解析并翻新 PPTX…', 'Importing & modernizing…') : pptText('立即导入并生成工程', 'Import & modernize deck')),
+          h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel'))))
+      : h(React.Fragment, null,
       h('p', { className: 'muted' }, pptText('任选一种方式即可生成：选行业蓝图快速起稿、粘贴 Markdown/要点自动排布多版式，或上传公司 .pptx 一键复刻配色与页面骨架。', 'Start from an industry blueprint, paste rough Markdown notes for auto-layout choreography, or upload a reference .pptx to absorb its style and slide structure.')),
       h('label', { htmlFor: fieldId + '-title' }, pptText('演示文稿标题', 'Presentation title')),
       h(W.Input, {
@@ -190,7 +260,7 @@ function PptCreateDialog({ open, busy, onClose, onCreate, onError }) {
           h(W.Button, { size: 'sm', variant: 'ghost', icon: 'close', disabled, onClick: () => setRefFile(null) }, pptText('移除参考文件', 'Clear'))) : null),
       h('div', { className: 'w-toolbar' },
         h(W.Button, { variant: 'primary', icon: 'plus', disabled, onClick: submitCreate }, submitting ? pptText('正在生成三件套…', 'Generating HTML & PPTX…') : pptText('立即生成演示文稿', 'Create presentation')),
-        h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel')))));
+        h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel'))))));
 }
 
 function PptPages({ project, selected, busy, imagePending, onChoose, onDuplicate, onAppend, dirty, dataDirty }) {
@@ -205,6 +275,10 @@ function PptPages({ project, selected, busy, imagePending, onChoose, onDuplicate
     ['comparison', pptText('双栏 / 痛点对比页', 'Two-column comparison')],
     ['process', pptText('流程 / 时间轴页', 'Process / timeline')],
     ['chevron', pptText('价值链五边形箭头页', 'Value-chain chevrons')],
+    ['value-chain', pptText('波特价值链', 'Porter value chain')],
+    ['marimekko', pptText('不等宽市场图', 'Marimekko market map')],
+    ['sankey', pptText('桑基流向图', 'Sankey flow diagram')],
+    ['swot', pptText('SWOT 十字矩阵', 'SWOT matrix')],
     ['matrix', pptText('2×2 四象限矩阵页', '2×2 Matrix')],
     ['gantt', pptText('甘特图路线图页', 'Gantt roadmap')],
     ['architecture', pptText('分层系统架构图页', 'Architecture diagram')],

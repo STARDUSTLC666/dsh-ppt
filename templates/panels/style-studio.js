@@ -32,6 +32,10 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'harvey', zh: '哈维球竞品矩阵', en: 'Harvey-ball matrix', group: 'data', quick: true, variants: [] },
   { id: 'tam', zh: 'TAM/SAM/SOM 同心圆', en: 'TAM/SAM/SOM', group: 'data', variants: [['concentric', '同心圆', 'Concentric']] },
   { id: 'org', zh: '组织架构 / 团队图谱', en: 'Org & team', group: 'structured', variants: [['tree', '汇报树状图', 'Org tree'], ['team', '核心团队卡', 'Team bios']] },
+  { id: 'marimekko', zh: '不等宽市场图', en: 'Marimekko market map', group: 'data', quick: true, variants: [] },
+  { id: 'sankey', zh: '桑基流向图', en: 'Sankey flow diagram', group: 'data', quick: true, variants: [] },
+  { id: 'swot', zh: 'SWOT 十字矩阵', en: 'SWOT matrix', group: 'structured', quick: true, variants: [] },
+  { id: 'value-chain', zh: '波特价值链', en: 'Porter value chain', group: 'structured', quick: true, variants: [] },
   { id: 'table', zh: '表格 / 学术三线表', en: 'Table', group: 'data', quick: true, variants: [] },
   { id: 'chart', zh: '原生数据图表', en: 'Chart', group: 'data', variants: [] },
   { id: 'chart-split', zh: '图表 + 洞察分栏', en: 'Chart + insights', group: 'data', variants: [['chart-left', '左图右洞察', 'Chart left'], ['chart-right', '左洞察右图', 'Chart right']] },
@@ -43,7 +47,7 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'closing', zh: '结束与行动号召', en: 'Closing & CTA', group: 'framing', variants: [['standard', '标准致谢', 'Standard'], ['cta-cards', '行动卡片', 'CTA cards'], ['inverted', '深色封底', 'Inverted']] },
 ]);
 
-const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org']);
+const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain']);
 
 function pptLayoutMeta(layout) {
   return PPT_LAYOUT_CATALOG.find(item => item.id === layout) || { id: layout || 'bullets', zh: layout || '要点', en: layout || 'Bullets', group: 'structured', variants: [] };
@@ -174,6 +178,64 @@ function projectDraftToLayout(draft, nextLayout) {
   if (nextLayout === 'gantt' && !next.columnsText?.trim()) {
     next.columnsText = 'Q1, Q2, Q3, Q4';
   }
+  if (nextLayout === 'marimekko' && !next.rowsText?.trim() && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.rowsText = serializeSlideRows(en
+      ? [['Player / Segment', 'Enterprise (45B)', 'Financial (32B)', 'Industrial (23B)'], ['Ours', '42%', '35%', '28%'], ['Vendor B', '33%', '40%', '32%'], ['Others', '25%', '25%', '40%']]
+      : [['厂商 / 赛道', '华东政务 (450亿)', '金融信创 (320亿)', '工业制造 (230亿)'], ['本方案', '42%', '35%', '28%'], ['厂商 B', '33%', '40%', '32%'], ['其他', '25%', '25%', '40%']]);
+  }
+  if (nextLayout === 'sankey' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'Total Revenue', title: 'Gross Profit', text: '', value: '68.5', unit: 'B', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Total Revenue', title: 'Cost of Revenue', text: '', value: '31.5', unit: 'B', delta: '', status: 'neutral', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Gross Profit', title: 'R&D Investment', text: '', value: '22.0', unit: 'B', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Gross Profit', title: 'Operating Income', text: '', value: '46.5', unit: 'B', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+        ]
+      : [
+          { tag: '总营收', title: '毛利润', text: '', value: '68.5', unit: '亿', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '总营收', title: '营业成本', text: '', value: '31.5', unit: '亿', delta: '', status: 'neutral', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '毛利润', title: '研发投入', text: '', value: '22.0', unit: '亿', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '毛利润', title: '营业利润', text: '', value: '46.5', unit: '亿', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+        ];
+  }
+  if (nextLayout === 'swot' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'S · Strengths', title: 'Core capabilities', text: '', value: '', unit: '', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['HTML + native OOXML parity'] },
+          { tag: 'W · Weaknesses', title: 'Current gaps', text: '', value: '', unit: '', delta: '', status: 'warning', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['Initial template setup'] },
+          { tag: 'O · Opportunities', title: 'Market tailwinds', text: '', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['Legacy deck refurbishment'] },
+          { tag: 'T · Threats', title: 'External risks', text: '', value: '', unit: '', delta: '', status: 'negative', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['Brand lock-in constraints'] },
+        ]
+      : [
+          { tag: 'S · 核心优势', title: '技术壁垒', text: '', value: '', unit: '', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['HTML 与原生 OOXML 双向同源'] },
+          { tag: 'W · 关键短板', title: '待补齐点', text: '', value: '', unit: '', delta: '', status: 'warning', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['复杂旧模板首次迁移微调'] },
+          { tag: 'O · 外部机遇', title: '增长空间', text: '', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['存量 PPTX 一键翻新需求'] },
+          { tag: 'T · 潜在威胁', title: '外部挑战', text: '', value: '', unit: '', delta: '', status: 'negative', start: '', span: '', milestone: false, role: '', conversion: '', bullets: ['严格既有母版约束'] },
+        ];
+  }
+  if (nextLayout === 'value-chain' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'Support', title: 'Governance & Infrastructure', text: 'Unified metrics and compliance', value: '', unit: '', delta: '', status: 'neutral', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Support', title: 'R&D & Technology Platform', text: 'AI workflow & QA automation', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Primary', title: 'Demand Intake', text: 'High-intent capture', value: '', unit: '', delta: '', status: 'neutral', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Primary', title: 'Core Delivery', text: 'Zero-rework build', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Primary', title: 'Go-to-Market', text: 'Benchmark rollout', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: 'Primary', title: 'Retention', text: '118% net expansion', value: '', unit: '', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+        ]
+      : [
+          { tag: '辅助活动', title: '企业基础设施与敏捷治理', text: '统一口径与合规审计', value: '', unit: '', delta: '', status: 'neutral', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '辅助活动', title: '技术研发与数字化中台', text: '智能编排与自动化门禁', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '基本活动', title: '需求洞察', text: '精准准入筛选', value: '', unit: '', delta: '', status: 'neutral', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '基本活动', title: '标准交付', text: '同源构建提效', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '基本活动', title: '市场拓展', text: '标杆复制推广', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+          { tag: '基本活动', title: '运营复购', text: '118% 净留存', value: '', unit: '', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
+        ];
+  }
   return next;
 }
 
@@ -184,7 +246,7 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
   const canQuickSwitch = !['chart', 'image', 'image-left', 'image-right'].includes(slide?.layout) || currentLayout === slide?.layout;
   const items = Array.isArray(draft.items) ? draft.items : [];
   const showItemsEditor = PPT_ITEM_LAYOUTS.has(currentLayout) || items.length > 0;
-  const showTableEditor = currentLayout === 'table' || currentLayout === 'harvey' || Boolean(draft.rowsText?.trim());
+  const showTableEditor = currentLayout === 'table' || currentLayout === 'harvey' || currentLayout === 'marimekko' || Boolean(draft.rowsText?.trim());
 
   function updateItem(idx, key, val) {
     const nextItems = items.map((entry, i) => i === idx ? { ...entry, [key]: val } : entry);
@@ -396,7 +458,7 @@ function writeSavedBrands(list) {
   } catch { /* sandbox storage fallback */ }
 }
 
-function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, onApplyAbsorbed, onError, onMessage }) {
+function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, onApplyAbsorbed, onSyncPptx, onError, onMessage }) {
   const L = (zh, en) => languageOf() === 'en' ? en : zh;
   const controlId = React.useId();
   const themes = Array.isArray(project?.themes) ? project.themes : [];
@@ -548,6 +610,21 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     reader.readAsDataURL(file);
   }
 
+  function handleSyncFile(file) {
+    if (!file || !onSyncPptx) return;
+    if (!/\.pptx$/i.test(file.name) || file.size > 24 * 1024 * 1024) {
+      onError(L('请选择 24 MiB 以内的 .pptx 修改稿。', 'Choose an edited .pptx file up to 24 MiB.'));
+      return;
+    }
+    onError('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      onSyncPptx({ data: String(reader.result || ''), fileName: file.name });
+    };
+    reader.onerror = () => onError(L('无法读取该 PPTX 文件，请重试。', 'Could not read the PPTX file. Try again.'));
+    reader.readAsDataURL(file);
+  }
+
   function submitBrand() {
     const payload = {
       name: brandDraft.name.trim(),
@@ -696,6 +773,23 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
           }, L('一键应用吸收的主题与品牌', 'Apply absorbed theme & brand')),
           h('button', { type: 'button', disabled, onClick: saveCurrentAbsorbedToVault }, L('收藏到我的品牌库', 'Save to My Brand Library')),
           h('button', { type: 'button', disabled, onClick: () => { setAbsorbed(null); setAbsorbedName(''); } }, L('清除预览', 'Dismiss')))) : null),
+
+    h('details', { className: 'ppt-structured-section', open: false },
+      h('summary', null, L('导入 Office 修改稿（导回更新当前工程，支持撤销）', 'Sync Edited .pptx (Round-trip Office edits into project)')),
+      h('p', { className: 'muted' }, L('在 PowerPoint / WPS 微调文字、表格、图表或演讲备注后，可直接将修改后的 .pptx（≤24 MiB）导回当前工程并重建 HTML 与工程快照；支持随时撤销，零数据丢失。', 'After polishing text, tables, charts, or speaker notes in PowerPoint / WPS, upload the edited .pptx (≤24 MiB) to sync changes back into this project as an undoable revision.')),
+      h('div', {
+        className: 'ppt-dropzone',
+        onDragOver: e => { e.preventDefault(); },
+        onDrop: e => { e.preventDefault(); if (!disabled) handleSyncFile(e.dataTransfer?.files?.[0]); },
+      },
+        h('label', { htmlFor: controlId + '-sync-pptx' }, L('导入 Office 修改稿 / Sync Edited .pptx', 'Sync Edited .pptx')),
+        h('input', {
+          id: controlId + '-sync-pptx',
+          type: 'file',
+          accept: '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          disabled,
+          onChange: e => { const f = e.target.files?.[0]; e.target.value = ''; handleSyncFile(f); },
+        }))),
 
     h('details', { className: 'ppt-structured-section', open: Boolean(project.brand) },
       h('summary', null, L('自定义品牌色、安全字体、Logo 与页脚', 'Custom brand colours, font, logo & footer')),

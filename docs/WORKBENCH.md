@@ -1,8 +1,8 @@
 # dsh-ppt 工作台 / Workbench
 
-演示文稿主工作台，提供自助「新建演示文稿」向导、可折叠四步使用指引、页面栏、画布区与五栏属性面板（内容编辑、风格与母版、视觉检查、演练、数据与推演）；支持一键切换 24 套主题、8 套名家范本预设、6 套母版骨架与 24+ 种版式原型（含价值链五边形箭头 `chevron`）、拖拽深度吸收参考 `.pptx`（≤24 MiB）并收藏到「我的品牌库」、HTML ↔ PPTX 并排对比及画布级视觉修复前后对照，保留跨栏推演联动、未保存保护和画面内全屏退出。
+演示文稿主工作台，提供自助「新建演示文稿」与「导入 PPTX 翻新」向导、可折叠四步使用指引、页面栏、画布区与五栏属性面板（内容编辑、风格与母版、视觉检查、演练、数据与推演）；支持一键切换 24 套主题、8 套名家范本预设、6 套母版骨架与 28+ 种版式原型（含不等宽市场图 `marimekko`、桑基图 `sankey`、波特价值链 `value-chain`、SWOT 矩阵 `swot` 与 LaTeX 原生公式）、上传 Office 修改稿导回更新工程（保留撤销历史）、拖拽深度吸收参考 `.pptx`（≤24 MiB）并收藏到「我的品牌库」、导出 `.handout.md` 演讲讲义、HTML ↔ PPTX 并排对比及画布级视觉修复前后对照，保留跨栏推演联动、未保存保护和画面内全屏退出。
 
-Presentation workbench with a self-service **New presentation** wizard, collapsible 4-step workflow guide, slide rail, split-capable canvas, and five inspector tabs (Edit content, Style Studio, Visual review, Rehearsal, Data and what-if); supports 1-click switching across 24 themes, 8 World-Class Reference Presets, 6 master chrome skeletons, and 24+ slide archetypes (including value-chain `chevron`), in-memory deep `.pptx` style & skeleton absorption (`≤24 MiB`) with reusable **My Brand Library** presets, HTML ↔ PPTX side-by-side comparison, and full-width Vision QA before/after diffs.
+Presentation workbench with self-service **New presentation** and **Import & Modernize .pptx** wizards, collapsible 4-step workflow guide, slide rail, split-capable canvas, and five inspector tabs (Edit content, Style Studio, Visual review, Rehearsal, Data and what-if); supports 1-click switching across 24 themes, 8 World-Class Reference Presets, 6 master chrome skeletons, and 28+ slide archetypes (including `marimekko`, `sankey`, Porter `value-chain`, `swot`, and LaTeX `formula` editing), round-trip **Sync Edited .pptx** with undo history, in-memory `.pptx` style & skeleton absorption (`≤24 MiB`) with **My Brand Library**, `.handout.md` speaker handout download, HTML ↔ PPTX side-by-side comparison, and full-width Vision QA diffs.
 
 ## 使用 / Use
 
@@ -31,7 +31,8 @@ The UI follows host language and theme without translating user content. Narrow 
 
 - **分享成品包 ZIP**：当前 PPTX、可离线放映的 HTML、逐页 Markdown 讲稿与使用说明；不含 JSON 工程和完整导入材料。分享版 HTML 保留 PPTX 下载入口，移除工程下载入口。原文件不会改变。
 - **完整工程包 ZIP**：PPTX、HTML、JSON 工程与使用说明，方便备份或继续编辑。JSON 可能含完整导入材料。
-- 也可分别下载 PPTX、HTML、讲稿或工程。未保存时先保存，旧修订的下载会被拒绝。
+- 也可分别下载 PPTX、HTML、演讲讲义（`kind: 'handout'`，导出 `.handout.md`）、讲稿 Markdown 或工程。未保存时先保存，旧修订的下载会被拒绝。
+- 独立打开导出的 HTML 放映页时，按 **`P`** 可开启双屏演讲者提词台（支持下一页预览、提词字号缩放、计时器与 **`L` 键虚拟激光笔**）。
 
 分享包里的 HTML、PPTX 备注和讲稿仍保留已绑定的来源摘录与用户填写内容。分包不等于自动脱敏，请按收件人需要选择内容。
 

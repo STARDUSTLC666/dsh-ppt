@@ -210,9 +210,11 @@ test('workbench client keeps keyboard shortcuts, dirty guard and retry affordanc
     'handleShortcut', 'dsh-ppt-shortcut', 'beforeunload', 'badge-dirty', '复制示例', 'aria-busy', 'Ctrl/⌘+S',
     'StyleStudioPanel', 'SlideArchetypeEditor', 'PPT_LAYOUT_CATALOG', 'PPT_CHROME_SKELETONS', 'Master Skeleton', '母版骨架',
     'consulting-classic', 'keynote-spatial', 'editorial-folio', 'saas-bento', 'academic-minimal', 'gov-ceremonial',
-    'gantt', 'architecture', 'harvey', 'tam', 'org',
-    'absorb-upload', 'recommendedChrome', 'extractedSkeleton', 'slideSkeleton',
+    'gantt', 'architecture', 'harvey', 'tam', 'org', 'marimekko', 'sankey', 'swot', 'value-chain', 'formula',
+    'absorb-upload', 'import-pptx', 'recommendedChrome', 'extractedSkeleton', 'slideSkeleton',
     'ppt-split-preview', 'ppt-canvas-visual-diff', 'ppt-issue-row',
+    '导入 PPTX 翻新', 'Import & Modernize .pptx', '导入 Office 修改稿', 'Sync Edited .pptx',
+    '下载演讲讲义 (.md)', 'Download Handout', '双屏演讲者提词台', 'Dual-Screen Presenter View',
   ]) {
     assert.ok(source.includes(marker), marker + ' missing from workbench client')
   }
@@ -518,4 +520,156 @@ test('workbench catalog-meta, chevron starterSlide, and self-service create wiza
   // Host path attempts must be rejected
   await assert.rejects(wb.action({ operation: 'create', title: 'Bad', referencePptx: refBuilt.pptxPath }), /面板/)
   await assert.rejects(wb.action({ operation: 'create', title: 'Bad', outputDir: refDir }), /面板/)
+}))
+
+test('workbench Phase-4 layouts (marimekko, sankey, swot, value-chain), LaTeX formula patch, handout download, and import-pptx security guards', () => fixture(async ({ dir, created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const slideId = (await wb.action({ operation: 'open', id })).project.slides[1].id
+
+  const formulaEdited = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: 0,
+    slide: slideId,
+    patch: {
+      layout: 'callout',
+      variant: 'formula',
+      title: '均方误差目标函数',
+      formula: '\\frac{1}{n}\\sum_{i=1}^{n}(y_i - \\hat{y}_i)^2',
+    },
+  })
+  assert.equal(formulaEdited.project.slides[1].formula, '\\frac{1}{n}\\sum_{i=1}^{n}(y_i - \\hat{y}_i)^2')
+
+  let rev = 1
+  for (const [archetype, check] of [
+    ['marimekko', s => { assert.ok(Array.isArray(s.rows) && s.rows.length >= 3) }],
+    ['sankey', s => { assert.ok(Array.isArray(s.items) && s.items.length >= 4) }],
+    ['swot', s => { assert.equal(s.items.length, 4) }],
+    ['value-chain', s => { assert.equal(s.items.length, 6) }],
+  ]) {
+    const res = await wb.action({ operation: 'append', id, expectedRevision: rev++, archetype })
+    const appended = res.project.slides.at(-1)
+    assert.equal(appended.layout, archetype)
+    check(appended)
+  }
+
+  // Handout download via POST action & GET fetchDownload
+  const handoutAction = await wb.action({ operation: 'download', id, kind: 'handout' })
+  assert.equal(handoutAction.ok, true)
+  assert.match(handoutAction.name, /\.handout\.md$/)
+  const handoutText = Buffer.from(handoutAction.data, 'base64').toString('utf8')
+  assert.match(handoutText, /# 工程/)
+
+  const handoutGet = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=handout&revision=${rev}`))
+  assert.equal(handoutGet.status, 200)
+  assert.match(handoutGet.headers.get('content-type'), /text\/markdown/)
+  assert.match(decodeURIComponent(handoutGet.headers.get('content-disposition')), /\.handout\.md/)
+
+  // Host paths and malformed payloads must be blocked on import-pptx
+  const validData = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + readFileSync(created.pptxPath).toString('base64')
+  await assert.rejects(wb.action({ operation: 'import-pptx', pptxPath: created.pptxPath, data: validData }), /面板上传/)
+  await assert.rejects(wb.action({ operation: 'import-pptx', path: created.pptxPath, data: validData }), /面板上传/)
+  await assert.rejects(wb.action({ operation: 'import-pptx', outputDir: dir, data: validData }), /面板上传/)
+  await assert.rejects(wb.action({ operation: 'import-pptx', data: Buffer.from('not-zip'.repeat(30)).toString('base64') }), /24 MiB/)
+}))
+
+test('workbench import-pptx Mode A (new modernized project) and Mode B (sync edited .pptx into existing project with undo)', () => fixture(async ({ dir, created, wb }) => {
+  // Mode A: import legacy .pptx without project id -> creates and indexes new project
+  const legacyDir = join(dir, 'legacy')
+  mkdirSync(legacyDir, { recursive: true })
+  const legacyDeck = await buildDeckAsync({
+    title: 'Legacy Q3 Review',
+    theme: 'data',
+    slides: [
+      { layout: 'cover', title: 'Legacy Q3 Review', subtitle: 'Operations Team' },
+      { layout: 'bullets', title: 'Revenue grew 28%', bullets: ['**Cloud ARR**: $42M (+28% YoY)', '**Gross Margin**: 74%'], notes: 'Emphasize cloud mix shift.' },
+      { layout: 'table', title: 'Regional Breakdown', rows: [['Region', 'Revenue', 'YoY'], ['East', '18M', '+31%'], ['West', '24M', '+26%']] },
+    ],
+    outputDir: legacyDir,
+  })
+  const pptxData = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + readFileSync(legacyDeck.pptxPath).toString('base64')
+  const imported = await wb.action({ operation: 'import-pptx', data: pptxData, modernize: true, preserveSourceTheme: false, theme: 'consulting' })
+  assert.equal(imported.ok, true)
+  assert.equal(imported.created, true)
+  assert.equal(imported.project.slides.length, 3)
+  assert.equal(imported.project.theme, 'consulting')
+
+  // Mode B: sync Office-edited .pptx into existing project -> updates slides & supports undo
+  const editedDir = join(dir, 'edited')
+  mkdirSync(editedDir, { recursive: true })
+  const editedDeck = await buildDeckAsync({
+    title: 'Synced Q3 Review',
+    slides: [
+      { layout: 'cover', title: 'Synced Cover Title', subtitle: 'Updated in Office' },
+      { layout: 'bullets', title: 'Updated Metric Slide', bullets: ['**ARR**: $48M (+34% YoY)'] },
+    ],
+    outputDir: editedDir,
+  })
+  const editedData = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + readFileSync(editedDeck.pptxPath).toString('base64')
+  const synced = await wb.action({
+    operation: 'import-pptx',
+    id: imported.project.id,
+    expectedRevision: imported.project.revision,
+    data: editedData,
+    modernize: true,
+  })
+  assert.equal(synced.ok, true)
+  assert.equal(synced.syncedProject, true)
+  assert.equal(synced.project.slides.length, 2)
+  assert.equal(synced.project.slides[0].title, 'Synced Cover Title')
+  assert.ok(synced.project.undoAvailable >= 1)
+
+  const undone = await wb.action({ operation: 'undo', id: imported.project.id, expectedRevision: synced.project.revision })
+  assert.equal(undone.project.slides.length, 3)
+}))
+
+test('editorHtml click-to-focus maps Phase-4 layout and math targets (.deck-math, .mekko-col, .sankey-svg, .swot-quad, .porter-beam)', () => {
+  const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  for (const selector of ['.deck-math', '.formula-plate', '.callout-formula', '.mekko-col', '.sankey-node', '.sankey-svg', '.swot-quad', '.porter-beam']) {
+    assert.ok(source.includes(selector), selector + ' click-to-focus selector missing')
+  }
+  assert.match(source, /n\.matches\('\.deck-math,\.formula-plate,\.callout-formula'\)\?'formula'/)
+  assert.match(source, /n\.matches\('table,\.mekko-col'\)\?'rows'/)
+  assert.match(source, /n\.matches\('\.sankey-node,\.sankey-svg,\.swot-quad,\.porter-beam,/)
+})
+
+test('workbench GET fetchDownload kind=handout returns speaker handout headers and rejects stale revisions', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  await editDeck({ deckPath: created.jsonPath, expectedRevision: 0, edits: [{ slide: 2, patch: { notes: 'Key handout cue for executives.' } }] })
+
+  const okRes = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=handout&revision=1`))
+  assert.equal(okRes.status, 200)
+  assert.match(okRes.headers.get('content-type'), /text\/markdown/)
+  assert.match(decodeURIComponent(okRes.headers.get('content-disposition')), /\.handout\.md/)
+  const md = await okRes.text()
+  assert.match(md, /Key handout cue for executives\./)
+
+  const staleRes = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=handout&revision=0`))
+  assert.equal(staleRes.status, 409)
+}))
+
+test('workbench import-pptx supports preserveSourceTheme=true vs modernize=true theme selection', () => fixture(async ({ dir, wb }) => {
+  const srcDir = join(dir, 'src-brand')
+  mkdirSync(srcDir, { recursive: true })
+  const branded = await buildDeckAsync({
+    title: 'Corporate Branded Deck',
+    theme: 'consulting',
+    brand: { name: 'CorpBrand', primaryColor: '#1E3A8A', backgroundColor: '#FFFFFF', textColor: '#0F172A' },
+    slides: [
+      { layout: 'cover', title: 'Corporate Branded Deck', subtitle: '2026 Plan' },
+      { layout: 'bullets', title: 'Focus Areas', bullets: ['**Growth**: +30% YoY'] },
+    ],
+    outputDir: srcDir,
+  })
+  const pptxData = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + readFileSync(branded.pptxPath).toString('base64')
+
+  const preserved = await wb.action({ operation: 'import-pptx', data: pptxData, preserveSourceTheme: true, modernize: true })
+  assert.equal(preserved.ok, true)
+  assert.equal(preserved.project.brand?.primaryColor, '#1E3A8A')
+
+  const modernized = await wb.action({ operation: 'import-pptx', data: pptxData, preserveSourceTheme: false, modernize: true, theme: 'bcg-emerald' })
+  assert.equal(modernized.ok, true)
+  assert.equal(modernized.project.theme, 'bcg-emerald')
 }))

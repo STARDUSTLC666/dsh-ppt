@@ -3,7 +3,7 @@ export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold' | 'consul
 export type PptChromeStyle = 'consulting-classic' | 'keynote-spatial' | 'editorial-folio' | 'saas-bento' | 'academic-minimal' | 'gov-ceremonial';
 export type PptPersonaId = 'auto' | 'consulting' | 'tech-pitch' | 'academic' | 'gov-exec' | 'education' | 'editorial';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team';
+export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team';
 export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'consulting' | 'keynote' | 'gov-report' | 'workshop' | 'architecture-review' | 'financial-earnings' | 'medical-case' | 'postmortem' | 'marketing-campaign' | 'promotion-review' | 'legal-compliance' | 'creative-lookbook' | 'quarterly-okr' | 'product-prd' | 'vc-daylight' | 'industry-research';
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey';
 export interface PptImageSpec {
@@ -179,6 +179,7 @@ export interface PptSlideSpec {
     takeaway?: string;
     source?: string;
     text?: string;
+    formula?: string;
     bullets?: string[];
     items?: PptSlideItem[];
     cards?: PptSlideItem[];
@@ -312,6 +313,16 @@ export interface PptAbsorbResult {
     slideSkeleton?: PptAbsorbSlideSkeleton[];
     layoutSummary?: Record<string, unknown>;
 }
+export interface PptImportArgs {
+    pptxPath: string;
+    projectId?: string;
+    outputDir?: string;
+    theme?: string;
+    persona?: PptPersonaId | string;
+    chromeStyle?: PptChromeStyle | string;
+    modernize?: boolean;
+    preserveSourceTheme?: boolean;
+}
 export interface PptCreateResult {
     ok: boolean;
     title: string;
@@ -323,26 +334,32 @@ export interface PptCreateResult {
         html: string;
         pptx: string;
         json: string;
+        handout?: string;
     };
     htmlPath: string;
     pptxPath: string;
     jsonPath: string;
+    handoutPath?: string;
     deckId?: string;
     revision?: number;
     undoAvailable?: number;
     deliveryStatus?: 'draft' | 'ready-for-review';
+    importedFrom?: string;
+    syncedProject?: boolean;
     quality?: PptQualityResult;
     verification?: PptVerification;
 }
 /** Shared generator and optional renderer exposed to the plugin. */
 export interface DeckEngine {
     absorbPptx(options: Record<string, unknown>): Promise<PptAbsorbResult>;
+    importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>;
     repairDeckVisual(options: Record<string, unknown>): Promise<PptCreateResult>;
     readRenderReceipt(pptxPath: string, receiptPath: string): PptRenderResult;
     previewDeckData(options: Record<string, unknown>): Record<string, any>;
     updateDeckData(options: Record<string, unknown>): Promise<PptCreateResult>;
     dataReport(manifest: any): string;
     dataNotes(manifest: any, slide: any): string;
+    renderHandoutMarkdown?(manifest: any, lang?: string): string;
     buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>;
     listTemplates(lang?: string): unknown[];
     editDeck(options: Record<string, unknown>): Promise<PptCreateResult>;

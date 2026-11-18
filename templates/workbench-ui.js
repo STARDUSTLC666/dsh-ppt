@@ -411,11 +411,12 @@ function createWorkbenchUI(React, requireFn) {
     };
   }
 
-  function Button({ children, icon, iconSize = 16, variant = 'outline', size = 'sm', className, ...props }) {
+  const Button = forwardRefWrap(function Button({ children, icon, iconSize = 16, variant = 'outline', size = 'sm', className, ...props }, ref) {
     const P = resolveHostPrimitives();
     const hostVariant = variant === 'danger' ? 'ghost' : (variant || 'outline');
     const iconEl = typeof icon === 'string' ? h(Icon, { name: icon, size: iconSize }) : icon;
     return h(P.Button, {
+      ...(ref ? { ref } : {}),
       variant: hostVariant,
       size,
       ...props,
@@ -423,7 +424,7 @@ function createWorkbenchUI(React, requireFn) {
       className: cx('w-button', variant && 'w-' + variant, className),
       icon: iconEl,
     }, children);
-  }
+  });
 
   function IconButton({ label, icon, variant = 'ghost', className, ...props }) {
     return h(Button, { ...props, icon, variant, className: cx('w-icon-button', className), 'aria-label': label, title: label });
@@ -553,11 +554,330 @@ function createWorkbenchUI(React, requireFn) {
     }));
   }
 
-  function Page({ title, subtitle, icon, navigation, actions, children, workbench = false, lang = 'zh', showStyleSwitcher = true, className, rootRef, ...props }) {
+  const tourSessionDone = new Set();
+
+  function readTourDone(storageKey, win) {
+    const key = String(storageKey || 'dsh-workbench.tour.v1');
+    if (tourSessionDone.has(key)) return true;
+    const target = resolveWindow(win);
+    if (!target) return false;
+    try {
+      return target.localStorage?.getItem(key) === 'done';
+    } catch {
+      return false;
+    }
+  }
+
+  function writeTourDone(storageKey, win) {
+    const key = String(storageKey || 'dsh-workbench.tour.v1');
+    tourSessionDone.add(key);
+    const target = resolveWindow(win);
+    if (!target) return;
+    try {
+      target.localStorage?.setItem(key, 'done');
+    } catch {
+      // Restricted storage: in-memory tourSessionDone keeps tour dismissed for the session.
+    }
+  }
+
+  function hasOpenModalDialog(pageNode) {
+    const doc = pageNode?.ownerDocument || resolveWindow()?.document || (typeof document !== 'undefined' ? document : null);
+    if (!doc || typeof doc.querySelectorAll !== 'function') return false;
+    const dialogs = doc.querySelectorAll('[role="dialog"]:not([data-tour-card])');
+    for (const el of dialogs) {
+      if (pageNode && el !== pageNode && typeof el.contains === 'function' && el.contains(pageNode)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  function computeTourLayout(target, preferredSide, cardEl) {
+    const win = resolveWindow();
+    const vw = (win && win.innerWidth) || 1280;
+    const vh = (win && win.innerHeight) || 800;
+    const cw = cardEl?.offsetWidth || 320;
+    const ch = cardEl?.offsetHeight || 196;
+    const pad = 5;
+    const gap = 12;
+    const raw = target?.getBoundingClientRect?.();
+    if (!target) {
+      return {
+        spotlight: null,
+        side: 'center',
+        left: Math.max(12, Math.round((vw - cw) / 2)),
+        top: Math.max(12, Math.round((vh - ch) / 2)),
+        arrowX: 28,
+        arrowY: 24,
+      };
+    }
+    const hasBox = Boolean(raw && (raw.width > 0 || raw.height > 0));
+    const rect = hasBox ? raw : { left: 120, top: 72, width: 140, height: 32 };
+    const spotlight = {
+      left: Math.round(rect.left - pad),
+      top: Math.round(rect.top - pad),
+      width: Math.round(rect.width + pad * 2),
+      height: Math.round(rect.height + pad * 2),
+    };
+    const spaceBottom = vh - spotlight.top - spotlight.height;
+    const spaceTop = spotlight.top;
+    const spaceRight = vw - spotlight.left - spotlight.width;
+    const spaceLeft = spotlight.left;
+    let side = preferredSide || 'bottom';
+    if (side === 'right' && spaceRight < cw + gap + 12) {
+      side = spaceBottom >= ch + gap + 12 ? 'bottom' : spaceLeft >= cw + gap + 12 ? 'left' : 'top';
+    } else if (side === 'left' && spaceLeft < cw + gap + 12) {
+      side = spaceRight >= cw + gap + 12 ? 'right' : 'bottom';
+    } else if (side === 'bottom' && spaceBottom < ch + gap + 12 && spaceTop > spaceBottom) {
+      side = 'top';
+    } else if (side === 'top' && spaceTop < ch + gap + 12 && spaceBottom > spaceTop) {
+      side = 'bottom';
+    }
+    let left = spotlight.left;
+    let top = spotlight.top + spotlight.height + gap;
+    if (side === 'top') top = spotlight.top - ch - gap;
+    else if (side === 'right') { left = spotlight.left + spotlight.width + gap; top = spotlight.top; }
+    else if (side === 'left') { left = spotlight.left - cw - gap; top = spotlight.top; }
+    left = Math.round(Math.max(12, Math.min(vw - cw - 12, left)));
+    top = Math.round(Math.max(12, Math.min(vh - ch - 12, top)));
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    return {
+      spotlight,
+      side,
+      left,
+      top,
+      arrowX: Math.round(Math.max(18, Math.min(cw - 18, centerX - left))),
+      arrowY: Math.round(Math.max(18, Math.min(ch - 18, centerY - top))),
+    };
+  }
+
+  function CoachmarkTour({ rootRef, steps = [], step = 0, manual = false, style = 'harness', lang = 'zh', layout: rawLayout, setLayout, onStep, onClose, onCopyPrompt }) {
+    const layerRef = useRefHook(null);
+    const cardRef = useRefHook(null);
+    const nextBtnRef = useRefHook(null);
+    const [copied, setCopied] = useStateHook(false);
+    const titleId = useIdHook() + '-tour-title';
+    const isEn = String(lang || '').toLowerCase().startsWith('en');
+    const l = (zh, en) => (isEn ? en : zh);
+    const safeIndex = Math.max(0, Math.min(steps.length - 1, step));
+    const current = steps[safeIndex] || {};
+    const activeStyle = normalizeDshStyle(style);
+    const layout = rawLayout && typeof rawLayout === 'object' && rawLayout.side
+      ? rawLayout
+      : { spotlight: null, side: current.side || 'bottom', left: 24, top: 76, arrowX: 28, arrowY: 24 };
+
+    useEffectHook(() => {
+      const node = layerRef.current;
+      if (!node) return undefined;
+      try {
+        node.setAttribute?.('popover', 'manual');
+        node.showPopover?.();
+      } catch { /* ignore */ }
+      return () => { try { node.hidePopover?.(); } catch { /* ignore */ } };
+    }, []);
+
+    useEffectHook(() => {
+      setCopied(false);
+    }, [safeIndex]);
+
+    useEffectHook(() => {
+      function measure() {
+        const doc = resolveWindow()?.document || (typeof document !== 'undefined' ? document : null);
+        const scope = rootRef?.current || doc;
+        if (!scope || typeof scope.querySelector !== 'function') return;
+        const target = (current.selector && scope.querySelector(current.selector))
+          || (current.fallback && scope.querySelector(current.fallback))
+          || (scope !== doc && current.selector && doc?.querySelector?.(current.selector))
+          || (scope !== doc && current.fallback && doc?.querySelector?.(current.fallback))
+          || null;
+        setLayout?.(computeTourLayout(target, current.side, cardRef.current));
+      }
+      measure();
+      const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(measure) : null;
+      const win = resolveWindow();
+      if (!win || typeof win.addEventListener !== 'function') {
+        return () => { if (raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf); };
+      }
+      win.addEventListener('resize', measure, { passive: true });
+      win.addEventListener('scroll', measure, true);
+      return () => {
+        if (raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+        win.removeEventListener('resize', measure);
+        win.removeEventListener('scroll', measure, true);
+      };
+    }, [safeIndex, current.selector, current.fallback, current.side]);
+
+    useEffectHook(() => {
+      if (manual) {
+        const btn = nextBtnRef.current || cardRef.current?.querySelector?.('[data-tour-next]');
+        btn?.focus?.();
+      }
+    }, [manual, safeIndex]);
+
+    async function defaultCopyPrompt(text) {
+      const win = resolveWindow();
+      const nav = win?.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+      if (nav?.clipboard?.writeText) {
+        try {
+          await nav.clipboard.writeText(String(text));
+          return true;
+        } catch { /* ignore */ }
+      }
+      return false;
+    }
+
+    async function handleCopy() {
+      if (!current.prompt) return;
+      const copyFn = typeof onCopyPrompt === 'function' ? onCopyPrompt : defaultCopyPrompt;
+      const ok = await copyFn(current.prompt);
+      if (ok !== false) {
+        setCopied(true);
+        const timer = setTimeout(() => setCopied(false), 1800);
+        if (timer && typeof timer.unref === 'function') timer.unref();
+      }
+    }
+
+    const isLast = safeIndex >= steps.length - 1;
+    function finish() { onClose?.(manual); }
+    function onKeyDown(event) {
+      if (event.isComposing || event.nativeEvent?.isComposing) return;
+      if (event.key === 'Escape') {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        finish();
+      } else if (event.key === 'ArrowRight' && !isLast) {
+        event.preventDefault?.();
+        onStep?.(safeIndex + 1, true);
+      } else if (event.key === 'ArrowLeft' && safeIndex > 0) {
+        event.preventDefault?.();
+        onStep?.(safeIndex - 1, true);
+      }
+    }
+
+    return h('div', {
+      ref: layerRef,
+      className: 'dshw w-tour-layer',
+      'data-dsh-style': activeStyle,
+      'data-wb-tour': current.id || String(safeIndex),
+      'data-window-drag-exclude': '',
+    },
+      layout.spotlight
+        ? h('div', {
+            className: 'w-tour-spotlight',
+            'data-tour-spotlight': current.id || String(safeIndex),
+            'aria-hidden': 'true',
+            style: {
+              left: layout.spotlight.left + 'px',
+              top: layout.spotlight.top + 'px',
+              width: layout.spotlight.width + 'px',
+              height: layout.spotlight.height + 'px',
+            },
+          })
+        : h('div', { className: 'w-tour-backdrop-fallback', 'aria-hidden': 'true' }),
+      h('div', {
+        ref: cardRef,
+        role: 'dialog',
+        'aria-modal': 'false',
+        'aria-labelledby': titleId,
+        tabIndex: -1,
+        onKeyDown,
+        className: 'w-tour-card',
+        'data-side': layout.side,
+        'data-tour-card': current.id || String(safeIndex),
+        style: {
+          left: layout.left + 'px',
+          top: layout.top + 'px',
+          '--arrow-x': layout.arrowX + 'px',
+          '--arrow-y': layout.arrowY + 'px',
+        },
+      },
+        h('span', { className: 'w-tour-arrow', 'data-tour-arrow': layout.side, 'aria-hidden': 'true' }),
+        h('div', { className: 'w-tour-head' },
+          h('div', { className: 'w-tour-step-meta' },
+            h('span', { className: 'w-tour-step-badge' }, (safeIndex + 1) + ' / ' + steps.length),
+            h('span', { className: 'w-tour-dots', 'aria-hidden': 'true' },
+              steps.map((item, idx) => h('span', { key: item.id || idx, className: 'w-tour-dot', 'data-active': idx === safeIndex ? 'true' : undefined })))),
+          h('button', { type: 'button', className: 'w-tour-skip', 'data-tour-skip': '', onClick: finish }, l('跳过', 'Skip'))),
+        h('h2', { id: titleId, className: 'w-tour-title' }, current.title),
+        h('p', { className: 'w-tour-desc' }, current.desc),
+        current.prompt ? h('div', { className: 'w-tour-inline-action' },
+          h(Button, {
+            variant: 'outline',
+            size: 'sm',
+            icon: copied ? 'check' : 'copy',
+            'data-copy-prompt': current.prompt,
+            'data-copied': copied ? 'true' : undefined,
+            onClick: () => { void handleCopy(); },
+          }, copied ? l('已复制', 'Copied') : (current.promptLabel || l('复制对话指令', 'Copy prompt')))) : null,
+        h('div', { className: 'w-tour-footer' },
+          safeIndex > 0
+            ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => onStep?.(safeIndex - 1, true), 'data-tour-prev': '' }, l('上一步', 'Back'))
+            : h('span', null),
+          h('div', { className: 'w-tour-nav' },
+            h(Button, {
+              ref: nextBtnRef,
+              variant: 'primary',
+              size: 'sm',
+              'data-tour-next': '',
+              onClick: () => (isLast ? finish() : onStep?.(safeIndex + 1, true)),
+            }, isLast ? l('完成引导', 'Done') : l('下一步', 'Next'))))));
+  }
+
+  function Page({ title, subtitle, icon, navigation, actions, children, workbench = false, lang = 'zh', showStyleSwitcher = true, className, rootRef, tourSteps = null, tourStorageKey = 'dsh-workbench.tour.v1', onTourCopyPrompt, ...props }) {
     const [style, setStyle] = useDshStyle();
+    const fallbackRootRef = useRefHook(null);
+    const pageRef = rootRef && typeof rootRef === 'object' ? rootRef : fallbackRootRef;
+    const triggerRef = useRefHook(null);
+    const [tour, setTour] = useStateHook({ open: false, step: 0, manual: false });
+    const [tourLayout, setTourLayout] = useStateHook(null);
+    const hasTour = Array.isArray(tourSteps) && tourSteps.length > 0;
+    const isEn = String(lang || '').toLowerCase().startsWith('en');
+
+    useEffectHook(() => {
+      if (!workbench || !hasTour || readTourDone(tourStorageKey)) return undefined;
+      const timer = setTimeout(() => {
+        if (!readTourDone(tourStorageKey) && !hasOpenModalDialog(pageRef.current)) {
+          setTour({ open: true, step: 0, manual: false });
+        }
+      }, 280);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+      return () => clearTimeout(timer);
+    }, [workbench, hasTour, tourStorageKey]);
+
+    useEffectHook(() => {
+      if (!tour.open || tour.manual) return undefined;
+      if (hasOpenModalDialog(pageRef.current)) {
+        writeTourDone(tourStorageKey);
+        setTour(prev => (prev.open ? { ...prev, open: false } : prev));
+        return undefined;
+      }
+      const doc = pageRef.current?.ownerDocument || resolveWindow()?.document || (typeof document !== 'undefined' ? document : null);
+      if (typeof MutationObserver !== 'function' || !doc?.body || typeof doc.body.nodeType !== 'number') return undefined;
+      const observer = new MutationObserver(() => {
+        if (hasOpenModalDialog(pageRef.current)) {
+          writeTourDone(tourStorageKey);
+          setTour(prev => (prev.open && !prev.manual ? { ...prev, open: false } : prev));
+        }
+      });
+      observer.observe(doc.body, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    }, [tour.open, tour.manual, tourStorageKey, children]);
+
+    function closeTour(restoreFocus = false) {
+      writeTourDone(tourStorageKey);
+      setTour(prev => ({ ...prev, open: false }));
+      if (restoreFocus) {
+        const timer = setTimeout(() => {
+          const btn = triggerRef.current || pageRef.current?.querySelector?.('[data-wb-tour-trigger]');
+          btn?.focus?.();
+        }, 0);
+        if (timer && typeof timer.unref === 'function') timer.unref();
+      }
+    }
+
     return h('section', {
       ...props,
-      ref: rootRef,
+      ref: pageRef,
       'data-dsh-style': style,
       'data-main': workbench ? 'true' : 'false',
       className: cx('dshw', 'w-page', !workbench && 'w-embedded', className),
@@ -570,12 +890,39 @@ function createWorkbenchUI(React, requireFn) {
             h('span', null, title)),
           subtitle ? h('p', { className: 'w-subtitle' }, subtitle) : null),
         navigation || null,
-        (actions || showStyleSwitcher)
+        (actions || showStyleSwitcher || hasTour)
           ? h('div', { className: 'w-header-actions', 'data-window-drag-exclude': '' },
+              hasTour ? h(Button, {
+                ref: triggerRef,
+                variant: 'ghost',
+                size: 'sm',
+                className: 'w-tour-trigger',
+                'data-wb-tour-trigger': '',
+                'aria-label': isEn ? 'Interactive guide' : '使用引导',
+                'aria-expanded': Boolean(tour.open),
+                title: isEn ? 'Interactive guide' : '使用引导',
+                onClick: () => {
+                  if (tour.open) closeTour(true);
+                  else setTour({ open: true, step: 0, manual: true });
+                },
+              }, isEn ? '? Tour' : '? 引导') : null,
               showStyleSwitcher ? h(StyleSwitcher, { style, onChange: setStyle, lang, compact: true }) : null,
               actions)
           : null),
-      h('div', { className: 'w-body' }, children));
+      h('div', { className: 'w-body' }, children),
+      hasTour && tour.open ? h(CoachmarkTour, {
+        rootRef: pageRef,
+        steps: tourSteps,
+        step: tour.step,
+        manual: tour.manual,
+        style,
+        lang,
+        layout: tourLayout,
+        setLayout: setTourLayout,
+        onStep: (next, isManual) => setTour({ open: true, step: next, manual: Boolean(isManual) }),
+        onClose: closeTour,
+        onCopyPrompt: onTourCopyPrompt,
+      }) : null);
   }
 
   function Tabs({ items, value, onChange, label, children }) {
@@ -595,6 +942,8 @@ function createWorkbenchUI(React, requireFn) {
         key: item.id,
         className: 'w-tab',
         id: id + '-' + item.id,
+        'data-tab-id': item.id,
+        ...(item['data-tour'] ? { 'data-tour': item['data-tour'] } : {}),
         'aria-selected': active === item.id,
         tabIndex: active === item.id ? 0 : -1,
         onClick: () => onChange(item.id),
@@ -1698,8 +2047,295 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
   .w-dialog { width: 100%; }
 }
 
-/* 11. Accessibility: Reduced Motion & Forced Colors */
+/* 11. Interactive Spotlight + Directional Arrow Coachmark Tour */
+.dshw .w-tour-trigger {
+  font-weight: 600;
+}
+
+.w-tour-layer {
+  --tour-accent: var(--dsw-alias-state-business-primary, #4176e6);
+  --tour-bg: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base, #ffffff));
+  --tour-ink: var(--dsw-alias-label-primary, #1e293b);
+  --tour-muted: var(--dsw-alias-label-secondary, #64748b);
+  --tour-border: var(--dsw-alias-border-l2, #e2e8f0);
+  --tour-radius: var(--dsw-radius-md, 12px);
+  container-type: normal;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2147483000;
+  color: var(--tour-ink);
+  font: 13px/1.55 var(--dsw-font-family, var(--dsh-font-family-content, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif));
+}
+
+.w-tour-layer[popover]:is(:popover-open, .\\:popover-open) {
+  display: block;
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] {
+  --tour-radius: 0px;
+}
+
+.w-tour-spotlight {
+  position: fixed;
+  pointer-events: none;
+  border-radius: calc(var(--tour-radius) * 0.75 + 2px);
+  box-shadow:
+    0 0 0 2px var(--tour-accent),
+    0 0 0 5px color-mix(in oklab, var(--tour-accent) 22%, transparent),
+    0 0 0 9999px rgba(15, 23, 42, 0.26);
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-spotlight {
+  border-radius: 0px;
+}
+
+.w-tour-backdrop-fallback {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.w-tour-card {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(328px, calc(100vw - 24px));
+  max-block-size: calc(100dvh - 24px);
+  padding: 13px 15px 12px;
+  border: 1px solid var(--tour-border);
+  border-radius: var(--tour-radius);
+  background: var(--tour-bg);
+  color: var(--tour-ink);
+  box-shadow: var(--dsw-elevation-prominent, 0 16px 40px rgba(15, 23, 42, 0.18));
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-card {
+  border: 2px solid #1e2826;
+  border-radius: 0px;
+  box-shadow: 4px 4px 0px #1e2826;
+}
+
+.w-tour-arrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--tour-bg);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.w-tour-card[data-side="bottom"] > .w-tour-arrow {
+  top: -6px;
+  left: calc(var(--arrow-x, 28px) - 5px);
+  border-top: 1px solid var(--tour-border);
+  border-left: 1px solid var(--tour-border);
+}
+
+.w-tour-card[data-side="top"] > .w-tour-arrow {
+  bottom: -6px;
+  left: calc(var(--arrow-x, 28px) - 5px);
+  border-bottom: 1px solid var(--tour-border);
+  border-right: 1px solid var(--tour-border);
+}
+
+.w-tour-card[data-side="right"] > .w-tour-arrow {
+  left: -6px;
+  top: calc(var(--arrow-y, 24px) - 5px);
+  border-bottom: 1px solid var(--tour-border);
+  border-left: 1px solid var(--tour-border);
+}
+
+.w-tour-card[data-side="left"] > .w-tour-arrow {
+  right: -6px;
+  top: calc(var(--arrow-y, 24px) - 5px);
+  border-top: 1px solid var(--tour-border);
+  border-right: 1px solid var(--tour-border);
+}
+
+.w-tour-card[data-side="center"] > .w-tour-arrow {
+  display: none;
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-card[data-side="bottom"] > .w-tour-arrow {
+  top: -7px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-card[data-side="top"] > .w-tour-arrow {
+  bottom: -7px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-card[data-side="right"] > .w-tour-arrow {
+  left: -7px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-card[data-side="left"] > .w-tour-arrow {
+  right: -7px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.w-tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.w-tour-step-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.w-tour-step-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in oklab, var(--tour-accent) 14%, transparent);
+  color: var(--tour-accent);
+}
+
+.w-tour-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.w-tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tour-border);
+}
+
+.w-tour-dot[data-active="true"] {
+  width: 14px;
+  background: var(--tour-accent);
+}
+
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-step-badge,
+.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-dot {
+  border-radius: 0px;
+}
+
+.w-tour-skip {
+  min-block-size: 24px;
+  min-inline-size: 24px;
+  padding: 2px 6px;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: var(--dsw-radius-xs, 6px);
+  background: transparent;
+  color: var(--tour-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.w-tour-skip:hover {
+  color: var(--tour-ink);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(15, 23, 42, 0.05));
+}
+
+.dshw .w-tour-title,
+.w-tour-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.38;
+  font-weight: 650;
+}
+
+.dshw .w-tour-desc,
+.w-tour-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--tour-muted);
+}
+
+.w-tour-inline-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-block-start: 2px;
+}
+
+.w-tour-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block-start: 2px;
+  padding-block-start: 8px;
+  border-block-start: 0.5px solid var(--tour-border);
+}
+
+.w-tour-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+@media (pointer: coarse) {
+  .w-tour-skip {
+    min-block-size: 32px;
+    padding: 4px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .w-tour-spotlight {
+    transition:
+      top 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      left 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      width 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      height 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .w-tour-card {
+    transition: top 0.22s cubic-bezier(0.22, 1, 0.36, 1), left 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .w-tour-dot {
+    transition: width 0.18s ease, background-color 0.18s ease;
+  }
+}
+
+/* 12. Accessibility: Reduced Motion & Forced Colors */
 @media (prefers-reduced-motion: reduce) {
+  .w-tour-spotlight,
+  .w-tour-card,
+  .w-tour-dot {
+    transition: none !important;
+  }
   :where([data-dsh-style]) :where(button, [role="button"], a.w-button, [data-dsh-card], .dsh-card, [data-dsh-row], .dsh-row),
   :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):has([data-dsh-style]) :where(button, [role="button"], a.w-button) {
     translate: none !important;
@@ -1747,6 +2383,8 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
     Checkbox,
     ChoiceMenu,
     StyleSwitcher,
+    CoachmarkTour,
+    computeTourLayout,
     Page,
     Tabs,
     Status,

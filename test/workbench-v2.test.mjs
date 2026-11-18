@@ -225,7 +225,7 @@ function createMiniEnv({ withHostPrimitives = false, throwStorage = false } = {}
     throw new Error('Module not mounted: ' + name)
   })
 
-  return { window, document, storage, dispatched, primitiveCalls, primitivesRequested: () => primitivesRequested, portalOverlays, React, plugin, render, findAll }
+  return { window, document, storage, dispatched, primitiveCalls, primitivesRequested: () => primitivesRequested, portalOverlays, React, plugin, render, findAll, effects }
 }
 
 test('Workbench UI v2 integrates @deepseek-ai/dsh-client-ui-primitives lazily and falls back cleanly in standalone DOM', () => {
@@ -252,6 +252,8 @@ test('Workbench UI v2 integrates @deepseek-ai/dsh-client-ui-primitives lazily an
   assert.ok(rootSection, 'workbench root section carries data-dsh-style')
   assert.equal(rootSection.props['data-dsh-style'], 'harness')
   assert.equal(rootSection.props['data-main'], 'true')
+  const allButtons = hostEnv.findAll(tree, n => n.type === 'button')
+  assert.ok(allButtons.some(b => JSON.stringify(b).includes('导入 PPTX 翻新')), 'Import & Modernize .pptx button renders in workbench')
 
   // Verify standalone fallback mode when @deepseek-ai/dsh-client-ui-primitives is unavailable
   const fallbackEnv = createMiniEnv({ withHostPrimitives: false, throwStorage: true })
@@ -287,6 +289,7 @@ test('5-preset StyleSwitcher syncs localStorage, dsh-stardust-style events, and 
   }
   runInNewContext(WORKBENCH_UI + '\n__W = createWorkbenchUI(React);', sandbox)
   const W = sandbox.__W
+  assert.ok(W.styles.includes(String.raw`.w-tour-layer[popover]:is(:popover-open, .\:popover-open)`), 'evaluated CSS contains .\\:popover-open polyfill selector')
 
   assert.deepEqual([...W.DSH_STYLES.map(s => s.id)], ['harness', 'cream', 'claude', 'pixel8bit', 'mint'])
 
@@ -403,4 +406,186 @@ test('HostMenuWithStyle and HostModalWithStyle sync portaled host Menu and Modal
   for (const fn of effectCleanups) fn()
   assert.equal(activeTools.length, 0, 'all tools unregistered via ctx.effect cleanup')
   assert.equal(activeSkills.length, 0, 'all skills unregistered via ctx.effect cleanup')
+})
+
+test('CoachmarkTour trigger, spotlight popover, directional arrow, 4-step progression, prompt copy, and localStorage persistence work cleanly', async () => {
+  assert.ok(BUNDLE.includes(String.raw`.w-tour-layer[popover]:is(:popover-open, .\\:popover-open)`), 'popover-open + polyfill class selector present')
+  assert.ok(BUNDLE.includes('.w-tour-spotlight') && BUNDLE.includes('rgba(15, 23, 42, 0.26)'), 'spotlight cutout mask present')
+  assert.ok(BUNDLE.includes('.w-tour-card[data-side="bottom"] > .w-tour-arrow'), 'directional arrow positioning CSS present')
+  assert.ok(BUNDLE.includes('.w-tour-layer[data-dsh-style="pixel8bit"] .w-tour-card') && BUNDLE.includes('4px 4px 0px #1e2826'), '8-bit tour card adaptation present')
+
+  const env = createMiniEnv({ withHostPrimitives: false })
+  const registrations = []
+  env.plugin.apply({
+    locale: { getSnapshot: () => ({ active: 'zh' }) },
+    slots: {
+      inject(_name, fn) { fn() },
+      register(meta, component) { registrations.push({ meta, component }); return () => {} },
+    },
+  })
+  const main = registrations.find(row => row.meta.name === 'main')
+  let tree = env.render(main.component, { workbench: true, locale: { getSnapshot: () => ({ active: 'zh' }) } })
+
+  // Static workflow guide clutter is removed from workbench canvas
+  assert.equal(env.findAll(tree, n => n.props?.className === 'ppt-workflow-guide').length, 0, 'static PptWorkflowGuide box is not rendered')
+
+  // Header actions include `? 引导` trigger without aria-haspopup
+  const headerActions = env.findAll(tree, n => n.props?.className === 'w-header-actions')[0]
+  assert.ok(headerActions, 'header actions container exists')
+  const trigger = env.findAll(headerActions, n => Object.hasOwn(n.props || {}, 'data-wb-tour-trigger'))[0]
+  assert.ok(trigger, 'tour trigger renders inside .w-header-actions')
+  assert.equal(trigger.props['aria-expanded'], false)
+  assert.equal(trigger.props['aria-haspopup'], undefined, 'tour trigger must not declare aria-haspopup')
+  assert.ok(JSON.stringify(trigger.children).includes('? 引导'))
+
+  // Open tour manually via trigger
+  trigger.props.onClick()
+  tree = env.render(main.component, { workbench: true, locale: { getSnapshot: () => ({ active: 'zh' }) } })
+  const openTrigger = env.findAll(tree, n => Object.hasOwn(n.props || {}, 'data-wb-tour-trigger'))[0]
+  assert.equal(openTrigger.props['aria-expanded'], true)
+
+  const layer = env.findAll(tree, n => n.props?.className?.includes('w-tour-layer'))[0]
+  assert.ok(layer, 'CoachmarkTour layer renders when open')
+  assert.equal(layer.props['data-dsh-style'], 'harness')
+  assert.equal(layer.props['data-window-drag-exclude'], '')
+
+  let card = env.findAll(layer, n => n.props?.role === 'dialog' && n.props?.['data-tour-card'])[0]
+  assert.ok(card, 'coachmark card exposes role="dialog"')
+  assert.equal(card.props['aria-modal'], 'false')
+  const titleEl = env.findAll(card, n => n.type === 'h2')[0]
+  assert.equal(card.props['aria-labelledby'], titleEl.props.id)
+  const arrow = env.findAll(card, n => n.props?.['data-tour-arrow'])[0]
+  assert.ok(arrow, 'coachmark card renders directional [data-tour-arrow]')
+  assert.equal(env.findAll(card, n => n.props?.className === 'w-tour-step-badge')[0].children[0], '1 / 4')
+  assert.equal(env.findAll(card, n => n.props?.className === 'w-tour-dot').length, 4)
+
+  // Step 1 inline 1-click prompt copy
+  const expectedPrompt = '请根据当前工作区材料制作一份结构清晰的演示文稿，输出 HTML、可编辑 PPTX 与工程包。'
+  const copyBtn = env.findAll(card, n => n.props?.['data-copy-prompt'] === expectedPrompt)[0]
+  assert.ok(copyBtn, 'Step 1 renders inline 1-click prompt copy button')
+  await copyBtn.props.onClick()
+  for (let i = 0; i < 4; i++) await Promise.resolve()
+  tree = env.render(main.component, { workbench: true, locale: { getSnapshot: () => ({ active: 'zh' }) } })
+  card = env.findAll(tree, n => n.props?.['data-tour-card'])[0]
+  const copiedBtn = env.findAll(card, n => n.props?.['data-copy-prompt'] === expectedPrompt)[0]
+  assert.equal(copiedBtn.props['data-copied'], 'true')
+
+  // Step progression 1 -> 2 -> 3 -> 4 -> Done
+  for (const expectedStep of ['2 / 4', '3 / 4', '4 / 4']) {
+    const nextBtn = env.findAll(card, n => Object.hasOwn(n.props || {}, 'data-tour-next'))[0]
+    nextBtn.props.onClick()
+    tree = env.render(main.component, { workbench: true, locale: { getSnapshot: () => ({ active: 'zh' }) } })
+    card = env.findAll(tree, n => n.props?.['data-tour-card'])[0]
+    assert.equal(env.findAll(card, n => n.props?.className === 'w-tour-step-badge')[0].children[0], expectedStep)
+  }
+  assert.ok(env.findAll(card, n => Object.hasOwn(n.props || {}, 'data-tour-prev'))[0], 'Back button renders on later steps')
+  const finishBtn = env.findAll(card, n => Object.hasOwn(n.props || {}, 'data-tour-next'))[0]
+  assert.ok(JSON.stringify(finishBtn.children).includes('完成引导'))
+  finishBtn.props.onClick()
+
+  tree = env.render(main.component, { workbench: true, locale: { getSnapshot: () => ({ active: 'zh' }) } })
+  assert.equal(env.findAll(tree, n => n.props?.className?.includes('w-tour-layer')).length, 0, 'tour closes on Done')
+  assert.equal(env.storage.get('dsh-ppt.tour.v1'), 'done', 'localStorage persists done state')
+
+  // Standalone W.CoachmarkTour + W.computeTourLayout + popover promotion + modal auto-close
+  const standaloneEnv = createMiniEnv({ withHostPrimitives: false })
+  const sandbox = {
+    window: { ...standaloneEnv.window, innerWidth: 1280, innerHeight: 800 },
+    document: standaloneEnv.document,
+    CustomEvent: standaloneEnv.window.CustomEvent,
+    React: standaloneEnv.React,
+    setTimeout,
+    clearTimeout,
+    __W: null,
+  }
+  runInNewContext(WORKBENCH_UI + '\n__W = createWorkbenchUI(React);', sandbox)
+  const W = sandbox.__W
+  assert.ok(W.styles.includes(String.raw`.w-tour-layer[popover]:is(:popover-open, .\:popover-open)`), 'evaluated CSS contains .\\:popover-open polyfill selector')
+
+  const flipped = W.computeTourLayout({ getBoundingClientRect: () => ({ left: 200, top: 740, width: 120, height: 32 }) }, 'bottom', { offsetWidth: 320, offsetHeight: 200 })
+  assert.equal(flipped.side, 'top', 'flips from bottom to top near viewport bottom edge')
+  assert.ok(flipped.spotlight.width > 120 && flipped.arrowX >= 18)
+  assert.equal(W.computeTourLayout(null, 'bottom', null).side, 'center')
+
+  let popoverAttr = null
+  let showedPopover = false
+  let focusedNext = false
+  let copiedStandalone = ''
+  const standaloneTree = standaloneEnv.render(W.CoachmarkTour, {
+    steps: [{ id: 's1', selector: '#t1', side: 'bottom', title: 'Step 1', desc: 'Desc', prompt: 'Prompt X' }],
+    step: 0,
+    manual: true,
+    style: 'pixel8bit',
+    lang: 'en',
+    onCopyPrompt: async text => { copiedStandalone = text; return true },
+  })
+  assert.equal(standaloneTree.props['data-dsh-style'], 'pixel8bit')
+  standaloneTree.props.ref.current = {
+    setAttribute(k, v) { popoverAttr = [k, v] },
+    showPopover() { showedPopover = true },
+    hidePopover() {},
+  }
+  const standaloneNext = standaloneEnv.findAll(standaloneTree, n => Object.hasOwn(n.props || {}, 'data-tour-next'))[0]
+  standaloneNext.props.ref.current = { focus() { focusedNext = true } }
+  for (const eff of [...standaloneEnv.effects]) eff()
+  assert.deepEqual(popoverAttr, ['popover', 'manual'], 'promotes layer via setAttribute("popover", "manual")')
+  assert.equal(showedPopover, true)
+  assert.equal(focusedNext, true, 'focuses Next button when opened manually')
+  const standaloneCopy = standaloneEnv.findAll(standaloneTree, n => n.props?.['data-copy-prompt'] === 'Prompt X')[0]
+  await standaloneCopy.props.onClick()
+  assert.equal(copiedStandalone, 'Prompt X')
+
+  // Verify manual: false does NOT steal focus, and auto-tour closes when a modal dialog opens
+  const autoEnv = createMiniEnv({ withHostPrimitives: false })
+  const autoSandbox = {
+    window: autoEnv.window,
+    document: autoEnv.document,
+    CustomEvent: autoEnv.window.CustomEvent,
+    React: autoEnv.React,
+    setTimeout,
+    clearTimeout,
+    __W: null,
+  }
+  runInNewContext(WORKBENCH_UI + '\n__W = createWorkbenchUI(React);', autoSandbox)
+  let autoFocused = false
+  const autoTree = autoEnv.render(autoSandbox.__W.CoachmarkTour, {
+    steps: [{ id: 's1', selector: '#t1', side: 'bottom', title: 'Auto', desc: 'Desc' }],
+    step: 0,
+    manual: false,
+  })
+  autoEnv.findAll(autoTree, n => Object.hasOwn(n.props || {}, 'data-tour-next'))[0].props.ref.current = { focus() { autoFocused = true } }
+  for (const eff of [...autoEnv.effects]) eff()
+  assert.equal(autoFocused, false, 'auto-opened tour must not steal focus')
+
+  const modalEnv = createMiniEnv({ withHostPrimitives: false })
+  let modalPresent = false
+  modalEnv.document.querySelectorAll = selector => {
+    if (selector === '[role="dialog"]:not([data-tour-card])') return modalPresent ? [{ contains: () => false }] : []
+    return []
+  }
+  const modalSandbox = {
+    window: modalEnv.window,
+    document: modalEnv.document,
+    CustomEvent: modalEnv.window.CustomEvent,
+    React: modalEnv.React,
+    setTimeout: fn => { fn(); return 0 },
+    clearTimeout() {},
+    __W: null,
+  }
+  runInNewContext(WORKBENCH_UI + '\n__W = createWorkbenchUI(React);', modalSandbox)
+  const ModalW = modalSandbox.__W
+  const AutoPage = () => modalEnv.React.createElement(ModalW.Page, {
+    workbench: true,
+    title: 'Auto Page',
+    tourStorageKey: 'dsh-ppt.auto.test',
+    tourSteps: [{ id: 's1', selector: '#x', title: 'T', desc: 'D' }],
+  }, 'body')
+  modalEnv.render(AutoPage)
+  for (const eff of [...modalEnv.effects]) eff()
+  let autoOpenTree = modalEnv.render(AutoPage)
+  assert.equal(modalEnv.findAll(autoOpenTree, n => n.props?.className?.includes('w-tour-layer')).length, 1, 'auto-tour opens on first workbench visit')
+  modalPresent = true
+  for (const eff of [...modalEnv.effects]) eff()
+  autoOpenTree = modalEnv.render(AutoPage)
+  assert.equal(modalEnv.findAll(autoOpenTree, n => n.props?.className?.includes('w-tour-layer')).length, 0, 'auto-tour closes when a modal dialog is open')
 })

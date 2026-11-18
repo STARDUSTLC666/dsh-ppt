@@ -34,10 +34,10 @@ test('parseSkillFile 兼容 CRLF 与带引号的单行 frontmatter', () => {
   assert.match(parsed.content, /^# Body/)
 })
 
-test('apply 空配置即可注册 9 个工具与 1 个技能（加载不失败）', () => {
+test('apply 空配置即可注册 10 个工具与 1 个技能（加载不失败）', () => {
   const ctx = fakeCtx()
   apply(ctx, {})
-  assert.deepEqual(ctx.tools.defs.map((def) => def.name).sort(), ['ppt_absorb', 'ppt_check', 'ppt_create', 'ppt_data', 'ppt_edit', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo'])
+  assert.deepEqual(ctx.tools.defs.map((def) => def.name).sort(), ['ppt_absorb', 'ppt_check', 'ppt_create', 'ppt_data', 'ppt_edit', 'ppt_import', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo'])
   assert.equal(ctx.skills.defs.length, 1)
   assert.equal(ctx.skills.defs[0].name, 'dsh-ppt')
   assert.ok(ctx.skills.defs[0].content.length > 500)
@@ -258,9 +258,18 @@ test('ppt_absorb、扩展版式与编辑参数均通过编译契约与参数校�
   assert.equal(create.parameters.properties.referencePptx.type, 'string')
   assert.equal(create.parameters.properties.cloneStructure.type, 'boolean')
   assert.equal(create.parameters.properties.template.enum.length, 20)
-  for (const layoutId of ['kpi', 'chart-split', 'gantt', 'architecture', 'harvey', 'tam', 'org', 'chevron', 'value-chain']) {
+  for (const layoutId of ['kpi', 'chart-split', 'gantt', 'architecture', 'harvey', 'tam', 'org', 'chevron', 'value-chain', 'marimekko', 'sankey', 'swot']) {
     assert.ok(create.parameters.properties.slides.items.properties.layout.enum.includes(layoutId), layoutId + ' missing')
   }
+  assert.equal(create.parameters.properties.slides.items.properties.formula.type, 'string')
+  const pptImport = ctx.tools.defs.find((def) => def.name === 'ppt_import')
+  assert.ok(pptImport, 'ppt_import 10th tool missing')
+  assert.deepEqual(pptImport.parameters.required, ['pptxPath'])
+  assert.equal(pptImport.parameters.properties.projectId.type, 'string')
+  assert.equal(pptImport.parameters.properties.modernize.type, 'boolean')
+  assert.equal(pptImport.parameters.properties.preserveSourceTheme.type, 'boolean')
+  assert.equal(pptImport.parameters.properties.chromeStyle.enum.length, 6)
+  await assert.rejects(() => pptImport.execute({ pptxPath: '   ' }), /pptxPath 不能为空/)
   assert.ok(create.parameters.properties.slides.items.properties.tableStyle.enum.includes('harvey'))
   assert.equal(create.parameters.properties.slides.items.properties.chrome.enum.length, 6)
   assert.equal(create.parameters.properties.slides.items.properties.columns.type, 'array')
@@ -271,4 +280,139 @@ test('ppt_absorb、扩展版式与编辑参数均通过编译契约与参数校�
   const templates = ctx.tools.defs.find((def) => def.name === 'ppt_templates')
   const tplOut = await templates.execute({})
   assert.equal(tplOut.templates.length, 20)
+})
+
+test('ppt_import 工具可导入外部 PPTX 生成可编辑工程，并支持 projectId 导回既有工程且可撤销', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, {})
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-import-tool-'))
+  try {
+    const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
+    const pptImport = ctx.tools.defs.find((def) => def.name === 'ppt_import')
+    const undo = ctx.tools.defs.find((def) => def.name === 'ppt_undo')
+    const srcOut = await create.execute({
+      title: 'Legacy Source Deck',
+      slides: [
+        { layout: 'cover', title: 'Legacy Source Deck', subtitle: 'Q3 Ops' },
+        { layout: 'bullets', title: 'Key Result', bullets: ['**ARR**: $42M'], notes: 'Mention enterprise ARR.' },
+      ],
+      theme: 'data',
+      outputDir: dir,
+      fileName: 'legacy-src',
+    })
+    const importedDir = join(dir, 'imported')
+    const imported = await pptImport.execute({
+      pptxPath: srcOut.pptxPath,
+      outputDir: importedDir,
+      theme: 'consulting',
+      modernize: true,
+    })
+    assert.equal(imported.ok, true)
+    assert.equal(imported.theme, 'consulting')
+    assert.equal(imported.slideCount, 2)
+    assert.ok(existsSync(imported.htmlPath))
+    assert.ok(existsSync(imported.pptxPath))
+    assert.ok(existsSync(imported.jsonPath))
+    const renderedText = pptImport.output.render({}, imported)[0].text
+    assert.match(renderedText, /打开演示文稿/)
+    assert.match(renderedText, /PPTX/)
+
+    // Sync an edited .pptx back into the imported project
+    const editedOut = await create.execute({
+      title: 'Edited Deck',
+      slides: [{ layout: 'cover', title: 'Edited Cover Title', subtitle: 'From Office' }],
+      outputDir: dir,
+      fileName: 'edited-src',
+    })
+    const synced = await pptImport.execute({
+      pptxPath: editedOut.pptxPath,
+      projectId: imported.jsonPath,
+      modernize: true,
+    })
+    assert.equal(synced.ok, true)
+    assert.equal(synced.slideCount, 1)
+    assert.ok(synced.undoAvailable >= 1)
+
+    const undone = await undo.execute({ deckPath: imported.jsonPath, expectedRevision: synced.revision })
+    assert.equal(undone.slideCount, 2)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('ppt_import 支持 preserveSourceTheme=true 保留原稿品牌色，且 10 个工具 wire schema 无 type 数组', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, {})
+  assert.equal(ctx.tools.defs.length, 10)
+  const walk = node => {
+    assert.equal(Array.isArray(node.type), false)
+    if (node.oneOf) node.oneOf.forEach(walk)
+    if (node.items) walk(node.items)
+    Object.values(node.properties ?? {}).forEach(walk)
+  }
+  for (const def of ctx.tools.defs) walk(def.parameters)
+
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-import-preserve-'))
+  try {
+    const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
+    const pptImport = ctx.tools.defs.find((def) => def.name === 'ppt_import')
+    const srcOut = await create.execute({
+      title: 'Branded Legacy',
+      theme: 'consulting',
+      brand: { name: 'Acme', primaryColor: '#1E3A8A', backgroundColor: '#FFFFFF', textColor: '#0F172A' },
+      slides: [
+        { layout: 'cover', title: 'Branded Legacy', subtitle: 'Brand Deck' },
+        { layout: 'bullets', title: 'Summary', bullets: ['**Metric**: 99% SLA'] },
+      ],
+      outputDir: dir,
+    })
+    const out = await pptImport.execute({
+      pptxPath: srcOut.pptxPath,
+      outputDir: join(dir, 'out'),
+      preserveSourceTheme: true,
+      modernize: true,
+    })
+    assert.equal(out.ok, true)
+    assert.equal(out.slideCount, 2)
+    const manifest = JSON.parse(readFileSync(out.jsonPath, 'utf8'))
+    assert.equal(manifest.brand?.primaryColor, '#1E3A8A')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('ppt_create 与 ppt_edit 工具支持 marimekko、sankey、swot、value-chain 与原生 formula 字段', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, {})
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-phase4-tools-'))
+  try {
+    const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
+    const edit = ctx.tools.defs.find((def) => def.name === 'ppt_edit')
+    const out = await create.execute({
+      title: 'Phase 4 Tools',
+      slides: [
+        { layout: 'cover', title: 'Phase 4 Tools', subtitle: 'Pinnacle Diagrams & Math' },
+        { layout: 'marimekko', title: 'Market Map', rows: [['Player/Seg', 'Gov (45B)', 'Fin (35B)'], ['Ours', '45%', '38%'], ['Other', '55%', '62%']] },
+        { layout: 'sankey', title: 'Profit Flow', items: [{ tag: 'Revenue', title: 'Gross', value: '68', unit: 'B', status: 'positive' }, { tag: 'Revenue', title: 'Cost', value: '32', unit: 'B', status: 'neutral' }] },
+        { layout: 'swot', title: 'SWOT Matrix', items: [{ tag: 'S', title: 'Strength', bullets: ['Speed'], status: 'positive' }, { tag: 'W', title: 'Weakness', bullets: ['Docs'], status: 'warning' }, { tag: 'O', title: 'Opp', bullets: ['AI'], status: 'accent' }, { tag: 'T', title: 'Threat', bullets: ['Lock-in'], status: 'negative' }] },
+        { layout: 'value-chain', title: 'Porter Chain', items: [{ tag: 'Support', title: 'Platform', text: 'Core' }, { tag: 'Primary', title: 'Build', text: 'Fast' }, { tag: 'Primary', title: 'Ship', text: 'Safe' }] },
+        { layout: 'callout', variant: 'formula', title: 'MSE Objective', formula: '\\frac{1}{n}\\sum_{i=1}^{n}(y_i - \\hat{y}_i)^2' },
+      ],
+      outputDir: dir,
+    })
+    assert.equal(out.ok, true)
+    assert.equal(out.slideCount, 6)
+    const html = readFileSync(out.htmlPath, 'utf8')
+    assert.match(html, /<math xmlns="http:\/\/www\.w3\.org\/1998\/Math\/MathML"/)
+
+    const edited = await edit.execute({
+      deckPath: out.jsonPath,
+      expectedRevision: out.revision,
+      edits: [{ slide: 6, patch: { formula: 'E = mc^2' } }],
+    })
+    assert.equal(edited.revision, 1)
+    assert.match(readFileSync(edited.htmlPath, 'utf8'), /<mi>E<\/mi>/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

@@ -14,9 +14,10 @@
 | Capability | Description |
 | --- | --- |
 | `ppt_create` tool | Markdown / structured `slides` → `*.html` + `*.pptx` + `*.json`; defaults to `theme: "auto"` and accepts `referencePptx` + `cloneStructure: true` for deep palette, chrome & skeleton cloning |
+| `ppt_import` tool | 10th agent tool: import an external `.pptx` (text, tables, native charts, images, speaker notes) into a modernized editable project, or pass `projectId` to sync Office-edited `.pptx` changes back into an existing project with undo history |
 | `ppt_absorb` tool | Read-only local extraction of OOXML modified palette colors, fonts, aspect ratio, chrome geometry (`extractedSkeleton`, `recommendedChrome`), slide sequence (`slideSkeleton[]`), and optional logo from a reference `.pptx` |
 | `ppt_themes` tool | Lists all 24 built-in themes (16 daylight + 8 dark) paired with 6 chrome skeletons; pass `preview: true` with `outputDir` to generate a side-by-side HTML gallery and SVG palette cards |
-| 24+ layouts & diagrams | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout` / `gantt` / `architecture` / `harvey` / `tam` / `org` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split` (plus `chevron`, `value-chain`, `waterfall`, `gallery`, and `flywheel` aliases) |
+| 28+ layouts & diagrams | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout` (with native `<m:oMath>` `formula`) / `gantt` / `architecture` / `harvey` / `tam` / `org` / `marimekko` / `sankey` / `swot` / `value-chain` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split` (plus `chevron`, `waterfall`, `gallery`, and `flywheel` aliases) |
 | 13 chart kinds | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall` with `highlight` focal emphasis |
 | `ppt_templates` | 20 scenario blueprints: `weekly`, `defense`, `project`, `pitch`, `consulting`, `keynote`, `gov-report`, `workshop`, `architecture-review`, `financial-earnings`, `medical-case`, `postmortem`, `marketing-campaign`, `promotion-review`, `legal-compliance`, `creative-lookbook`, `quarterly-okr`, `product-prd`, `vc-daylight`, `industry-research` |
 | `ppt_edit` / `ppt_undo` | Edit selected slides, switch deck `theme` / `brand` / `referencePptx`, append/duplicate/remove/reorder slides with 20-step undo and revision guards |
@@ -25,7 +26,7 @@
 | `ppt_data` | Optional source lineage updates and what-if simulation with diff preview before saving; see [data guide](DATA.md#english) |
 | Visual review & repair | Optional rendered-PPTX inspection (up to 24 original slides) with 12 lossless repair actions and re-render verification; see [visual guide](VISUAL.md#english) |
 | Coaching & rehearsal | Optional storyline (SCQA / Pyramid / Action Titles), expression, logic & evidence pre-review (up to 8 findings) and 7-persona Q&A rehearsal; see [coaching guide](COACHING.md#english) |
-| Speaker notes & motion | `<!-- note: ... -->` or `notes` field synced to HTML presenter view (`V`/`S`) and native PPTX notes; motion on by default (`motion: 'off'` / `--motion off` for static) |
+| Presenter Console, handout & motion | `<!-- note: ... -->` or `notes` syncs to HTML Dual-Screen Presenter View (`P` to open, `L` laser pointer) and native PPTX notes, plus `.handout.md` export; motion on by default (`motion: 'off'` / `--motion off` for static) |
 | `dsh-ppt` skill & CLI | Full Auto-Director SOP registered in DSH, or copy `skills/dsh-ppt/` into Claude Code / Cursor / Gemini CLI / Codex for standalone cross-harness builds |
 
 Example:

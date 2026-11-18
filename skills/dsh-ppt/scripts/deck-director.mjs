@@ -1642,6 +1642,10 @@ const ARCH_TITLE_RE = /技术架构|系统架构|平台架构|总体架构|分�
 const TAM_TITLE_RE = /市场规模|市场空间|可触达市场|\bTAM\b|\bSAM\b|\bSOM\b|addressable\s*market|market\s*sizing/i
 const ORG_TITLE_RE = /组织架构|团队介绍|治理架构|汇报线|核心团队|管理团队|org\s*chart|organization|leadership\s*team|team\s*structure/i
 const HARVEY_TITLE_RE = /竞品对比|能力矩阵|选型对比|能力评估|competitor\s*matrix|capability\s*matrix|feature\s*matrix|harvey/i
+const MARIMEKKO_TITLE_RE = /marimekko|不等宽|市场地图|市场格局|竞争版图|赛道份额|market\s*map/i
+const SANKEY_TITLE_RE = /sankey|桑基|流向图|资金流向|营收拆解|利润分配|营收转化|flow\s*diagram|revenue\s*bridge/i
+const SWOT_TITLE_RE = /\bswot\b|优劣势与机会威胁/i
+const PORTER_VALUE_CHAIN_RE = /波特价值链|porter\s*value\s*chain|辅助活动.*基本活动/i
 
 function splitLeadAndBody(bullet) {
   const raw = String(bullet ?? '').trim()
@@ -1679,7 +1683,9 @@ export function promoteMarkdownSlides(slides, options = {}) {
     }
 
     chapterIndex += 1
-    if (/^(?:要点|Key\s*point)$/i.test(String(slide.kicker ?? '').trim())) {
+    const curKicker = String(slide.kicker ?? '').trim()
+    const curTitle = String(slide.title ?? '').trim()
+    if (/^(?:要点|Key\s*point)$/i.test(curKicker) || (curKicker && curTitle && curKicker === curTitle)) {
       slide.kicker = String(chapterIndex).padStart(2, '0')
     }
 
@@ -1791,6 +1797,24 @@ export function promoteMarkdownSlides(slides, options = {}) {
       continue
     }
 
+    if (n >= 2 && n <= 8 && (SANKEY_TITLE_RE.test(titleText) || bullets.filter((b) => /(?:->|→)/.test(b) && /\d/.test(b)).length / n >= 0.66) && maxLen <= 96) {
+      slide.layout = 'sankey'
+      consecutiveBullets = 0
+      continue
+    }
+
+    if (n >= 2 && n <= 6 && MARIMEKKO_TITLE_RE.test(titleText) && maxLen <= 96) {
+      slide.layout = 'marimekko'
+      consecutiveBullets = 0
+      continue
+    }
+
+    if (n === 4 && SWOT_TITLE_RE.test(titleText) && maxLen <= 80) {
+      slide.layout = 'swot'
+      consecutiveBullets = 0
+      continue
+    }
+
     if (n === 4 && MATRIX_TITLE_RE.test(titleText) && maxLen <= 68) {
       slide.layout = 'matrix'
       slide.variant = '2x2'
@@ -1801,6 +1825,12 @@ export function promoteMarkdownSlides(slides, options = {}) {
     if (n >= 2 && n <= 6 && COMPARE_TITLE_RE.test(titleText) && maxLen <= 76) {
       slide.layout = 'comparison'
       slide.variant = /问题|痛点|风险|挑战|阻塞/.test(titleText) ? 'issue-action' : 'versus'
+      consecutiveBullets = 0
+      continue
+    }
+
+    if (n >= 3 && n <= 8 && PORTER_VALUE_CHAIN_RE.test(titleText + ' ' + bullets.join(' ')) && maxLen <= 90) {
+      slide.layout = 'value-chain'
       consecutiveBullets = 0
       continue
     }

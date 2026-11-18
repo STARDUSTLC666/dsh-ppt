@@ -1,6 +1,6 @@
 ---
 name: dsh-ppt
-description: "Turn one sentence, a Markdown document, structured slides, or a reference .pptx into a world-class presentation deck: standalone HTML web slideshow + 100% native-editable PPTX + project manifest. Features Zero-Question Scenario Auto-Direction (theme: auto), 24 curated themes (16 daylight projector-safe + 8 dark elevation), 8 world-class reference presets, 6 distinct Master Chrome Skeletons, 24+ native-editable layouts & pro diagrams (Value-Chain Chevrons, Gantt, Architecture, Harvey Matrix, TAM Concentric, Org Tree, Bento, KPI, 2x2 Matrix, Timeline/Process/Flywheel, Booktabs 3-line tables, Chart-Split), 20 industry blueprints, 13 Economist/FT-grade charts (including vector Waterfall), deep external .pptx skeleton & group-shape absorption (ppt_absorb / referencePptx / cloneStructure), data provenance, and bilingual ZH/EN support. 中文：把一句话、文档、数据或参考 PPTX 变成大师级演示文稿（独立 HTML 放映 + 100% 原生可编辑 PPTX），内置零追问智能审美导演、24 套明暗主题、8 套名家范本预设、6 套母版骨架、价值链五边形箭头等 24+ 种原生版式与专业图示、20 套行业蓝图、13 类出版级图表与外部 PPTX 深度吸收。"
+description: "Turn one sentence, a Markdown document, structured slides, or an existing/reference .pptx into a world-class presentation deck: standalone HTML web slideshow (with Dual-Screen Presenter Console & Laser Pointer) + 100% native-editable PPTX (with native <m:oMath> formulas, Marimekko, Sankey, Porter Value Chain, SWOT) + project manifest + Speaker Handout (.handout.md). Features Zero-Question Scenario Auto-Direction (theme: auto), 24 curated themes, 8 reference presets, 6 Master Chrome Skeletons, 27+ native-editable layouts & pro diagrams, 20 industry blueprints, 13 Economist/FT-grade charts, deep external .pptx content import & Office round-trip sync (ppt_import / --import-pptx / --sync-pptx), data provenance, and bilingual ZH/EN support. 中文：把一句话、文档、数据或已有/参考 PPTX 变成大师级演示文稿（独立 HTML 双屏提词台放映 + 100% 原生可编辑 PPTX + 演讲讲义），内置零追问智能导演、24 套主题、6 套母版骨架、Marimekko/桑基图/波特价值链/SWOT/原生数学公式 <m:oMath> 等 27+ 版式、外部 PPTX 全量导入翻新与 Office 双向回导同步。"
 compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts/PPTX absorption use @office-kit/pptx@0.21.0; optional data models use jsep@1.4.0 and csv-parse@6.1.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.2.3 (bundled by DSH 0.2.2+; 0.1.5 also supported). Cross-harness: copy the full directory and run npm install --ignore-scripts there."
 allowed-tools: "Bash, Read, Write, Edit"
 ---
@@ -27,7 +27,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 - **默认零额外模型开销直接交付**：不自动触发 AI 预审、模拟答辩或视觉看图修复。用户可在 DSH 设置页主动开启可选 AI 预审/答辩或「视觉检查与修复」（支持最高 24 页全量审查与 12 种无损版式/字号修复）；AI 演练不等于事实核验，不编造实验、数据或引用；采纳建议默认另存副本，原件保留。模型失败、截断、停止或未检查页面必须如实说明，不能声称视觉通过。
 - **数字溯源与推演纪律**：需要解释数字来源或现场滑块推演时，提供 `dataModel` 并在 `slides`（含 `items`、`takeaway`、`source`、`chart`）绑定 `{{metricId}}`；先读 `references/data.md`。`source` 必须对应真实材料行或单元格，假设用 `kind: 'input'` 标注，禁止虚构来源。修改数据先 `ppt_data(action: 'preview')`，展示差异并获确认后带凭证 `apply`（默认 `saveAs: true`）。
-- **工程安全与版本锁**：修改已有工程先 `ppt_check` 获取当前 `revision` 与页面 ID。外部手工改过的 HTML/PPTX 或缺少校验记录的旧工程不可覆盖；告知用户 `saveAs: true` 仅从 JSON 另存新副本，Office 手工修改不会回导。严禁绕过校验或篡改摘要。仅吸收外部 `.pptx` 的视觉风格（`ppt_absorb` / `referencePptx`），不直接就地编辑任意外部 `.pptx` 正文。
+- **工程安全与版本锁**：修改已有工程先 `ppt_check` 获取当前 `revision` 与页面 ID。外部手工改过的 HTML/PPTX 或缺少校验记录的旧工程不可被 `ppt_edit` 静默覆盖；若用户在 PowerPoint / WPS 中修改了 `.pptx` 并希望同步回工程，请使用 **`ppt_import`（传 `projectId`）或 CLI `--sync-pptx`**，自动在 `.history/` 留存快照并用 `ppt_undo` 可逆回导；需要全新翻新外部 `.pptx` 时使用 `ppt_import`（CLI `--import-pptx`）。风格提取仍可使用只读 `ppt_absorb` / `referencePptx`。
 - **字体与跨平台零缺字**：正文最小字号硬底线 `13.5pt`，超长内容必须拆页而非强行缩字。若 `ppt_render` 报告 `missingFonts` 非空，必须替换为环境与接收方可用字体（Windows `Microsoft YaHei`、macOS `PingFang SC`/`Songti SC`、Linux `Noto Sans/Serif CJK SC`），重新生成并逐页复核；未解决前不得声称已验收。CLI 与工具报错信息统一为中文。
 - **语言分工**：`lang`（`zh | en | bilingual`）仅控制播放器界面与默认标签；正文与双语表达由你在写作阶段完成。
 
@@ -42,7 +42,7 @@ allowed-tools: "Bash, Read, Write, Edit"
    - **跨 harness CLI**：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --slides @slides.json --theme auto --lang zh --out dist`（吸收参考模板并克隆结构可加 `--reference-pptx ref.pptx --clone-structure`；显式骨架用 `--chrome academic-minimal`；仅提取风格用 `--absorb ref.pptx`）。
    - 动效默认 `motion: 'on'`（HTML 页间淡入 + PPTX 要点点击逐条出现）；严肃政企公文、学术打印或归档传 `motion: 'off'`。
 5. **Verify 校验与看图修正**：调 `ppt_check` 检查结构、字数密度、WCAG 对比度与 `SLOP-01..10` 审美告警。若安装了 `@deepseek-ai/libreoffice-kit`，调 `ppt_render` 生成逐页 PNG/PDF 并附 `renderReceipt` 复检，逐张用看图工具核查画面（0 缺字、0 溢出、0 遮挡、0 冗余图例）。微调文字、切换主题或版式用 `ppt_edit`（带 `expectedRevision`），需要时 `ppt_undo`。静态估算、渲染成功与视觉验收必须分开如实陈述。
-6. **Deliver 交付**：向用户提供 `.html`、`.pptx`、`.json` 三个绝对路径，说明 HTML 快捷键（`← →` 翻页 · `F` 全屏 · `G` 总览 · `S` 演讲者备注 · `P` 打印）及 PPTX 100% 原生可编辑特性（形状、卡片、三线表、图表工作簿、瀑布桥与备注均可在 PowerPoint / WPS / Keynote 直接编辑）；提示 DSH 工作台支持「风格与母版（Style Studio）」一键换肤、拖拽吸收 `.pptx` 与单页版式切换。
+6. **Deliver 交付**：向用户提供 `.html`、`.pptx`、`.json`（以及可选 `--handout` 生成的 `.handout.md`）绝对路径，说明 HTML 快捷键（`← →` 翻页 · **`P` 开启双屏演讲者提词台** · **`L` 开启虚拟激光笔** · `F` 全屏 · `G` 总览 · `S` 顶部备注 · `Ctrl/Cmd+P` 打印）及检查面板内置「下载讲义 (.md)」离线导出；说明 PPTX 100% 原生可编辑特性（含 `<m:oMath>` 原生公式、Marimekko、桑基流向图、波特价值链、SWOT、三线表与图表工作簿），以及支持 `ppt_import` / `--sync-pptx` 从 Office 改稿回导同步工程。
 
 ## 按需装载索引
 

@@ -14,9 +14,10 @@
 | 能力 | 说明 |
 | --- | --- |
 | `ppt_create` 工具 | Markdown / 结构化 `slides` → `*.html` + `*.pptx` + `*.json` 三件套；默认 `theme: "auto"` 自动匹配主题与骨架，支持 `referencePptx` 与 `cloneStructure: true` 深度复用参考结构 |
+| `ppt_import` 工具 | 第 10 个工具：导入外部 `.pptx`（正文、表格、原生图表、图片、备注）一键翻新为可编辑工程，或传入 `projectId` 将 Office 修改稿导回既有工程更新（支持撤销） |
 | `ppt_absorb` 工具 | 本地只读解析参考 `.pptx` 的主题修饰色板、字体、画幅比例、母版骨架几何（`extractedSkeleton` / `recommendedChrome`）、逐页序列（`slideSkeleton`）与可选嵌入 Logo |
 | `ppt_themes` 工具 | 列出 24 套内置主题（16 明亮 + 8 深色）与 6 套母版骨架；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套 SVG 色板卡 |
-| 24+ 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout` / `gantt` / `architecture` / `harvey` / `tam` / `org` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `chevron`、`value-chain`、`waterfall`、`gallery`、`flywheel` 别名） |
+| 28+ 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout`（支持原生 `<m:oMath>` `formula`） / `gantt` / `architecture` / `harvey` / `tam` / `org` / `marimekko` / `sankey` / `swot` / `value-chain` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `chevron`、`waterfall`、`gallery`、`flywheel` 别名） |
 | 13 类原生图表 | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall`，支持 `highlight` 焦点项染色 |
 | `ppt_templates` | 20 套场景蓝图：`weekly`、`defense`、`project`、`pitch`、`consulting`、`keynote`、`gov-report`、`workshop`、`architecture-review`、`financial-earnings`、`medical-case`、`postmortem`、`marketing-campaign`、`promotion-review`、`legal-compliance`、`creative-lookbook`、`quarterly-okr`、`product-prd`、`vc-daylight`、`industry-research` |
 | `ppt_edit` / `ppt_undo` | 按页或整套切换主题/品牌/参考 `.pptx`、增删改排页面，支持最多 20 次历史与修订号冲突保护 |
@@ -26,7 +27,7 @@
 | AI 看图修复 | 可选实际 PPTX 图片检查（最多 24 页）、12 种无损排版动作、可撤销副本与重新渲染复查；见[看图修复](VISUAL.md) |
 | AI 预审与模拟答辩 | 可选叙事主线（SCQA / 金字塔 / 动作标题）、表达、逻辑与证据缺口预审（最多 8 条）及 7 类听众模拟答辩；见[预审与答辩](COACHING.md) |
 | 品牌与母版 | 共享主色、背景色、文字色、字体、Logo、页脚，HTML 与 PPTX 同源同步 |
-| 演讲者备注与动效 | `<!-- 备注: ... -->` 或 `notes` 字段同步至 HTML 演讲者视图（`V`/`S`）与 PPTX 原生备注页；`motion` 默认开启，`motion: 'off'` / `--motion off` 产出纯静态 |
+| 演讲者提词台、讲义与动效 | `<!-- 备注: ... -->` 或 `notes` 字段同步至 HTML 双屏演讲者提词台（`P` 开启、`L` 激光笔）与 PPTX 原生备注页，支持导出 `.handout.md` 讲义；`motion` 默认开启，`motion: 'off'` / `--motion off` 产出纯静态 |
 | `dsh-ppt` 技能 & 裸 CLI | 完整自动审美指导 SOP 注册进 DSH；也可将 `skills/dsh-ppt/` 复制到 Claude Code / Cursor / Gemini CLI / Codex 跨环境独立运行 |
 
 示例对话：
