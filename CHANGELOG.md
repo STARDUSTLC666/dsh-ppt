@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.23.1 (2026-11-18)
+
+- 同步 `@stardustlc/dsh-updates` 0.2.3：侧边栏工作台平时默认隐藏底部更新栏（零高度占用），仅在检测到兼容新版本或执行更新时浮现单行精简提示条；完整更新设置与检查入口统一保留在 DSH「插件」详情页底部。
+- Sync `@stardustlc/dsh-updates` 0.2.3: keep the sidebar workbench update footer hidden by default when up-to-date, surfacing a single-line compact strip only for actionable updates or active jobs while retaining full controls in native Plugin Details.
+
 ## 0.23.0 (2026-11-18)
 
 - **24 套大师主题、8 套名家范本预设与 20 套行业蓝图**：新增 `bcg-emerald`（翡翠战略）、`economist-brief`（经济学人简报）、`venture-daylight`（红杉日间备忘录）、`stripe-craft`（云靛工坊）、`aurora-stage`（极光发布会）、`obsidian-amber`（黑曜终端）6 套主题（共 16 浅 + 8 深），内置 8 套免上传一键直吸名家范本预设；场景蓝图扩展至 20 套（新增 `quarterly-okr`、`product-prd`、`vc-daylight`、`industry-research`），并新增咨询价值链咬合五边形箭头（`chevron` / `value-chain`）原生可编辑图示。
