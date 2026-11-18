@@ -57,11 +57,11 @@ test('CLI 主流程生成三件套并打印路径', async () => {
   }
 })
 
-test('CLI --list-themes 输出全部 18 套内置大师主题且不写文件', async () => {
+test('CLI --list-themes 输出全部 24 套内置大师主题且不写文件', async () => {
   const logs = []
   const code = await main(['--list-themes'], { log: (line) => logs.push(line), error: () => {} })
   assert.equal(code, 0)
-  assert.equal(logs.length, 18)
+  assert.equal(logs.length, 24)
   assert.match(logs.join('\n'), /data/)
   assert.match(logs.join('\n'), /consulting/)
   assert.match(logs.join('\n'), /exec-jilan/)
@@ -69,16 +69,21 @@ test('CLI --list-themes 输出全部 18 套内置大师主题且不写文件', a
   assert.match(logs.join('\n'), /financial-ft/)
   assert.match(logs.join('\n'), /medical-clean/)
   assert.match(logs.join('\n'), /luxury-noir/)
+  assert.match(logs.join('\n'), /bcg-emerald/)
+  assert.match(logs.join('\n'), /stripe-craft/)
 })
 
-test('CLI --list-templates 输出 16 套行业结构蓝图且兼容前 8 个经典 ID', async () => {
+test('CLI --list-templates 输出 20 套行业结构蓝图且兼容前 8 个经典 ID', async () => {
   const logs = []
   const code = await main(['--list-templates', '--lang', 'en'], { log: (line) => logs.push(line) })
   assert.equal(code, 0)
   const payload = JSON.parse(logs.join('\n'))
-  assert.equal(payload.templates.length, 16)
+  assert.equal(payload.templates.length, 20)
   assert.deepEqual(payload.templates.slice(0, 8).map((t) => t.id), [
     'weekly', 'defense', 'project', 'pitch', 'consulting', 'keynote', 'gov-report', 'workshop',
+  ])
+  assert.deepEqual(payload.templates.slice(16).map((t) => t.id), [
+    'quarterly-okr', 'product-prd', 'vc-daylight', 'industry-research',
   ])
 })
 

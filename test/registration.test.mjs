@@ -90,14 +90,14 @@ test('execute 校验参数，不触网', async () => {
   await assert.rejects(() => create.execute({ title: 'T', content: 'x', theme: 'neon' }), /未知主题/)
 })
 
-test('ppt_themes 返回 18 套内置主题并给出可读文本', async () => {
+test('ppt_themes 返回 24 套内置主题并给出可读文本', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})
   const themes = ctx.tools.defs.find((def) => def.name === 'ppt_themes')
   const out = await themes.execute({})
   assert.deepEqual(JSON.parse(JSON.stringify(out)), out)
   assert.equal(out.ok, true)
-  assert.equal(out.themes.length, 18)
+  assert.equal(out.themes.length, 24)
   assert.deepEqual(out.themes.slice(0, 5).map((theme) => theme.id), ['swiss', 'velvet', 'data', 'soft', 'bold'])
   assert.deepEqual(out.themes.map((theme) => theme.id).sort(), [...ALLOWED_THEME_IDS].sort())
   const rendered = themes.output.render({}, out)
@@ -107,7 +107,7 @@ test('ppt_themes 返回 18 套内置主题并给出可读文本', async () => {
   assert.match(rendered[0].text, /data/)
 })
 
-test('ppt_themes preview=true 生成主题对比页与 18 张 SVG', async () => {
+test('ppt_themes preview=true 生成主题对比页与 24 张 SVG', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})
   const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-reg-preview-'))
@@ -115,9 +115,9 @@ test('ppt_themes preview=true 生成主题对比页与 18 张 SVG', async () => 
     const themes = ctx.tools.defs.find((def) => def.name === 'ppt_themes')
     const out = await themes.execute({ preview: true, outputDir: dir })
     assert.equal(out.ok, true)
-    assert.equal(out.preview.themeCount, 18)
+    assert.equal(out.preview.themeCount, 24)
     assert.ok(existsSync(out.preview.htmlPath))
-    assert.equal(out.preview.svgs.length, 18)
+    assert.equal(out.preview.svgs.length, 24)
     for (const svg of out.preview.svgs) assert.ok(existsSync(svg.path))
     const rendered = themes.output.render({}, out)
     assert.match(rendered[0].text, /themes-preview/)
@@ -257,8 +257,8 @@ test('ppt_absorb、扩展版式与编辑参数均通过编译契约与参数校�
   assert.ok(create.parameters.properties.persona.enum.includes('consulting'))
   assert.equal(create.parameters.properties.referencePptx.type, 'string')
   assert.equal(create.parameters.properties.cloneStructure.type, 'boolean')
-  assert.equal(create.parameters.properties.template.enum.length, 16)
-  for (const layoutId of ['kpi', 'chart-split', 'gantt', 'architecture', 'harvey', 'tam', 'org']) {
+  assert.equal(create.parameters.properties.template.enum.length, 20)
+  for (const layoutId of ['kpi', 'chart-split', 'gantt', 'architecture', 'harvey', 'tam', 'org', 'chevron', 'value-chain']) {
     assert.ok(create.parameters.properties.slides.items.properties.layout.enum.includes(layoutId), layoutId + ' missing')
   }
   assert.ok(create.parameters.properties.slides.items.properties.tableStyle.enum.includes('harvey'))
@@ -270,5 +270,5 @@ test('ppt_absorb、扩展版式与编辑参数均通过编译契约与参数校�
   assert.equal(edit.parameters.properties.append.type, 'array')
   const templates = ctx.tools.defs.find((def) => def.name === 'ppt_templates')
   const tplOut = await templates.execute({})
-  assert.equal(tplOut.templates.length, 16)
+  assert.equal(tplOut.templates.length, 20)
 })

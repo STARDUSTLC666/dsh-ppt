@@ -218,7 +218,7 @@ test('workbench client keeps keyboard shortcuts, dirty guard and retry affordanc
   }
 })
 
-test('catalog caches theme/slideCount/revision and open exposes 18 daylight and dark themes', () => fixture(async ({ created, wb }) => {
+test('catalog caches theme/slideCount/revision and open exposes 24 daylight and dark themes + 8 master presets', () => fixture(async ({ created, wb }) => {
   await wb.remember(created, {})
   const list = await wb.action({ operation: 'list' })
   assert.equal(list.projects[0].theme, 'data')
@@ -227,9 +227,10 @@ test('catalog caches theme/slideCount/revision and open exposes 18 daylight and 
   const opened = await wb.action({ operation: 'open', id: list.projects[0].id })
   assert.equal(opened.project.theme, 'data')
   assert.equal(opened.project.brand, null)
-  assert.equal(opened.project.themes.length, 18)
-  assert.equal(opened.project.themes.filter(t => !t.dark).length, 12)
-  assert.equal(opened.project.themes.filter(t => t.dark).length, 6)
+  assert.equal(opened.project.themes.length, 24)
+  assert.equal(opened.project.themes.filter(t => !t.dark).length, 16)
+  assert.equal(opened.project.themes.filter(t => t.dark).length, 8)
+  assert.equal(opened.project.presets.length, 8)
 }))
 
 test('workbench edits structured archetypes, tables, deck theme/brand, and starter slide append with undo', () => fixture(async ({ created, wb }) => {
@@ -450,12 +451,71 @@ test('workbench patch validates chrome, brand.chromeStyle null reset, fractional
   await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: 3, slide: slideId, patch: { items: [{ title: 'Bad', span: -1 }] } }), /结构化卡片内容无效/)
 }))
 
-test('Style Studio bundle includes 6-Chrome Master Skeleton picker, 24 layouts, and absorb skeleton summary UI', () => {
+test('Style Studio bundle includes 6-Chrome Master Skeleton picker, 24 layouts, master presets, and self-service create wizard UI', () => {
   const bundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
   for (const label of [
     '麦肯锡直角', 'Apple 空间留白', '杂志社论书脊', '黑曜石 Bento', '学术顶栏横幅', '东方政务双线',
     'brand-chrome', '哈维球矩阵', 'Harvey balls', '时间轴列头', 'extractedSkeleton', 'recommendedChrome',
+    '价值链箭头', '新建演示文稿', '名家范本一键直吸', '我的已收藏企业品牌',
   ]) {
     assert.ok(bundle.includes(label), label + ' missing from Style Studio bundle')
   }
 })
+
+test('workbench catalog-meta, chevron starterSlide, and self-service create wizard work without exposing host paths', () => fixture(async ({ dir, wb }) => {
+  const meta = await wb.action({ operation: 'catalog-meta' })
+  assert.equal(meta.ok, true)
+  assert.equal(meta.themes.length, 24)
+  assert.equal(meta.templates.length, 20)
+  assert.equal(meta.presets.length, 8)
+
+  // Self-service create from blueprint
+  const fromBlueprint = await wb.action({
+    operation: 'create',
+    title: '2026 Q4 OKR 复盘',
+    template: 'quarterly-okr',
+    theme: 'auto',
+    lang: 'zh',
+  })
+  assert.equal(fromBlueprint.ok, true)
+  assert.equal(fromBlueprint.project.title, '2026 Q4 OKR 复盘')
+  assert.ok(fromBlueprint.project.slides.length >= 4)
+
+  // Append chevron slide
+  const withChevron = await wb.action({
+    operation: 'append',
+    id: fromBlueprint.project.id,
+    expectedRevision: fromBlueprint.project.revision,
+    archetype: 'chevron',
+  })
+  assert.equal(withChevron.project.slides.at(-1).layout, 'process')
+  assert.equal(withChevron.project.slides.at(-1).variant, 'chevron')
+
+  // Self-service create from Markdown + uploaded referencePptxData + cloneStructure
+  const refDir = join(dir, 'wizard-ref')
+  mkdirSync(refDir, { recursive: true })
+  const refBuilt = await buildDeckAsync({
+    title: 'Ref Wizard',
+    theme: 'bcg-emerald',
+    slides: [
+      { layout: 'cover', title: 'Ref Cover' },
+      { layout: 'kpi', title: 'Ref KPI', items: [{ value: '99%', title: 'SLA' }, { value: '2.4x', title: 'ROI' }] },
+      { layout: 'chevron', title: 'Ref Chain', items: [{ tag: '01', title: 'Step A' }, { tag: '02', title: 'Step B' }, { tag: '03', title: 'Step C' }] },
+    ],
+    outputDir: refDir,
+  })
+  const refDataUrl = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + readFileSync(refBuilt.pptxPath).toString('base64')
+  const fromRef = await wb.action({
+    operation: 'create',
+    title: '复刻风格汇报',
+    content: '# 复刻风格汇报\n\n## 核心达成指标\n- 交付准时率 99.2%\n- 研发人效提升 38%\n\n## 业务流转环节\n- **需求评审**：统一入口\n- **自动集成**：门禁扫描\n- **灰度发布**：秒级回滚',
+    referencePptxData: refDataUrl,
+    cloneStructure: true,
+  })
+  assert.equal(fromRef.ok, true)
+  assert.equal(fromRef.project.slides[1].layout, 'kpi')
+
+  // Host path attempts must be rejected
+  await assert.rejects(wb.action({ operation: 'create', title: 'Bad', referencePptx: refBuilt.pptxPath }), /面板/)
+  await assert.rejects(wb.action({ operation: 'create', title: 'Bad', outputDir: refDir }), /面板/)
+}))

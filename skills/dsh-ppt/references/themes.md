@@ -1,8 +1,8 @@
-# dsh-ppt 大师主题系统、6 套母版骨架与色彩字体规范（18 套内置主题 + 外源母版吸收）
+# dsh-ppt 大师主题系统、6 套母版骨架与色彩字体规范（24 套内置主题 + 8 套名家预设 + 外源母版吸收）
 
 每套主题在独立 HTML 与可编辑 PPTX 中共用同一套 **18 语义设计 Token（`theme.tokens`）**、**6 套差异化母版骨架（`chromeStyle`）** 与跨平台零缺字字体映射，确保屏幕放映、会议室投影仪与打印件视觉完全一致。
 
-> 预览全部 18 套主题：运行 `ppt_themes { preview: true, outputDir: "dist" }`（或 CLI `--theme-preview --out dist`），生成 `themes-preview.html` 对比页与 18 张 `theme-<id>.svg` 色板卡。
+> 预览全部 24 套主题：运行 `ppt_themes { preview: true, outputDir: "dist" }`（或 CLI `--theme-preview --out dist`），生成 `themes-preview.html` 对比页与 24 张 `theme-<id>.svg` 色板卡。
 
 ---
 
@@ -44,9 +44,9 @@
 
 ---
 
-## 三、18 套内置大师主题速查表（12 浅 + 6 深，全部通过 WCAG AA）
+## 三、24 套内置大师主题速查表（16 浅 + 8 深，全部通过 WCAG AA）
 
-前 14 套保持向后兼容，第 14–17 项为 Phase 3 新增 4 套世界级专业主题：
+前 18 套保持向后兼容，第 18–23 项新增 6 套世界级标杆演示主题（BCG 翡翠战略、经济学人社论简报、红杉日间创投、Stripe 工程工坊、极光舞台、彭博黑曜终端）：
 
 | ID | 中文名 | English | 明暗 | 画布 `canvas` | 卡片表面 `surface1` | 主文字 `inkPrimary` | 主强调 `accent` | 默认 `chromeStyle` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -68,6 +68,12 @@
 | **`financial-ft`** | **金融时报粉** | **FT Salmon Financial** | **亮** | `#FFF1E5` | `#F6E3D2` | `#1A1817` | `#0D3D56` | `consulting-classic` |
 | **`medical-clean`** | **循证医学蓝绿** | **Clinical Evidence Teal** | **亮** | `#F8FAFC` | `#EEF5F7` | `#0F172A` | `#0F766E` | `academic-minimal` |
 | **`luxury-noir`** | **黑金典藏** | **Luxury Noir Gold** | **暗** | `#0B0B0D` | `#151519` | `#F5F2EB` | `#D4AF37` | `editorial-folio` |
+| **`bcg-emerald`** | **翡翠战略** | **Emerald Strategy** | **亮** | `#FFFFFF` | `#F1F7F4` | `#0D1F18` | `#006B54` | `consulting-classic` |
+| **`economist-brief`** | **经济学人简报** | **Economist Crimson** | **亮** | `#FBF9F5` | `#F3EEE6` | `#161616` | `#C8102E` | `editorial-folio` |
+| **`venture-daylight`** | **红杉创投简报** | **Venture Memo Light** | **亮** | `#FCFCFA` | `#F4F3EE` | `#141413` | `#155EEF` | `saas-bento` |
+| **`stripe-craft`** | **云靛工坊** | **Indigo Craft** | **亮** | `#F8FAFC` | `#EEF2F8` | `#0A2540` | `#533AFD` | `saas-bento` |
+| **`aurora-stage`** | **极光发布会** | **Aurora Keynote** | **暗** | `#070C12` | `#0E1621` | `#F0F6FC` | `#10B981` | `keynote-spatial` |
+| **`obsidian-amber`** | **黑曜终端** | **Terminal Amber** | **暗** | `#0C0D10` | `#15171D` | `#F4F4F5` | `#F59E0B` | `consulting-classic` |
 
 > **政务汇报反土味铁律（`exec-jilan` & `exec-palace`）**：彻底告别 `#FF0000` 刺眼荧光红满屏底色与 `#FFFF00` 土味黄字！两套东方政务主题均采用 `coverMode: 'inverted-accent'`——仅封面/章节过渡页使用深邃霁蓝（`#1A2B4C`）或沉淀故宫红（`#9E1B1E`）配描金细线镇场，**90% 的正文与数据页回归宣纸暖白浅底（`#F7F6F2` / `#F9F6F1`）**，既符合正式站位又确保会议室投影清晰锐利。
 

@@ -1,6 +1,6 @@
 /** Operator-only workbench. Paths come from successful tools, never browser input. */
-import { createHash } from 'node:crypto'
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { getEngine, type PptExecution } from './execution.js'
@@ -14,8 +14,8 @@ import type { VisualModel } from './visual-model.js'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
-const REQUEST_LIMIT = 15 * 1024 * 1024
-const ABSORB_PPTX_LIMIT = 10 * 1024 * 1024
+const REQUEST_LIMIT = 36 * 1024 * 1024
+const ABSORB_PPTX_LIMIT = 24 * 1024 * 1024
 const FILE_LIMIT = 64 * 1024 * 1024
 const BUNDLE_LIMIT = 128 * 1024 * 1024
 
@@ -24,14 +24,14 @@ const ALLOWED_LAYOUTS = new Set([
   'kpi', 'cards', 'comparison', 'matrix', 'process', 'callout',
   'gantt', 'architecture', 'harvey', 'tam', 'org',
   'table', 'closing', 'image', 'image-left', 'image-right', 'chart', 'chart-split',
-  'waterfall', 'gallery', 'flywheel',
+  'waterfall', 'gallery', 'flywheel', 'chevron', 'value-chain',
 ])
 const ALLOWED_TABLE_STYLES = new Set(['consulting', 'booktabs', 'minimal', 'banded', 'harvey'])
 const ALLOWED_DENSITIES = new Set(['compact', 'balanced', 'airy'])
 const ALLOWED_ITEM_STATUS = new Set(['neutral', 'accent', 'positive', 'negative', 'warning'])
 const ALLOWED_CHROME_STYLES = new Set(['consulting-classic', 'keynote-spatial', 'editorial-folio', 'saas-bento', 'academic-minimal', 'gov-ceremonial'])
 const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'status', 'tone', 'bullets'])
-const BRAND_KEYS = new Set(['name', 'primaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'logo', 'footer', 'chromeStyle'])
+const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'chromeStyle'])
 const VISUAL_KEYS = new Set(['titleSize', 'bodySize', 'chartLabelSize', 'density', 'tableStyle', 'chrome'])
 
 /** Sharing keeps the offline deck, but omits the control for a project not in the ZIP. */
@@ -116,6 +116,19 @@ function starterSlide(archetype: unknown, language: unknown): Record<string, unk
         { tag: 'Q2', title: en ? 'Strategic bets' : '战略攻坚项', text: en ? 'High impact, staged milestones required.' : '高价值、长周期，分阶段里程碑推进。', status: 'accent' },
         { tag: 'Q3', title: en ? 'Routine upkeep' : '常规维护项', text: en ? 'Automate and keep lightweight.' : '保持自动化轻量运转，控制投入。', status: 'neutral' },
         { tag: 'Q4', title: en ? 'Defer / prune' : '暂缓或精简', text: en ? 'Low return — avoid resource dilution.' : '收益有限，避免分散核心团队精力。', status: 'warning' },
+      ],
+    }
+  }
+  if (kind === 'chevron' || kind === 'value-chain') {
+    return {
+      layout: 'process',
+      variant: 'chevron',
+      title: en ? 'End-to-end value chain and stage conversion' : '端到端业务价值链与阶段转化效能',
+      items: [
+        { tag: '01', title: en ? 'Discovery' : '需求洞察', text: en ? 'Capture high-intent demand and scope.' : '聚焦高频刚需痛点与准入标准。', conversion: '100%' },
+        { tag: '02', title: en ? 'Build & Pilot' : '敏捷验证', text: en ? 'Ship MVP benchmark with fast feedback.' : '快速交付标杆样板并完成实测。', conversion: '68%' },
+        { tag: '03', title: en ? 'Scale Rollout' : '规模推广', text: en ? 'Standardize playbooks across teams.' : '沉淀标准手册，多业务线铺开。', conversion: '45%' },
+        { tag: '04', title: en ? 'Compounding' : '复购续费', text: en ? 'Drive net retention and expansion.' : '持续复盘成效，驱动高净留存。', conversion: '118% NRR' },
       ],
     }
   }
@@ -331,9 +344,11 @@ export class PptWorkbench {
     try { html = ordinaryFile(files.html).toString('utf8') } catch { /* A check can register an older JSON-only project. */ }
     const render = this.renders.get(entry.id)
     const currentRender = render && render.revision === manifest.revision && digest(ordinaryFile(files.pptx)) === render.sourceSha256 ? render : undefined
-    const themes = typeof engine.listThemes === 'function' ? engine.listThemes(manifest.language === 'en' ? 'en' : 'zh') : []
+    const langCode = manifest.language === 'en' ? 'en' : 'zh'
+    const themes = typeof engine.listThemes === 'function' ? engine.listThemes(langCode) : []
+    const presets = typeof engine.listMasterPresets === 'function' ? engine.listMasterPresets(langCode) : []
     return { ok: true, project: { ...entry, deckId: manifest.deckId, revision: manifest.revision, theme: manifest.theme ?? 'data',
-      brand: manifest.brand ?? null, themes, slides: manifest.slides,
+      brand: manifest.brand ?? null, themes, presets, slides: manifest.slides,
       undoAvailable: manifest.history.length, quality: check, html, dataModel: manifest.dataModel ?? null,
       assets: Object.fromEntries(Object.entries(manifest.assets ?? {}).map(([key, value]: [string, any]) => [key, { data: value.data, mime: value.mime }])),
       render: currentRender ? { pageCount: currentRender.pngPaths.length, missingFonts: currentRender.missingFonts ?? [] } : null } }
@@ -352,14 +367,18 @@ export class PptWorkbench {
     for (const [key, item] of Object.entries(raw)) {
       if (!BRAND_KEYS.has(key)) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
       if (item === undefined) continue
-      if (['primaryColor', 'backgroundColor', 'textColor'].includes(key)) {
-        if (item === '') continue
+      if (['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'coverBg'].includes(key)) {
+        if (item === '' || item === null) continue
         if (typeof item !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(item.trim())) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item.trim().toUpperCase()
-      } else if (key === 'fontFamily') {
-        if (item === '') continue
+      } else if (key === 'fontFamily' || key === 'headingFont') {
+        if (item === '' || item === null) continue
         if (typeof item !== 'string' || !/^[A-Za-z0-9\u4e00-\u9fff ,.'_-]{1,80}$/.test(item.trim())) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item.trim()
+      } else if (key === 'coverMode') {
+        if (item === '' || item === null) continue
+        if (item !== 'standard' && item !== 'inverted-accent') throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
+        out.coverMode = item
       } else if (key === 'name' || key === 'footer') {
         if (typeof item !== 'string' || item.length > 200 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(item)) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item
@@ -499,20 +518,103 @@ export class PptWorkbench {
     return result
   }
   private pptxBytes(raw: unknown): Uint8Array {
-    if (typeof raw !== 'string' || raw.length < 120) throw new Error('请选择有效的参考 PPTX 文件（10 MiB 以内）')
+    if (typeof raw !== 'string' || raw.length < 120) throw new Error('请选择有效的参考 PPTX 文件（24 MiB 以内）')
     const clean = raw.replace(/^data:[^;,]+;base64,/, '').replace(/\s+/g, '')
-    if (!clean || clean.length > 14_000_000 || clean.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) {
-      throw new Error('请选择有效的参考 PPTX 文件（10 MiB 以内）')
+    if (!clean || clean.length > 34_000_000 || clean.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) {
+      throw new Error('请选择有效的参考 PPTX 文件（24 MiB 以内）')
     }
     const bytes = Buffer.from(clean, 'base64')
     if (bytes.byteLength < 100 || bytes.byteLength > ABSORB_PPTX_LIMIT || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
-      throw new Error('请选择有效的参考 PPTX 文件（10 MiB 以内）')
+      throw new Error('请选择有效的参考 PPTX 文件（24 MiB 以内）')
     }
     return new Uint8Array(bytes)
   }
   async action(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     signal?.throwIfAborted()
     if (body.operation === 'list') return { ok: true, projects: this.catalog() }
+    if (body.operation === 'catalog-meta') {
+      const engine = await this.loadEngine()
+      signal?.throwIfAborted()
+      const langCode = body.lang === 'en' ? 'en' : 'zh'
+      return {
+        ok: true,
+        themes: typeof engine.listThemes === 'function' ? engine.listThemes(langCode) : [],
+        presets: typeof engine.listMasterPresets === 'function' ? engine.listMasterPresets(langCode) : [],
+        templates: typeof engine.listTemplates === 'function' ? engine.listTemplates(langCode) : [],
+      }
+    }
+    if (body.operation === 'create') {
+      if (['referencePptx', 'pptxPath', 'path', 'outputDir'].some(k => Object.hasOwn(body, k))) {
+        throw new Error('图片必须从面板上传，不能读取其他本地文件')
+      }
+      const title = typeof body.title === 'string' ? body.title.trim() : ''
+      if (!title || title.length > 200 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(title)) {
+        throw new Error('请输入演示文稿标题（1–200 字符）')
+      }
+      const content = typeof body.content === 'string' ? body.content : ''
+      if (content.length > 200_000) throw new Error('大纲正文超过 200,000 字符上限，请精简后重试')
+      const lang = body.lang === 'en' || body.lang === 'bilingual' ? body.lang : 'zh'
+      const theme = typeof body.theme === 'string' && body.theme.trim() ? (body.theme.trim() === 'auto' ? 'auto' : this.themeId(body.theme)) : 'auto'
+      const template = typeof body.template === 'string' && body.template.trim() ? body.template.trim() : undefined
+      const brand = body.brand !== undefined ? this.brandPatch(body.brand) : undefined
+      const cloneStructure = body.cloneStructure === true
+      const engine = await this.loadEngine()
+      signal?.throwIfAborted()
+      const decksDir = join(dirname(this.catalogPath), 'workbench-decks')
+      mkdirSync(decksDir, { recursive: true })
+      let tmpRefPath: string | undefined
+      let skeletonSlides: Array<Record<string, unknown>> | undefined
+      try {
+        if (body.referencePptxData !== undefined && body.referencePptxData !== null && body.referencePptxData !== '') {
+          if (typeof engine.absorbPptx !== 'function') throw new Error('当前引擎版本暂不支持参考 PPTX 吸收')
+          const refBytes = this.pptxBytes(body.referencePptxData)
+          tmpRefPath = join(decksDir, '.absorb-' + randomUUID() + '.pptx')
+          writeFileSync(tmpRefPath, refBytes)
+          if (cloneStructure && !content.trim() && !template) {
+            const absorbed = await engine.absorbPptx({ bytes: refBytes, extractLogo: true, signal })
+            const rawSeq = Array.isArray(absorbed?.slideSkeleton) ? absorbed.slideSkeleton.slice(0, 20) : []
+            if (rawSeq.length > 0) {
+              skeletonSlides = rawSeq.map((entry, idx) => {
+                const want = entry?.inferredLayout || 'bullets'
+                if (idx === 0 || want === 'cover') {
+                  return { layout: 'cover', title, subtitle: lang === 'en' ? 'Cloned from reference deck structure' : '已吸收参考演示文稿视觉与骨架节奏' }
+                }
+                if (want === 'closing') return starterSlide('closing', lang)
+                if (['chart', 'chart-split', 'waterfall'].includes(want)) return starterSlide('kpi', lang)
+                if (['image', 'image-left', 'image-right', 'gallery'].includes(want)) return starterSlide('cards', lang)
+                const baseSlide = starterSlide(ALLOWED_LAYOUTS.has(want) ? want : 'cards', lang)
+                if (entry?.variant && typeof entry.variant === 'string' && /^[a-z0-9-]{1,40}$/.test(entry.variant)) {
+                  baseSlide.variant = entry.variant
+                }
+                return baseSlide
+              })
+            }
+          }
+        }
+        const fallbackContent = !content.trim() && !template && !skeletonSlides
+          ? (lang === 'en'
+              ? `# ${title}\n\n## Key Headline Metrics\n- **Target attainment**: 98.5% (+4.2% QoQ)\n- **Delivery velocity**: 2.4x faster cycle\n- **Customer adoption**: 118% net retention\n\n## Core Execution Pillars\n- **Focused scope**: Prioritize highest-value workflows\n- **Standardized quality**: Automated checks before handoff\n- **Closed-loop review**: Weekly metric tracking\n\n## Next Steps & Milestones\n- Phase 1: Finalize pilot sign-off this week\n- Phase 2: Roll out across priority teams\n- Phase 3: Lock next-quarter targets`
+              : `# ${title}\n\n## 核心结果与关键指标\n- **关键目标达成率**：98.5%（环比提升 +4.2%）\n- **协同交付提效**：端到端周期缩短至原来的 2.4 倍速\n- **核心场景采纳率**：标杆团队留存率达 118%\n\n## 三大核心推进支柱\n- **聚焦高频刚需**：围绕最具价值的业务主链路集中投入\n- **标准化质量门禁**：统一输入规范与交付前核验清单\n- **量化闭环复盘**：按周追踪先行指标并快速纠偏\n\n## 推进排期与下一步行动\n- 第一阶段：本周完成试点方案确认与责任分工\n- 第二阶段：下月完成重点业务团队推广落地\n- 第三阶段：季度末完成量化成效复盘与沉淀`)
+          : content
+        const created = await (engine.buildDeckAsync ?? engine.buildDeck)({
+          title,
+          ...(skeletonSlides ? { slides: skeletonSlides } : {}),
+          ...(fallbackContent ? { content: fallbackContent } : {}),
+          ...(template ? { template } : {}),
+          theme,
+          lang,
+          ...(tmpRefPath ? { referencePptx: tmpRefPath, cloneStructure } : {}),
+          ...(brand ? { brand } : {}),
+          outputDir: decksDir,
+          cwd: decksDir,
+          signal,
+        })
+        await this.remember(created, {})
+        return { ...await this.view(digest(created.jsonPath)), created: true }
+      } finally {
+        if (tmpRefPath) rmSync(tmpRefPath, { force: true })
+      }
+    }
     if (body.operation === 'open') return this.view(body.id)
     const { entry, engine, manifest, files } = await this.project(body.id)
     signal?.throwIfAborted()
@@ -548,6 +650,9 @@ export class PptWorkbench {
           sanitizedTokens: absorbed?.sanitizedTokens ?? null,
           recommendedTheme: absorbed?.recommendedTheme ?? null,
           recommendedChrome: absorbed?.recommendedChrome ?? null,
+          recommendedTableStyle: absorbed?.recommendedTableStyle ?? null,
+          narrativeProfile: absorbed?.narrativeProfile ?? null,
+          warnings: absorbed?.warnings ?? [],
           slideSkeleton: absorbed?.slideSkeleton ?? null,
           layoutSummary: absorbed?.layoutSummary ?? null,
         },
@@ -716,7 +821,7 @@ export class PptWorkbench {
       const reader = request.body?.getReader()
       if (!reader) return fail(400, '缺少请求内容')
       let size = 0; const chunks: Uint8Array[] = []
-      try { for (;;) { const { value, done } = await reader.read(); if (done) break; size += value.byteLength; if (size > REQUEST_LIMIT) { await reader.cancel(); return fail(413, '图片或请求超过 12 MiB，请压缩后重试') } chunks.push(value) } } finally { reader.releaseLock() }
+      try { for (;;) { const { value, done } = await reader.read(); if (done) break; size += value.byteLength; if (size > REQUEST_LIMIT) { await reader.cancel(); return fail(413, '图片或请求超过 36 MiB，请压缩后重试') } chunks.push(value) } } finally { reader.releaseLock() }
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
       if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(400, '请求必须是对象')
       return json(200, await this.action(body, request.signal))

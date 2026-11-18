@@ -24,6 +24,9 @@ const messages: Record<string, string> = {
   '主题名称无效': 'The theme identifier is invalid.',
   '品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo': 'Invalid brand settings. Check #RRGGBB colours, font family, footer length, or upload a PNG/JPEG logo from this panel.',
   '请选择有效的参考 PPTX 文件（10 MiB 以内）': 'Choose a valid reference PPTX file up to 10 MiB.',
+  '请选择有效的参考 PPTX 文件（24 MiB 以内）': 'Choose a valid reference PPTX file up to 24 MiB.',
+  '请输入演示文稿标题（1–200 字符）': 'Enter a presentation title (1–200 characters).',
+  '大纲正文超过 200,000 字符上限，请精简后重试': 'The outline exceeds 200,000 characters. Shorten it and try again.',
   '当前引擎版本暂不支持参考 PPTX 吸收': 'Reference PPTX style extraction is unavailable in the current engine.',
   '页数已达 120 页上限，无法继续新增页面': 'The presentation already has 120 slides and cannot add more.',
   '请选择 PNG 或 JPEG 图片': 'Choose a PNG or JPEG image.',
@@ -44,6 +47,7 @@ const messages: Record<string, string> = {
   '请从演示文稿面板操作': 'Perform this operation from the presentation panel.',
   '缺少请求内容': 'The request body is missing.',
   '图片或请求超过 12 MiB，请压缩后重试': 'The image or request exceeds 12 MiB. Reduce its size and try again.',
+  '图片或请求超过 36 MiB，请压缩后重试': 'The image or request exceeds 36 MiB. Reduce its size and try again.',
   '请求必须是对象': 'The request must be an object.',
 }
 

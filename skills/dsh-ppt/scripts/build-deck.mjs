@@ -28,14 +28,14 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --title <text>          演示文稿标题（必填）
   --content <text|@path>  Markdown 正文；或文件路径（自动读取）；或 @- 从 stdin 读
   --slides <json>         结构化 slides JSON（可选，与 --content 二选一）
-  --template <id>         16 套行业结构蓝图 ID（可用 --list-templates 查看全部）
+  --template <id>         20 套行业结构蓝图 ID（可用 --list-templates 查看全部）
   --persona <id>          auto / consulting / tech-pitch / academic / gov-exec / education / editorial
-  --reference-pptx <path> 只读吸收本地参考 .pptx 的净化色板、字体、母版 Logo 与骨架
+  --reference-pptx <path> 只读吸收本地参考 .pptx 的净化双色板、双字体、封面反白、母版 Logo 与骨架
   --clone-structure       配合 --reference-pptx 使用，克隆参考文稿的逐页版式骨架与母版 chrome
   --chrome <style>        母版骨架风格：${CHROME_STYLE_IDS.join(' / ')}
   --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架与逐页分布 JSON
   --smart-layout          显式开启多版式叙事节奏自动升维（配合 --no-smart-layout 可关闭）
-  --brand <json|@path>    品牌颜色、字体、Logo、页脚、chromeStyle
+  --brand <json|@path>    品牌主辅颜色、标题/正文字体、封面反白、Logo、页脚、chromeStyle
   --data-model <json|@path> 可选数字来源、公式与推演假设；配合 --slides
   --edit <deck.json>      修改指定页或整套换肤，配合 --edits / --theme / --reference-pptx / --brand
   --edits <json|@path>    页面修改指令数组
@@ -47,7 +47,7 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --timeout <ms>          渲染整体期限，默认 120000 毫秒
   --render-receipt <path> 配合 --check 核验当前渲染收据
   --revision <n>          编辑 / 撤销预期修订号，防止覆盖他人修改
-  --list-templates        列出 16 套行业结构蓝图
+  --list-templates        列出 20 套行业结构蓝图
   --theme <id>            视觉主题：auto / ${THEME_IDS.join(' / ')}（裸 CLI 缺省为 ${DEFAULT_THEME}，推荐显式传 auto）
   --lang <id>             界面语言：zh / en / bilingual（默认 zh）
   --motion <on|off>       页间转场与要点入场动画（默认 on；off 产出纯静态）

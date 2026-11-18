@@ -1026,6 +1026,314 @@ export const THEMES = {
     },
     fonts: { heading: SERIF_HEADING_STACK, body: SANS_STACK },
   }),
+
+  // 18..23: 6 Absorbed World-Class Benchmark Themes (BCG, Economist, Venture Daylight, Stripe Craft, Aurora, Terminal)
+  'bcg-emerald': makeTheme({
+    id: 'bcg-emerald',
+    name: { zh: '翡翠战略', en: 'Emerald Strategy' },
+    mood: { zh: '顶级绿金咨询、增长转型、锋利高管矩阵', en: 'BCG-grade emerald authority, growth & sustainability' },
+    bestFor: { zh: '增长战略、业务转型、ESG双碳、OKR季度复盘', en: 'Growth strategy, ESG transformation, quarterly OKR reviews' },
+    persona: 'consulting',
+    dark: false,
+    radiusPx: 4,
+    shadow: false,
+    defaultTableStyle: 'consulting',
+    chromeStyle: 'consulting-classic',
+    palette: {
+      bg: '#FFFFFF',
+      panel: '#F1F7F4',
+      fg: '#0D1F18',
+      muted: '#4A6157',
+      accent: '#006B54',
+      accent2: '#0F4C81',
+    },
+    tokens: {
+      canvas: '#FFFFFF',
+      surface1: '#F1F7F4',
+      surface2: '#E3EFE9',
+      hairline: '#C8DDD3',
+      inkPrimary: '#0D1F18',
+      inkSecondary: '#2C4239',
+      inkMuted: '#4A6157',
+      accentPrimary: '#006B54',
+      accentText: '#005A46',
+      accentSecondary: '#0F4C81',
+      accent2Text: '#0D416E',
+      chartNeutral: '#C9D8D0',
+      chartSeries: ['#006B54', '#0F4C81', '#1F2937', '#0D9488', '#B45309', '#64748B'],
+    },
+    fonts: { heading: SANS_STACK, body: SANS_STACK },
+  }),
+  'economist-brief': makeTheme({
+    id: 'economist-brief',
+    name: { zh: '社论红标', en: 'Economist Briefing' },
+    mood: { zh: '经济学人红标书脊、智库级图表、衬线洞察', en: 'Economist red-tab folio, think-tank rigor, editorial serif' },
+    bestFor: { zh: '行业研究、宏观洞察、智库白皮书、并购尽调', en: 'Macro briefings, industry research, think-tank & M&A memos' },
+    persona: 'consulting',
+    dark: false,
+    radiusPx: 0,
+    shadow: false,
+    defaultTableStyle: 'booktabs',
+    chromeStyle: 'editorial-folio',
+    palette: {
+      bg: '#F9F8F5',
+      panel: '#F0EDE6',
+      fg: '#141413',
+      muted: '#57534B',
+      accent: '#C8102E',
+      accent2: '#1D3557',
+    },
+    tokens: {
+      canvas: '#F9F8F5',
+      surface1: '#F0EDE6',
+      surface2: '#E5E0D6',
+      hairline: '#CFC8BA',
+      inkPrimary: '#141413',
+      inkSecondary: '#383631',
+      inkMuted: '#57534B',
+      accentPrimary: '#C8102E',
+      accentText: '#A60D25',
+      accentSecondary: '#1D3557',
+      accent2Text: '#1D3557',
+      chartNeutral: '#CCC5B7',
+      chartSeries: ['#C8102E', '#1D3557', '#0F766E', '#6D4C3D', '#3B5998', '#6B665E'],
+    },
+    fonts: { heading: SERIF_HEADING_STACK, body: SANS_STACK },
+  }),
+  'venture-daylight': makeTheme({
+    id: 'venture-daylight',
+    name: { zh: '硅谷创投白', en: 'Venture Daylight' },
+    mood: { zh: '红杉/YC日间阅读风、清爽高锐度、数据抓手', en: 'Sequoia/YC partner-memo clarity, crisp daylight pitch' },
+    bestFor: { zh: '创投BP（邮件/iPad阅读版）、商业计划书、新业务立项', en: 'Daylight investor decks, partner memos, venture proposals' },
+    persona: 'tech-pitch',
+    dark: false,
+    radiusPx: 12,
+    shadow: false,
+    defaultTableStyle: 'consulting',
+    chromeStyle: 'keynote-spatial',
+    palette: {
+      bg: '#FFFFFF',
+      panel: '#F6F7F9',
+      fg: '#111827',
+      muted: '#525B66',
+      accent: '#C2410C',
+      accent2: '#0F766E',
+    },
+    tokens: {
+      canvas: '#FFFFFF',
+      surface1: '#F6F7F9',
+      surface2: '#ECEEF2',
+      hairline: '#D8DEE4',
+      inkPrimary: '#111827',
+      inkSecondary: '#374151',
+      inkMuted: '#525B66',
+      accentPrimary: '#C2410C',
+      accentText: '#9A3412',
+      accentSecondary: '#0F766E',
+      accent2Text: '#0D655E',
+      chartNeutral: '#CBD5E1',
+      chartSeries: ['#C2410C', '#0F766E', '#1E3A8A', '#7C3AED', '#B45309', '#64748B'],
+    },
+    fonts: { heading: GEOMETRIC_SANS_STACK, body: SANS_STACK },
+  }),
+  'stripe-craft': makeTheme({
+    id: 'stripe-craft',
+    name: { zh: '极光产研', en: 'Product Indigo' },
+    mood: { zh: 'Stripe/Vercel工程美学、1px精密Bento、清透靛蓝', en: 'Stripe/Vercel product craft, crisp 1px Bento hairlines' },
+    bestFor: { zh: 'PRD产品评审、SaaS方案、开发者平台、AI工程复盘', en: 'Product reviews, SaaS roadmaps, developer platforms, AI eng' },
+    persona: 'tech-pitch',
+    dark: false,
+    radiusPx: 10,
+    shadow: false,
+    defaultTableStyle: 'consulting',
+    chromeStyle: 'saas-bento',
+    palette: {
+      bg: '#F8FAFC',
+      panel: '#EFF3F9',
+      fg: '#0F172A',
+      muted: '#4E5D73',
+      accent: '#4F46E5',
+      accent2: '#0284C7',
+    },
+    tokens: {
+      canvas: '#F8FAFC',
+      surface1: '#EFF3F9',
+      surface2: '#E2E9F3',
+      hairline: '#CBD5E1',
+      inkPrimary: '#0F172A',
+      inkSecondary: '#334155',
+      inkMuted: '#4E5D73',
+      accentPrimary: '#4F46E5',
+      accentText: '#3730A3',
+      accentSecondary: '#0284C7',
+      accent2Text: '#0369A1',
+      chartNeutral: '#CBD5E1',
+      chartSeries: ['#4F46E5', '#0284C7', '#0D9488', '#7C3AED', '#D97706', '#64748B'],
+    },
+    fonts: { heading: SANS_STACK, body: SANS_STACK },
+  }),
+  'aurora-stage': makeTheme({
+    id: 'aurora-stage',
+    name: { zh: '极光发布会', en: 'Aurora Keynote' },
+    mood: { zh: '深海极光青紫、无框空间悬浮、算力与硬件大秀', en: 'Deep midnight aurora teal & indigo, spatial keynote stage' },
+    bestFor: { zh: 'AI基础设施发布、大模型演进、芯片/硬件主题演讲', en: 'AI infra keynotes, foundation model launches, hardware talks' },
+    persona: 'tech-pitch',
+    dark: true,
+    radiusPx: 16,
+    shadow: false,
+    chromeStyle: 'keynote-spatial',
+    palette: {
+      bg: '#070B14',
+      panel: '#101726',
+      fg: '#F1F5F9',
+      muted: '#94A3B8',
+      accent: '#2DD4BF',
+      accent2: '#818CF8',
+    },
+    tokens: {
+      canvas: '#070B14',
+      surface1: '#101726',
+      surface2: '#192338',
+      hairline: '#26344E',
+      inkPrimary: '#F1F5F9',
+      inkSecondary: '#CBD5E1',
+      inkMuted: '#94A3B8',
+      accentPrimary: '#2DD4BF',
+      accentText: '#2DD4BF',
+      accentSecondary: '#818CF8',
+      accent2Text: '#A5B4FC',
+      chartNeutral: '#293856',
+      chartSeries: ['#2DD4BF', '#818CF8', '#38BDF8', '#F472B6', '#FBBF24', '#64748B'],
+    },
+    fonts: { heading: GEOMETRIC_SANS_STACK, body: SANS_STACK },
+  }),
+  'obsidian-amber': makeTheme({
+    id: 'obsidian-amber',
+    name: { zh: '黑曜终端', en: 'Terminal Amber' },
+    mood: { zh: '彭博终端琥珀金、0px锋利栅格、高密风控与量化', en: 'Bloomberg-inspired carbon & amber, sharp analytical grid' },
+    bestFor: { zh: '量化金融、网络安全态势、SRE作战室、实时监控复盘', en: 'Quant finance, security operations, SRE war-room, telemetry' },
+    persona: 'consulting',
+    dark: true,
+    radiusPx: 0,
+    shadow: false,
+    defaultTableStyle: 'consulting',
+    chromeStyle: 'consulting-classic',
+    palette: {
+      bg: '#0C0D10',
+      panel: '#151820',
+      fg: '#F3F4F6',
+      muted: '#9CA3AF',
+      accent: '#F59E0B',
+      accent2: '#38BDF8',
+    },
+    tokens: {
+      canvas: '#0C0D10',
+      surface1: '#151820',
+      surface2: '#1F2430',
+      hairline: '#2E3545',
+      inkPrimary: '#F3F4F6',
+      inkSecondary: '#D1D5DB',
+      inkMuted: '#9CA3AF',
+      accentPrimary: '#F59E0B',
+      accentText: '#FBBF24',
+      accentSecondary: '#38BDF8',
+      accent2Text: '#38BDF8',
+      chartNeutral: '#2A303E',
+      chartSeries: ['#F59E0B', '#38BDF8', '#34D399', '#F87171', '#A78BFA', '#6B7280'],
+    },
+    fonts: { heading: SANS_STACK, body: SANS_STACK },
+  }),
+}
+
+/**
+ * 8 套内置名家参考文稿直吸预设（无需外部 .pptx 文件，一键套用大师级配色、母版骨架与叙事节奏建议）。
+ */
+export const CURATED_MASTER_PRESETS = Object.freeze([
+  {
+    id: 'mckinsey-board',
+    name: { zh: '麦肯锡董事会简报', en: 'McKinsey Board Brief' },
+    sourceStyle: { zh: '0px 直角卡片 · 结论先行 · 深海蓝主调', en: '0px sharp cards · Action titles · Deep navy' },
+    theme: 'consulting',
+    chromeStyle: 'consulting-classic',
+    brand: { primaryColor: '#0057B8', secondaryColor: '#0E7490', backgroundColor: '#FFFFFF', textColor: '#0F172A', chromeStyle: 'consulting-classic' },
+    rhythm: ['cover', 'cards', 'kpi', 'waterfall', 'matrix', 'gantt', 'closing'],
+  },
+  {
+    id: 'bcg-growth',
+    name: { zh: 'BCG 增长与双碳战略', en: 'BCG Growth & Sustainability' },
+    sourceStyle: { zh: '翡翠绿主色 · 价值链五边形箭头 · 哈维球矩阵', en: 'Emerald accent · Value-chain chevrons · Harvey matrix' },
+    theme: 'bcg-emerald',
+    chromeStyle: 'consulting-classic',
+    brand: { primaryColor: '#006B54', secondaryColor: '#0F4C81', backgroundColor: '#FFFFFF', textColor: '#0D1F18', chromeStyle: 'consulting-classic' },
+    rhythm: ['cover', 'kpi', 'process', 'harvey', 'gantt', 'closing'],
+  },
+  {
+    id: 'sequoia-memo',
+    name: { zh: '红杉 / YC 创投融资简报（明亮版）', en: 'Sequoia / YC Partner Deck' },
+    sourceStyle: { zh: '适合邮件与平板阅读 · TAM 同心圆 · 增长指标', en: 'Screen-first daylight · TAM sizing · Traction KPIs' },
+    theme: 'venture-daylight',
+    chromeStyle: 'keynote-spatial',
+    brand: { primaryColor: '#C2410C', secondaryColor: '#0F766E', backgroundColor: '#FFFFFF', textColor: '#111827', chromeStyle: 'keynote-spatial' },
+    rhythm: ['cover', 'comparison', 'kpi', 'tam', 'harvey', 'org', 'closing'],
+  },
+  {
+    id: 'apple-cupertino',
+    name: { zh: 'Cupertino 旗舰产品发布', en: 'Cupertino Spatial Keynote' },
+    sourceStyle: { zh: '无顶部分隔线 · 16pt 呼吸感浮卡 · 大数字聚焦', en: 'Divider-free canvas · 16pt airy Bento · Hero metrics' },
+    theme: 'keynote-light',
+    chromeStyle: 'keynote-spatial',
+    brand: { primaryColor: '#0066CC', secondaryColor: '#5E5CE6', backgroundColor: '#FFFFFF', textColor: '#1D1D1F', chromeStyle: 'keynote-spatial' },
+    rhythm: ['cover', 'statement', 'cards', 'kpi', 'architecture', 'closing'],
+  },
+  {
+    id: 'stripe-product',
+    name: { zh: 'Stripe / Vercel 产研方案评审', en: 'Stripe / Vercel Product Craft' },
+    sourceStyle: { zh: '1px 精密 Bento 网格 · 系统分层架构 · 路线图', en: '1px Bento grid · Layered architecture · Roadmap' },
+    theme: 'stripe-craft',
+    chromeStyle: 'saas-bento',
+    brand: { primaryColor: '#4F46E5', secondaryColor: '#0284C7', backgroundColor: '#F8FAFC', textColor: '#0F172A', chromeStyle: 'saas-bento' },
+    rhythm: ['cover', 'comparison', 'architecture', 'cards', 'gantt', 'closing'],
+  },
+  {
+    id: 'economist-macro',
+    name: { zh: '经济学人 / FT 宏观与财报洞察', en: 'Economist & FT Macro Briefing' },
+    sourceStyle: { zh: '暖纸底色 · 红标书脊 · 衬线标题 + 瀑布利润桥', en: 'Warm paper · Editorial folio · Serif title & waterfall' },
+    theme: 'economist-brief',
+    chromeStyle: 'editorial-folio',
+    brand: { primaryColor: '#C8102E', secondaryColor: '#1D3557', backgroundColor: '#F9F8F5', textColor: '#141413', headingFont: 'Georgia', chromeStyle: 'editorial-folio' },
+    rhythm: ['cover', 'statement', 'waterfall', 'chart-split', 'table', 'closing'],
+  },
+  {
+    id: 'nature-defense',
+    name: { zh: 'Nature / ETH 学术答辩与临床研究', en: 'Nature & Beamer Academic Defense' },
+    sourceStyle: { zh: 'Beamer 通栏页眉 · 无竖线学术三线表 · 严谨对比', en: 'Beamer header band · Booktabs 3-line tables · Rigor' },
+    theme: 'academic',
+    chromeStyle: 'academic-minimal',
+    brand: { primaryColor: '#006980', secondaryColor: '#C8430E', backgroundColor: '#FFFFFF', textColor: '#111827', chromeStyle: 'academic-minimal' },
+    rhythm: ['cover', 'cards', 'process', 'table', 'kpi', 'closing'],
+  },
+  {
+    id: 'imperial-gov',
+    name: { zh: '现代东方政务述职与规划', en: 'Modern Institutional Briefing' },
+    sourceStyle: { zh: '深霁蓝庄重封面 + 宣纸浅底正文 · 双线页眉', en: 'Inverted slate cover + warm paper body · Double rule' },
+    theme: 'exec-jilan',
+    chromeStyle: 'gov-ceremonial',
+    brand: { primaryColor: '#1A2B4C', secondaryColor: '#9E1B1E', chromeStyle: 'gov-ceremonial' },
+    rhythm: ['cover', 'kpi', 'cards', 'comparison', 'org', 'gantt', 'closing'],
+  },
+])
+
+export function listMasterPresets(lang = 'zh') {
+  const pick = (pair) => (lang === 'en' ? pair.en : pair.zh)
+  return CURATED_MASTER_PRESETS.map((preset) => ({
+    id: preset.id,
+    name: pick(preset.name),
+    sourceStyle: pick(preset.sourceStyle),
+    theme: preset.theme,
+    chromeStyle: preset.chromeStyle,
+    brand: { ...preset.brand },
+    rhythm: [...preset.rhythm],
+  }))
 }
 
 export const THEME_IDS = Object.keys(THEMES)
@@ -1099,6 +1407,13 @@ export function sanitizeAbsorbedTheme(raw = {}) {
   } else if (bgLum >= 0.42) {
     dark = false
     canvas = clampHslColor(rawBg, { minL: 0.88, maxL: 1.0, maxS: 0.18 })
+    if (raw.coverSlideBg) {
+      const rawCover = normalizeHex(raw.coverSlideBg, '')
+      if (rawCover && relativeLuminance(rawCover) < 0.30) {
+        coverMode = 'inverted-accent'
+        coverBg = clampHslColor(rawCover, { minL: 0.06, maxL: 0.25, maxS: 0.78 })
+      }
+    }
   } else {
     dark = true
     canvas = clampHslColor(rawBg, { minL: 0.008, maxL: 0.055, maxS: 0.35 })
@@ -1148,6 +1463,8 @@ export function sanitizeAbsorbedTheme(raw = {}) {
   const inkOnAccent = relativeLuminance(accentPrimary) > 0.36 ? '#0F172A' : '#FFFFFF'
 
   const secondaryPool = [
+    raw.brandSecondary,
+    raw.secondaryColor,
     srcPalette.accent2,
     srcPalette.accent3,
     srcPalette.accent4,
@@ -1156,7 +1473,7 @@ export function sanitizeAbsorbedTheme(raw = {}) {
   ]
     .filter(Boolean)
     .map((c) => normalizeHex(c, ''))
-    .filter((c) => c.length === 7 && hueDelta(c, accentPrimary) >= 28)
+    .filter((c) => c.length === 7 && hueDelta(c, accentPrimary) >= 24 && colorDistance(c, canvas) > 32)
 
   const rawSecondary = secondaryPool[0] ?? hslToHex((hexToHsl(accentPrimary).h + 36) % 360, Math.max(0.45, hexToHsl(accentPrimary).s * 0.85), dark ? 0.62 : 0.38)
   const accentSecondary = ensureContrast(rawSecondary, canvas, 3.2, 0.80)
@@ -1201,14 +1518,16 @@ export function sanitizeAbsorbedTheme(raw = {}) {
     return trimmed
   }
 
+  const isSafeSingleFont = (f) => Boolean(f && /^[\p{L}\p{N} _-]+$/u.test(f) && f.length <= 80 && !/^\+mn-|^\+mj-/i.test(f))
   const majorLatin = sanitizeExtractedFont(srcFonts.majorLatin)
   const majorEA = sanitizeExtractedFont(srcFonts.majorEastAsian)
   const minorLatin = sanitizeExtractedFont(srcFonts.minorLatin)
   const minorEA = sanitizeExtractedFont(srcFonts.minorEastAsian)
   const headingStack = [majorLatin, majorEA, SANS_STACK].filter(Boolean).join(', ')
   const bodyStack = [minorLatin || majorLatin, minorEA || majorEA, SANS_STACK].filter(Boolean).join(', ')
-  const safeBrandFont = [majorEA, minorEA, majorLatin, minorLatin]
-    .find((f) => f && /^[\p{L}\p{N} _-]+$/u.test(f) && f.length <= 80 && !/^\+mn-|^\+mj-/i.test(f))
+  const safeBrandFont = [minorEA, majorEA, minorLatin, majorLatin].find(isSafeSingleFont)
+  const safeHeadingCandidate = [majorEA, majorLatin].find(isSafeSingleFont)
+  const safeHeadingFont = safeHeadingCandidate && safeHeadingCandidate !== safeBrandFont ? safeHeadingCandidate : ''
 
   // 匹配最接近的内置大师主题 ID
   let recommendedTheme = dark ? 'linear-dark' : 'consulting'
@@ -1264,9 +1583,12 @@ export function sanitizeAbsorbedTheme(raw = {}) {
   }
   const sanitizedBrand = {
     primaryColor: accentPrimary,
+    secondaryColor: accentSecondary,
     backgroundColor: canvas,
     textColor: inkPrimary,
     ...(safeBrandFont ? { fontFamily: safeBrandFont } : {}),
+    ...(safeHeadingFont ? { headingFont: safeHeadingFont } : {}),
+    ...(coverMode === 'inverted-accent' ? { coverMode: 'inverted-accent', coverBg } : {}),
   }
 
   return {
@@ -1295,7 +1617,7 @@ export function deriveBrandedTheme(themeOrId, brand) {
   }
   if (!brand || typeof brand !== 'object') return cloned
 
-  const hasColorOverride = Boolean(brand.backgroundColor || brand.textColor || brand.primaryColor)
+  const hasColorOverride = Boolean(brand.backgroundColor || brand.textColor || brand.primaryColor || brand.secondaryColor || brand.coverMode || brand.coverBg)
   if (hasColorOverride) {
     const nextBg = brand.backgroundColor ? normalizeHex(brand.backgroundColor, base.palette.bg) : base.palette.bg
     const nextDark = relativeLuminance(nextBg) < 0.42
@@ -1318,10 +1640,27 @@ export function deriveBrandedTheme(themeOrId, brand) {
     const nextInkSecondary = ensureContrast(mixHex(safeInkForDerived, nextSurface1, 0.25), nextSurface1, 7.0)
     const nextMuted = ensureContrast(mixHex(safeInkForDerived, nextSurface1, 0.46), nextSurface1, 4.6)
     const nextAccentText = ensureContrast(nextAccent, nextSurface1, 4.6)
-    const nextAccent2 = ensureContrast(base.palette.accent2, nextBg, 3.0)
+    const rawSecondary = brand.secondaryColor ? normalizeHex(brand.secondaryColor, base.palette.accent2) : base.palette.accent2
+    const nextAccent2 = ensureContrast(rawSecondary, nextBg, 3.0)
     const nextAccent2Text = ensureContrast(nextAccent2, nextSurface1, 4.6)
     const nextChartNeutral = mixHex(nextBg, safeInkForDerived, nextDark ? 0.24 : 0.18)
-    const nextSeries = [nextAccent, ...base.tokens.chartSeries.slice(1).map((c) => ensureContrast(c, nextBg, 2.8))]
+    const seedTail = brand.secondaryColor
+      ? [nextAccent2, ...base.tokens.chartSeries.slice(1).filter((c) => colorDistance(c, nextAccent2) >= 28)]
+      : base.tokens.chartSeries.slice(1)
+    const nextSeries = [nextAccent, ...seedTail.slice(0, 5).map((c) => ensureContrast(c, nextBg, 2.8))]
+    while (nextSeries.length < 6) {
+      nextSeries.push(ensureContrast(OKABE_ITO_FALLBACKS[nextSeries.length % OKABE_ITO_FALLBACKS.length], nextBg, 2.8))
+    }
+
+    const explicitInverted = brand.coverMode === 'inverted-accent'
+    const resolvedCoverMode = explicitInverted
+      ? 'inverted-accent'
+      : brand.coverMode === 'standard'
+        ? 'standard'
+        : (brand.backgroundColor ? 'standard' : cloned.tokens.coverMode)
+    const resolvedCoverBg = resolvedCoverMode === 'inverted-accent'
+      ? (brand.coverBg ? normalizeHex(brand.coverBg, nextAccent) : (cloned.tokens.coverMode === 'inverted-accent' ? cloned.tokens.coverBg : nextAccent))
+      : nextBg
 
     cloned.dark = nextDark
     cloned.shadow = !nextDark && base.shadow
@@ -1354,8 +1693,8 @@ export function deriveBrandedTheme(themeOrId, brand) {
       chartFocal: nextAccent,
       chartNeutral: nextChartNeutral,
       chartSeries: nextSeries,
-      coverMode: brand.backgroundColor ? 'standard' : cloned.tokens.coverMode,
-      coverBg: brand.backgroundColor ? nextBg : cloned.tokens.coverBg,
+      coverMode: resolvedCoverMode,
+      coverBg: resolvedCoverBg,
     }
   }
 
@@ -1363,12 +1702,24 @@ export function deriveBrandedTheme(themeOrId, brand) {
     cloned.chromeStyle = String(brand.chromeStyle).trim()
   }
 
+  const normalizeBrandFontStack = (raw, fallbackStack) => {
+    const trimmed = String(raw).trim()
+    if (!trimmed) return fallbackStack
+    if (BITMAP_SERIF_FONT_RE.test(trimmed) || NOVELTY_FONT_RE.test(trimmed) || /^微软雅黑$/i.test(trimmed)) {
+      return [pptxEastAsianFont(trimmed), SANS_STACK].join(', ')
+    }
+    return trimmed
+  }
+
   if (brand.fontFamily) {
-    const trimmed = String(brand.fontFamily).trim()
-    const cleanFamily = BITMAP_SERIF_FONT_RE.test(trimmed) || NOVELTY_FONT_RE.test(trimmed) || /^微软雅黑$/i.test(trimmed)
-      ? [pptxEastAsianFont(trimmed), SANS_STACK].join(', ')
-      : trimmed
-    cloned.fonts = { heading: cleanFamily, body: cleanFamily }
+    const cleanBody = normalizeBrandFontStack(brand.fontFamily, cloned.fonts.body)
+    cloned.fonts = { heading: cleanBody, body: cleanBody }
+  }
+  if (brand.headingFont) {
+    cloned.fonts = {
+      ...cloned.fonts,
+      heading: normalizeBrandFontStack(brand.headingFont, cloned.fonts.heading),
+    }
   }
   return cloned
 }

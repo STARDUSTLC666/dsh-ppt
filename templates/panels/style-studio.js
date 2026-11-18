@@ -24,7 +24,7 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'cards', zh: 'Bento / 支柱卡', en: 'Cards & Bento', group: 'structured', quick: true, variants: [['pillars', '并列支柱卡', 'Pillars'], ['bento', 'Bento 网格', 'Bento grid'], ['exec-summary', '结论+三支柱', 'Exec summary'], ['numbered', '编号卡片', 'Numbered']] },
   { id: 'kpi', zh: '大数字指标 KPI', en: 'KPI metrics', group: 'structured', quick: true, variants: [['grid', '指标矩阵', 'Grid'], ['hero-left', '主指标左置', 'Hero left'], ['banner', '通栏指标', 'Banner']] },
   { id: 'comparison', zh: '双栏 / 痛点对比', en: 'Comparison', group: 'structured', quick: true, variants: [['versus', 'A/B 对比', 'Versus'], ['before-after', '前后对比', 'Before / after'], ['do-dont', '推荐 vs 避免', 'Do / don’t'], ['issue-action', '痛点 → 举措', 'Issue → action']] },
-  { id: 'process', zh: '流程 / 飞轮 / 漏斗', en: 'Process & flywheel', group: 'structured', quick: true, variants: [['steps', '推进步骤', 'Steps'], ['timeline', '里程碑时间轴', 'Timeline'], ['layers', '架构分层', 'Layers'], ['funnel', '转化漏斗', 'Funnel'], ['flywheel', '增长飞轮', 'Flywheel']] },
+  { id: 'process', zh: '流程 / 价值链 / 飞轮', en: 'Process & value chain', group: 'structured', quick: true, variants: [['steps', '推进步骤', 'Steps'], ['chevron', '价值链箭头', 'Value-chain chevrons'], ['timeline', '里程碑时间轴', 'Timeline'], ['layers', '架构分层', 'Layers'], ['funnel', '转化漏斗', 'Funnel'], ['flywheel', '增长飞轮', 'Flywheel']] },
   { id: 'matrix', zh: '2×2 四象限矩阵', en: '2×2 Matrix', group: 'structured', quick: true, variants: [['2x2', '四象限坐标轴', '2×2 quadrant'], ['grid', '四宫格', 'Grid']] },
   { id: 'callout', zh: '结论清单 / 定理框', en: 'Callout & checklist', group: 'structured', variants: [['takeaways', '行动清单', 'Takeaways'], ['definition', '核心定义框', 'Definition'], ['formula', '公式定理框', 'Formula']] },
   { id: 'gantt', zh: '甘特图路线图', en: 'Gantt roadmap', group: 'data', quick: true, variants: [['quarters', '按季度', 'Quarters'], ['months', '按月份', 'Months'], ['weeks', '按周次', 'Weeks'], ['swimlane', '泳道甘特', 'Swimlane']] },
@@ -288,6 +288,19 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
             onClick: () => onChange({ ...draft, tableStyle: id }),
           }, label))),
       h('label', { htmlFor: controlId + '-rows' }, L('表格单元格（每行一排，用 Tab、竖线 | 或逗号分隔，首行为表头）', 'Table cells (first line is header; separate columns with Tab, |, or comma)')),
+      (currentLayout === 'harvey' || draft.tableStyle === 'harvey') ? h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('快捷插入哈维球符号', 'Quick insert Harvey symbols') },
+        [['●', L('● 满分', '● Full')], ['◕', L('◕ 较强', '◕ Strong')], ['◑', L('◑ 中等', '◑ Half')], ['◔', L('◔ 起步', '◔ Quarter')], ['○', L('○ 暂无', '○ None')]].map(([sym, lbl]) =>
+          h('button', {
+            type: 'button',
+            key: sym,
+            className: 'ppt-pill',
+            disabled,
+            onClick: () => {
+              const base = String(draft.rowsText || '');
+              const sep = base && !base.endsWith('\t') && !base.endsWith('\n') ? '\t' : '';
+              onChange({ ...draft, rowsText: base + sep + sym });
+            },
+          }, lbl))) : null,
       h('textarea', {
         id: controlId + '-rows',
         rows: 5,
@@ -355,10 +368,41 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
           })) : null))) : null);
 }
 
+const PPT_SAVED_BRANDS_KEY = 'dsh-ppt:saved-brands';
+const PPT_FALLBACK_MASTER_PRESETS = Object.freeze([
+  { id: 'mckinsey-board', zh: '麦肯锡董事会简报', en: 'McKinsey Board Brief', metaZh: '0px 直角卡片 · 结论先行 · 深海蓝主调', metaEn: '0px sharp cards · Action titles · Deep navy', theme: 'consulting', brand: { primaryColor: '#0057B8', secondaryColor: '#0E7490', backgroundColor: '#FFFFFF', textColor: '#0F172A', chromeStyle: 'consulting-classic' } },
+  { id: 'bcg-growth', zh: 'BCG 增长与双碳战略', en: 'BCG Growth Strategy', metaZh: '翡翠绿主色 · 价值链五边形箭头 · 哈维球矩阵', metaEn: 'Emerald accent · Value-chain chevrons · Harvey matrix', theme: 'bcg-emerald', brand: { primaryColor: '#006B54', secondaryColor: '#0F4C81', backgroundColor: '#FFFFFF', textColor: '#0D1F18', chromeStyle: 'consulting-classic' } },
+  { id: 'sequoia-memo', zh: '红杉 / YC 创投简报（明亮版）', en: 'Sequoia / YC Partner Deck', metaZh: '适合邮件与平板阅读 · TAM 同心圆 · 增长指标', metaEn: 'Screen-first daylight · TAM sizing · Traction KPIs', theme: 'venture-daylight', brand: { primaryColor: '#C2410C', secondaryColor: '#0F766E', backgroundColor: '#FFFFFF', textColor: '#111827', chromeStyle: 'keynote-spatial' } },
+  { id: 'apple-cupertino', zh: 'Cupertino 旗舰产品发布', en: 'Cupertino Spatial Keynote', metaZh: '无顶部分隔线 · 16pt 呼吸感浮卡 · 大数字聚焦', metaEn: 'Divider-free canvas · 16pt airy Bento · Hero metrics', theme: 'keynote-light', brand: { primaryColor: '#0066CC', secondaryColor: '#5E5CE6', backgroundColor: '#FFFFFF', textColor: '#1D1D1F', chromeStyle: 'keynote-spatial' } },
+  { id: 'stripe-product', zh: 'Stripe / Vercel 产研评审', en: 'Stripe / Vercel Product Craft', metaZh: '1px 精密 Bento 网格 · 系统分层架构 · 路线图', metaEn: '1px Bento grid · Layered architecture · Roadmap', theme: 'stripe-craft', brand: { primaryColor: '#4F46E5', secondaryColor: '#0284C7', backgroundColor: '#F8FAFC', textColor: '#0F172A', chromeStyle: 'saas-bento' } },
+  { id: 'economist-macro', zh: '经济学人 / FT 宏观与财报', en: 'Economist & FT Briefing', metaZh: '暖纸底色 · 红标书脊 · 衬线标题 + 瀑布利润桥', metaEn: 'Warm paper · Editorial folio · Serif title & waterfall', theme: 'economist-brief', brand: { primaryColor: '#C8102E', secondaryColor: '#1D3557', backgroundColor: '#F9F8F5', textColor: '#141413', headingFont: 'Georgia', chromeStyle: 'editorial-folio' } },
+  { id: 'nature-defense', zh: 'Nature / ETH 学术答辩', en: 'Nature & Beamer Defense', metaZh: 'Beamer 通栏页眉 · 无竖线学术三线表 · 严谨对比', metaEn: 'Beamer header band · Booktabs 3-line tables · Rigor', theme: 'academic', brand: { primaryColor: '#006980', secondaryColor: '#C8430E', backgroundColor: '#FFFFFF', textColor: '#111827', chromeStyle: 'academic-minimal' } },
+  { id: 'imperial-gov', zh: '现代东方政务述职', en: 'Modern Institutional Briefing', metaZh: '深霁蓝庄重封面 + 宣纸浅底正文 · 双线页眉', metaEn: 'Inverted slate cover + warm paper body · Double rule', theme: 'exec-jilan', brand: { primaryColor: '#1A2B4C', secondaryColor: '#9E1B1E', chromeStyle: 'gov-ceremonial' } },
+]);
+
+function readSavedBrands() {
+  try {
+    const raw = window.localStorage?.getItem(PPT_SAVED_BRANDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedBrands(list) {
+  try {
+    window.localStorage?.setItem(PPT_SAVED_BRANDS_KEY, JSON.stringify(list.slice(0, 12)));
+  } catch { /* sandbox storage fallback */ }
+}
+
 function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, onApplyAbsorbed, onError, onMessage }) {
   const L = (zh, en) => languageOf() === 'en' ? en : zh;
   const controlId = React.useId();
   const themes = Array.isArray(project?.themes) ? project.themes : [];
+  const masterPresets = Array.isArray(project?.presets) && project.presets.length > 0
+    ? project.presets
+    : PPT_FALLBACK_MASTER_PRESETS.map(p => ({ id: p.id, name: L(p.zh, p.en), sourceStyle: L(p.metaZh, p.metaEn), theme: p.theme, brand: p.brand }));
   const lightThemes = themes.filter(item => !item.dark);
   const darkThemes = themes.filter(item => item.dark);
   const savedBrand = project?.brand || {};
@@ -367,9 +411,11 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   const [brandDraft, setBrandDraft] = React.useState(() => ({
     name: savedBrand.name || '',
     primaryColor: savedBrand.primaryColor || '',
+    secondaryColor: savedBrand.secondaryColor || '',
     backgroundColor: savedBrand.backgroundColor || '',
     textColor: savedBrand.textColor || '',
     fontFamily: savedBrand.fontFamily || '',
+    headingFont: savedBrand.headingFont || '',
     footer: savedBrand.footer || '',
     logo: savedBrand.logo || '',
     chromeStyle: savedBrand.chromeStyle || '',
@@ -377,15 +423,18 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   const [absorbing, setAbsorbing] = React.useState(false);
   const [absorbed, setAbsorbed] = React.useState(null);
   const [absorbedName, setAbsorbedName] = React.useState('');
+  const [savedVault, setSavedVault] = React.useState(() => readSavedBrands());
 
   React.useEffect(() => {
     const next = project?.brand || {};
     setBrandDraft({
       name: next.name || '',
       primaryColor: next.primaryColor || '',
+      secondaryColor: next.secondaryColor || '',
       backgroundColor: next.backgroundColor || '',
       textColor: next.textColor || '',
       fontFamily: next.fontFamily || '',
+      headingFont: next.headingFont || '',
       footer: next.footer || '',
       logo: next.logo || '',
       chromeStyle: next.chromeStyle || '',
@@ -393,6 +442,34 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   }, [project?.id, project?.revision]);
 
   const disabled = busy || blocked || absorbing;
+
+  function saveCurrentAbsorbedToVault() {
+    if (!absorbed) return;
+    const entryBrand = {
+      ...(absorbed.sanitizedBrand || {}),
+      ...(!absorbed.sanitizedBrand?.chromeStyle && absorbed.recommendedChrome ? { chromeStyle: absorbed.recommendedChrome } : {}),
+    };
+    if (typeof entryBrand.logo === 'string' && entryBrand.logo.length > 260000) {
+      delete entryBrand.logo;
+    }
+    const label = (absorbedName || entryBrand.name || L('企业模板风格', 'Corporate style')).replace(/\.pptx$/i, '').slice(0, 48);
+    const nextItem = {
+      id: 'brand-' + Date.now(),
+      label,
+      theme: absorbed.recommendedTheme || project.theme || 'consulting',
+      brand: entryBrand,
+    };
+    const nextList = [nextItem, ...savedVault.filter(item => item.label !== label)].slice(0, 12);
+    setSavedVault(nextList);
+    writeSavedBrands(nextList);
+    onMessage(L('已收藏到“我的品牌库”，后续任何演示文稿均可一键套用。', 'Saved to My Brand Library for 1-click reuse across future decks.'));
+  }
+
+  function removeVaultItem(id) {
+    const nextList = savedVault.filter(item => item.id !== id);
+    setSavedVault(nextList);
+    writeSavedBrands(nextList);
+  }
 
   function renderSwatches(palette) {
     if (!palette || typeof palette !== 'object') return null;
@@ -422,8 +499,8 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
 
   function handlePptxFile(file) {
     if (!file) return;
-    if (!/\.pptx$/i.test(file.name) || file.size > 10 * 1024 * 1024) {
-      onError(L('请选择 10 MiB 以内的 .pptx 参考文件。', 'Choose a reference .pptx file up to 10 MiB.'));
+    if (!/\.pptx$/i.test(file.name) || file.size > 24 * 1024 * 1024) {
+      onError(L('请选择 24 MiB 以内的 .pptx 参考文件。', 'Choose a reference .pptx file up to 24 MiB.'));
       return;
     }
     setAbsorbing(true);
@@ -476,9 +553,11 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
       name: brandDraft.name.trim(),
       footer: brandDraft.footer.trim(),
       ...(brandDraft.primaryColor.trim() ? { primaryColor: brandDraft.primaryColor.trim() } : {}),
+      ...(brandDraft.secondaryColor.trim() ? { secondaryColor: brandDraft.secondaryColor.trim() } : {}),
       ...(brandDraft.backgroundColor.trim() ? { backgroundColor: brandDraft.backgroundColor.trim() } : {}),
       ...(brandDraft.textColor.trim() ? { textColor: brandDraft.textColor.trim() } : {}),
       ...(brandDraft.fontFamily.trim() ? { fontFamily: brandDraft.fontFamily.trim() } : {}),
+      ...(brandDraft.headingFont.trim() ? { headingFont: brandDraft.headingFont.trim() } : {}),
       ...(brandDraft.chromeStyle ? { chromeStyle: brandDraft.chromeStyle } : savedBrand.chromeStyle ? { chromeStyle: null } : {}),
       ...(brandDraft.logo ? { logo: brandDraft.logo } : savedBrand.logo ? { logo: null } : {}),
     };
@@ -488,8 +567,43 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   return h('section', { className: 'card ppt-style-studio', 'data-dsh-card': '', 'aria-label': L('风格与母版工作室', 'Style & Master Studio') },
     h('style', null, PPT_STYLE_STUDIO_CSS),
     h('h3', null, L('风格与母版工作室', 'Style & Master Studio')),
-    h('p', { className: 'muted' }, L('无需手调设计参数：一键切换大师级明暗主题，或上传企业参考 PPTX 自动提取并净化配色、字体与 Logo。所有更改同步更新 HTML 与可编辑 PPTX，且支持撤销。', 'Switch curated themes in one click, or upload a reference .pptx to extract and contrast-sanitize its palette, fonts, and logo. Updates HTML and editable PPTX together with undo.')),
+    h('p', { className: 'muted' }, L('无需手调设计参数：可一键直吸名家范本、切换 24 套大师明暗主题，或拖拽企业参考 PPTX 提取配色、双字体、封面反白与母版骨架。所有更改同步更新 HTML 与可编辑 PPTX，且支持撤销。', 'Apply curated master deck DNA in one click, switch 24 themes, or drop a reference .pptx to absorb its palette, font pairing, cover polarity, and skeleton with undo.')),
     blocked ? h('p', { className: 'dirty' }, L('请先保存或取消“内容编辑 / 数据推演”中的未保存修改，再切换全稿风格。', 'Save or discard unsaved content or scenario edits before restyling the presentation.')) : null,
+
+    savedVault.length > 0 ? h('div', { className: 'ppt-theme-section' },
+      h('h4', null, L('我的已收藏企业品牌（一键复用）', 'My Saved Brand Presets')),
+      h('div', { className: 'ppt-theme-grid' }, savedVault.map(item =>
+        h('div', { key: item.id, className: 'ppt-theme-card', 'data-dsh-card': '' },
+          h('div', { className: 'ppt-theme-card-top' },
+            renderSwatches({ bg: item.brand?.backgroundColor, accent: item.brand?.primaryColor, accent2: item.brand?.secondaryColor, fg: item.brand?.textColor }),
+            h('button', { type: 'button', className: 'ppt-pill', disabled, onClick: () => removeVaultItem(item.id) }, L('移除', 'Remove'))),
+          h('strong', { className: 'ppt-theme-name' }, item.label),
+          h('button', {
+            type: 'button',
+            className: 'ppt-pill',
+            disabled,
+            onClick: () => onApplyAbsorbed({ theme: item.theme, brand: item.brand }),
+          }, L('套用此品牌', 'Apply brand')))))) : null,
+
+    masterPresets.length > 0 ? h('div', { className: 'ppt-theme-section' },
+      h('h4', null, L('名家范本一键直吸（免上传 .pptx）', 'World-Class Reference Deck Presets')),
+      h('div', { className: 'ppt-theme-grid' }, masterPresets.map(preset => {
+        const isCurrent = project.theme === preset.theme && (savedBrand.chromeStyle || activeChromeStyle) === (preset.brand?.chromeStyle || preset.chromeStyle);
+        return h('button', {
+          type: 'button',
+          key: preset.id,
+          className: 'ppt-theme-card',
+          'data-dsh-card': '',
+          'aria-pressed': isCurrent ? 'true' : 'false',
+          disabled,
+          onClick: () => onApplyAbsorbed({ theme: preset.theme, brand: preset.brand }),
+        },
+          h('div', { className: 'ppt-theme-card-top' },
+            renderSwatches({ bg: preset.brand?.backgroundColor || '#FFFFFF', accent: preset.brand?.primaryColor, accent2: preset.brand?.secondaryColor, fg: preset.brand?.textColor || '#0F172A' }),
+            isCurrent ? h('span', { className: 'w-tag' }, L('已匹配', 'Active')) : null),
+          h('strong', { className: 'ppt-theme-name' }, preset.name),
+          preset.sourceStyle ? h('span', { className: 'ppt-theme-meta' }, preset.sourceStyle) : null);
+      }))) : null,
 
     lightThemes.length > 0 ? h('div', { className: 'ppt-theme-section' },
       h('h4', null, L('明亮投影与政务/咨询/学术推荐（', 'Projector-safe daylight themes (') + lightThemes.length + L(' 套）', ')')),
@@ -530,7 +644,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
 
     h('details', { className: 'ppt-structured-section', open: true },
       h('summary', null, L('吸收外部优质 PPTX 风格（零本地路径暴露）', 'Absorb style from reference .pptx')),
-      h('p', { className: 'muted' }, L('上传公司模板或喜欢的参考 .pptx（≤10 MiB）：自动提取母版色板、中英文字体与 Logo，并通过 WCAG 对比度净化与刺眼大红底降级算法，避免低对比度和刺眼背景。', 'Upload a corporate template or reference .pptx (≤10 MiB) to extract its theme colours, CJK/Latin fonts, and logo with automatic WCAG ≥4.5:1 contrast clamping.')),
+      h('p', { className: 'muted' }, L('上传公司模板或喜欢的参考 .pptx（≤24 MiB）：深度解析母版主辅色、中英文标题/正文字体配对、封面深底反白、母版 Logo 与逐页版式序列，自动完成 WCAG ≥4.5:1 对比度净化。', 'Upload a corporate template or reference .pptx (≤24 MiB) to extract dual brand colours, heading/body fonts, cover polarity, logo, and slide archetypes with WCAG ≥4.5:1 clamping.')),
       h('div', {
         className: 'ppt-dropzone',
         onDragOver: e => { e.preventDefault(); },
@@ -552,15 +666,21 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
           (absorbed.extractedSkeleton.cornerStyle || 'rounded') +
           (absorbed.extractedSkeleton.hasTopBanner ? L(' · 顶部通栏横幅', ' · Top banner') : '') +
           (absorbed.extractedSkeleton.hasSideSpine ? L(' · 侧边装饰脊', ' · Side spine') : '') +
+          (absorbed.sanitizedBrand?.coverMode === 'inverted-accent' ? L(' · 深色庄重封面+浅色正文', ' · Inverted cover + daylight body') : '') +
           (typeof absorbed.extractedSkeleton.masterShapeCount === 'number' ? ' · ' + absorbed.extractedSkeleton.masterShapeCount + L(' 个母版形状', ' master shapes') : '')) : null,
         Array.isArray(absorbed.slideSkeleton) && absorbed.slideSkeleton.length > 0 ? h('p', { className: 'muted' },
-          L('页面骨架序列：', 'Slide sequence: ') + absorbed.slideSkeleton.slice(0, 8).map(s => 'P' + s.slideNumber + ':' + s.inferredLayout).join(' → ') + (absorbed.slideSkeleton.length > 8 ? ' …' : '')) : null,
+          L('页面骨架序列：', 'Slide sequence: ') + absorbed.slideSkeleton.slice(0, 10).map(s => 'P' + s.slideNumber + ':' + s.inferredLayout + (s.variant ? '[' + s.variant + ']' : '')).join(' → ') + (absorbed.slideSkeleton.length > 10 ? ' …' : '')) : null,
+        absorbed.narrativeProfile && typeof absorbed.narrativeProfile.diagramRatio === 'number' ? h('p', { className: 'muted' },
+          L('版式诊断：专业图示占比 ', 'Layout recipe: diagram ratio ') + Math.round(absorbed.narrativeProfile.diagramRatio * 100) + '%' +
+          (absorbed.recommendedTableStyle ? ' · ' + L('推荐表格：', 'Table style: ') + absorbed.recommendedTableStyle : '')) : null,
         absorbed.sanitizedBrand ? h('div', { className: 'ppt-swatch-row' },
-          [absorbed.sanitizedBrand.backgroundColor, absorbed.sanitizedBrand.primaryColor, absorbed.sanitizedBrand.textColor].filter(Boolean).map((hex, i) =>
+          [absorbed.sanitizedBrand.backgroundColor, absorbed.sanitizedBrand.primaryColor, absorbed.sanitizedBrand.secondaryColor, absorbed.sanitizedBrand.textColor].filter(Boolean).map((hex, i) =>
             h('span', { key: i, className: 'ppt-swatch-chip' },
               h('span', { className: 'ppt-swatch-dot', style: { backgroundColor: hex } }),
               h('code', null, hex)))) : null,
-        absorbed.sanitizedBrand?.fontFamily ? h('p', { className: 'muted' }, L('安全字体映射：', 'Safe font: ') + absorbed.sanitizedBrand.fontFamily) : null,
+        (absorbed.sanitizedBrand?.fontFamily || absorbed.sanitizedBrand?.headingFont) ? h('p', { className: 'muted' },
+          L('安全字体映射：', 'Safe font pairing: ') + [absorbed.sanitizedBrand.headingFont ? L('标题 ', 'Heading ') + absorbed.sanitizedBrand.headingFont : '', absorbed.sanitizedBrand.fontFamily ? L('正文 ', 'Body ') + absorbed.sanitizedBrand.fontFamily : ''].filter(Boolean).join(' · ')) : null,
+        Array.isArray(absorbed.warnings) && absorbed.warnings.length > 0 ? h('p', { className: 'muted' }, absorbed.warnings.join(' ')) : null,
         absorbed.sanitizedBrand?.logo ? h('img', { className: 'image-preview', src: absorbed.sanitizedBrand.logo, alt: L('提取的母版 Logo', 'Extracted master logo') }) : null,
         h('div', { className: 'tools' },
           h('button', {
@@ -574,6 +694,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
                 : null,
             }),
           }, L('一键应用吸收的主题与品牌', 'Apply absorbed theme & brand')),
+          h('button', { type: 'button', disabled, onClick: saveCurrentAbsorbedToVault }, L('收藏到我的品牌库', 'Save to My Brand Library')),
           h('button', { type: 'button', disabled, onClick: () => { setAbsorbed(null); setAbsorbedName(''); } }, L('清除预览', 'Dismiss')))) : null),
 
     h('details', { className: 'ppt-structured-section', open: Boolean(project.brand) },
@@ -581,16 +702,30 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
       h('div', { className: 'ppt-archetype-subgrid' },
         h('div', null,
           h('label', { htmlFor: controlId + '-brand-primary' }, L('主强调色 (#RRGGBB)', 'Primary (#RRGGBB)')),
-          h('input', { id: controlId + '-brand-primary', value: brandDraft.primaryColor, disabled, placeholder: '#0057B8', onChange: e => setBrandDraft({ ...brandDraft, primaryColor: e.target.value }) })),
+          h('div', { className: 'ppt-color-pair' },
+            h('input', { type: 'color', 'aria-label': L('选择主强调色', 'Pick primary colour'), value: /^#[0-9A-Fa-f]{6}$/.test(brandDraft.primaryColor) ? brandDraft.primaryColor : '#0057B8', disabled, onChange: e => setBrandDraft({ ...brandDraft, primaryColor: e.target.value.toUpperCase() }) }),
+            h('input', { id: controlId + '-brand-primary', value: brandDraft.primaryColor, disabled, placeholder: '#0057B8', onChange: e => setBrandDraft({ ...brandDraft, primaryColor: e.target.value }) }))),
+        h('div', null,
+          h('label', { htmlFor: controlId + '-brand-secondary' }, L('辅助色 (#RRGGBB)', 'Secondary (#RRGGBB)')),
+          h('div', { className: 'ppt-color-pair' },
+            h('input', { type: 'color', 'aria-label': L('选择辅助色', 'Pick secondary colour'), value: /^#[0-9A-Fa-f]{6}$/.test(brandDraft.secondaryColor) ? brandDraft.secondaryColor : '#0E7490', disabled, onChange: e => setBrandDraft({ ...brandDraft, secondaryColor: e.target.value.toUpperCase() }) }),
+            h('input', { id: controlId + '-brand-secondary', value: brandDraft.secondaryColor, disabled, placeholder: '#0E7490', onChange: e => setBrandDraft({ ...brandDraft, secondaryColor: e.target.value }) }))),
         h('div', null,
           h('label', { htmlFor: controlId + '-brand-bg' }, L('背景色 (#RRGGBB)', 'Background (#RRGGBB)')),
-          h('input', { id: controlId + '-brand-bg', value: brandDraft.backgroundColor, disabled, placeholder: '#FFFFFF', onChange: e => setBrandDraft({ ...brandDraft, backgroundColor: e.target.value }) })),
+          h('div', { className: 'ppt-color-pair' },
+            h('input', { type: 'color', 'aria-label': L('选择背景色', 'Pick background colour'), value: /^#[0-9A-Fa-f]{6}$/.test(brandDraft.backgroundColor) ? brandDraft.backgroundColor : '#FFFFFF', disabled, onChange: e => setBrandDraft({ ...brandDraft, backgroundColor: e.target.value.toUpperCase() }) }),
+            h('input', { id: controlId + '-brand-bg', value: brandDraft.backgroundColor, disabled, placeholder: '#FFFFFF', onChange: e => setBrandDraft({ ...brandDraft, backgroundColor: e.target.value }) }))),
         h('div', null,
           h('label', { htmlFor: controlId + '-brand-fg' }, L('正文色 (#RRGGBB)', 'Text (#RRGGBB)')),
-          h('input', { id: controlId + '-brand-fg', value: brandDraft.textColor, disabled, placeholder: '#0F172A', onChange: e => setBrandDraft({ ...brandDraft, textColor: e.target.value }) })),
+          h('div', { className: 'ppt-color-pair' },
+            h('input', { type: 'color', 'aria-label': L('选择正文色', 'Pick text colour'), value: /^#[0-9A-Fa-f]{6}$/.test(brandDraft.textColor) ? brandDraft.textColor : '#0F172A', disabled, onChange: e => setBrandDraft({ ...brandDraft, textColor: e.target.value.toUpperCase() }) }),
+            h('input', { id: controlId + '-brand-fg', value: brandDraft.textColor, disabled, placeholder: '#0F172A', onChange: e => setBrandDraft({ ...brandDraft, textColor: e.target.value }) }))),
         h('div', null,
-          h('label', { htmlFor: controlId + '-brand-font' }, L('跨平台安全字体', 'Safe font family')),
-          h('input', { id: controlId + '-brand-font', value: brandDraft.fontFamily, disabled, placeholder: 'Microsoft YaHei', onChange: e => setBrandDraft({ ...brandDraft, fontFamily: e.target.value }) }))),
+          h('label', { htmlFor: controlId + '-brand-font' }, L('正文安全字体', 'Body font family')),
+          h('input', { id: controlId + '-brand-font', value: brandDraft.fontFamily, disabled, placeholder: 'Microsoft YaHei', onChange: e => setBrandDraft({ ...brandDraft, fontFamily: e.target.value }) })),
+        h('div', null,
+          h('label', { htmlFor: controlId + '-brand-heading-font' }, L('标题字体（可选衬线配对）', 'Heading font (optional)')),
+          h('input', { id: controlId + '-brand-heading-font', value: brandDraft.headingFont, disabled, placeholder: 'Georgia', onChange: e => setBrandDraft({ ...brandDraft, headingFont: e.target.value }) }))),
       h('label', { htmlFor: controlId + '-brand-chrome' }, L('母版骨架覆盖（chromeStyle）', 'Master skeleton override (chromeStyle)')),
       h('select', {
         id: controlId + '-brand-chrome',
@@ -635,5 +770,7 @@ const PPT_STYLE_STUDIO_CSS = `
 .ppt-workbench .ppt-swatch-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border:1px solid var(--w-border);border-radius:999px;background:var(--w-bg);font-size:11px}
 .ppt-workbench .ppt-dropzone{border:1px dashed var(--w-border);border-radius:10px;padding:12px;margin-top:8px;background:var(--w-soft)}
 .ppt-workbench .ppt-absorbed-card{border:1px solid var(--w-border);border-radius:10px;padding:12px;margin-top:10px;background:var(--w-bg);display:flex;flex-direction:column;gap:8px}
+.ppt-workbench .ppt-color-pair{display:grid;grid-template-columns:34px minmax(0,1fr);gap:6px;align-items:center}
+.ppt-workbench .ppt-color-pair input[type=color]{width:34px;height:34px;padding:2px;border:1px solid var(--w-border);border-radius:8px;background:var(--w-bg);cursor:pointer}
 @container dsh-workbench (max-width:760px){.ppt-workbench .ppt-theme-grid,.ppt-workbench .ppt-archetype-subgrid{grid-template-columns:1fr}}
 `;

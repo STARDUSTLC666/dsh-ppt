@@ -1135,6 +1135,309 @@ export const SCENARIO_TEMPLATES = Object.freeze([
       subtitle: ['待填写：策展机构、预约通道与展览日期', 'To fill: atelier, RSVP contact and exhibition dates'],
     },
   },
+  {
+    id: 'quarterly-okr',
+    persona: 'consulting',
+    theme: 'bcg-emerald',
+    name: { zh: '季度经营与 OKR 复盘', en: 'Quarterly OKR review' },
+    sections: [
+      {
+        title: ['本季 OKR 核心目标打分与经营指标总览', 'Quarterly OKR scorecards and headline metrics'],
+        kicker: ['01 · OKR 总览', '01 · OKR Scorecard'],
+        layout: 'kpi',
+        variant: 'grid',
+        bullets: [
+          ['**O1 核心增长达成**：待填写 KR 完成率与关键量化结果', '**O2 产品体验升级**：待填写留存/NPS 变化与里程碑状态', '**O3 组织与效率**：待填写人效或成本优化幅度'],
+          ['**O1 Growth target**: To fill: KR score and headline metric', '**O2 Product quality**: To fill: retention/NPS delta', '**O3 Operational efficiency**: To fill: unit economics gain'],
+        ],
+      },
+      {
+        title: ['端到端业务价值链各环节转化与协同复盘', 'End-to-end value-chain execution review'],
+        kicker: ['02 · 价值链拆解', '02 · Value Chain'],
+        layout: 'process',
+        variant: 'chevron',
+        items: [
+          [
+            { tag: '01', title: '需求洞察与立项', text: '待填写商机/需求命中率', conversion: '待填写转化率' },
+            { tag: '02', title: '敏捷研发与交付', text: '待填写按期上线率', conversion: '待填写周期' },
+            { tag: '03', title: '标杆落地与验证', text: '待填写客户采纳成效', conversion: '待填写留存' },
+            { tag: '04', title: '规模化续费增购', text: '待填写净留存贡献', conversion: '待填写 NRR' },
+          ],
+          [
+            { tag: '01', title: 'Discovery & Intake', text: 'To fill: hit rate', conversion: 'To fill' },
+            { tag: '02', title: 'Agile Delivery', text: 'To fill: on-time ship rate', conversion: 'To fill' },
+            { tag: '03', title: 'Pilot Adoption', text: 'To fill: activation impact', conversion: 'To fill' },
+            { tag: '04', title: 'Expansion & NRR', text: 'To fill: upsell contribution', conversion: 'To fill' },
+          ],
+        ],
+        bullets: [
+          ['**价值链瓶颈**：待填写本季最关键的漏损环节与提效抓手'],
+          ['**Chain bottleneck**: To fill: primary conversion drop-off and fix'],
+        ],
+      },
+      {
+        title: ['未达预期项根因剖析与跨部门纠偏动作', 'Misses, root causes and corrective actions'],
+        kicker: ['03 · 差距纠偏', '03 · Gap & Action'],
+        layout: 'comparison',
+        variant: 'issue-action',
+        bullets: [
+          ['**待填写未达标 KR 与核心根因**：待填写下季改进举措、责任人与量化验收线'],
+          ['**To fill: missed KR and root cause**: To fill: corrective action, owner and target'],
+        ],
+      },
+      {
+        title: ['下季度 OKR 关键战役排期与里程碑', 'Next-quarter OKR roadmap and milestones'],
+        kicker: ['04 · 下季排期', '04 · Next Quarter'],
+        layout: 'gantt',
+        variant: 'quarters',
+        columns: [
+          ['M1', 'M2', 'M3'],
+          ['M1', 'M2', 'M3'],
+        ],
+        items: [
+          [
+            { tag: '战役一', title: '核心增长引擎攻坚', text: '待填写 KR 目标', start: 0, span: 2, status: 'accent' },
+            { tag: '战役二', title: '关键能力底座补齐', text: '待填写交付物', start: 1, span: 2, status: 'positive' },
+            { tag: '里程碑', title: '季度末经营验收节点', text: '待填写日期', start: 2, span: 0, milestone: true, status: 'warning' },
+          ],
+          [
+            { tag: 'Bet 1', title: 'Primary growth initiative', text: 'To fill: KR target', start: 0, span: 2, status: 'accent' },
+            { tag: 'Bet 2', title: 'Platform capability upgrade', text: 'To fill: deliverable', start: 1, span: 2, status: 'positive' },
+            { tag: 'Gate', title: 'QBR Sign-off Milestone', text: 'To fill: date', start: 2, span: 0, milestone: true, status: 'warning' },
+          ],
+        ],
+        bullets: [
+          ['**资源锁定**：待填写下季度预算与编制需求'],
+          ['**Resource lock**: To fill: headcount and budget dependencies'],
+        ],
+      },
+    ],
+    closing: {
+      title: ['对齐下季北极星指标，立即启动首周拆解', 'Align on next-quarter north star and kick off Week 1'],
+      subtitle: ['待填写：团队负责人与复盘日期', 'To fill: team lead and review date'],
+    },
+  },
+  {
+    id: 'product-prd',
+    persona: 'tech-pitch',
+    theme: 'stripe-craft',
+    name: { zh: '产品需求与方案评审（PRD）', en: 'Product PRD & design review' },
+    sections: [
+      {
+        title: ['真实用户场景痛点与新旧交互路径对比', 'User friction and before/after workflow'],
+        kicker: ['01 · 用户痛点', '01 · User Friction'],
+        layout: 'comparison',
+        variant: 'before-after',
+        bullets: [
+          ['**改版前操作断点**：待填写用户在旧流程中的步骤耗时与流失率数据', '**改版后顺滑路径**：待填写新交互如何消除断点并缩短完成时长'],
+          ['**Current friction**: To fill: drop-off rate and manual steps today', '**Proposed flow**: To fill: streamlined interaction and time saved'],
+        ],
+      },
+      {
+        title: ['本期核心功能模块与优先级范围边界', 'Core feature scope and Bento breakdown'],
+        kicker: ['02 · 功能范围', '02 · Feature Scope'],
+        layout: 'cards',
+        variant: 'bento',
+        bullets: [
+          ['**P0 核心体验闭环**：待填写首期必须上线的主路径能力与验收口径', '**P1 效率增强项**：待填写批处理、快捷键或推荐辅助能力', '**明确不做（Out of Scope）**：待填写延后至二期的非核心诉求'],
+          ['**P0 Core loop**: To fill: must-ship user journey and acceptance criteria', '**P1 Power UX**: To fill: shortcuts, presets and assistive defaults', '**Non-goals**: To fill: explicitly deferred items'],
+        ],
+      },
+      {
+        title: ['前后端系统交互与数据埋点分层方案', 'System integration and telemetry architecture'],
+        kicker: ['03 · 技术与埋点', '03 · Architecture & Metrics'],
+        layout: 'architecture',
+        variant: 'layered',
+        items: [
+          [
+            { tag: '交互层', title: '客户端组件与状态反馈', bullets: ['待填写关键视图', '异常兜底态'] },
+            { tag: '服务层', title: '接口契约与权限校验', bullets: ['待填写核心 API', '幂等与限流'] },
+            { tag: '数据层', title: '核心漏斗埋点与实验归因', bullets: ['待填写北极星指标', 'A/B 实验分组'] },
+          ],
+          [
+            { tag: 'UI Layer', title: 'Client components & states', bullets: ['To fill: key views', 'Error recovery'] },
+            { tag: 'API Layer', title: 'Contracts & permissions', bullets: ['To fill: endpoints', 'Rate limits'] },
+            { tag: 'Telemetry', title: 'Funnel events & A/B flags', bullets: ['To fill: success metric', 'Experiment cohorts'] },
+          ],
+        ],
+        bullets: [
+          ['**上线衡量标准**：待填写发布后 14 天核心转化或留存验收阈值'],
+          ['**Success threshold**: To fill: 14-day post-launch metric target'],
+        ],
+      },
+      {
+        title: ['设计走查、联调提测与灰度放量排期', 'Design QA, engineering build and rollout plan'],
+        kicker: ['04 · 交付排期', '04 · Rollout Plan'],
+        layout: 'gantt',
+        variant: 'weeks',
+        columns: [
+          ['W1', 'W2', 'W3', 'W4'],
+          ['W1', 'W2', 'W3', 'W4'],
+        ],
+        items: [
+          [
+            { tag: '设计定稿', title: '交互走查与视觉交付', start: 0, span: 1, status: 'accent' },
+            { tag: '研发联调', title: '前后端开发与埋点自测', start: 1, span: 2 },
+            { tag: '灰度全量', title: '10% 灰度验证与全量发布', start: 3, span: 1, status: 'positive' },
+          ],
+          [
+            { tag: 'Design', title: 'Figma sign-off & copy review', start: 0, span: 1, status: 'accent' },
+            { tag: 'Build', title: 'Implementation & integration', start: 1, span: 2 },
+            { tag: 'Rollout', title: '10% canary to 100% GA', start: 3, span: 1, status: 'positive' },
+          ],
+        ],
+        bullets: [
+          ['**评审待决项**：待填写需产研测当场拍板的边界问题'],
+          ['**Open decisions**: To fill: edge cases requiring sign-off today'],
+        ],
+      },
+    ],
+    closing: {
+      title: ['确认 P0 范围与排期，进入研发排期锁定', 'Sign off P0 scope and lock sprint schedule'],
+      subtitle: ['待填写：产品经理、设计及研发接口人', 'To fill: PM, design and engineering leads'],
+    },
+  },
+  {
+    id: 'vc-daylight',
+    persona: 'tech-pitch',
+    theme: 'venture-daylight',
+    name: { zh: '创投融资简报（明亮阅读版）', en: 'Daylight investor deck' },
+    sections: [
+      {
+        title: ['结构性市场拐点与刚性未被满足的痛点', 'Structural catalyst and urgent customer pain'],
+        kicker: ['01 · 痛点与拐点', '01 · Why Now'],
+        layout: 'cards',
+        variant: 'pillars',
+        bullets: [
+          ['**存量方案高昂代价**：待填写目标客户当前损耗的真实成本数据', '**技术与供给侧拐点**：待填写使 10 倍体验跃迁成为可能的关键变化', '**切入楔子（Wedge）**：待填写高频、高留存的首发刚需场景'],
+          ['**Incumbent tax**: To fill: quantified time & cost pain today', '**Why now**: To fill: enabling technology or regulatory shift', '**Initial wedge**: To fill: high-frequency entry workflow'],
+        ],
+      },
+      {
+        title: ['早期商业化验证：高增速与健康单位经济模型', 'Early traction and unit economics proof'],
+        kicker: ['02 · 增长验证', '02 · Traction'],
+        layout: 'kpi',
+        variant: 'grid',
+        bullets: [
+          ['**核心营收 / ARR**：待填写当前规模与月/季复合增速', '**净收入留存（NRR）**：待填写付费留存与扩购表现', '**毛利率与回收期**：待填写毛利水平与 CAC Payback 月数'],
+          ['**ARR / GMV**: To fill: current run-rate and MoM/QoQ growth', '**Net retention**: To fill: cohort retention and expansion', '**Payback & margin**: To fill: gross margin and CAC payback'],
+        ],
+      },
+      {
+        title: ['从首发细分市场向百亿级可触达空间扩张', 'Bottom-up market sizing from SOM to TAM'],
+        kicker: ['03 · 市场空间', '03 · Market Size'],
+        layout: 'tam',
+        variant: 'concentric',
+        items: [
+          [
+            { tag: 'TAM', value: '待填写总额', title: '全球目标行业总体潜在市场', text: '待填写自下而上测算口径' },
+            { tag: 'SAM', value: '待填写规模', title: '核心产品线可服务市场空间', text: '待填写目标客群数量 × 客单价' },
+            { tag: 'SOM', value: '待填写目标', title: '未来 24 个月可拿下份额', text: '待填写标杆渠道转化路径' },
+          ],
+          [
+            { tag: 'TAM', value: 'To fill', title: 'Total addressable spend', text: 'To fill: bottom-up sizing formula' },
+            { tag: 'SAM', value: 'To fill', title: 'Serviceable target segment', text: 'To fill: account count × ACV' },
+            { tag: 'SOM', value: 'To fill', title: '24-month obtainable target', text: 'To fill: GTM wedge capture' },
+          ],
+        ],
+        bullets: [
+          ['**测算依据**：待填写客单价与目标客户基数的核验来源'],
+          ['**Sizing basis**: To fill: verified account count and ACV assumptions'],
+        ],
+      },
+      {
+        title: ['核心技术护城河与主流竞品全维度对比', 'Defensibility and competitive landscape'],
+        kicker: ['04 · 竞争壁垒', '04 · Moat & Matrix'],
+        layout: 'harvey',
+        rows: [
+          [
+            ['关键能力', '我们', '传统巨头', '同类初创'],
+            ['开箱即用交付速度', '●', '◔', '◑'],
+            ['数据飞轮与专有壁垒', '●', '◑', '◔'],
+            ['总体拥有成本优势', '●', '○', '◑'],
+          ],
+          [
+            ['Capability', 'Us', 'Incumbents', 'Point Startups'],
+            ['Time-to-value', '●', '◔', '◑'],
+            ['Proprietary data moat', '●', '◑', '◔'],
+            ['TCO advantage', '●', '○', '◑'],
+          ],
+        ],
+        bullets: [
+          ['**复利壁垒**：待填写随规模扩大而增强的网络效应或切换成本'],
+          ['**Compounding moat**: To fill: switching costs or data network effects'],
+        ],
+      },
+    ],
+    closing: {
+      title: ['本轮融资规划与未来 18 个月关键里程碑', 'Fundraising terms & 18-month milestones'],
+      subtitle: ['待填写：融资金额、资金用途比例与创始人联系方式', 'To fill: round size, use of proceeds and founder contact'],
+    },
+  },
+  {
+    id: 'industry-research',
+    persona: 'consulting',
+    theme: 'economist-brief',
+    tableStyle: 'booktabs',
+    name: { zh: '行业研究与宏观洞察', en: 'Macro & industry research' },
+    sections: [
+      {
+        title: ['核心研判：技术成本曲线下移正触发产业链利润池重分配', 'Core thesis: falling cost curves are redistributing value-chain profit pools'],
+        kicker: ['01 · 核心研判', '01 · Core Thesis'],
+        layout: 'statement',
+        bullets: [
+          ['待填写：一句话浓缩本篇行研最具洞察力的非共识结论与时间窗口'],
+          ['To fill: one non-consensus analytical thesis with timeframe and magnitude'],
+        ],
+      },
+      {
+        title: ['产业链上中下游价值分布与议价权演进', 'Value-chain profit pool and bargaining power'],
+        kicker: ['02 · 产业链图谱', '02 · Value Chain'],
+        layout: 'process',
+        variant: 'chevron',
+        items: [
+          [
+            { tag: '上游', title: '核心原材料与算力底座', text: '待填写集中度与毛利带', conversion: '毛利 待填写' },
+            { tag: '中游', title: '模组平台与系统集成', text: '待填写规模效应拐点', conversion: '毛利 待填写' },
+            { tag: '下游', title: '垂直场景与品牌终端', text: '待填写渠道壁垒与复购', conversion: '毛利 待填写' },
+          ],
+          [
+            { tag: 'Upstream', title: 'Core inputs & infrastructure', text: 'To fill: concentration', conversion: 'GM: To fill' },
+            { tag: 'Midstream', title: 'Platform & integration', text: 'To fill: scale economics', conversion: 'GM: To fill' },
+            { tag: 'Downstream', title: 'Vertical apps & distribution', text: 'To fill: customer lock-in', conversion: 'GM: To fill' },
+          ],
+        ],
+        bullets: [
+          ['**利润迁移方向**：待填写未来三年高毛利环节转移证据'],
+          ['**Profit migration**: To fill: where margin expansion accrues next'],
+        ],
+      },
+      {
+        title: ['主要玩家战略定位与竞争格局四象限', 'Competitive positioning 2x2 matrix'],
+        kicker: ['03 · 竞争格局', '03 · Landscape'],
+        layout: 'matrix',
+        variant: '2x2',
+        bullets: [
+          ['**全栈领军者（高壁垒·广覆盖）**：待填写代表企业与份额', '**垂直隐形冠军（高壁垒·深场景）**：待填写高利基玩家', '**规模挑战者（成本领先·标准化）**：待填写价格带玩家', '**长尾出清区（同质化·低毛利）**：待填写整合趋势'],
+          ['**Full-stack leaders**: To fill: share & moat', '**Vertical specialists**: To fill: high-margin niche winners', '**Scale challengers**: To fill: cost-curve disruptors', '**Consolidation zone**: To fill: commoditized tail'],
+        ],
+      },
+      {
+        title: ['关键跟踪指标、情景假设与下行风险提示', 'Key signposts, scenarios and downside risks'],
+        kicker: ['04 · 风险与跟踪', '04 · Signposts & Risks'],
+        layout: 'comparison',
+        variant: 'issue-action',
+        bullets: [
+          ['**待填写核心宏观/政策/技术证伪风险**：待填写高频先行观察指标与应对配置建议'],
+          ['**To fill: primary thesis-falsifying risk**: To fill: leading indicator signpost and hedge'],
+        ],
+      },
+    ],
+    closing: {
+      title: ['研究结论摘要与重点跟踪标的清单', 'Summary takeaways & coverage watchlist'],
+      subtitle: ['待填写：研究团队、数据截止日期与免责声明', 'To fill: research team, data cutoff date and disclosures'],
+    },
+  },
 ])
 
 export function findScenarioTemplate(id) {
@@ -1240,15 +1543,38 @@ export function inferThemeFromContent(input = {}) {
     }
     if (persona === 'tech-pitch') {
       const keynoteLightHit = /苹果风|极简白|空间留白|消费电子|硬件生态|cupertino|spatial\s*keynote|keynote\s*light/i.test(corpus)
+      const ventureDaylightHit = /创投简报|明亮路演|阅读版\s*BP|投资备忘录|日间路演|partner\s*memo|daylight\s*pitch|investor\s*memo/i.test(corpus)
+      const stripeCraftHit = /PRD评审|需求评审|产品需求文档|开发者平台|产品迭代评审|SaaS\s*方案|product\s*review|\bprd\b|developer\s*platform|stripe\s*craft/i.test(corpus)
+      const auroraStageHit = /极光发布|算力底座|芯片发布|大模型训练集群|AI基础设施发布|aurora\s*keynote|gpu\s*cluster|ai\s*infra\s*launch/i.test(corpus)
       const stageHit = /路演|融资|商业计划|种子轮|天使轮|[ABC]\s*轮|产品发布|新品发布|发布会|开发者大会|大模型|智能体|算力|keynote|pitch\s*deck|seed\s*round|series\s*[abc]|product\s*launch|developer/i.test(corpus)
       const b2bHit = /技术方案|架构设计|系统重构|工程效能|云原生|微服务|中台|数字化转型|安全合规|接口规范|运维|选型评审|故障复盘/i.test(corpus)
-      const theme = keynoteLightHit ? 'keynote-light' : (b2bHit && !stageHit ? 'cobalt-cream' : 'linear-dark')
+      const theme = keynoteLightHit
+        ? 'keynote-light'
+        : ventureDaylightHit
+          ? 'venture-daylight'
+          : stripeCraftHit
+            ? 'stripe-craft'
+            : auroraStageHit
+              ? 'aurora-stage'
+              : (b2bHit && !stageHit ? 'cobalt-cream' : 'linear-dark')
       return {
         persona: 'tech-pitch',
         theme,
         tableStyle: 'consulting',
         chartHighlight: 'last',
       }
+    }
+    const terminalAmberHit = /彭博终端|量化交易|安全态势|攻防演练|SRE作战室|高频风控|quant\s*trading|threat\s*intel|war\s*room|bloomberg/i.test(corpus)
+    if (terminalAmberHit) {
+      return { persona: 'consulting', theme: 'obsidian-amber', tableStyle: 'consulting', chartHighlight: 'max' }
+    }
+    const economistHit = /经济学人|行业研究|宏观洞察|地缘政治|通胀展望|智库报告|并购尽调|产业白皮书|产业链图谱|economist|macro\s*research|geopolitic|industry\s*research|think\s*tank|due\s*diligence/i.test(corpus)
+    if (economistHit) {
+      return { persona: 'consulting', theme: 'economist-brief', tableStyle: 'booktabs', chartHighlight: 'max' }
+    }
+    const bcgEmeraldHit = /\bBCG\b|波士顿咨询|OKR\s*复盘|绿色转型|双碳战略|低碳转型|翡翠战略|增长转型|green\s*transformation|okr\s*review|emerald\s*strategy|decarbonization/i.test(corpus)
+    if (bcgEmeraldHit) {
+      return { persona: 'consulting', theme: 'bcg-emerald', tableStyle: 'consulting', chartHighlight: 'max' }
     }
     const financialFtHit = /财报|业绩会|季报业绩|IPO|二级市场|投研|资产配置|宏观经济|金融时报|净值|估值模型|earnings|financial\s*report|investor\s*relations|ebitda|valuation|consensus/i.test(corpus)
     if (financialFtHit) {
@@ -1285,8 +1611,8 @@ export function inferThemeFromContent(input = {}) {
   addMatches('academic', /论文|答辩|综述|实验结果|消融实验|基线模型|定理|假设检验|显著性|参考文献|学位|导师|课题组|自然科学基金|临床|病例|诊疗|病理|患者|thesis|dissertation|ablation|methodology|empirical|et\s+al\.|arxiv|clinical|medical|diagnosis/gi, 3.2)
   addMatches('education', /课程|教学|培训|讲义|课堂|学习目标|知识点|课后练习|随堂|章节导读|实训|工坊|新员工|onboarding|workshop|syllabus|curriculum|lesson/gi, 3.0)
   addMatches('editorial', /品牌故事|人文|策展|可持续发展|碳中和|社会责任|非遗|文化洞察|建筑设计|工业设计|作品集|摄影集|奢侈品|高定|画册|黑金|ESG|sustainability|editorial|monograph|bauhaus|lookbook|luxury|atelier/gi, 2.9)
-  addMatches('tech-pitch', /路演|融资|商业计划|种子轮|天使轮|[ABC]\s*轮|产品发布|新品发布|发布会|开发者大会|大模型|智能体|算力|苹果风|消费电子|keynote|pitch\s*deck|product\s*launch/gi, 3.1)
-  addMatches('consulting', /战略|咨询|经营分析|商业复盘|周报|月报|季报|财报|业绩会|投研|预算|利润率|成本拆解|ROI|同比|环比|项目汇报|矩阵|漏斗|里程碑|earnings|ebitda/gi, 2.4)
+  addMatches('tech-pitch', /路演|融资|商业计划|种子轮|天使轮|[ABC]\s*轮|产品发布|新品发布|发布会|开发者大会|大模型|智能体|算力|苹果风|消费电子|创投简报|PRD评审|需求评审|开发者平台|极光发布|keynote|pitch\s*deck|product\s*launch|partner\s*memo|\bprd\b|developer\s*platform/gi, 3.1)
+  addMatches('consulting', /战略|咨询|\bBCG\b|波士顿咨询|双碳战略|绿色转型|低碳转型|经营分析|商业复盘|周报|月报|季报|财报|业绩会|投研|预算|利润率|成本拆解|ROI|同比|环比|项目汇报|矩阵|漏斗|里程碑|OKR\s*复盘|行业研究|宏观洞察|地缘政治|通胀展望|智库报告|并购尽调|量化交易|安全态势|earnings|ebitda|okr\s*review|industry\s*research|macro\s*research/gi, 2.6)
 
   let bestPersona = 'consulting'
   let bestScore = 0
@@ -1475,6 +1801,20 @@ export function promoteMarkdownSlides(slides, options = {}) {
     if (n >= 2 && n <= 6 && COMPARE_TITLE_RE.test(titleText) && maxLen <= 76) {
       slide.layout = 'comparison'
       slide.variant = /问题|痛点|风险|挑战|阻塞/.test(titleText) ? 'issue-action' : 'versus'
+      consecutiveBullets = 0
+      continue
+    }
+
+    if (n >= 3 && n <= 6 && /价值链|端到端|全链路|研产销|产业链|业务链路|value\s*chain|end-to-end/i.test(titleText) && maxLen <= 74) {
+      slide.layout = 'process'
+      slide.variant = 'chevron'
+      consecutiveBullets = 0
+      continue
+    }
+
+    if (n >= 3 && n <= 6 && /转化漏斗|销售漏斗|获客漏斗|漏斗转化|conversion\s*funnel|sales\s*funnel/i.test(titleText) && maxLen <= 74) {
+      slide.layout = 'process'
+      slide.variant = 'funnel'
       consecutiveBullets = 0
       continue
     }

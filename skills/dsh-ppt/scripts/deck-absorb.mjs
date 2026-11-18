@@ -16,7 +16,7 @@
 import { lstatSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { inflateSync } from 'node:zlib'
-import { sanitizeAbsorbedTheme, normalizeHex, hexToHsl } from './deck-themes.mjs'
+import { sanitizeAbsorbedTheme, normalizeHex, hexToHsl, relativeLuminance } from './deck-themes.mjs'
 
 const MAX_PPTX_BYTES = 64 * 1024 * 1024
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -154,6 +154,13 @@ export function resolveColorModifiers(baseHex, mods) {
       const [h, s, l] = rgbToHsl01(r, g, b)
       const nextS = clamp01(step.kind === 'satMod' ? s * ratio : s + ratio)
       ;[r, g, b] = hslToRgb01(h, nextS, l)
+    } else if (step.kind === 'hueMod' || step.kind === 'hueOff') {
+      const [h, s, l] = rgbToHsl01(r, g, b)
+      // OOXML hueOff uses 1/60000 deg (21600000 = 360 deg); hueMod uses 1/100000 ratio
+      const nextH = step.kind === 'hueMod'
+        ? ((h * ratio) % 1 + 1) % 1
+        : (((h + step.val / 21600000) % 1) + 1) % 1
+      ;[r, g, b] = hslToRgb01(nextH, s, l)
     }
   }
 
@@ -164,11 +171,32 @@ export function resolveColorModifiers(baseHex, mods) {
 function parseXmlModifiers(innerXml) {
   if (!innerXml) return []
   const mods = []
-  const modRe = /<a:(lumMod|lumOff|tint|shade|satMod|satOff)\b[^>]*\bval=["'](-?\d+)["'][^>]*\/?>/g
+  const modRe = /<a:(lumMod|lumOff|tint|shade|satMod|satOff|hueMod|hueOff)\b[^>]*\bval=["'](-?\d+)["'][^>]*\/?>/g
   for (const m of innerXml.matchAll(modRe)) {
     mods.push({ kind: m[1], val: Number(m[2]) })
   }
   return mods
+}
+
+const PRESET_COLOR_HEX = {
+  black: '#000000',
+  white: '#FFFFFF',
+  navy: '#000080',
+  darkblue: '#00008B',
+  midnightblue: '#191970',
+  royalblue: '#4169E1',
+  teal: '#008080',
+  darkgreen: '#006400',
+  seagreen: '#2E8B57',
+  darkred: '#8B0000',
+  crimson: '#DC143C',
+  firebrick: '#B22222',
+  gold: '#FFD700',
+  orange: '#FFA500',
+  darkslategray: '#2F4F4F',
+  slategray: '#708090',
+  gray: '#808080',
+  lightgray: '#D3D3D3',
 }
 
 function lookupSchemeHex(slot, themeScheme, colorMap) {
@@ -183,18 +211,31 @@ function lookupSchemeHex(slot, themeScheme, colorMap) {
 }
 
 /**
- * Parse <a:srgbClr> or <a:schemeClr> (including child lumMod/lumOff/tint/shade/satMod) from an XML fragment.
+ * Parse <a:srgbClr>, <a:schemeClr>, <a:sysClr>, or <a:prstClr> (including child modifiers) from an XML fragment.
  */
 export function resolveXmlColorElement(xmlFragment, themeScheme, colorMap) {
   if (!xmlFragment || typeof xmlFragment !== 'string') return null
-  const match = /<a:(srgbClr|schemeClr)\b[^>]*\bval=["']([^"']+)["'][^>]*(?:\/>|>([\s\S]*?)<\/a:\1>)/.exec(xmlFragment)
+  const match = /<a:(srgbClr|schemeClr|sysClr|prstClr)\b([^>]*)(?:\/>|>([\s\S]*?)<\/a:\1>)/.exec(xmlFragment)
   if (!match) return null
-  const [, tag, val, inner] = match
+  const [, tag, attrs, inner] = match
+  const valMatch = /\bval=["']([^"']+)["']/.exec(attrs)
+  const lastClrMatch = /\blastClr=["']([^"']+)["']/.exec(attrs)
+  const val = valMatch ? valMatch[1].trim() : ''
   let baseHex = null
   if (tag === 'srgbClr') {
     baseHex = normalizeHex(val, '') || null
-  } else {
-    baseHex = lookupSchemeHex(val.trim(), themeScheme, colorMap)
+  } else if (tag === 'sysClr') {
+    if (lastClrMatch && /^#?[\da-f]{6}$/i.test(lastClrMatch[1].trim())) {
+      baseHex = normalizeHex(lastClrMatch[1].trim(), '') || null
+    } else if (/windowtext|buttontext|menutext/i.test(val)) {
+      baseHex = '#000000'
+    } else if (/window|highlighttext/i.test(val)) {
+      baseHex = '#FFFFFF'
+    }
+  } else if (tag === 'prstClr') {
+    baseHex = PRESET_COLOR_HEX[val.toLowerCase()] ?? null
+  } else if (val) {
+    baseHex = lookupSchemeHex(val, themeScheme, colorMap)
   }
   if (!baseHex) return null
   const mods = parseXmlModifiers(inner)
@@ -248,13 +289,43 @@ function resolveShapeFillSafe(lib, pres, shape, themeScheme, colorMap) {
 // Master Slide Skeleton Extraction
 // ---------------------------------------------------------------------------
 
+function getBoundsSafe(lib, shape) {
+  try {
+    const resolved = lib.getShapeBoundsResolved?.(shape)
+    if (resolved && Number.isFinite(resolved.w) && Number.isFinite(resolved.h)) return resolved
+  } catch { /* fallback */ }
+  try {
+    return lib.getShapeBounds(shape)
+  } catch {
+    return null
+  }
+}
+
+function flattenShapes(lib, shapes, depth = 0) {
+  if (!Array.isArray(shapes) || depth > 4) return []
+  const out = []
+  for (const shape of shapes) {
+    if (!shape) continue
+    let children = null
+    try {
+      children = lib.getGroupChildren?.(shape)
+    } catch { /* ignore */ }
+    if (Array.isArray(children) && children.length > 0) {
+      out.push(...flattenShapes(lib, children, depth + 1))
+    } else {
+      out.push(shape)
+    }
+  }
+  return out
+}
+
 function classifyCornerFromShapes(lib, shapes, slideW) {
   let hasRounded = false
   let hasSoft = false
   let hasSharpRect = false
-  for (const shape of shapes) {
+  for (const shape of flattenShapes(lib, shapes)) {
     try {
-      const bounds = lib.getShapeBounds(shape)
+      const bounds = getBoundsSafe(lib, shape)
       if (!bounds) continue
       const relW = bounds.w / slideW
       if (relW < 0.08) continue
@@ -286,9 +357,9 @@ function classifyCornerFromShapes(lib, shapes, slideW) {
 }
 
 function extractSkeletonFromShapes(lib, masterShapes, layoutShapes, sampleSlideShapes, slideW, slideH) {
-  const mShapes = Array.isArray(masterShapes) ? masterShapes : []
-  const lShapes = Array.isArray(layoutShapes) ? layoutShapes : []
-  const sShapes = Array.isArray(sampleSlideShapes) ? sampleSlideShapes : []
+  const mShapes = flattenShapes(lib, masterShapes)
+  const lShapes = flattenShapes(lib, layoutShapes)
+  const sShapes = flattenShapes(lib, sampleSlideShapes)
   const inspectShapes = [...mShapes, ...lShapes, ...(mShapes.length + lShapes.length === 0 ? sShapes : [])]
 
   let hasTopBanner = false
@@ -299,7 +370,7 @@ function extractSkeletonFromShapes(lib, masterShapes, layoutShapes, sampleSlideS
   for (const shape of inspectShapes) {
     try {
       if (lib.hasShapeImage(shape)) continue
-      const bounds = lib.getShapeBounds(shape)
+      const bounds = getBoundsSafe(lib, shape)
       if (!bounds) continue
       const relW = bounds.w / slideW
       const relH = bounds.h / slideH
@@ -328,7 +399,7 @@ function extractSkeletonFromShapes(lib, masterShapes, layoutShapes, sampleSlideS
     cornerStyle,
     hasTopBanner,
     hasSideSpine,
-    masterShapeCount: mShapes.length,
+    masterShapeCount: Array.isArray(masterShapes) ? masterShapes.length : mShapes.length,
     _hasFooterRule: hasFooterRule,
     _doubleHeaderLines: doubleHeaderLines,
   }
@@ -358,6 +429,8 @@ function inferChromeStyle(skeleton, palette, fonts, dark, recommendedTheme) {
 
   if (
     recommendedTheme === 'keynote-light' ||
+    recommendedTheme === 'venture-daylight' ||
+    recommendedTheme === 'aurora-stage' ||
     recommendedTheme === 'bold' ||
     skeleton.cornerStyle === 'soft' ||
     (!skeleton.hasTopBanner && !skeleton.hasSideSpine && !skeleton._hasFooterRule && skeleton.cornerStyle !== 'sharp' && !dark)
@@ -368,6 +441,7 @@ function inferChromeStyle(skeleton, palette, fonts, dark, recommendedTheme) {
   if (
     skeleton.hasSideSpine ||
     recommendedTheme === 'editorial-forest' ||
+    recommendedTheme === 'economist-brief' ||
     recommendedTheme === 'cartesian' ||
     recommendedTheme === 'velvet' ||
     recommendedTheme === 'luxury-noir'
@@ -377,6 +451,7 @@ function inferChromeStyle(skeleton, palette, fonts, dark, recommendedTheme) {
 
   if (
     recommendedTheme === 'linear-dark' ||
+    recommendedTheme === 'stripe-craft' ||
     recommendedTheme === 'swiss' ||
     recommendedTheme === 'data' ||
     recommendedTheme === 'soft' ||
@@ -389,29 +464,68 @@ function inferChromeStyle(skeleton, palette, fonts, dark, recommendedTheme) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-Slide Layout Classification
+// Per-Slide Layout Classification (Full 24-Archetype + Variant Recognition)
 // ---------------------------------------------------------------------------
+
+function inspectTableForHarveyAndStyle(lib, tables) {
+  let hasHarvey = false
+  let styleHint = null
+  for (const tbl of tables ?? []) {
+    try {
+      const dims = lib.getTableDimensions?.(tbl)
+      const rows = dims?.rows ?? 0
+      const cols = dims?.cols ?? 0
+      let harveyHits = 0
+      for (let r = 0; r < Math.min(rows, 15); r += 1) {
+        for (let c = 0; c < Math.min(cols, 10); c += 1) {
+          const txt = String(lib.getTableCellText?.(tbl, r, c) ?? '').trim()
+          if (/[●◕◑◔○]/.test(txt)) harveyHits += 1
+        }
+      }
+      if (harveyHits >= 2) hasHarvey = true
+      const flags = lib.getTableStyleFlags?.(tbl)
+      if (flags && flags.bandRow === false && flags.bandCol === false && flags.firstRow === true) {
+        styleHint ||= 'booktabs'
+      } else if (flags?.bandRow === true) {
+        styleHint ||= 'banded'
+      }
+    } catch { /* ignore table inspection error */ }
+  }
+  return { hasHarvey, styleHint }
+}
 
 function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH) {
   const result = { slideNumber: slideIndex + 1, inferredLayout: 'bullets' }
   try {
-    const shapes = lib.getSlideShapes(slide) ?? []
+    const rawShapes = lib.getSlideShapes(slide) ?? []
+    const shapes = flattenShapes(lib, rawShapes)
     let layoutType = ''
+    let layoutName = ''
     try {
       const sLayout = lib.getSlideLayout(slide)
-      if (sLayout) layoutType = String(lib.getSlideLayoutType(sLayout) ?? '').toLowerCase()
+      if (sLayout) {
+        layoutType = String(lib.getSlideLayoutType(sLayout) ?? '').toLowerCase()
+        layoutName = String(lib.getSlideLayoutName?.(sLayout) ?? '').toLowerCase()
+      }
     } catch { /* ignore */ }
 
     let hasChart = false
+    let isWaterfallChart = false
     let hasTable = false
+    let slideTables = []
     try {
       const charts = lib.getSlideCharts?.(slide)
       if (Array.isArray(charts) && charts.length > 0) hasChart = true
     } catch { /* ignore */ }
     try {
       const tables = lib.getSlideTables?.(slide)
-      if (Array.isArray(tables) && tables.length > 0) hasTable = true
+      if (Array.isArray(tables) && tables.length > 0) {
+        hasTable = true
+        slideTables = tables
+      }
     } catch { /* ignore */ }
+
+    const tableMeta = hasTable ? inspectTableForHarveyAndStyle(lib, slideTables) : { hasHarvey: false, styleHint: null }
 
     let titleText = ''
     let titleFound = false
@@ -421,20 +535,59 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
     let nonTitleTextShapes = 0
     let largeCardShapes = 0
     let numericKpiShapes = 0
-    let harveyCells = false
+    let harveyCells = tableMeta.hasHarvey
+    let harveyPieOrCircles = 0
+    let waterfallBars = 0
+    let chevronShapes = 0
+    let ellipseCircles = 0
+    let diamondShapes = 0
+    let connectorShapes = 0
+    let horizontalAxisLines = 0
+    let roleBioHits = 0
+    let quoteSignal = false
+    let tamTextHits = 0
+    const cardRects = []
+    const ganttBars = []
+    const layerBands = []
     const shapeCenters = []
+    const allBodyTexts = []
 
     for (const shape of shapes) {
       try {
-        if (lib.isChartShape?.(shape)) hasChart = true
+        if (lib.isChartShape?.(shape)) {
+          hasChart = true
+          try {
+            if (String(lib.getShapeChartKind?.(shape) ?? '').toLowerCase() === 'waterfall') isWaterfallChart = true
+          } catch { /* ignore */ }
+        }
         if (lib.isTableShape?.(shape)) hasTable = true
 
         const name = String(lib.getShapeName?.(shape) ?? '').toLowerCase()
         const phType = String(lib.getShapePlaceholderType?.(shape) ?? '').toLowerCase()
-        const bounds = lib.getShapeBounds(shape)
+        const preset = String(lib.getShapePreset?.(shape) ?? '').toLowerCase()
+        const kind = String(lib.getShapeKind?.(shape) ?? '').toLowerCase()
+        const bounds = getBoundsSafe(lib, shape)
         const text = String(lib.getShapeText?.(shape) ?? '').trim()
 
-        if (!hasChart && (name.includes('chart') || name.includes('diagram'))) hasChart = true
+        if (name.startsWith('waterfall bar') || name.startsWith('waterfall bridge')) {
+          waterfallBars += 1
+        }
+        if (name.startsWith('harvey ')) {
+          harveyCells = true
+        } else if (bounds && (preset === 'pie' || preset === 'ellipse') && (bounds.w / slideW) >= 0.01 && (bounds.w / slideW) <= 0.045 && Math.abs(bounds.w - bounds.h) <= bounds.w * 0.18) {
+          harveyPieOrCircles += 1
+          if (harveyPieOrCircles >= 4) harveyCells = true
+        }
+        if (kind === 'connector' || preset.includes('connector') || preset === 'line') {
+          const inBodyZone = bounds && (bounds.y / slideH) > 0.22 && (bounds.y / slideH) < 0.86 && !/rule|folio|divider|header|footer|takeaway/i.test(name)
+          if (inBodyZone) {
+            connectorShapes += 1
+            if (bounds.w / slideW >= 0.52 && bounds.h / slideH <= 0.025) {
+              horizontalAxisLines += 1
+            }
+          }
+        }
+        if (!hasChart && (name.includes('chart') || (name.includes('diagram') && !name.includes('arch')))) hasChart = true
         if (!hasTable && name.includes('table')) hasTable = true
 
         if (phType === 'title' || phType === 'ctrtitle' || name.startsWith('title') || name.includes('标题')) {
@@ -444,6 +597,10 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
         }
 
         if (lib.hasShapeImage(shape)) {
+          // Ignore tiny corner brand logos during content layout classification
+          if (bounds && bounds.w <= slideW * 0.16 && bounds.h <= slideH * 0.14 && (bounds.y <= slideH * 0.16 || bounds.y + bounds.h >= slideH * 0.84)) {
+            continue
+          }
           imageCount += 1
           if (bounds) {
             const relW = bounds.w / slideW
@@ -467,6 +624,9 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
         const relX = bounds.x / slideW
         const relY = bounds.y / slideH
 
+        // Skip full-bleed background canvas shapes
+        if (relW >= 0.78 && relH >= 0.78 && relX <= 0.12 && relY <= 0.12) continue
+
         if (!titleFound && relY < 0.22 && relW > 0.45 && relH < 0.22 && text) {
           titleFound = true
           titleText = text.replace(/\s+/g, ' ').slice(0, 80)
@@ -480,28 +640,102 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
           phType === 'ftr' || phType === 'sldnum' || phType === 'dt'
         if (isChromeShape) continue
 
+        if (preset === 'chevron' || preset === 'homeplate' || preset === 'pentagon') {
+          chevronShapes += 1
+        } else if (preset === 'ellipse' && relW >= 0.12 && relH >= 0.16 && Math.abs(bounds.w - bounds.h) <= Math.max(bounds.w, bounds.h) * 0.45) {
+          ellipseCircles += 1
+        } else if (preset === 'diamond' && relW <= 0.08 && relH <= 0.12) {
+          diamondShapes += 1
+        }
+
         if (text) {
           nonTitleTextShapes += 1
-          if (/^[+-]?\d[\d.,]*\s*[%％倍xX万亿千百kKmMbB+]*$/.test(text.split('\n')[0]?.trim() ?? '')) {
+          allBodyTexts.push(text)
+          const firstLine = text.split('\n')[0]?.trim() ?? ''
+          if (/^[+-]?[$¥€£]?\s*\d[\d.,]*\s*[%％倍xX万亿千百kKmMbBtT+]*$/.test(firstLine)) {
             numericKpiShapes += 1
           }
           if (/[●◕◑◔○]/.test(text)) harveyCells = true
+          if (/\b(?:TAM|SAM|SOM)\b/i.test(text)) tamTextHits += 1
+          if (/\b(?:CEO|CTO|CFO|COO|CMO|VP|SVP|Director|Founder|Partner)\b|负责人|总监|合伙人|首席|院长|组长/.test(text)) {
+            roleBioHits += 1
+          }
+          if (/^[“"「『][\s\S]{10,}[”"」』]?/.test(text) || /——\s*\S+/.test(text)) {
+            quoteSignal = true
+          }
         }
 
-        if (!lib.isChartShape?.(shape) && !lib.isTableShape?.(shape) && relW > 0.18 && relW < 0.65 && relH > 0.18) {
-          largeCardShapes += 1
-          shapeCenters.push({ x: relX + relW / 2, y: relY + relH / 2 })
+        if (!lib.isChartShape?.(shape) && !lib.isTableShape?.(shape)) {
+          if (relW >= 0.52 && relH >= 0.065 && relH <= 0.22 && relY >= 0.16 && relY <= 0.86) {
+            layerBands.push({ x: relX, y: relY, w: relW, h: relH })
+          }
+          if (relW >= 0.10 && relW <= 0.68 && relH >= 0.025 && relH <= 0.105 && relY >= 0.20 && relY <= 0.85 && relX >= 0.14) {
+            ganttBars.push({ x: relX, y: relY, w: relW, h: relH })
+          }
+          if (relW > 0.16 && relW < 0.88 && relH > 0.14) {
+            cardRects.push({ x: relX, y: relY, w: relW, h: relH, cx: relX + relW / 2, cy: relY + relH / 2 })
+            if (relW > 0.18 && relW < 0.65 && relH > 0.18) {
+              largeCardShapes += 1
+              shapeCenters.push({ x: relX + relW / 2, y: relY + relH / 2 })
+            }
+          }
         }
       } catch { /* ignore shape */ }
     }
 
-    // Check charts & tables BEFORE shapeCount <= 2 so single-chart/single-table slides classify accurately!
-    if (harveyCells) {
+    const combinedSignal = (titleText + ' ' + layoutName + ' ' + allBodyTexts.join(' ')).trim()
+    const distinctGanttStarts = new Set(ganttBars.map((b) => Math.round(b.x * 20))).size
+    const distinctLayerYs = new Set(layerBands.map((b) => Math.round(b.y * 20))).size
+    const isFunnelBands = layerBands.length >= 3 && (() => {
+      const sorted = [...layerBands].sort((a, b) => a.y - b.y)
+      return sorted[0].w > sorted[sorted.length - 1].w * 1.18 && sorted.every((b, idx) => idx === 0 || b.w <= sorted[idx - 1].w * 1.03)
+    })()
+    const hasTopSummaryBanner = cardRects.some((r) => r.w >= 0.68 && r.h <= 0.26 && r.y <= 0.38)
+    const lowerPillars = cardRects.filter((r) => r.w <= 0.42 && r.y >= 0.34)
+
+    // Priority order: rich native charts/tables/diagrams -> media -> framing -> structured layouts
+    if (waterfallBars >= 3 || isWaterfallChart) {
+      result.inferredLayout = 'waterfall'
+    } else if (harveyCells) {
       result.inferredLayout = 'harvey'
     } else if (hasChart) {
       result.inferredLayout = nonTitleTextShapes >= 1 || largeCardShapes >= 1 ? 'chart-split' : 'chart'
     } else if (hasTable) {
       result.inferredLayout = 'table'
+      if (tableMeta.styleHint) result.tableStyle = tableMeta.styleHint
+    } else if (ellipseCircles >= 2 && (ellipseCircles >= 3 || tamTextHits >= 2 || /市场规模|市场空间|\bTAM\b/i.test(combinedSignal))) {
+      result.inferredLayout = 'tam'
+      result.variant = 'concentric'
+    } else if (chevronShapes >= 3) {
+      result.inferredLayout = 'process'
+      result.variant = 'chevron'
+    } else if (
+      ganttBars.length >= 3 &&
+      (distinctGanttStarts >= 2 || diamondShapes >= 1 || /\bQ[1-4]\b|\bW[1-9]\b|甘特|排期|路线图|里程碑|roadmap|gantt/i.test(combinedSignal)) &&
+      distinctLayerYs >= 2 &&
+      ganttBars.every((b) => b.w < 0.62)
+    ) {
+      result.inferredLayout = 'gantt'
+      result.variant = /\bM1\b|1月|月份|month/i.test(combinedSignal) ? 'months' : 'quarters'
+    } else if (isFunnelBands) {
+      result.inferredLayout = 'process'
+      result.variant = 'funnel'
+    } else if (
+      layerBands.length >= 3 &&
+      distinctLayerYs >= 3 &&
+      (/架构|分层|中台|底座|平台层|应用层|接入层|architecture|layer|platform|stack|infra/i.test(combinedSignal) || layerBands.length >= 4)
+    ) {
+      result.inferredLayout = 'architecture'
+      result.variant = 'layered'
+    } else if (
+      largeCardShapes >= 3 &&
+      numericKpiShapes < 2 &&
+      (connectorShapes >= 2 || /组织架构|汇报线|治理架构|核心团队|管理团队|org\s*chart|leadership|team/i.test(titleText))
+    ) {
+      const ys = shapeCenters.map((c) => c.y).sort((a, b) => a - b)
+      const hasTopRoot = ys.length >= 3 && (ys[1] - ys[0] >= 0.14)
+      result.inferredLayout = 'org'
+      result.variant = hasTopRoot || (!roleBioHits && connectorShapes >= 2) ? 'tree' : 'team'
     } else if (imageCount >= 2) {
       result.inferredLayout = 'image'
       result.variant = 'gallery'
@@ -522,11 +756,23 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
       (nonTitleTextShapes <= 1 && /谢谢|感谢|Q\s*&\s*A|Thank|Contact|Next/i.test(titleText))
     ) {
       result.inferredLayout = 'closing'
+    } else if (slideIndex > 0 && slideIndex <= 2 && /^(?:目录|汇报目录|议程|大纲|章节导航|Agenda|Contents|Table\s+of\s+Contents|Outline)$/i.test(titleText.trim())) {
+      result.inferredLayout = 'agenda'
+      result.variant = largeCardShapes >= 3 ? 'cards' : 'list'
     } else if (slideIndex > 0 && (layoutType === 'sechdr' || (nonTitleTextShapes === 0 && shapes.length <= 2))) {
       result.inferredLayout = 'section'
+    } else if (quoteSignal && largeCardShapes <= 1 && nonTitleTextShapes <= 2) {
+      result.inferredLayout = 'quote'
+      result.variant = 'editorial'
     } else if (numericKpiShapes >= 2) {
       result.inferredLayout = 'kpi'
       result.variant = 'grid'
+    } else if (hasTopSummaryBanner && lowerPillars.length >= 2 && lowerPillars.length <= 4) {
+      result.inferredLayout = 'cards'
+      result.variant = 'exec-summary'
+    } else if (ellipseCircles >= 1 && largeCardShapes >= 3 && largeCardShapes <= 5) {
+      result.inferredLayout = 'process'
+      result.variant = 'flywheel'
     } else if (largeCardShapes === 4 && shapeCenters.length === 4) {
       const xs = shapeCenters.map((c) => c.x).sort((a, b) => a - b)
       const ys = shapeCenters.map((c) => c.y).sort((a, b) => a - b)
@@ -536,15 +782,26 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
     } else if (largeCardShapes >= 3) {
       const ySpread = Math.max(...shapeCenters.map((c) => c.y)) - Math.min(...shapeCenters.map((c) => c.y))
       if (ySpread < 0.12) {
-        result.inferredLayout = 'process'
-        result.variant = 'steps'
+        const avgH = cardRects.reduce((s, r) => s + r.h, 0) / Math.max(1, cardRects.length)
+        if (horizontalAxisLines >= 1 || /\bQ[1-4]\b|20\d{2}|阶段|里程碑|timeline|phase/i.test(combinedSignal)) {
+          result.inferredLayout = 'process'
+          result.variant = horizontalAxisLines >= 1 ? 'timeline' : 'steps'
+        } else if (avgH >= 0.36) {
+          result.inferredLayout = 'cards'
+          result.variant = 'pillars'
+        } else {
+          result.inferredLayout = 'process'
+          result.variant = 'steps'
+        }
       } else {
         result.inferredLayout = 'cards'
         result.variant = 'bento'
       }
     } else if (largeCardShapes === 2) {
       result.inferredLayout = 'comparison'
-      result.variant = 'versus'
+      result.variant = /问题|痛点|风险|整改|应对|issue|mitigation/i.test(combinedSignal) ? 'issue-action' : 'versus'
+    } else if (titleFound && nonTitleTextShapes === 0 && titleText.length >= 16) {
+      result.inferredLayout = 'statement'
     } else {
       result.inferredLayout = 'bullets'
     }
@@ -656,11 +913,14 @@ function detectFullBleedShapeBg(lib, pres, shapes, slideW, slideH, themeScheme, 
 function extractCandidateLogo(lib, pres, slides, layouts, slideW, slideH) {
   const pools = []
   for (const layout of layouts.slice(0, 6)) {
-    try { pools.push({ source: 'master', shapes: lib.getSlideMasterShapes(pres, layout) }) } catch { /* ignore */ }
-    try { pools.push({ source: 'layout', shapes: lib.getSlideLayoutShapes(pres, layout) }) } catch { /* ignore */ }
+    try { pools.push({ source: 'master', shapes: flattenShapes(lib, lib.getSlideMasterShapes(pres, layout)) }) } catch { /* ignore */ }
+    try { pools.push({ source: 'layout', shapes: flattenShapes(lib, lib.getSlideLayoutShapes(pres, layout)) }) } catch { /* ignore */ }
   }
-  for (const slide of slides.slice(0, 2)) {
-    try { pools.push({ source: 'slide', shapes: lib.getSlideShapes(slide) }) } catch { /* ignore */ }
+  if (slides[1]) {
+    try { pools.push({ source: 'content-slide', shapes: flattenShapes(lib, lib.getSlideShapes(slides[1])) }) } catch { /* ignore */ }
+  }
+  if (slides[0]) {
+    try { pools.push({ source: 'cover-slide', shapes: flattenShapes(lib, lib.getSlideShapes(slides[0])) }) } catch { /* ignore */ }
   }
 
   let best = null
@@ -671,7 +931,7 @@ function extractCandidateLogo(lib, pres, slides, layouts, slideW, slideH) {
         const rawFmt = String(lib.getShapeImageFormat(shape) ?? '').toLowerCase()
         const fmt = rawFmt === 'jpg' ? 'jpeg' : rawFmt
         if (fmt !== 'png' && fmt !== 'jpeg') continue
-        const bounds = lib.getShapeBounds(shape)
+        const bounds = getBoundsSafe(lib, shape)
         if (!bounds || bounds.w <= 0 || bounds.h <= 0) continue
 
         const nameText = [
@@ -685,20 +945,21 @@ function extractCandidateLogo(lib, pres, slides, layouts, slideW, slideH) {
         if (bounds.w > maxW || bounds.h > maxH) continue
 
         const nearCornerBand = bounds.y <= slideH * 0.24 || (bounds.y + bounds.h) >= slideH * 0.76
-        if (!namedLogo && pool.source === 'slide' && !nearCornerBand) continue
+        if (!namedLogo && (pool.source === 'cover-slide' || pool.source === 'content-slide') && !nearCornerBand) continue
 
         const bytes = lib.getShapeImageBytes(shape)
         if (!isValidRasterLogo(bytes, fmt)) continue
 
-        const score = (namedLogo ? 100 : 0) + (pool.source === 'master' ? 40 : pool.source === 'layout' ? 25 : 10) + (nearCornerBand ? 15 : 0)
+        const originWeight = pool.source === 'master' ? 45 : pool.source === 'layout' ? 30 : pool.source === 'content-slide' ? 20 : 12
+        const score = (namedLogo ? 100 : 0) + originWeight + (nearCornerBand ? 15 : 0)
         if (!best || score > best.score) {
           const b64 = Buffer.from(bytes).toString('base64')
-          best = { score, dataUri: `data:image/${fmt};base64,${b64}` }
+          best = { score, source: pool.source, dataUri: `data:image/${fmt};base64,${b64}` }
         }
       } catch { /* ignore shape read error */ }
     }
   }
-  return best?.dataUri ?? null
+  return best ?? null
 }
 
 function safeReadXmlPart(lib, pres, partName) {
@@ -709,6 +970,47 @@ function safeReadXmlPart(lib, pres, partName) {
   } catch {
     return ''
   }
+}
+
+function resolveAnySlideBg(lib, pres, slide, widthEmu, heightEmu, rawTheme, fallbackColorMap) {
+  if (!slide) return null
+  const sColorMap = (() => { try { return lib.getEffectiveColorMap(slide) } catch { return fallbackColorMap } })() ?? fallbackColorMap
+  const slideXml = (() => { try { return lib.getSlideXmlString?.(slide) ?? '' } catch { return '' } })()
+  let bg = null
+  try {
+    bg = resolveBackgroundHex(
+      lib.getSlideBackground(slide),
+      pres,
+      slide,
+      rawTheme,
+      sColorMap,
+      lib.getSlideBackgroundGradientFill,
+      slideXml,
+    )
+  } catch { /* ignore */ }
+  if (!bg) {
+    try {
+      const sLayout = lib.getSlideLayout(slide)
+      if (sLayout) {
+        const layoutXml = safeReadXmlPart(lib, pres, lib.getSlideLayoutPartName?.(sLayout))
+        bg = resolveBackgroundHex(
+          lib.getSlideLayoutBackground(sLayout),
+          pres,
+          sLayout,
+          rawTheme,
+          sColorMap,
+          lib.getSlideLayoutBackgroundGradientFill,
+          layoutXml,
+        ) || detectFullBleedShapeBg(lib, pres, lib.getSlideLayoutShapes(pres, sLayout), widthEmu, heightEmu, rawTheme, sColorMap)
+      }
+    } catch { /* ignore */ }
+  }
+  if (!bg) {
+    try {
+      bg = detectFullBleedShapeBg(lib, pres, lib.getSlideShapes(slide), widthEmu, heightEmu, rawTheme, sColorMap)
+    } catch { /* ignore */ }
+  }
+  return bg
 }
 
 /**
@@ -822,54 +1124,10 @@ export async function absorbPptx(options = {}) {
     masterBg = resolveBackgroundFromXml(masterXml, rawTheme, colorMap)
   }
 
-  let contentSlideBg = null
-  if (sampleSlide) {
-    const sampleXml = (() => { try { return lib.getSlideXmlString?.(sampleSlide) ?? '' } catch { return '' } })()
-    try {
-      contentSlideBg = resolveBackgroundHex(
-        lib.getSlideBackground(sampleSlide),
-        pres,
-        sampleSlide,
-        rawTheme,
-        colorMap,
-        lib.getSlideBackgroundGradientFill,
-        sampleXml,
-      )
-    } catch { /* ignore */ }
-    if (!contentSlideBg && sampleLayout) {
-      const layoutPartName = (() => { try { return lib.getSlideLayoutPartName?.(sampleLayout) } catch { return '' } })()
-      const layoutXml = safeReadXmlPart(lib, pres, layoutPartName)
-      try {
-        contentSlideBg = resolveBackgroundHex(
-          lib.getSlideLayoutBackground(sampleLayout),
-          pres,
-          sampleLayout,
-          rawTheme,
-          colorMap,
-          lib.getSlideLayoutBackgroundGradientFill,
-          layoutXml,
-        ) || detectFullBleedShapeBg(lib, pres, lib.getSlideLayoutShapes(pres, sampleLayout), widthEmu, heightEmu, rawTheme, colorMap)
-      } catch { /* ignore */ }
-    }
-    if (!contentSlideBg) {
-      try {
-        contentSlideBg = detectFullBleedShapeBg(lib, pres, lib.getSlideShapes(sampleSlide), widthEmu, heightEmu, rawTheme, colorMap)
-      } catch { /* ignore */ }
-    }
-  }
-  if (!contentSlideBg && slides[0] && slides[0] !== sampleSlide) {
-    const firstXml = (() => { try { return lib.getSlideXmlString?.(slides[0]) ?? '' } catch { return '' } })()
-    try {
-      contentSlideBg = resolveBackgroundHex(
-        lib.getSlideBackground(slides[0]),
-        pres,
-        slides[0],
-        rawTheme,
-        colorMap,
-        lib.getSlideBackgroundGradientFill,
-        firstXml,
-      ) || detectFullBleedShapeBg(lib, pres, lib.getSlideShapes(slides[0]), widthEmu, heightEmu, rawTheme, colorMap)
-    } catch { /* ignore */ }
+  const coverSlideBg = slides[0] ? resolveAnySlideBg(lib, pres, slides[0], widthEmu, heightEmu, rawTheme, colorMap) : null
+  let contentSlideBg = sampleSlide ? resolveAnySlideBg(lib, pres, sampleSlide, widthEmu, heightEmu, rawTheme, colorMap) : null
+  if (!contentSlideBg && coverSlideBg && slides.length === 1) {
+    contentSlideBg = coverSlideBg
   }
 
   let bodyTextColor = null
@@ -877,34 +1135,48 @@ export async function absorbPptx(options = {}) {
     try { bodyTextColor = lib.resolveDeckBodyTextColor(sampleSlide) } catch { /* ignore */ }
   }
 
+  // Scan shape fills across master + up to 8 slides to discover real chromatic brand accents
+  // (covers Office default #4472C4/#156082 AND corporate templates where accent1 is charcoal/navy while brand color lives on shapes)
   let shapeAccentCandidate = null
+  let shapeSecondaryCandidate = null
   const rawAccent1 = rawTheme.accent1 ? normalizeHex(rawTheme.accent1, '') : ''
-  if (!rawAccent1 || OFFICE_DEFAULT_ACCENTS.has(rawAccent1)) {
+  const accent1IsWeakOrDefault = !rawAccent1 || OFFICE_DEFAULT_ACCENTS.has(rawAccent1) || hexToHsl(rawAccent1).s < 0.14
+  {
     const colorCounts = new Map()
     const inspectPool = []
     if (firstLayout) {
-      try { inspectPool.push(...lib.getSlideMasterShapes(pres, firstLayout)) } catch { /* ignore */ }
+      try { inspectPool.push(...flattenShapes(lib, lib.getSlideMasterShapes(pres, firstLayout))) } catch { /* ignore */ }
     }
-    for (const slide of slides.slice(0, 6)) {
-      try { inspectPool.push(...lib.getSlideShapes(slide)) } catch { /* ignore */ }
+    for (const slide of slides.slice(0, 8)) {
+      try { inspectPool.push(...flattenShapes(lib, lib.getSlideShapes(slide))) } catch { /* ignore */ }
     }
+    const effectiveBg = (contentSlideBg ?? masterBg ?? '#FFFFFF').toUpperCase()
     for (const shape of inspectPool) {
       try {
-        const b = lib.getShapeBounds(shape)
+        const b = getBoundsSafe(lib, shape)
         if (b && b.w >= widthEmu * 0.78 && b.h >= heightEmu * 0.78) continue
         const hex = resolveShapeFillSafe(lib, pres, shape, rawTheme, colorMap)
         if (!hex || !/^#[\da-f]{6}$/i.test(hex)) continue
         const norm = hex.toUpperCase()
-        if (norm === '#FFFFFF' || norm === '#000000' || norm === (contentSlideBg ?? masterBg)) continue
+        if (norm === '#FFFFFF' || norm === '#000000' || norm === effectiveBg || norm === coverSlideBg) continue
+        const hsl = hexToHsl(norm)
+        // Ignore very pale surface tints (L > 0.90) and near-neutral greys (S < 0.10) when hunting brand accents
+        if (hsl.l > 0.90 || hsl.s < 0.10) continue
         colorCounts.set(norm, (colorCounts.get(norm) ?? 0) + 1)
       } catch { /* ignore */ }
     }
-    let topCount = 0
-    for (const [hex, count] of colorCounts.entries()) {
-      if (count > topCount) {
-        topCount = count
-        shapeAccentCandidate = hex
-      }
+    const ranked = [...colorCounts.entries()].sort((a, b) => b[1] - a[1])
+    if (accent1IsWeakOrDefault && ranked[0]) {
+      shapeAccentCandidate = ranked[0][0]
+    }
+    const primaryRef = shapeAccentCandidate || rawAccent1
+    if (primaryRef && ranked.length > 0) {
+      const pH = hexToHsl(primaryRef).h
+      const secHit = ranked.find(([hex]) => {
+        const d = Math.abs(hexToHsl(hex).h - pH) % 360
+        return (d > 180 ? 360 - d : d) >= 26
+      })
+      if (secHit) shapeSecondaryCandidate = secHit[0]
     }
   }
 
@@ -915,6 +1187,7 @@ export async function absorbPptx(options = {}) {
     }
   }
   if (masterBg) extractedPalette.masterBg = masterBg
+  if (coverSlideBg) extractedPalette.coverSlideBg = coverSlideBg
   if (contentSlideBg) extractedPalette.contentSlideBg = contentSlideBg
   if (bodyTextColor) extractedPalette.bodyTextColor = normalizeHex(bodyTextColor, bodyTextColor)
 
@@ -929,12 +1202,24 @@ export async function absorbPptx(options = {}) {
     palette: extractedPalette,
     fonts: extractedFonts,
     masterBg: masterBg ?? undefined,
+    coverSlideBg: coverSlideBg ?? undefined,
     contentSlideBg: contentSlideBg ?? masterBg ?? undefined,
     textColor: bodyTextColor ?? undefined,
     ...(shapeAccentCandidate ? { brandPrimary: shapeAccentCandidate } : {}),
+    ...(shapeSecondaryCandidate ? { brandSecondary: shapeSecondaryCandidate } : {}),
   })
 
-  const logoDataUri = extractLogo ? extractCandidateLogo(lib, pres, slides, layouts, widthEmu, heightEmu) : null
+  const logoMatch = extractLogo ? extractCandidateLogo(lib, pres, slides, layouts, widthEmu, heightEmu) : null
+  const logoDataUri = logoMatch?.dataUri ?? null
+  if (
+    logoMatch?.source === 'cover-slide' &&
+    !sanitized.dark &&
+    coverSlideBg &&
+    relativeLuminance(coverSlideBg) < 0.25
+  ) {
+    sanitized.warnings.push('母版 Logo 提取自深色封面页；若为反白透明图标，应用后建议核对浅色正文页右上角可见度。')
+  }
+
   let coreTitle = ''
   try {
     const props = lib.getCoreProperties(pres)
@@ -948,16 +1233,17 @@ export async function absorbPptx(options = {}) {
     ...(coreTitle ? { name: coreTitle } : {}),
     ...(logoDataUri ? { logo: logoDataUri } : {}),
   }
-  if (
-    sanitizedBrand.fontFamily &&
-    (
-      /^(?:SimSun|NSimSun|宋体|新宋体|FangSong|仿宋|Impact|Comic Sans MS)$/i.test(sanitizedBrand.fontFamily) ||
-      (/^(?:Calibri|Calibri Light|Aptos|Aptos Display)$/i.test(sanitizedBrand.fontFamily) &&
-        !extractedFonts.majorEastAsian &&
-        !extractedFonts.minorEastAsian)
-    )
-  ) {
+  const isOfficeDefaultFont = (f) =>
+    /^(?:SimSun|NSimSun|宋体|新宋体|FangSong|仿宋|Impact|Comic Sans MS)$/i.test(f) ||
+    (/^(?:Calibri|Calibri Light|Aptos|Aptos Display)$/i.test(f) &&
+      !extractedFonts.majorEastAsian &&
+      !extractedFonts.minorEastAsian)
+
+  if (sanitizedBrand.fontFamily && isOfficeDefaultFont(sanitizedBrand.fontFamily)) {
     delete sanitizedBrand.fontFamily
+  }
+  if (sanitizedBrand.headingFont && isOfficeDefaultFont(sanitizedBrand.headingFont)) {
+    delete sanitizedBrand.headingFont
   }
 
   const layoutTypes = {}
@@ -1009,6 +1295,27 @@ export async function absorbPptx(options = {}) {
     analyzeSlideLayout(lib, slide, idx, slides.length, widthEmu, heightEmu)
   )
 
+  // Synthesize human-readable Narrative & Style Recipe Profile
+  const archetypeCounts = {}
+  let diagramSlideCount = 0
+  let detectedTableStyle = null
+  for (const entry of slideSkeleton) {
+    const key = entry.variant ? `${entry.inferredLayout}:${entry.variant}` : entry.inferredLayout
+    archetypeCounts[key] = (archetypeCounts[key] ?? 0) + 1
+    if (['kpi', 'cards', 'comparison', 'matrix', 'process', 'gantt', 'architecture', 'harvey', 'tam', 'org', 'chart', 'chart-split', 'waterfall', 'table'].includes(entry.inferredLayout)) {
+      diagramSlideCount += 1
+    }
+    if (!detectedTableStyle && entry.tableStyle) detectedTableStyle = entry.tableStyle
+  }
+  const recommendedTableStyle = detectedTableStyle || (recommendedChrome === 'academic-minimal' ? 'booktabs' : 'consulting')
+  const narrativeProfile = {
+    rhythmSummary: slideSkeleton.slice(0, 10).map((s) => `P${s.slideNumber}:${s.inferredLayout}${s.variant ? `[${s.variant}]` : ''}`).join(' → '),
+    archetypeCounts,
+    diagramRatio: slideCount > 0 ? Number((diagramSlideCount / slideCount).toFixed(2)) : 0,
+    hasInvertedCover: sanitized.sanitizedTokens.coverMode === 'inverted-accent',
+    recommendedTableStyle,
+  }
+
   return {
     ok: true,
     ...(resolvedPath ? { pptxPath: resolvedPath } : {}),
@@ -1020,6 +1327,8 @@ export async function absorbPptx(options = {}) {
     sanitizedTokens: sanitized.sanitizedTokens,
     recommendedTheme: sanitized.recommendedTheme,
     recommendedChrome,
+    recommendedTableStyle,
+    narrativeProfile,
     dark: sanitized.dark,
     warnings: sanitized.warnings,
     layoutSummary,

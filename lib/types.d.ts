@@ -1,10 +1,10 @@
 /** dsh-ppt 的公共类型。 */
-export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold' | 'consulting' | 'cobalt-cream' | 'exec-jilan' | 'exec-palace' | 'academic' | 'editorial-forest' | 'cartesian' | 'course-sage' | 'linear-dark' | 'keynote-light' | 'financial-ft' | 'medical-clean' | 'luxury-noir';
+export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold' | 'consulting' | 'cobalt-cream' | 'exec-jilan' | 'exec-palace' | 'academic' | 'editorial-forest' | 'cartesian' | 'course-sage' | 'linear-dark' | 'keynote-light' | 'financial-ft' | 'medical-clean' | 'luxury-noir' | 'bcg-emerald' | 'economist-brief' | 'venture-daylight' | 'stripe-craft' | 'aurora-stage' | 'obsidian-amber';
 export type PptChromeStyle = 'consulting-classic' | 'keynote-spatial' | 'editorial-folio' | 'saas-bento' | 'academic-minimal' | 'gov-ceremonial';
 export type PptPersonaId = 'auto' | 'consulting' | 'tech-pitch' | 'academic' | 'gov-exec' | 'education' | 'editorial';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team';
-export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'consulting' | 'keynote' | 'gov-report' | 'workshop' | 'architecture-review' | 'financial-earnings' | 'medical-case' | 'postmortem' | 'marketing-campaign' | 'promotion-review' | 'legal-compliance' | 'creative-lookbook';
+export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team';
+export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'consulting' | 'keynote' | 'gov-report' | 'workshop' | 'architecture-review' | 'financial-earnings' | 'medical-case' | 'postmortem' | 'marketing-campaign' | 'promotion-review' | 'legal-compliance' | 'creative-lookbook' | 'quarterly-okr' | 'product-prd' | 'vc-daylight' | 'industry-research';
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey';
 export interface PptImageSpec {
     src?: string;
@@ -51,9 +51,13 @@ export interface PptChartSpec {
 export interface PptBrand {
     name?: string;
     primaryColor?: string;
+    secondaryColor?: string;
     backgroundColor?: string;
     textColor?: string;
     fontFamily?: string;
+    headingFont?: string;
+    coverMode?: 'standard' | 'inverted-accent';
+    coverBg?: string;
     logo?: string | null;
     footer?: string;
     chromeStyle?: PptChromeStyle | string | null;
@@ -303,6 +307,8 @@ export interface PptAbsorbResult {
     sanitizedTokens: Record<string, unknown>;
     recommendedTheme: string;
     recommendedChrome?: PptChromeStyle | string;
+    recommendedTableStyle?: PptTableStyle | string;
+    narrativeProfile?: Record<string, unknown>;
     slideSkeleton?: PptAbsorbSlideSkeleton[];
     layoutSummary?: Record<string, unknown>;
 }
@@ -347,6 +353,7 @@ export interface DeckEngine {
     buildDeck(options: Record<string, unknown>): PptCreateResult;
     buildThemePreview(options: Record<string, unknown>): PptThemePreviewResult;
     listThemes(lang?: string): PptThemeInfo[];
+    listMasterPresets?(lang?: string): unknown[];
     resolveTheme(input: unknown): Record<string, unknown>;
     resolveLanguage(input: unknown): Record<string, unknown>;
 }

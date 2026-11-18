@@ -29,10 +29,11 @@ test('outputDir 优先显式配置，其次环境变量', () => {
   }
 })
 
-test('defaultTheme / defaultLang 解析与校验（含 auto 与全部 18 套内置主题）', () => {
-  assert.equal(ALLOWED_THEME_IDS.length, 18)
+test('defaultTheme / defaultLang 解析与校验（含 auto 与全部 24 套内置主题）', () => {
+  assert.equal(ALLOWED_THEME_IDS.length, 24)
   assert.deepEqual(ALLOWED_THEME_IDS.slice(0, 5), ['swiss', 'velvet', 'data', 'soft', 'bold'])
-  assert.deepEqual(ALLOWED_THEME_IDS.slice(14), ['keynote-light', 'financial-ft', 'medical-clean', 'luxury-noir'])
+  assert.deepEqual(ALLOWED_THEME_IDS.slice(14, 18), ['keynote-light', 'financial-ft', 'medical-clean', 'luxury-noir'])
+  assert.deepEqual(ALLOWED_THEME_IDS.slice(18), ['bcg-emerald', 'economist-brief', 'venture-daylight', 'stripe-craft', 'aurora-stage', 'obsidian-amber'])
   assert.equal(ALLOWED_CHROME_STYLES.length, 6)
   assert.deepEqual([...ALLOWED_CHROME_STYLES], [
     'consulting-classic',
@@ -66,10 +67,10 @@ test('clampInt 边界与兜底', () => {
   assert.equal(clampInt('x', 20, 1, 100), 20)
 })
 
-test('18 套内置主题与 6 套母版骨架列表唯一且顺序稳定', () => {
-  assert.equal(new Set(ALLOWED_THEME_IDS).size, 18)
+test('24 套内置主题与 6 套母版骨架列表唯一且顺序稳定', () => {
+  assert.equal(new Set(ALLOWED_THEME_IDS).size, 24)
   assert.equal(new Set(ALLOWED_CHROME_STYLES).size, 6)
-  for (const id of ['keynote-light', 'financial-ft', 'medical-clean', 'luxury-noir']) {
+  for (const id of ['keynote-light', 'financial-ft', 'medical-clean', 'luxury-noir', 'bcg-emerald', 'economist-brief', 'venture-daylight', 'stripe-craft', 'aurora-stage', 'obsidian-amber']) {
     assert.ok(ALLOWED_THEME_IDS.includes(id), id + ' missing from ALLOWED_THEME_IDS')
   }
   for (const chrome of ['consulting-classic', 'keynote-spatial', 'editorial-folio', 'saas-bento', 'academic-minimal', 'gov-ceremonial']) {

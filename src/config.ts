@@ -21,6 +21,12 @@ export const ALLOWED_THEME_IDS = [
   'financial-ft',
   'medical-clean',
   'luxury-noir',
+  'bcg-emerald',
+  'economist-brief',
+  'venture-daylight',
+  'stripe-craft',
+  'aurora-stage',
+  'obsidian-amber',
 ] as const
 
 export const ALLOWED_CHROME_STYLES = [

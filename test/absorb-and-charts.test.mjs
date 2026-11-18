@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { resolve, join } from 'node:path'
-import { unzipSync, strFromU8 } from 'fflate'
+import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
 import * as officeKit from '@office-kit/pptx'
 import {
   buildDeckAsync,
@@ -18,7 +18,7 @@ import { normalizeDataModel, prepareDataSlides } from '../skills/dsh-ppt/scripts
 import { normalizeSlides } from '../skills/dsh-ppt/scripts/deck-core.mjs'
 import { main } from '../skills/dsh-ppt/scripts/build-deck.mjs'
 import { CHART_KINDS, normalizeChart, computeWaterfallGeometry, mediaBoxes, buildOfficeKitChartSpec } from '../skills/dsh-ppt/scripts/deck-media.mjs'
-import { contrastRatio, relativeLuminance, resolveTheme } from '../skills/dsh-ppt/scripts/deck-themes.mjs'
+import { contrastRatio, relativeLuminance, resolveTheme, CURATED_MASTER_PRESETS, listMasterPresets } from '../skills/dsh-ppt/scripts/deck-themes.mjs'
 
 const work = resolve('.test-output')
 mkdirSync(work, { recursive: true })
@@ -678,8 +678,8 @@ test('Phase 3: deck-media.mjs renders differentiated HTML & PPTX chrome across a
   }
 }))
 
-test('Phase 3: inferThemeFromContent covers all 18 themes & 16 blueprints; smartLayout promotes gantt/architecture/tam/org/harvey', () => {
-  assert.equal(SCENARIO_TEMPLATES.length, 16)
+test('Phase 3: inferThemeFromContent covers all 24 themes & 20 blueprints; smartLayout promotes gantt/architecture/tam/org/harvey/chevron/funnel', () => {
+  assert.equal(SCENARIO_TEMPLATES.length, 20)
   for (const tpl of SCENARIO_TEMPLATES) {
     assert.equal(inferThemeFromContent({ title: '测试', template: tpl.id }).theme, tpl.theme)
   }
@@ -687,6 +687,10 @@ test('Phase 3: inferThemeFromContent covers all 18 themes & 16 blueprints; smart
   assert.equal(inferThemeFromContent({ title: '肺癌靶向治疗临床病例讨论与循证随访' }).theme, 'medical-clean')
   assert.equal(inferThemeFromContent({ title: '苹果风极简白空间留白硬件生态发布会', persona: 'tech-pitch' }).theme, 'keynote-light')
   assert.equal(inferThemeFromContent({ title: 'Atelier Noir 2026 高定黑金品牌画册 Lookbook' }).theme, 'luxury-noir')
+  assert.equal(inferThemeFromContent({ title: 'BCG 双碳战略与绿色转型增长路线图' }).theme, 'bcg-emerald')
+  assert.equal(inferThemeFromContent({ title: '经济学人智库：全球地缘政治与通胀展望' }).theme, 'economist-brief')
+  assert.equal(inferThemeFromContent({ title: 'A 轮阅读版 BP 投资备忘录与 PMF 增长复盘' }).theme, 'venture-daylight')
+  assert.equal(inferThemeFromContent({ title: '开发者平台 SDK 与 API 架构工作坊' }).theme, 'stripe-craft')
 
   const promoted = promoteMarkdownSlides([
     { layout: 'cover', title: '技术与商业全景规划' },
@@ -695,6 +699,8 @@ test('Phase 3: inferThemeFromContent covers all 18 themes & 16 blueprints; smart
     { layout: 'bullets', title: '全球可触达市场空间 TAM/SAM/SOM', bullets: ['**总体市场**：120 亿美元全球需求', '**可服务市场**：35 亿美元亚太核心区', '**三年目标**：4.2 亿美元头部客户'] },
     { layout: 'bullets', title: '核心组织架构与交付汇报线', bullets: ['**平台负责人**：统筹技术规划', '**基础架构组**：高可用底座', '**数据智能组**：实时计算引擎'] },
     { layout: 'bullets', title: '主流方案竞品对比与能力矩阵', bullets: ['**自动化编排**：● 支持', '**跨云合规**：● 支持', '**零代码接入**：● 支持'] },
+    { layout: 'bullets', title: '端到端供应链价值链拆解', bullets: ['**采购寻源**：集中议价降本', '**智能制造**：柔性排产提效', '**履约交付**：仓配一体直达'] },
+    { layout: 'bullets', title: '用户获客与留存转化漏斗', bullets: ['**曝光触达**：100 万月度访客', '**注册激活**：18% 首周转化', '**付费续约**：118% 净留存'] },
   ], { explicitSmartLayout: true })
 
   assert.equal(promoted[1].layout, 'architecture')
@@ -702,6 +708,10 @@ test('Phase 3: inferThemeFromContent covers all 18 themes & 16 blueprints; smart
   assert.equal(promoted[3].layout, 'tam')
   assert.equal(promoted[4].layout, 'org')
   assert.equal(promoted[5].layout, 'harvey')
+  assert.equal(promoted[6].layout, 'process')
+  assert.equal(promoted[6].variant, 'chevron')
+  assert.equal(promoted[7].layout, 'process')
+  assert.equal(promoted[7].variant, 'funnel')
 })
 
 test('Phase 3: deck-data {{metricId}} bindings work across gantt, tam, architecture, org items[] & columns[] & harvey rows[][]', () => inDir(async dir => {
@@ -886,4 +896,126 @@ test('Phase 3+: deck-media chrome parity renders Beamer header/footer and editor
   })
   assert.match(readFileSync(ed.htmlPath, 'utf8'), /media-editorial-bar/)
   assert.match(strFromU8(unzipSync(readFileSync(ed.pptxPath))['ppt/slides/slide1.xml']), /Editorial folio rule/)
+}))
+
+test('Phase 4: chevron value-chain diagram, 4 new blueprints, and 8 curated master presets build valid OOXML & HTML', () => inDir(async dir => {
+  assert.equal(CURATED_MASTER_PRESETS.length, 8)
+  assert.equal(listMasterPresets('zh').length, 8)
+  assert.equal(listMasterPresets('en').length, 8)
+
+  const chevronOut = await buildDeckAsync({
+    title: '端到端价值链诊断',
+    theme: 'bcg-emerald',
+    slides: [
+      { layout: 'cover', title: '端到端价值链诊断', subtitle: 'BCG 祖母绿母版验证' },
+      {
+        layout: 'chevron',
+        title: '核心业务价值链在履约环节释放 18% 利润空间',
+        kicker: '01 · 价值链拆解',
+        takeaway: '优先改造制造排产与仓配直达两个高杠杆环节',
+        items: [
+          { tag: '01', title: '寻源采购', text: '集中供应商议价', bullets: ['账期优化 15 天'] },
+          { tag: '02', title: '柔性制造', text: 'APS 智能排产', status: 'accent', bullets: ['换线耗时 -32%'] },
+          { tag: '03', title: '仓配履约', text: '区域中心直发', status: 'positive', bullets: ['次日达率 94%'] },
+          { tag: '04', title: '客户续约', text: '全周期健康度预警', bullets: ['NRR 达 118%'] },
+        ],
+      },
+    ],
+    outputDir: dir,
+    fileName: 'chevron-check',
+  })
+  assert.equal(chevronOut.ok, true)
+  const chevronHtml = readFileSync(chevronOut.htmlPath, 'utf8')
+  assert.match(chevronHtml, /chevron-board/)
+  assert.match(chevronHtml, /chevron-arrow/)
+  const chevronXml = strFromU8(unzipSync(readFileSync(chevronOut.pptxPath))['ppt/slides/slide2.xml'])
+  assert.match(chevronXml, /prst="homePlate"/)
+  assert.match(chevronXml, /prst="chevron"/)
+  const chevronPres = await officeKit.loadPresentation(readFileSync(chevronOut.pptxPath))
+  assert.deepEqual(officeKit.validatePresentation(chevronPres).filter((i) => i.severity === 'error'), [])
+
+  for (const id of ['quarterly-okr', 'product-prd', 'vc-daylight', 'industry-research']) {
+    for (const lang of ['zh', 'en']) {
+      const out = await buildDeckAsync({ title: `${id}-${lang}`, template: id, lang, outputDir: dir, fileName: `${id}-${lang}` })
+      assert.equal(out.ok, true)
+      assert.equal(out.quality.errorCount, 0)
+      const pres = await officeKit.loadPresentation(readFileSync(out.pptxPath))
+      assert.deepEqual(officeKit.validatePresentation(pres).filter((i) => i.severity === 'error'), [], `${id} (${lang}) OOXML errors`)
+    }
+  }
+}))
+
+test('Phase 4: deep absorbPptx unwraps nested <p:grpSp>, resolves sysClr/prstClr/hueMod, detects dark cover + daylight body, dual accents & 24 layouts', () => inDir(async dir => {
+  // Verify XML color resolution for sysClr, prstClr, and hueMod
+  assert.equal(resolveXmlColorElement('<a:sysClr val="windowText" lastClr="1E293B"/>', {}), '#1E293B')
+  assert.equal(resolveXmlColorElement('<a:sysClr val="window"/>', {}), '#FFFFFF')
+  assert.equal(resolveXmlColorElement('<a:prstClr val="navy"/>', {}), '#000080')
+  const hueShifted = resolveColorModifiers('#0057B8', { hueOff: 3600000 })
+  assert.match(hueShifted, /^#[0-9A-F]{6}$/)
+  assert.notEqual(hueShifted, '#0057B8')
+
+  // Build a multi-archetype reference deck, then wrap slide 2's KPI shapes inside a nested <p:grpSp>
+  // and give slide 1 an explicit dark background while keeping slides 2..5 daylight to test cover polarity!
+  const baseRef = await buildDeckAsync({
+    title: 'Enterprise Master Deck',
+    theme: 'economist-brief',
+    brand: {
+      name: 'Global Strategy House',
+      primaryColor: '#1E293B',
+      secondaryColor: '#C8102E',
+      fontFamily: 'Microsoft YaHei',
+      headingFont: 'Georgia',
+    },
+    slides: [
+      { layout: 'cover', title: '2026 Global Industry Outlook', subtitle: 'Executive Briefing' },
+      { layout: 'kpi', title: 'Operating Margin Expanded +420 bps', items: [{ tag: 'REV', value: '$4.8B', delta: '+19%', title: 'Annual Revenue' }, { tag: 'EBITDA', value: '28.4%', delta: '+420bps', title: 'Margin' }, { tag: 'NRR', value: '121%', delta: '+6pt', title: 'Net Retention' }] },
+      { layout: 'chevron', title: 'Four-Stage Value Chain Transformation', items: [{ tag: '01', title: 'Source', text: 'Direct procurement' }, { tag: '02', title: 'Build', text: 'Automated assembly' }, { tag: '03', title: 'Ship', text: 'Regional hubs' }, { tag: '04', title: 'Serve', text: 'Predictive care' }] },
+      { layout: 'harvey', title: 'Competitive Capability Matrix', rows: [['Dimension', 'Platform A', 'Legacy B'], ['Automation', '●', '◔'], ['Compliance', '◕', '◑'], ['Latency', '●', '○']] },
+      { layout: 'table', tableStyle: 'booktabs', title: 'Regional Breakdown', rows: [['Region', 'FY25', 'FY26E'], ['APAC', '$1.4B', '$1.9B'], ['EMEA', '$1.8B', '$2.1B']] },
+    ],
+    outputDir: dir,
+    fileName: 'deep-ref',
+  })
+
+  const archive = unzipSync(readFileSync(baseRef.pptxPath))
+  // Inject explicit dark cover background on slide1.xml (<p:bg>...#0F172A...</p:bg>) + wrap slide2 KPI cards inside <p:grpSp> with scaled child coords
+  let s1 = strFromU8(archive['ppt/slides/slide1.xml'])
+  if (/<p:bg>[\s\S]*?<\/p:bg>/.test(s1)) {
+    s1 = s1.replace(/<p:bg>[\s\S]*?<\/p:bg>/, '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>')
+  } else {
+    s1 = s1.replace(/<p:cSld[^>]*>/, (m) => m + '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>')
+  }
+  archive['ppt/slides/slide1.xml'] = strToU8(s1)
+  let s2 = strFromU8(archive['ppt/slides/slide2.xml'])
+  // Wrap all <p:sp> after the first title shape into a <p:grpSp> to prove recursive group unwrapping preserves KPI detection
+  const spParts = s2.split(/(?=<p:sp\b)/)
+  if (spParts.length > 3) {
+    const head = spParts[0] + spParts[1]
+    const tailIdx = spParts.at(-1).lastIndexOf('</p:spTree>')
+    const lastSp = spParts.at(-1).slice(0, tailIdx)
+    const restTree = spParts.at(-1).slice(tailIdx)
+    const groupedBody = spParts.slice(2, -1).join('') + lastSp
+    const grpXml = `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="900" name="GroupedKPIs"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/><a:chOff x="0" y="0"/><a:chExt cx="12192000" cy="6858000"/></a:xfrm></p:grpSpPr>${groupedBody}</p:grpSp>`
+    archive['ppt/slides/slide2.xml'] = strToU8(head + grpXml + restTree)
+  }
+  // Inject explicit theme majorFont Georgia + minorFont Microsoft YaHei and accent2 C8102E into theme1.xml
+  let themeXml = strFromU8(archive['ppt/theme/theme1.xml'])
+  themeXml = themeXml.replace(/<a:accent2>[\s\S]*?<\/a:accent2>/, '<a:accent2><a:srgbClr val="C8102E"/></a:accent2>')
+  archive['ppt/theme/theme1.xml'] = strToU8(themeXml)
+
+  const mutatedPath = join(dir, 'mutated-enterprise.pptx')
+  writeFileSync(mutatedPath, Buffer.from(zipSync(archive)))
+
+  const absorbed = await absorbPptx({ pptxPath: mutatedPath })
+  assert.equal(absorbed.slideCount, 5)
+  assert.equal(absorbed.sanitizedBrand.coverMode, 'inverted-accent', 'dark cover + daylight body preserved as inverted-accent')
+  assert.equal(absorbed.sanitizedBrand.coverBg, '#0F172A')
+  assert.equal(absorbed.sanitizedBrand.secondaryColor, '#C21632', 'vivid secondary accent preserved and saturation-clamped alongside charcoal primary')
+  assert.ok(contrastRatio(absorbed.sanitizedBrand.secondaryColor, absorbed.sanitizedBrand.backgroundColor) >= 3.2)
+  assert.equal(absorbed.slideSkeleton[1].inferredLayout, 'kpi', 'grouped KPI shapes inside <p:grpSp> accurately unwrapped and classified')
+  assert.equal(absorbed.slideSkeleton[2].inferredLayout, 'process')
+  assert.equal(absorbed.slideSkeleton[2].variant, 'chevron', 'interlocking chevron shapes classified as process[chevron]')
+  assert.equal(absorbed.slideSkeleton[3].inferredLayout, 'harvey', 'Harvey ball symbols inside <a:tbl> cells classified as harvey')
+  assert.ok(absorbed.narrativeProfile && typeof absorbed.narrativeProfile.diagramRatio === 'number')
+  assert.ok(absorbed.narrativeProfile.diagramRatio > 0.4)
 }))

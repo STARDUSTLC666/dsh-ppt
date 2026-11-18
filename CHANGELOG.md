@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.23.0 (2026-11-18)
+
+- **24 套大师主题、8 套名家范本预设与 20 套行业蓝图**：新增 `bcg-emerald`（翡翠战略）、`economist-brief`（经济学人简报）、`venture-daylight`（红杉日间备忘录）、`stripe-craft`（云靛工坊）、`aurora-stage`（极光发布会）、`obsidian-amber`（黑曜终端）6 套主题（共 16 浅 + 8 深），内置 8 套免上传一键直吸名家范本预设；场景蓝图扩展至 20 套（新增 `quarterly-okr`、`product-prd`、`vc-daylight`、`industry-research`），并新增咨询价值链咬合五边形箭头（`chevron` / `value-chain`）原生可编辑图示。
+- **深度 `.pptx` 吸收引擎升级**：支持递归拆解嵌套组合形状（`<p:grpSp>`）并换算子图元坐标，补全 `<a:sysClr>`、`<a:prstClr>` 与 `hueMod`/`hueOff` 修饰色解析，自动识别「深色庄重封面 + 浅色正文」双极性（`coverMode: "inverted-accent"`）、主辅双品牌强调色（`secondaryColor`）、中英标题/正文字体配对（`headingFont`）、表格风格提示及 24+ 版式序列诊断（`narrativeProfile`），面板上传上限提升至 24 MiB。
+- **工作台自助起稿与品牌库沉淀**：工作台新增自助「新建演示文稿」向导（支持选蓝图、填大纲或传参考 `.pptx` 复刻骨架）、`localStorage` 持久化「我的品牌库」跨工程一键复用、预览画面文字/卡片/表格点击直达编辑框、哈维球 `● ◕ ◑ ◔ ○` 快捷填入按钮、原生取色器、顶栏直出下载 PPTX 与可折叠四步人类使用指引。
+- Add 6 curated themes (`bcg-emerald`, `economist-brief`, `venture-daylight`, `stripe-craft`, `aurora-stage`, `obsidian-amber` for 24 total), 8 1-click World-Class Reference Presets, 4 scenario blueprints (`quarterly-okr`, `product-prd`, `vc-daylight`, `industry-research` for 20 total), and interlocking native-editable `chevron` (`value-chain`) diagrams.
+- Upgrade `.pptx` absorption (up to 24 MiB in Workbench) to recursively unwrap nested `<p:grpSp>` group shapes, resolve `sysClr`/`prstClr`/`hueMod` color transforms, detect dark-cover + daylight-body polarity (`coverMode: "inverted-accent"`), extract `secondaryColor` and `headingFont` pairings, classify all 24+ slide archetypes, and report `narrativeProfile`.
+- Add a self-serve **New presentation** wizard, persistent **My Brand Library**, expanded click-to-focus preview targets, 1-click Harvey ball insertion chips, color pickers, direct PPTX download, and a collapsible 4-step workflow guide.
+
 ## 0.22.1 (2026-11-18)
 
 - 更新区底部新增克制、无打扰的 GitHub 点赞与问题反馈快捷链接，并完善中英文检索关键词。

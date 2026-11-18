@@ -1,8 +1,8 @@
 # dsh-ppt 工作台 / Workbench
 
-演示文稿主工作台，提供页面栏、画布区与五栏属性面板（内容编辑、风格与母版、视觉检查、演练、数据与推演）；支持一键切换 18 套主题、6 套母版骨架与 24 种版式原型、拖拽深度吸收参考 `.pptx` 配色与骨架、HTML ↔ PPTX 并排对比及画布级视觉修复前后对照，保留跨栏推演联动、未保存保护和画面内全屏退出。
+演示文稿主工作台，提供自助「新建演示文稿」向导、可折叠四步使用指引、页面栏、画布区与五栏属性面板（内容编辑、风格与母版、视觉检查、演练、数据与推演）；支持一键切换 24 套主题、8 套名家范本预设、6 套母版骨架与 24+ 种版式原型（含价值链五边形箭头 `chevron`）、拖拽深度吸收参考 `.pptx`（≤24 MiB）并收藏到「我的品牌库」、HTML ↔ PPTX 并排对比及画布级视觉修复前后对照，保留跨栏推演联动、未保存保护和画面内全屏退出。
 
-Presentation workbench with slide rail, split-capable canvas, and five inspector tabs (Edit content, Style Studio, Visual review, Rehearsal, Data and what-if); supports 1-click switching across 18 themes, 6 master chrome skeletons, and 24 slide archetypes, in-memory deep `.pptx` style & skeleton absorption, HTML ↔ PPTX side-by-side comparison, and full-width Vision QA before/after diffs while preserving live what-if previews, dirty-edit guards, and fullscreen exit controls.
+Presentation workbench with a self-service **New presentation** wizard, collapsible 4-step workflow guide, slide rail, split-capable canvas, and five inspector tabs (Edit content, Style Studio, Visual review, Rehearsal, Data and what-if); supports 1-click switching across 24 themes, 8 World-Class Reference Presets, 6 master chrome skeletons, and 24+ slide archetypes (including value-chain `chevron`), in-memory deep `.pptx` style & skeleton absorption (`≤24 MiB`) with reusable **My Brand Library** presets, HTML ↔ PPTX side-by-side comparison, and full-width Vision QA before/after diffs.
 
 ## 使用 / Use
 

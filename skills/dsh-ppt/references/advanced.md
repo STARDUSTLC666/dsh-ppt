@@ -4,11 +4,12 @@ Agent 先提炼真实内容与数据结论，再通过结构化参数生成可�
 
 ---
 
-## 一、16 套高品味行业结构蓝图（`ppt_templates`）
+## 一、20 套高品味行业结构蓝图（`ppt_templates`）
 
-调 `ppt_templates` 可查看 16 套内置叙事与版式骨架（前 8 套兼容经典场景，后 8 套为高频垂直行业蓝图）：
+调 `ppt_templates` 可查看 20 套内置叙事与版式骨架（前 8 套兼容经典场景，后 12 套为高频垂直行业与现代职场蓝图）：
 - **经典 8 套**：`weekly`（周报复盘）、`defense`（学术答辩）、`project`（项目汇报 · 含 `gantt` 排期）、`pitch`（创业路演 · 含 `tam` + `harvey`）、`consulting`（战略咨询）、`keynote`（产品发布）、`gov-report`（政务述职）、`workshop`（培训工坊）
-- **新增 8 套**：`architecture-review`（技术架构评审）、`financial-earnings`（季度财报与业绩会）、`medical-case`（临床病例研讨）、`postmortem`（线上故障复盘）、`marketing-campaign`（品牌营销与增长战役）、`promotion-review`（个人述职与晋升答辩）、`legal-compliance`（法务合规与风控审计）、`creative-lookbook`（高端品牌策展与画册）
+- **垂直行业 8 套**：`architecture-review`（技术架构评审）、`financial-earnings`（季度财报与业绩会）、`medical-case`（临床病例研讨）、`postmortem`（线上故障复盘）、`marketing-campaign`（品牌营销与增长战役）、`promotion-review`（个人述职与晋升答辩）、`legal-compliance`（法务合规与风控审计）、`creative-lookbook`（高端品牌策展与画册）
+- **新增高频 4 套**：`quarterly-okr`（季度 OKR 复盘与规划 · 含 `chevron` 价值链）、`product-prd`（产品需求与方案评审 PRD）、`vc-daylight`（阅读版融资商业计划书 · 明亮投资备忘录风）、`industry-research`（行业深度研究与洞察 · 经济学人风）
 
 > 注意：`ppt_create` 仅传 `template` 而不提供实际 `content` / `slides` 时，仅生成带占位的待填草稿（返回 `deliveryStatus: "draft"`）；必须组织好真实业务内容再生成，方能进入成品验收（`ready`）。
 

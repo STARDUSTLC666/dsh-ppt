@@ -50,6 +50,8 @@ export const LAYOUT_ALIASES = Object.freeze({
   layers: { layout: 'process', variant: 'layers' },
   funnel: { layout: 'process', variant: 'funnel' },
   flywheel: { layout: 'process', variant: 'flywheel' },
+  chevron: { layout: 'process', variant: 'chevron' },
+  'value-chain': { layout: 'process', variant: 'chevron' },
   'issue-action': { layout: 'comparison', variant: 'issue-action' },
   'before-after': { layout: 'comparison', variant: 'before-after' },
   'matrix-2x2': { layout: 'matrix', variant: '2x2' },
@@ -3424,6 +3426,86 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       shapes.push(ooxmlShape(nextId(), 'Flywheel Arrow Right', { x: corners[1].x + cardW / 2 - 0.14, y: centerY - 0.22, w: 0.28, h: 0.44 }, { preset: 'downArrow', fill: tk.accentPrimary }))
       shapes.push(ooxmlShape(nextId(), 'Flywheel Arrow Bottom', { x: centerX - 0.26, y: corners[2].y + cardH / 2 - 0.14, w: 0.52, h: 0.28 }, { preset: 'leftArrow', fill: tk.accentPrimary }))
       shapes.push(ooxmlShape(nextId(), 'Flywheel Arrow Left', { x: corners[0].x + cardW / 2 - 0.14, y: centerY - 0.22, w: 0.28, h: 0.44 }, { preset: 'upArrow', fill: tk.accentPrimary }))
+    } else if (variant === 'chevron') {
+      // McKinsey / BCG Interlocking Value-Chain Chevrons + Supporting Detail Cards
+      const overlap = n > 1 ? 0.08 : 0
+      const chevW = (12.09 + (n - 1) * overlap) / n
+      const chevY = bodyTopY + 0.08
+      const chevH = 0.88
+      const detailGap = 0.16
+      const colW = (12.09 - detailGap * (n - 1)) / n
+      const detailY = chevY + chevH + 0.20
+      const detailH = Math.max(1.55, bodyBottomY - detailY - 0.06)
+
+      items.forEach((it, idx) => {
+        const isFirst = idx === 0
+        const isLast = idx === n - 1 && n >= 3
+        const cx = 0.62 + idx * (chevW - overlap)
+        const fillHex = isFirst ? tk.accentPrimary : isLast ? tk.accentSecondary : tk.surface2
+        const inkHex = isFirst
+          ? tk.inkOnAccent
+          : isLast
+            ? (relativeLuminance(tk.accentSecondary) > 0.36 ? '#0F172A' : '#FFFFFF')
+            : tk.inkPrimary
+        const stageTag = it.tag || String(idx + 1).padStart(2, '0')
+        const chevLabel = (stageTag ? stageTag + ' · ' : '') + (it.title || '')
+
+        shapes.push(ooxmlShape(nextId(), 'Chevron Stage ' + (idx + 1), { x: cx, y: chevY, w: chevW, h: chevH }, {
+          preset: isFirst ? 'homePlate' : 'chevron',
+          adjs: { adj: 20000 },
+          fill: fillHex,
+          stroke: tk.canvas,
+          strokePt: 2.0,
+          anchor: 'ctr',
+          marginsIn: { l: isFirst ? 0.14 : 0.28, r: 0.24, t: 0.06, b: 0.06 },
+          paragraphs: [
+            ooxmlRichParagraph(chevLabel, {
+              sizePt: n >= 5 ? 13 : 14.5,
+              color: inkHex,
+              bold: true,
+              lang: langAttr,
+              align: 'ctr',
+              font: theme.fonts.heading,
+              lineHeight: 1.18,
+            }),
+          ],
+        }))
+
+        const dx = 0.62 + idx * (colW + detailGap)
+        const cardBox = { x: dx, y: detailY, w: colW, h: detailH }
+        shapes.push(renderSurfaceCardPptx('Chevron Detail Surface ' + (idx + 1), cardBox, {
+          fill: isFirst ? tk.accentSoft : tk.surface1,
+          focal: isFirst,
+        }, nextId, chromeCfg, theme))
+
+        const convNote = it.conversion || it.delta || (it.value ? it.value + (it.unit ? ' ' + it.unit : '') : '')
+        const detailLines = [
+          ...(convNote ? ['**' + convNote + '**'] : []),
+          ...(it.text ? [it.text] : []),
+          ...(Array.isArray(it.bullets) ? it.bullets : []),
+        ]
+        const innerBox = { x: cardBox.x + 0.16, y: cardBox.y + 0.16, w: cardBox.w - 0.32, h: cardBox.h - 0.30 }
+        const fit = computeTextFit(detailLines, innerBox, 'cardBody', { maxPt: 14, minPt: 12.5 })
+        if (detailLines.length > 0) {
+          shapes.push(ooxmlShape(nextId(), 'Chevron Detail ' + (idx + 1), innerBox, {
+            txBox: true,
+            anchor: 't',
+            marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+            fontScale: fit.fontScale,
+            paragraphs: detailLines.map((line, lIdx) =>
+              ooxmlRichParagraph(line, {
+                sizePt: fit.fontPt,
+                color: lIdx === 0 && convNote ? tk.accentText : tk.inkSecondary,
+                accentColor: tk.accentText,
+                lang: langAttr,
+                font: theme.fonts.body,
+                lineHeight: 1.36,
+                spaceAfterPt: 4,
+              }),
+            ),
+          }))
+        }
+      })
     } else if (variant === 'layers' || variant === 'funnel') {
       const gapY = 0.14
       const rowH = Math.min(0.92, (bodyH - gapY * (n - 1)) / n)
@@ -4256,6 +4338,32 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
           )
         }).join('') +
         '</div>'
+    } else if (variant === 'chevron') {
+      inner =
+        renderHeader() +
+        '<ol class="layout-grid chevron-board cols-' + Math.max(1, items.length) + '">' +
+        items.map((it, idx) => {
+          const isFirst = idx === 0
+          const isLast = idx === items.length - 1 && items.length >= 3
+          const conv = it.conversion || it.delta || (it.value ? it.value + (it.unit ? ' ' + it.unit : '') : '')
+          const bodyLines = [
+            ...(it.text ? [it.text] : []),
+            ...(Array.isArray(it.bullets) ? it.bullets : []),
+          ]
+          return (
+            '<li class="chevron-col" data-item-index="' + idx + '">' +
+            '<div class="chevron-arrow' + (isFirst ? ' is-first' : isLast ? ' is-last' : '') + '">' +
+            '<span class="chevron-tag">' + escapeHtml(it.tag || String(idx + 1).padStart(2, '0')) + '</span>' +
+            (it.title ? '<span class="chevron-title" data-item-field="title">' + renderInlineHtml(it.title) + '</span>' : '') +
+            '</div>' +
+            '<div class="surface-card chevron-detail' + (isFirst ? ' is-focal' : '') + '">' +
+            (conv ? '<span class="funnel-conversion-badge chevron-metric">' + escapeHtml(conv) + '</span>' : '') +
+            (bodyLines.length ? '<div class="card-body" data-item-field="text">' + bodyLines.map((ln) => renderInlineHtml(ln)).join('<br>') + '</div>' : '') +
+            '</div>' +
+            '</li>'
+          )
+        }).join('') +
+        '</ol>'
     } else {
       const modeClass = variant === 'timeline' ? 'is-timeline' : variant === 'layers' ? 'is-layers' : variant === 'funnel' ? 'is-funnel' : 'is-steps'
       inner =
@@ -4445,6 +4553,14 @@ export const LAYOUT_CSS = `
 .flywheel-stage{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:clamp(22px,3vw,42px) clamp(120px,14vw,220px);align-items:center;padding:8px 0}
 .flywheel-hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:clamp(130px,13vw,190px);height:clamp(130px,13vw,190px);border-radius:50%;background:var(--accent);color:var(--ink-on-accent);border:4px solid var(--bg);display:flex;align-items:center;justify-content:center;text-align:center;padding:14px;font-family:var(--font-heading);font-weight:800;font-size:clamp(14px,1.4vw,20px);z-index:2;box-shadow:0 12px 32px rgba(0,0,0,.14)}
 .flywheel-node-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.chevron-board{gap:12px;align-items:stretch}
+.chevron-col{display:flex;flex-direction:column;gap:12px;min-width:0;list-style:none}
+.chevron-arrow{min-height:68px;padding:12px 24px 12px 28px;background:var(--surface2);color:var(--fg);font-family:var(--font-heading);font-weight:700;font-size:clamp(13px,1.2vw,16px);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:3px;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%,16px 50%)}
+.chevron-arrow.is-first{padding-left:16px;background:var(--accent);color:var(--ink-on-accent);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%)}
+.chevron-arrow.is-last{background:var(--accent2);color:#FFF}
+.chevron-tag{font-size:11px;opacity:.86;letter-spacing:.06em}
+.chevron-detail{flex:1;padding:14px 16px;gap:8px}
+.chevron-metric{margin-left:0;align-self:flex-start}
 .callout-hero{background:var(--surface2);border:1px solid var(--accent);border-left:5px solid var(--accent);border-radius:var(--radius);padding:20px 26px;font-size:clamp(17px,1.8vw,26px);font-weight:700;line-height:1.4}
 .callout-hero.is-formula{font-family:Georgia,"Times New Roman",serif;text-align:center}
 .callout-row{flex-direction:row;align-items:center;padding:12px 18px}

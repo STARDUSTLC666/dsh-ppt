@@ -17,9 +17,9 @@
 
 ## Features
 
-- **Zero-taste-burden Auto-Director**: Automatically selects from **18 curated themes** (12 projector-safe daylight + 6 stage dark), **6 distinct Master Chrome Skeletons** (McKinsey Consulting Classic, Apple Keynote Spatial, Editorial Folio, SaaS Bento, Academic Beamer, Gov Ceremonial), **16 industry blueprints**, and **24 native editable layouts & pro diagrams** (Bento cards, KPI hero metrics, 2×2 matrices, comparisons, process/flywheel flows, Gantt roadmaps, layered architecture diagrams, Harvey-ball competitor matrices, concentric TAM/SAM/SOM, org/team charts, academic 3-line tables, and 13 publication-grade chart types including vector waterfall bridges).
-- **Deep Reference `.pptx` Skeleton Absorption**: Combines built-in design systems with **Deep `.pptx` Absorption** (`ppt_absorb`, `referencePptx` with `cloneStructure: true`, or drag-and-drop in Style Studio) — resolving OOXML color transforms, CJK/Latin fonts, master logos, chrome geometry (`extractedSkeleton` / `recommendedChrome`), and slide-by-slide `slideSkeleton` sequences with automatic WCAG ≥4.5:1 contrast sanitization.
-- **Interactive Workbench & Style Studio**: Adapted for DeepSeek Harness `>=0.2.2-rc.3` with 5 switchable studio UI themes (Native Airy / Warm Cream / Claude Warmth / Bright 8-Bit / Airy Mint); switch 18 deck themes, 6 master chrome skeletons, and 24 slide archetypes in one click; edit Gantt timelines, Harvey-ball matrices, structured cards, tables, and images; compare HTML and rendered PPTX side-by-side; and undo up to 20 revisions.
+- **Zero-taste-burden Auto-Director**: Automatically selects from **24 curated themes** (16 projector-safe daylight + 8 stage dark — spanning McKinsey, BCG Emerald, Economist Brief, FT Salmon, Sequoia Daylight Memo, Stripe Craft, Apple Spatial Light, and Gov Ceremonial), **6 distinct Master Chrome Skeletons**, **20 industry blueprints**, and **24+ native editable layouts & pro diagrams** (including interlocking **Value-Chain Chevrons**, Bento cards, KPI hero metrics, 2×2 matrices, comparisons, process/flywheel/funnel flows, Gantt roadmaps, layered architecture diagrams, Harvey-ball competitor matrices, concentric TAM/SAM/SOM, org/team charts, academic 3-line tables, and 13 publication-grade chart types including vector waterfall bridges).
+- **Deep Reference `.pptx` Absorption & Master Presets**: Ships **8 1-click World-Class Reference Presets** plus **Deep `.pptx` Absorption** (`ppt_absorb`, `referencePptx` with `cloneStructure: true`, or drag-and-drop up to `24 MiB` in Style Studio) — recursively unwrapping nested `<p:grpSp>` group shapes, resolving OOXML `sysClr`/`prstClr`/`hueMod` color transforms, dual brand accents, heading/body font pairings, dark-cover + daylight-body polarity, master logos, `recommendedChrome`, and 24-layout `slideSkeleton` sequences with WCAG ≥4.5:1 sanitization and reusable **My Brand Library** presets.
+- **Human-first Workbench & Self-Serve Creation**: Adapted for DeepSeek Harness `>=0.2.2-rc.3` with 5 switchable light UI themes; launch **New presentation** directly inside the workbench from a blueprint, rough notes, or uploaded `.pptx`; click text/cards/tables in the live preview to jump straight to their editor inputs, insert Harvey balls (`● ◕ ◑ ◔ ○`) in 1 click, compare HTML ↔ rendered PPTX side-by-side, and undo up to 20 revisions.
 - **Optional verification & coaching**: Traceable numbers with live what-if sliders across diagrams and tables, 24-slide two-tier Vision QA (12 lossless formatting actions + full-width before/after canvas diff), and executive storyline coaching / defense rehearsal.
 
 ## Style previews
@@ -72,15 +72,19 @@ For the web profile, replace `desktop` with `web`. Restart that DSH profile afte
 
 ## Start using it
 
-1. Provide material, purpose, audience, or a reference `.pptx` in the target workspace — no manual design tuning needed; Scenario Auto-Director selects a tailored daylight/dark theme and varied slide layouts automatically.
-2. Open Presentations in the sidebar and search for or select the generated project.
-3. Switch 24 slide archetypes, edit Gantt timelines, Harvey matrices, structured cards/tables/images in **Edit content**, or restyle the whole deck across 18 themes & 6 master skeletons and absorb a corporate `.pptx` in **Style Studio**; render the current PPTX for side-by-side HTML ↔ PPTX comparison when needed.
-4. Explicitly start optional AI storyline review, defense rehearsal, or 24-slide visual repair when needed; direct download does not require them.
-5. Deliver the share bundle or retain editability with the project bundle; check the result in the target browser or Office application.
+Four intuitive steps — start either in chat or directly inside the workbench:
 
-Example request:
+1. **Draft in seconds (two ways)**:
+   - **Self-serve in the Workbench**: Open **Presentations** in the sidebar and click **New presentation** to start from any of the 20 scenario blueprints (Quarterly OKR, Product PRD, Investor Memo, Industry Research, Project Update, Defense, etc.), paste rough Markdown notes, or upload a reference `.pptx`.
+   - **Ask in Chat**: Share your notes, data, or reference `.pptx` path (or copy a ready-made prompt from the workbench guide) — Auto-Director picks a projector-safe theme and varied layouts automatically.
+2. **Click-to-edit & upgrade layouts**: Click any title, card, or table in the live preview to focus its editor field; switch bullets into **KPI hero metrics, Value-Chain Chevrons, Gantt timelines, Architecture diagrams, Harvey-ball matrices, or academic 3-line tables** in one click, then press `Ctrl/⌘+S` or **Save slide**.
+3. **Absorb reference `.pptx` & save your brand**: In **Style Studio**, apply **8 built-in Master Reference Presets** in 1 click, or drop a corporate `.pptx` (`≤24 MiB`) to extract dual brand colours, heading/body fonts, cover polarity, logo, and skeleton — then save it to **My Brand Library** for 1-click reuse on future decks.
+4. **Verify & deliver**: Render the current PPTX for **side-by-side HTML & PPTX inspection** (or optionally run AI storyline coaching, rehearsal, or 24-slide visual repair), then click **Download PPTX** or export the Share ZIP bundle.
 
-> Create an executive strategy deck from this material with HTML, editable PPTX and a project bundle — automatically match a clean daylight theme and varied KPI/card/chart layouts.
+Ready-to-copy chat prompts:
+
+- **Quarterly / OKR review**: `Turn these notes into a Quarterly OKR review deck with action titles, KPI cards, value-chain chevrons, and issue-action comparisons (HTML + editable PPTX).`
+- **Clone a corporate `.pptx`**: `Absorb the palette, logo, chrome skeleton, and slide cadence of company-template.pptx, and turn this document into an executive presentation.`
 
 ## Before you start
 

@@ -133,12 +133,16 @@ function renderThemes(value: PptThemesResult): TextBlock[] {
 
 function renderAbsorb(value: PptAbsorbResult): TextBlock[] {
   const brand = value.sanitizedBrand ?? {}
+  const profile = value.narrativeProfile as Record<string, unknown> | undefined
   const parts = [
     'dsh-ppt 已解析参考演示文稿' + (value.pptxPath ? '：' + value.pptxPath : '') + '（共 ' + value.slideCount + ' 页）',
-    '推荐内置主题：' + value.recommendedTheme + (value.recommendedChrome ? ' ｜ 推荐母版骨架：' + value.recommendedChrome : ''),
-    '净化后品牌色板：主色 ' + (brand.primaryColor || '—') + ' ｜ 背景 ' + (brand.backgroundColor || '—') + ' ｜ 文字 ' + (brand.textColor || '—') +
-      (brand.fontFamily ? ' ｜ 字体 ' + brand.fontFamily : '') + (brand.chromeStyle ? ' ｜ 骨架 ' + brand.chromeStyle : '') + (brand.logo ? ' ｜ 已提取母版 Logo' : ''),
-    ...(value.slideSkeleton?.length ? ['提取页面骨架：' + value.slideSkeleton.slice(0, 8).map(s => `P${s.slideNumber}:${s.inferredLayout}`).join(' → ') + (value.slideSkeleton.length > 8 ? ' …' : '')] : []),
+    '推荐内置主题：' + value.recommendedTheme + (value.recommendedChrome ? ' ｜ 推荐母版骨架：' + value.recommendedChrome : '') + (value.recommendedTableStyle ? ' ｜ 推荐表格规范：' + value.recommendedTableStyle : ''),
+    '净化后品牌色板：主色 ' + (brand.primaryColor || '—') + (brand.secondaryColor ? ' ｜ 辅色 ' + brand.secondaryColor : '') + ' ｜ 背景 ' + (brand.backgroundColor || '—') + ' ｜ 文字 ' + (brand.textColor || '—') +
+      (brand.fontFamily ? ' ｜ 正文字体 ' + brand.fontFamily : '') + (brand.headingFont ? ' ｜ 标题字体 ' + brand.headingFont : '') +
+      (brand.coverMode === 'inverted-accent' ? ' ｜ 深色反白封面 (' + (brand.coverBg || brand.primaryColor || '') + ')' : '') +
+      (brand.chromeStyle ? ' ｜ 骨架 ' + brand.chromeStyle : '') + (brand.logo ? ' ｜ 已提取母版 Logo' : ''),
+    ...(value.slideSkeleton?.length ? ['提取页面骨架：' + value.slideSkeleton.slice(0, 8).map(s => `P${s.slideNumber}:${s.inferredLayout}${s.variant ? `[${s.variant}]` : ''}`).join(' → ') + (value.slideSkeleton.length > 8 ? ' …' : '')] : []),
+    ...(typeof profile?.diagramRatio === 'number' ? ['专业图示页占比：' + Math.round(Number(profile.diagramRatio) * 100) + '%'] : []),
     '可直接调用 ppt_create { title: "...", content: "...", referencePptx: ' + JSON.stringify(value.pptxPath || '<参考文件.pptx>') + ', cloneStructure: true } 自动套用净化后的色板、母版骨架与版式序列。',
   ]
   return oneText(parts.join('\n'))
@@ -210,8 +214,11 @@ const chartSchema = { type: ['object', 'null'], properties: {
   totalIndices: { type: 'array', items: { type: 'integer' }, description: '0-based category indices treated as totals in waterfall charts.' },
 }, additionalProperties: false }
 const brandProperties = {
-  name: { type: 'string' }, primaryColor: { type: 'string' }, backgroundColor: { type: 'string' }, textColor: { type: 'string' },
+  name: { type: 'string' }, primaryColor: { type: 'string' }, secondaryColor: { type: 'string' }, backgroundColor: { type: 'string' }, textColor: { type: 'string' },
   fontFamily: { type: 'string', description: 'One installed font family; choose a font available on the recipient computer.' },
+  headingFont: { type: 'string', description: 'Optional distinct heading font family (e.g. Georgia or serif paired with sans body).' },
+  coverMode: { type: 'string', enum: ['standard', 'inverted-accent'], description: 'Optional cover polarity override.' },
+  coverBg: { type: 'string', description: 'Optional #RRGGBB cover background color when coverMode is inverted-accent.' },
   logo: { type: ['string', 'null'], description: 'Local PNG/JPEG logo path or data URI; null clears logo during edit.' }, footer: { type: 'string' },
   chromeStyle: {
     description: 'Master chrome skeleton override: ' + ALLOWED_CHROME_STYLES.join(' | ') + ' (or null to clear during edit).',
@@ -247,7 +254,7 @@ const slideLayouts = [
   'gantt', 'architecture', 'harvey', 'tam', 'org',
   'table', 'closing', 'image', 'image-left', 'image-right',
   'chart', 'chart-split', 'gallery', 'waterfall', 'flywheel',
-  'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel',
+  'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel', 'chevron', 'value-chain',
   'issue-action', 'before-after', 'matrix-2x2', 'kpi-grid', 'scorecard',
   'formula-callout', 'takeaways', 'gallery-grid', 'ablation-compare', 'roadmap', 'swimlane', 'team',
 ] as const
@@ -256,6 +263,7 @@ const templateIds = [
   'consulting', 'keynote', 'gov-report', 'workshop',
   'architecture-review', 'financial-earnings', 'medical-case', 'postmortem',
   'marketing-campaign', 'promotion-review', 'legal-compliance', 'creative-lookbook',
+  'quarterly-okr', 'product-prd', 'vc-daylight', 'industry-research',
 ] as const
 const tableStyles = ['consulting', 'booktabs', 'minimal', 'banded', 'harvey'] as const
 const slideProperties = {
@@ -318,7 +326,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
   return [
     {
       name: 'ppt_themes',
-      description: 'List the 18 built-in visual themes of dsh-ppt (paired with 6 distinct master chrome skeletons: id, name, mood, best-for, chromeStyle, palette) before building a deck. Pass preview: true with outputDir to also write a self-contained theme gallery HTML plus one SVG palette card per theme. Use a theme id (or "auto") as the theme argument of ppt_create. 中文：列出 dsh-ppt 内置 18 套视觉主题与 6 套差异化母版骨架；传 preview: true + outputDir 会额外生成主题对比页和每套主题的 SVG 色板卡。',
+      description: 'List the 24 built-in visual themes of dsh-ppt (paired with 6 distinct master chrome skeletons: id, name, mood, best-for, chromeStyle, palette) before building a deck. Pass preview: true with outputDir to also write a self-contained theme gallery HTML plus one SVG palette card per theme. Use a theme id (or "auto") as the theme argument of ppt_create. 中文：列出 dsh-ppt 内置 24 套大师主题与 6 套差异化母版骨架；传 preview: true + outputDir 会额外生成主题对比页和每套主题的 SVG 色板卡。',
       parameters: compileParameters({
         lang: { type: 'string', description: 'Theme description language: zh (default), en, or bilingual.' },
         preview: { type: 'boolean', description: 'Write a theme gallery HTML and one SVG palette card per theme into outputDir. Default false (list only).' },
@@ -346,7 +354,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_create',
-      description: 'Generate a standalone HTML slideshow, editable 16:9 PPTX and JSON project from prepared Markdown or structured slides. Supports 18 themes, 6 distinct master chrome skeletons, Scenario Auto-Director (theme: "auto"), 24 native editable layouts & pro diagrams (KPI, Bento/pillar cards, comparison, 2x2 matrix, process/timeline/flywheel, gantt roadmaps, layered architecture, Harvey-ball matrices, concentric TAM/SAM/SOM, org/team charts, academic booktabs 3-line tables, chart-split, waterfall bridges), deep reference .pptx skeleton absorption (cloneStructure), and shared branding. 中文：先组织事实与内容，再生成可直接放映和继续编辑的三件套；内置 18 套主题、6 套差异化母版骨架、24 种原生可编辑版式与专业图示、16 套行业蓝图、13 类出版级图表与外部 PPTX 深度骨架吸收。',
+      description: 'Generate a standalone HTML slideshow, editable 16:9 PPTX and JSON project from prepared Markdown or structured slides. Supports 24 themes, 6 distinct master chrome skeletons, Scenario Auto-Director (theme: "auto"), 24+ native editable layouts & pro diagrams (KPI, Bento/pillar cards, comparison, 2x2 matrix, process/timeline/flywheel/chevron, gantt roadmaps, layered architecture, Harvey-ball matrices, concentric TAM/SAM/SOM, org/team charts, academic booktabs 3-line tables, chart-split, waterfall bridges), 20 industry blueprints, deep reference .pptx skeleton absorption (cloneStructure), and shared branding. 中文：先组织事实与内容，再生成可直接放映和继续编辑的三件套；内置 24 套大师主题、6 套差异化母版骨架、24+ 种原生可编辑版式与专业图示、20 套行业蓝图、13 类出版级图表与外部 PPTX 深度骨架吸收。',
       parameters: compileParameters({
         title: { type: 'string', required: true, description: 'Deck title (used for the cover and file names).' },
         content: { type: 'string', description: 'Markdown content: # cover title, ## slides, -/* bullets (supports **bold** lead-ins), | ... | tables, > quotes, > [!TAKEAWAY] bottom summary bar, ::: kpi|cards|comparison|process|matrix|callout|gantt|architecture|harvey|tam|org blocks, and <!-- 备注: ... --> speaker notes. Required unless slides or template is provided.' },
@@ -373,7 +381,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_templates',
-      description: 'List all 16 industry scenario blueprints (weekly, defense, project, pitch, consulting, keynote, gov-report, workshop, architecture-review, financial-earnings, medical-case, postmortem, marketing-campaign, promotion-review, legal-compliance, creative-lookbook) with recommended themes, chrome skeletons, and multi-archetype slide outlines. 中文：查看全部 16 套行业场景蓝图（含推荐主题、母版骨架与专业图示大纲），组织真实内容后再调用 ppt_create 交付成品。',
+      description: 'List all 20 industry scenario blueprints (weekly, defense, project, pitch, consulting, keynote, gov-report, workshop, architecture-review, financial-earnings, medical-case, postmortem, marketing-campaign, promotion-review, legal-compliance, creative-lookbook, quarterly-okr, product-prd, vc-daylight, industry-research) with recommended themes, chrome skeletons, and multi-archetype slide outlines. 中文：查看全部 20 套行业场景蓝图（含推荐主题、母版骨架与专业图示大纲），组织真实内容后再调用 ppt_create 交付成品。',
       parameters: compileParameters({ lang: { type: 'string', description: 'zh / en / bilingual, default zh.' } }),
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => oneText(JSON.stringify(value, null, 2)) },
       execute: executors.templates,

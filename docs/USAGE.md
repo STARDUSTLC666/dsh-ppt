@@ -15,10 +15,10 @@
 | --- | --- |
 | `ppt_create` 工具 | Markdown / 结构化 `slides` → `*.html` + `*.pptx` + `*.json` 三件套；默认 `theme: "auto"` 自动匹配主题与骨架，支持 `referencePptx` 与 `cloneStructure: true` 深度复用参考结构 |
 | `ppt_absorb` 工具 | 本地只读解析参考 `.pptx` 的主题修饰色板、字体、画幅比例、母版骨架几何（`extractedSkeleton` / `recommendedChrome`）、逐页序列（`slideSkeleton`）与可选嵌入 Logo |
-| `ppt_themes` 工具 | 列出 18 套内置主题（12 明亮 + 6 深色）与 6 套母版骨架；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套 SVG 色板卡 |
-| 24 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout` / `gantt` / `architecture` / `harvey` / `tam` / `org` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `waterfall`、`gallery`、`flywheel` 别名） |
+| `ppt_themes` 工具 | 列出 24 套内置主题（16 明亮 + 8 深色）与 6 套母版骨架；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套 SVG 色板卡 |
+| 24+ 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout` / `gantt` / `architecture` / `harvey` / `tam` / `org` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `chevron`、`value-chain`、`waterfall`、`gallery`、`flywheel` 别名） |
 | 13 类原生图表 | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall`，支持 `highlight` 焦点项染色 |
-| `ppt_templates` | 16 套场景蓝图：`weekly`、`defense`、`project`、`pitch`、`consulting`、`keynote`、`gov-report`、`workshop`、`architecture-review`、`financial-earnings`、`medical-case`、`postmortem`、`marketing-campaign`、`promotion-review`、`legal-compliance`、`creative-lookbook` |
+| `ppt_templates` | 20 套场景蓝图：`weekly`、`defense`、`project`、`pitch`、`consulting`、`keynote`、`gov-report`、`workshop`、`architecture-review`、`financial-earnings`、`medical-case`、`postmortem`、`marketing-campaign`、`promotion-review`、`legal-compliance`、`creative-lookbook`、`quarterly-okr`、`product-prd`、`vc-daylight`、`industry-research` |
 | `ppt_edit` / `ppt_undo` | 按页或整套切换主题/品牌/参考 `.pptx`、增删改排页面，支持最多 20 次历史与修订号冲突保护 |
 | `ppt_check` | 只读版面与信息密度检查（含标题动作化、密度过载、连续同构页等提醒），定位具体页；可复核当前渲染收据 |
 | `ppt_render` | 可选官方引擎生成逐页 PNG / PDF，保留源 PPTX，报告缺失字体 |

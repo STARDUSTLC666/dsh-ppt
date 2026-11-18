@@ -20,7 +20,7 @@
 | `cards` | `pillars \| bento \| exec-summary \| numbered` | `kicker, title, subtitle, items`（2–6 项）, `takeaway` | **主力去要点墙版式**：并列支柱卡、Apple/Linear 非对称 Bento 网格、麦肯锡顶部总论断+三支柱 `exec-summary` |
 | `comparison` | `versus \| before-after \| do-dont \| issue-action` | `kicker, title, items`（2 列或 2–4 对配对行）, `takeaway` | A/B 方案对比、改造前后、✓ 推荐 vs ✗ 误区、政企「痛点 ──▶ 整改举措」原生箭头配对 |
 | `matrix` | `2x2 \| grid` | `kicker, title, items`（4 象限）, `takeaway` | 咨询四象限矩阵（带原生 X/Y 坐标轴箭头与象限卡片） |
-| `process` | `steps \| timeline \| layers \| funnel \| flywheel` | `kicker, title, items`（3–6 步）, `takeaway` | 方法管线步骤、里程碑时间轴、技术架构分层、转化漏斗（支持 `delta` 转化率徽章）、4 节点增长飞轮闭环 |
+| `process` | `steps \| timeline \| chevron \| layers \| funnel \| flywheel` | `kicker, title, items`（3–6 步）, `takeaway` | 方法管线步骤、里程碑时间轴、**咨询价值链咬合五边形箭头（`chevron`，亦支持 `layout: "chevron" \| "value-chain"` 别名）**、技术分层、转化漏斗、4 节点增长飞轮 |
 | `callout` | `formula \| definition \| takeaways` | `kicker, title, subtitle, items / bullets, source` | 学术公式/算法定理框、核心概念定义卡、复盘行动清单 |
 | `table` | `tableStyle`: `consulting \| booktabs \| minimal \| banded \| harvey` | `kicker, title, rows`（首行表头）, `takeaway, source` | 原生可编辑对比表（`booktabs` 为**无竖线学术三线表**；`harvey` 支持哈维球；数值列右对齐；> 8 行自动分页） |
 | **`gantt`** | `quarters \| months \| weeks \| swimlane` | `kicker, title, columns[], items[]`（`start, span, milestone?`）, `takeaway` | **原生甘特排期图**：自动时间刻度栅格、泳道标签、比例条形块与菱形里程碑节点 |

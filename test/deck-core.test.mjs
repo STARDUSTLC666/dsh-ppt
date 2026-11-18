@@ -64,10 +64,11 @@ function unzipPptxXml(buf) {
   return entries
 }
 
-test('内置 18 套大师主题与 6 套母版骨架，兼容前 14 套顺序与色值并满足 WCAG AA 对比度', () => {
-  assert.equal(THEME_IDS.length, 18)
+test('内置 24 套大师主题与 6 套母版骨架，兼容前 18 套顺序与色值并满足 WCAG AA 对比度', () => {
+  assert.equal(THEME_IDS.length, 24)
   assert.deepEqual(THEME_IDS.slice(0, 5), ['swiss', 'velvet', 'data', 'soft', 'bold'])
-  assert.deepEqual(THEME_IDS.slice(14), ['keynote-light', 'financial-ft', 'medical-clean', 'luxury-noir'])
+  assert.deepEqual(THEME_IDS.slice(14, 18), ['keynote-light', 'financial-ft', 'medical-clean', 'luxury-noir'])
+  assert.deepEqual(THEME_IDS.slice(18), ['bcg-emerald', 'economist-brief', 'venture-daylight', 'stripe-craft', 'aurora-stage', 'obsidian-amber'])
   assert.equal(CHROME_STYLES.length, 6)
   assert.equal(DEFAULT_THEME, 'data')
   assert.equal(SMART_DEFAULT_THEME, 'consulting')
@@ -109,7 +110,7 @@ test('内置 18 套大师主题与 6 套母版骨架，兼容前 14 套顺序与
   assert.equal(THEMES['exec-palace'].dark, false)
   assert.equal(THEMES.academic.defaultTableStyle, 'booktabs')
   assert.equal(THEMES.cartesian.radiusPx, 0)
-  assert.equal(listThemes('zh').length, 18)
+  assert.equal(listThemes('zh').length, 24)
   assert.equal(listThemes('en')[0].name, 'Swiss Pulse')
 
   // resolveChromeStyle 优先级：slide.chrome > brand.chromeStyle > theme.chromeStyle
@@ -438,7 +439,7 @@ test('HTML 播放器：演讲者视图、缩略图总览、Esc 关闭与备注�
   assert.doesNotMatch(html, /max-width:1120px/)
 })
 
-test('主题预览：SVG 色板卡与对比页覆盖 18 套主题', () => {
+test('主题预览：SVG 色板卡与对比页覆盖 24 套主题', () => {
   const svg = renderThemeSvg('data', 'zh')
   assert.ok(svg.startsWith('<svg'))
   assert.match(svg, /#7C3AED/)
@@ -447,7 +448,7 @@ test('主题预览：SVG 色板卡与对比页覆盖 18 套主题', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-preview-'))
   try {
     const out = buildThemePreview({ outputDir: dir, lang: 'zh' })
-    assert.equal(out.themeCount, 18)
+    assert.equal(out.themeCount, 24)
     assert.ok(existsSync(out.htmlPath))
     for (const item of out.svgs) assert.ok(existsSync(item.path))
   } finally {

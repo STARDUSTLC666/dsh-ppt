@@ -33,13 +33,14 @@ function zipEntries(buffer) {
   return entries
 }
 
-test('all sixteen scenarios expose useful outlines; unfilled templates are labelled draft', () => inDir(async dir => {
+test('all twenty scenarios expose useful outlines; unfilled templates are labelled draft', () => inDir(async dir => {
   const ids = listTemplates().map(s => s.id)
   assert.deepEqual(ids.slice(0, 4), ['weekly', 'defense', 'project', 'pitch'])
   assert.deepEqual(ids, [
     'weekly', 'defense', 'project', 'pitch', 'consulting', 'keynote', 'gov-report', 'workshop',
     'architecture-review', 'financial-earnings', 'medical-case', 'postmortem',
     'marketing-campaign', 'promotion-review', 'legal-compliance', 'creative-lookbook',
+    'quarterly-okr', 'product-prd', 'vc-daylight', 'industry-research',
   ])
   for (const template of listTemplates('en')) {
     const result = await buildDeckAsync({ title: 'Report', template: template.id, lang: 'en', outputDir: dir })

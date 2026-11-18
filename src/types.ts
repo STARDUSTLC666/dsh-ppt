@@ -19,6 +19,12 @@ export type PptThemeId =
   | 'financial-ft'
   | 'medical-clean'
   | 'luxury-noir'
+  | 'bcg-emerald'
+  | 'economist-brief'
+  | 'venture-daylight'
+  | 'stripe-craft'
+  | 'aurora-stage'
+  | 'obsidian-amber'
 
 export type PptChromeStyle =
   | 'consulting-classic'
@@ -65,6 +71,8 @@ export type PptSlideLayout =
   | 'steps'
   | 'layers'
   | 'funnel'
+  | 'chevron'
+  | 'value-chain'
   | 'issue-action'
   | 'before-after'
   | 'matrix-2x2'
@@ -95,6 +103,10 @@ export type PptTemplateId =
   | 'promotion-review'
   | 'legal-compliance'
   | 'creative-lookbook'
+  | 'quarterly-okr'
+  | 'product-prd'
+  | 'vc-daylight'
+  | 'industry-research'
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey'
 export interface PptImageSpec { src?: string; assetId?: string; alt?: string; fit?: 'contain' | 'cover'; caption?: string }
 export interface PptSlideItem {
@@ -143,9 +155,13 @@ export interface PptChartSpec {
 export interface PptBrand {
   name?: string
   primaryColor?: string
+  secondaryColor?: string
   backgroundColor?: string
   textColor?: string
   fontFamily?: string
+  headingFont?: string
+  coverMode?: 'standard' | 'inverted-accent'
+  coverBg?: string
   logo?: string | null
   footer?: string
   chromeStyle?: PptChromeStyle | string | null
@@ -308,6 +324,8 @@ export interface PptAbsorbResult {
   sanitizedTokens: Record<string, unknown>
   recommendedTheme: string
   recommendedChrome?: PptChromeStyle | string
+  recommendedTableStyle?: PptTableStyle | string
+  narrativeProfile?: Record<string, unknown>
   slideSkeleton?: PptAbsorbSlideSkeleton[]
   layoutSummary?: Record<string, unknown>
 }
@@ -350,6 +368,7 @@ export interface DeckEngine {
   buildDeck(options: Record<string, unknown>): PptCreateResult
   buildThemePreview(options: Record<string, unknown>): PptThemePreviewResult
   listThemes(lang?: string): PptThemeInfo[]
+  listMasterPresets?(lang?: string): unknown[]
   resolveTheme(input: unknown): Record<string, unknown>
   resolveLanguage(input: unknown): Record<string, unknown>
 }

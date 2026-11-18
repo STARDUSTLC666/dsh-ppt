@@ -3,7 +3,7 @@ import { resolve, dirname, extname, basename } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, buildDeck } from './deck-core.mjs'
-import { listThemes, resolveTheme, buildThemePreview as buildThemePreviewFromThemes, deriveBrandedTheme, pptxEastAsianFont } from './deck-themes.mjs'
+import { listThemes, listMasterPresets, resolveTheme, buildThemePreview as buildThemePreviewFromThemes, deriveBrandedTheme, pptxEastAsianFont } from './deck-themes.mjs'
 import { CORE_LAYOUTS, LAYOUT_ALIASES, stripInlineMarkdown } from './deck-layouts.mjs'
 import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, normalizeChart, buildOfficeKitChartSpec, computeWaterfallGeometry } from './deck-media.mjs'
 import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
@@ -13,7 +13,7 @@ import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScen
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
-export { listThemes, resolveTheme } from './deck-themes.mjs'
+export { listThemes, listMasterPresets, resolveTheme } from './deck-themes.mjs'
 export { absorbPptx } from './deck-absorb.mjs'
 export { inferThemeFromContent } from './deck-director.mjs'
 
@@ -101,16 +101,23 @@ function normalizeBrand(input, assets, cwd) {
   if (input === undefined || input === null) return undefined
   if (typeof input !== 'object' || Array.isArray(input)) fail('brand 必须是对象')
   const brand = {}
-  for (const key of ['primaryColor', 'backgroundColor', 'textColor']) {
-    if (input[key] !== undefined && input[key] !== '') {
+  for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'coverBg']) {
+    if (input[key] !== undefined && input[key] !== null && input[key] !== '') {
       if (!/^#[\da-f]{6}$/i.test(input[key])) fail(`brand.${key} 必须为 #RRGGBB`)
       brand[key] = input[key].toUpperCase()
     }
   }
-  if (input.fontFamily) {
-    const font = String(input.fontFamily).trim()
-    if (font.length > 80 || !/^[\p{L}\p{N} _-]+$/u.test(font)) fail('brand.fontFamily 需单个字体名称，最多 80 字符')
-    brand.fontFamily = font
+  for (const fontKey of ['fontFamily', 'headingFont']) {
+    if (input[fontKey]) {
+      const font = String(input[fontKey]).trim()
+      if (font.length > 80 || !/^[\p{L}\p{N} _-]+$/u.test(font)) fail(`brand.${fontKey} 需单个字体名称，最多 80 字符`)
+      brand[fontKey] = font
+    }
+  }
+  if (input.coverMode !== undefined && input.coverMode !== null && input.coverMode !== '') {
+    const cm = String(input.coverMode).trim()
+    if (!['standard', 'inverted-accent'].includes(cm)) fail('brand.coverMode 仅支持 standard / inverted-accent')
+    brand.coverMode = cm
   }
   if (input.name) brand.name = String(input.name).slice(0, 100)
   if (input.footer) {
@@ -456,7 +463,7 @@ function validateSnapshot(value, assets) {
   validateDataSnapshot(value, normalizeSlides)
   if (value.brand != null) {
     if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
-    for (const key of ['primaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'name', 'footer', 'chromeStyle']) {
+    for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'name', 'footer', 'chromeStyle']) {
       if (value.brand[key] !== undefined && typeof value.brand[key] !== 'string') fail('工程 brand.' + key + ' 必须为字符串')
     }
     normalizeBrand(value.brand, assets, '.')
@@ -498,7 +505,7 @@ function mapSlidesToAbsorbedSkeleton(slides, slideSkeleton, langId) {
     const metricHits = bullets.filter((b) => SKELETON_METRIC_RE.test(stripInlineMarkdown(b))).length
     const hasMetrics = n >= 2 && n <= 4 && (metricHits / n) >= 0.75
     // Avoid breaking Markdown-only slides that lack media assets (chart/image) by mapping media slots to visual card equivalents
-    if (want === 'chart' || want === 'chart-split') {
+    if (want === 'chart' || want === 'chart-split' || want === 'waterfall') {
       return { ...slide, layout: hasMetrics ? 'kpi' : 'cards', variant: hasMetrics ? 'grid' : 'bento' }
     }
     if (want === 'image' || want === 'image-left' || want === 'image-right') {
@@ -516,7 +523,7 @@ function mapSlidesToAbsorbedSkeleton(slides, slideSkeleton, langId) {
     if (want === 'harvey' && (!Array.isArray(slide.rows) || slide.rows.length === 0)) {
       return { ...slide, layout: 'comparison', variant: 'versus' }
     }
-    if (['cards', 'kpi', 'comparison', 'matrix', 'process', 'callout', 'statement', 'bullets', 'gantt', 'architecture', 'tam', 'org'].includes(want)) {
+    if (['cards', 'kpi', 'comparison', 'matrix', 'process', 'callout', 'statement', 'quote', 'bullets', 'gantt', 'architecture', 'tam', 'org'].includes(want)) {
       return {
         ...slide,
         layout: want,
@@ -796,7 +803,10 @@ export async function editDeck(options = {}) {
   if (options.referencePptx !== undefined && options.referencePptx !== null && String(options.referencePptx).trim() !== '') {
     const absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
     if (options.theme === undefined) next.theme = absorbed.recommendedTheme
-    const absorbedBrand = { ...absorbed.sanitizedBrand }
+    const absorbedBrand = {
+      ...absorbed.sanitizedBrand,
+      ...(absorbed.recommendedChrome && !next.brand?.chromeStyle && !options.brand?.chromeStyle ? { chromeStyle: absorbed.recommendedChrome } : {}),
+    }
     if (
       absorbed.sanitizedTokens?.coverMode === 'inverted-accent' &&
       resolveTheme(next.theme).tokens?.coverMode === 'inverted-accent' &&
