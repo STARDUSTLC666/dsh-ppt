@@ -714,7 +714,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
             onClick: () => onApplyBrand({ chromeStyle: sk.id }),
           },
             h('div', { className: 'ppt-theme-card-top' },
-              h('strong', { className: 'ppt-theme-name' }, L(sk.zh, sk.en)),
+              h('strong', { className: 'ppt-theme-name', 'data-dsh-serif': '' }, L(sk.zh, sk.en)),
               pressed ? h('span', { className: 'w-tag' }, savedBrand.chromeStyle ? L('已指定', 'Override') : L('默认', 'Default')) : null),
             h('span', { className: 'ppt-theme-meta' }, L(sk.descZh, sk.descEn)));
         }))),
