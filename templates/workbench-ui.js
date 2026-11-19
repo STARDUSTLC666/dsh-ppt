@@ -804,6 +804,8 @@ function createWorkbenchUI(React, requireFn) {
     }, bars);
   }
 
+  const primitivesByHost = new Map();
+
   function resolveHostPrimitives(customRequire = requireFn) {
     let host = null;
     if (typeof customRequire === 'function') {
@@ -813,6 +815,10 @@ function createWorkbenchUI(React, requireFn) {
         host = null;
       }
     }
+
+    // Keep component types stable while still discovering host changes on render.
+    const cached = primitivesByHost.get(host);
+    if (cached) return cached;
 
     const FallbackButton = forwardRefWrap(function FallbackButton({ variant = 'ghost', size = 'md', icon, className, children, type = 'button', ...rest }, ref) {
       return h('button', {
@@ -943,9 +949,11 @@ function createWorkbenchUI(React, requireFn) {
         'data-dsh-font': font,
         'data-window-drag-exclude': '',
         'data-dsh-portal-synced': 'true',
-        onKeyDownCapture: event => {
-          onKeyDownCapture?.(event);
+        onKeyDownCapture,
+        // Let nested menus/editors consume Escape before the enclosing dialog.
+        onKeyDown: event => {
           if (!event?.defaultPrevented && event?.key === 'Escape') {
+            event.stopPropagation?.();
             onClose?.();
           }
         },
@@ -993,7 +1001,7 @@ function createWorkbenchUI(React, requireFn) {
         }
       : FallbackModal;
 
-    return {
+    const resolved = {
       ...(host || {}),
       isFallback: !host,
       Button: host?.Button || FallbackButton,
@@ -1004,6 +1012,8 @@ function createWorkbenchUI(React, requireFn) {
       Menu: WrappedMenu,
       Modal: WrappedModal,
     };
+    primitivesByHost.set(host, resolved);
+    return resolved;
   }
 
   const Button = forwardRefWrap(function Button({ children, icon, iconSize = 15, variant = 'outline', size = 'sm', className, ...props }, ref) {

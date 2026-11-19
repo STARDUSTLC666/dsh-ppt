@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.27.1 (2026-11-20)
+
+- 修复工作台控件反复重挂载导致的焦点丢失；备用弹窗让内层控件优先处理 Escape。
+- Preserve workbench control identity and let nested controls consume Escape before closing a fallback dialog.
+
 ## 0.27.0 (2026-11-20)
 
 - **全栈审美工坊与 8 套大师品味配方（Aesthetic Studio & Curated Taste Recipes）**：新增零外部依赖 `deck-taste.mjs` 与 8 套向世界顶级演示流派致敬的结构化品味配方（`mckinsey-partner` 麦肯锡合伙人精修、`apple-keynote-dark` Apple 发布会暗夜、`apple-keynote-light` Apple 极简纯白、`swiss-editorial` 瑞士杂志 Monocle、`linear-craft` Linear 玻璃工艺、`ft-data-journal` Financial Times 研报、`nature-academic` Nature/NeurIPS 学术、`oriental-zen` 东方极简宋韵），通过 `taste` 参数 / CLI `--taste` / `--list-tastes` / 工作台风格面板一键协同驱动封面形态、材质、节奏、图标语言与图表精修。
