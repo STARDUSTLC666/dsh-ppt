@@ -673,3 +673,116 @@ test('workbench import-pptx supports preserveSourceTheme=true vs modernize=true 
   assert.equal(modernized.ok, true)
   assert.equal(modernized.project.theme, 'bcg-emerald')
 }))
+
+test('workbench create-demo generates flagship showcase deck in 0 LLM calls with paceBudget & downloads (onepager + remotion)', () => fixture(async ({ wb }) => {
+  const demo = await wb.action({ operation: 'create-demo', lang: 'zh' })
+  assert.equal(demo.ok, true)
+  assert.equal(demo.created, true)
+  assert.equal(demo.demo, true)
+  assert.ok(demo.project.slides.length >= 8)
+  const layouts = new Set(demo.project.slides.map(s => s.layout))
+  for (const required of ['cover', 'kpi', 'architecture', 'gantt', 'sankey', 'marimekko', 'callout', 'closing']) {
+    assert.ok(layouts.has(required), `demo missing layout ${required}`)
+  }
+  assert.ok(demo.project.slides.some(s => s.layout === 'callout' && s.formula), 'demo includes native math formula slide')
+  assert.ok(demo.project.paceBudget && typeof demo.project.paceBudget.estimatedMinutes === 'number')
+
+  // Reject host path keys on create-demo
+  await assert.rejects(wb.action({ operation: 'create-demo', outputDir: 'C:/tmp' }), /面板/)
+
+  // Download One-Pager HTML via POST & GET
+  const id = demo.project.id
+  const rev = demo.project.revision
+  const opPost = await wb.action({ operation: 'download', id, kind: 'onepager' })
+  assert.equal(opPost.ok, true)
+  assert.match(opPost.name, /-onepager\.html$/)
+  assert.match(Buffer.from(opPost.data, 'base64').toString('utf8'), /<!doctype html>/i)
+
+  const opGet = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=onepager&revision=${rev}`))
+  assert.equal(opGet.status, 200)
+  assert.match(opGet.headers.get('content-type'), /text\/html/)
+  assert.match(decodeURIComponent(opGet.headers.get('content-disposition')), /-onepager\.html/)
+
+  // Download Remotion storyboard ZIP via POST & GET
+  const remPost = await wb.action({ operation: 'download', id, kind: 'remotion' })
+  assert.equal(remPost.ok, true)
+  assert.match(remPost.name, /-remotion\.zip$/)
+  const remFiles = unzipSync(new Uint8Array(Buffer.from(remPost.data, 'base64')))
+  for (const f of ['remotion-storyboard.json', 'src/DeckVideo.tsx', 'src/slides-data.json', 'README.md']) {
+    assert.ok(remFiles[f], `Remotion zip missing ${f}`)
+  }
+
+  const remGet = await wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=remotion&revision=${rev}`))
+  assert.equal(remGet.status, 200)
+  assert.equal(remGet.headers.get('content-type'), 'application/zip')
+  assert.match(decodeURIComponent(remGet.headers.get('content-disposition')), /-remotion\.zip/)
+}))
+
+test('workbench import-office enforces upload-only security guards, validates file types, and delegates to importOfficeDeck', () => fixture(async ({ dir, created, wb }) => {
+  const csvData = 'data:text/csv;base64,' + Buffer.from('Segment,Revenue,Share\nEnterprise,450,42%\nFinancial,320,35%\n', 'utf8').toString('base64')
+  await assert.rejects(wb.action({ operation: 'import-office', filePath: 'C:/secret.csv', fileName: 'a.csv', data: csvData }), /面板/)
+  await assert.rejects(wb.action({ operation: 'import-office', outputDir: dir, fileName: 'a.csv', data: csvData }), /面板/)
+  await assert.rejects(wb.action({ operation: 'import-office', fileName: 'bad.exe', data: csvData }), /24 MiB/)
+  await assert.rejects(wb.action({ operation: 'import-office', fileName: 'bad.xlsx', data: csvData }), /24 MiB/)
+
+  let capturedOpts = null
+  const customWb = new PptWorkbench({
+    catalogPath: join(dir, 'office-cat.jsonl'),
+    loadEngine: async () => ({
+      ...engine,
+      importOfficeDeck: async (opts) => {
+        capturedOpts = opts
+        assert.ok(existsSync(opts.filePath), 'temp uploaded office file exists during import')
+        return created
+      },
+    }),
+  })
+  const res = await customWb.action({
+    operation: 'import-office',
+    fileName: 'metrics.csv',
+    data: csvData,
+    theme: 'consulting',
+    targetMinutes: 12,
+  })
+  assert.equal(res.ok, true)
+  assert.equal(res.imported, true)
+  assert.equal(capturedOpts.theme, 'consulting')
+  assert.equal(capturedOpts.targetMinutes, 12)
+  assert.equal(existsSync(capturedOpts.filePath), false, 'temp uploaded office file cleaned up after import')
+
+  // Real engine import-office end-to-end
+  const realOffice = await wb.action({
+    operation: 'import-office',
+    fileName: 'segment-growth.csv',
+    data: csvData,
+    theme: 'consulting',
+    targetMinutes: 5,
+  })
+  assert.equal(realOffice.ok, true)
+  assert.equal(realOffice.created, true)
+  assert.ok(realOffice.project.slides.length >= 3)
+  assert.equal(realOffice.project.targetMinutes, 5)
+}))
+
+test('workbench Pace Budget & client bundle include Phase-5 tour, Mermaid editor, One-Pager, and Remotion exports', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const opened = await wb.action({ operation: 'open', id })
+  assert.ok(opened.project.paceBudget)
+  assert.equal(opened.project.targetMinutes, null)
+
+  // Trigger pace overrun by setting a tight 1-minute target budget
+  const tight = await wb.action({ operation: 'edit', id, expectedRevision: 0, targetMinutes: 1 })
+  assert.equal(tight.project.paceBudget.slideCount, 3)
+
+  await assert.rejects(wb.action({ operation: 'edit', id, expectedRevision: tight.project.revision, targetMinutes: 999 }), /1–240/)
+
+  const bundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  for (const marker of [
+    'buildPptTourSteps', '一键体验旗舰示例', 'Load Flagship Demo', '导入 Excel / Word', 'Import Excel / Word',
+    '下载高管一页纸 (.html)', '导出 Remotion 视频分镜包 (.zip)', 'Mermaid 流程图 / 时序图', '.deck-mermaid-svg',
+    'ppt-pace-card', '演讲节奏预算', 'Speaking Pace Budget',
+  ]) {
+    assert.ok(bundle.includes(marker), marker + ' missing from built client bundle')
+  }
+}))

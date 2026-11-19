@@ -17,7 +17,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listThemes, THEME_IDS, DEFAULT_THEME } from './deck-themes.mjs'
 import { CHROME_STYLE_IDS } from './deck-absorb.mjs'
-import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck } from './deck-advanced.mjs'
+import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck } from './deck-advanced.mjs'
 
 const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
@@ -35,15 +35,18 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --chrome <style>        母版骨架风格：${CHROME_STYLE_IDS.join(' / ')}
   --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架与逐页分布 JSON
   --import-pptx <path>    导入外部 .pptx 全量内容（标题/要点/表格/图表/图片/备注）并一键翻新为 dsh-ppt 工程
+  --from-office <path>    直吞 .xlsx / .csv / .tsv / .docx 数据表或 Word 报告，自动画像并生成全套文稿
   --sync-pptx <path>      将 Office 修改后的 .pptx 内容回导同步至已有工程（自动写入 .history/ 支持撤销）
   --target-project <dir>  配合 --sync-pptx 指定目标工程目录（或传 --edit <deck.json>）
   --preserve-theme        配合 --import-pptx 使用，保留原 .pptx 净化后的品牌配色与 Logo
   --no-modernize          配合 --import-pptx/--sync-pptx 关闭自动版式升维
   --handout               同时生成 <file>.handout.md 演讲者讲义与逐字稿文件
+  --one-pager             同时生成 <file>.onepager.html 高管一页纸战报（默认不额外写盘，可在检查面板离线导出）
+  --target-minutes <n>    指定演讲目标总时长（分钟），计算逐页配速预算并标记超预算页
   --smart-layout          显式开启多版式叙事节奏自动升维（配合 --no-smart-layout 可关闭）
   --brand <json|@path>    品牌主辅颜色、标题/正文字体、封面反白、Logo、页脚、chromeStyle
   --data-model <json|@path> 可选数字来源、公式与推演假设；配合 --slides
-  --edit <deck.json>      修改指定页或整套换肤，配合 --edits / --theme / --reference-pptx / --brand
+  --edit <deck.json>      修改指定页或整套换肤，配合 --edits / --theme / --reference-pptx / --brand / --target-minutes
   --edits <json|@path>    页面修改指令数组
   --undo <deck.json>      撤销最近一次修改
   --check <deck.json>     查看质量报告和页码 / ID
@@ -64,10 +67,11 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --help                  显示本帮助
 
 输出：
-  <file>.html       独立网页放映（无外链，支持按 P 启动双屏演讲者提词台、按 L 开启虚拟激光笔）
-  <file>.pptx       可编辑 PPTX（16:9）
-  <file>.json       deck manifest
-  <file>.handout.md 演讲者讲义（传 --handout 时同步落盘，HTML 检查面板随时可下载）
+  <file>.html          独立网页放映（无外链，支持按 P 启动双屏演讲者提词台、按 L 开启虚拟激光笔）
+  <file>.pptx          可编辑 PPTX（16:9）
+  <file>.json          deck manifest
+  <file>.handout.md    演讲者讲义（传 --handout 时同步落盘，HTML 检查面板随时可下载）
+  <file>.onepager.html 高管一页纸战报（传 --one-pager 时同步落盘，HTML 检查面板随时可下载）
 `
 
 export function parseArgv(argv) {
@@ -100,11 +104,14 @@ export function parseArgv(argv) {
     else if (key === '--reference-pptx') args.referencePptx = nextValue()
     else if (key === '--absorb') args.absorb = nextValue()
     else if (key === '--import-pptx') args.importPptx = nextValue()
+    else if (key === '--from-office') args.fromOffice = nextValue()
     else if (key === '--sync-pptx') args.syncPptx = nextValue()
     else if (key === '--target-project') args.targetProject = nextValue()
     else if (key === '--preserve-theme') args.preserveTheme = true
     else if (key === '--no-modernize') args.modernize = false
     else if (key === '--handout') args.handout = true
+    else if (key === '--one-pager') args.onePager = true
+    else if (key === '--target-minutes') args.targetMinutes = Number(nextValue())
     else if (key === '--brand') args.brand = readJson(nextValue())
     else if (key === '--data-model') args.dataModel = readJson(nextValue())
     else if (key === '--edit') args.edit = nextValue()
@@ -152,11 +159,31 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return 0
   }
   if (args.listTemplates) { log(JSON.stringify({ templates: listTemplates(args.lang) }, null, 2)); return 0 }
-  if ([args.edit && !args.syncPptx ? args.edit : null, args.undo, args.check, args.render, args.absorb, args.importPptx, args.syncPptx].filter(Boolean).length > 1) {
-    throw new Error('dsh-ppt CLI：--edit / --undo / --check / --render / --absorb / --import-pptx / --sync-pptx 只能选择一项')
+  if ([args.edit && !args.syncPptx ? args.edit : null, args.undo, args.check, args.render, args.absorb, args.importPptx, args.syncPptx, args.fromOffice].filter(Boolean).length > 1) {
+    throw new Error('dsh-ppt CLI：--edit / --undo / --check / --render / --absorb / --import-pptx / --sync-pptx / --from-office 只能选择一项')
   }
   if (args.renderReceipt !== undefined && !args.check) throw new Error('dsh-ppt CLI：--render-receipt 需配合 --check')
   if (!args.render && [args.format, args.width, args.timeoutMs].some(v => v !== undefined)) throw new Error('dsh-ppt CLI：--format / --width / --timeout 需配合 --render')
+  if (args.fromOffice) {
+    const imported = await importOfficeDeck({
+      filePath: args.fromOffice,
+      outDir: resolvePath(args.out || '.'),
+      outputDir: resolvePath(args.out || '.'),
+      ...(args.title ? { title: args.title } : {}),
+      ...(args.file ? { fileName: args.file } : {}),
+      ...(args.theme ? { theme: args.theme } : {}),
+      ...(args.persona ? { persona: args.persona } : {}),
+      ...(args.chrome ? { chromeStyle: args.chrome } : {}),
+      ...(args.lang ? { lang: args.lang } : {}),
+      ...(args.motion ? { motion: args.motion } : {}),
+      ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
+      overwrite: args.overwrite === true,
+      handout: args.handout === true,
+      onePager: args.onePager === true,
+    })
+    log(JSON.stringify(imported, null, 2))
+    return 0
+  }
   if (args.importPptx || args.syncPptx) {
     const imported = await importPptxDeck({
       pptxPath: args.importPptx || args.syncPptx,
@@ -206,6 +233,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
           theme: args.theme,
           referencePptx: args.referencePptx,
           brand: effectiveBrand,
+          ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
           expectedRevision: args.revision,
         })
       : await undoDeck({ deckPath: args.undo, expectedRevision: args.revision })
@@ -243,6 +271,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     brand: effectiveBrand,
     dataModel: args.dataModel,
     ...(args.handout ? { handout: true } : {}),
+    ...(args.onePager ? { onePager: true } : {}),
+    ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
   }
   const result = await buildDeckAsync(options)
   log('dsh-ppt 已生成 ' + result.slideCount + ' 页演示文稿：')
@@ -250,6 +280,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   log('  PPTX 导出：' + result.pptxPath)
   log('  Manifest ：' + result.jsonPath)
   if (result.handoutPath) log('  讲义 Handout：' + result.handoutPath)
+  if (result.onePagerPath) log('  高管一页纸：' + result.onePagerPath)
   if (result.deliveryStatus === 'draft') log('  草稿：还有待填写内容，不可作为成品交付。')
   log('  质量检查：' + result.quality.errorCount + ' 个错误 / ' + result.quality.warningCount + ' 个提醒；修订号 ' + result.revision)
   return 0

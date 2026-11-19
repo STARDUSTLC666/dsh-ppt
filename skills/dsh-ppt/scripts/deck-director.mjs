@@ -1660,16 +1660,55 @@ function splitLeadAndBody(bullet) {
   return { title: stripInlineMarkdown(raw), text: '' }
 }
 
+function extractMermaidFromSlide(slide) {
+  if (typeof slide?.mermaid === 'string' && slide.mermaid.trim()) {
+    return slide.mermaid.trim()
+  }
+  const textRaw = typeof slide?.text === 'string' ? slide.text : ''
+  const fenceMatch = /```mermaid\s*\n([\s\S]*?)```/i.exec(textRaw)
+  if (fenceMatch && fenceMatch[1].trim()) {
+    return fenceMatch[1].trim()
+  }
+  const bullets = Array.isArray(slide?.bullets) ? slide.bullets : []
+  const joined = [textRaw, ...bullets].filter(Boolean).join('\n')
+  const joinedFence = /```mermaid\s*\n([\s\S]*?)```/i.exec(joined)
+  if (joinedFence && joinedFence[1].trim()) {
+    return joinedFence[1].trim()
+  }
+  if (bullets.length >= 2) {
+    const first = String(bullets[0] ?? '').trim()
+    const isMermaidHeader = /^(?:flowchart\s+(?:TD|TB|LR|RL)|graph\s+(?:TD|TB|LR|RL)|sequenceDiagram)\b/i.test(first)
+    const hasEdges = bullets.slice(1).some((b) => /(?:-->|-.->|==>|---|<-->|->>|-->>)/.test(String(b)))
+    if (isMermaidHeader && hasEdges) {
+      return bullets.map((b) => String(b).trim()).join('\n')
+    }
+  }
+  if (/^(?:flowchart\s+(?:TD|TB|LR|RL)|graph\s+(?:TD|TB|LR|RL)|sequenceDiagram)\b/i.test(textRaw.trim()) && /(?:-->|-.->|==>|->>|-->>)/.test(textRaw)) {
+    return textRaw.trim()
+  }
+  return ''
+}
+
 export function promoteMarkdownSlides(slides, options = {}) {
   if (!Array.isArray(slides) || slides.length === 0) return slides
+
+  const result = slides.map((s) => {
+    const copy = { ...s }
+    const mermaidCode = extractMermaidFromSlide(copy)
+    if (mermaidCode && (!copy.layout || copy.layout === 'bullets' || copy.layout === 'mermaid' || copy.layout === 'flowchart' || copy.layout === 'sequence')) {
+      copy.layout = 'mermaid'
+      copy.mermaid = mermaidCode
+    }
+    return copy
+  })
+
   const minBodySlides = options.explicitSmartLayout ? 2 : 4
-  const bodyIndices = slides
+  const bodyIndices = result
     .map((s, idx) => (!['cover', 'section', 'closing', 'agenda'].includes(s.layout) ? idx : -1))
     .filter((idx) => idx >= 0)
 
-  if (bodyIndices.length < minBodySlides) return slides
+  if (bodyIndices.length < minBodySlides) return result
 
-  const result = slides.map((s) => ({ ...s }))
   let chapterIndex = 0
   let consecutiveBullets = 0
   let cardStyleToggle = 0
@@ -1687,6 +1726,13 @@ export function promoteMarkdownSlides(slides, options = {}) {
     const curTitle = String(slide.title ?? '').trim()
     if (/^(?:要点|Key\s*point)$/i.test(curKicker) || (curKicker && curTitle && curKicker === curTitle)) {
       slide.kicker = String(chapterIndex).padStart(2, '0')
+    }
+
+    if (slide.layout === 'mermaid' || (typeof slide.mermaid === 'string' && slide.mermaid.trim())) {
+      slide.layout = 'mermaid'
+      slide.mermaid = String(slide.mermaid).trim()
+      consecutiveBullets = 0
+      continue
     }
 
     if (slide.layout !== 'bullets' || !Array.isArray(slide.bullets) || slide.bullets.length === 0) {

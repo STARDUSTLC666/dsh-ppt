@@ -245,7 +245,7 @@ function createMiniEnv({ withHostPrimitives = false, throwStorage = false } = {}
   return { window, document, storage, dispatched, primitiveCalls, primitivesRequested: () => primitivesRequested, portalOverlays, React, plugin, render, findAll, effects }
 }
 
-test('Workbench UI v2 integrates @deepseek-ai/dsh-client-ui-primitives lazily and falls back cleanly in standalone DOM', () => {
+test('Workbench UI v2 integrates @deepseek-ai/dsh-client-ui-primitives lazily and falls back cleanly in standalone DOM', async () => {
   const hostEnv = createMiniEnv({ withHostPrimitives: true })
   assert.equal(hostEnv.primitivesRequested(), 0, 'must not require ui-primitives eagerly during module load')
 
@@ -270,8 +270,13 @@ test('Workbench UI v2 integrates @deepseek-ai/dsh-client-ui-primitives lazily an
   assert.equal(rootSection.props['data-dsh-style'], 'harness')
   assert.equal(rootSection.props['data-dsh-font'], 'arcade')
   assert.equal(rootSection.props['data-main'], 'true')
-  const allButtons = hostEnv.findAll(tree, n => n.type === 'button')
+  for (const fn of [...hostEnv.effects]) fn()
+  await new Promise(r => setTimeout(r, 0))
+  const loadedTree = hostEnv.render(main.component, { workbench: true, locale: { getSnapshot: () => ({ active: 'zh' }) } })
+  const allButtons = hostEnv.findAll(loadedTree, n => n.type === 'button')
   assert.ok(allButtons.some(b => JSON.stringify(b).includes('导入 PPTX 翻新')), 'Import & Modernize .pptx button renders in workbench')
+  assert.ok(allButtons.some(b => JSON.stringify(b).includes('导入 Excel / Word')), 'Import Excel / Word button renders in workbench')
+  assert.ok(allButtons.some(b => JSON.stringify(b).includes('一键体验旗舰示例')), 'Load Flagship Demo button renders in empty state')
 
   // Verify standalone fallback mode when @deepseek-ai/dsh-client-ui-primitives is unavailable
   const fallbackEnv = createMiniEnv({ withHostPrimitives: false, throwStorage: true })

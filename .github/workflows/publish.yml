@@ -22,6 +22,7 @@ concurrency:
 
 env:
   RELEASE_VERSION: ${{ inputs.version }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   validate:
@@ -33,7 +34,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
-          package-manager-cache: false
       - run: node .github/scripts/npm-release.mjs check-input
       - run: node --test .github/scripts/npm-registry-verification.test.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts --no-optional
@@ -61,7 +61,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
-          package-manager-cache: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: npm-release
@@ -89,7 +88,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
-          package-manager-cache: false
       - name: Publish GitHub Release for the verified npm version
         env:
           GH_TOKEN: ${{ github.token }}

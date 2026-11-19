@@ -23,7 +23,7 @@ PPTX 保留确认后的静态数值及原生可编辑图表。每页的演讲备
 
 ## 材料与分享
 
-支持 UTF-8 CSV、TSV、TXT、Markdown 或内嵌表格。Excel 可先导出 CSV。本版不直接解析 XLSX，不自动联网寻找来源。
+`ppt_data` 实时来源绑定与替换支持 UTF-8 CSV、TSV、TXT、Markdown 或内嵌表格（不自动联网寻找来源，也不监视或回写原始文件）。如需从多工作表 `.xlsx` 财务/排期表或 `.docx` Word 报告直接自动生成全套演示文稿，请使用 **`ppt_from_office`**（或 CLI `--from-office` / 工作台「导入 Word/Excel」）。
 
 来源只能说明“这个数字如何得到”，不代表材料真实或结论正确。JSON 工程包含导入的完整材料；HTML / PPTX 包含指标引用的材料行摘录和来源名称，摘录可能包含同一行的其他字段，分享前应核对。
 
@@ -35,7 +35,7 @@ Both features are optional. Ordinary finished-deck delivery does not require a d
 
 - Supply actual material and ask DSH to link its numbers (`{{metricId}}`) and expose selected assumptions. In the Presentations workbench (**Data and what-if** tab), click a linked number to inspect its source row, CSV cell, or formula. Follow formula inputs to their origins. Unlinked numbers are labelled explicitly.
 - Adjust declared assumptions; titles, bullets, structured `items` across KPI/cards/`gantt`/`tam`/`architecture`/`org` (`value`, `delta`, `text`, `bullets`), `takeaway` callouts, `source` footnotes, tables & Harvey matrices (`rows`), and all **13 native chart kinds** (including `waterfall`, `combo`, and stacked charts) recalculate together. Source facts remain read-only in what-if mode. Preview metric and slide differences before confirming. The default is an undoable new copy, preserving the original.
-- Replace an existing source by importing or pasting UTF-8 CSV, TSV, TXT, or Markdown. Excel tables can be exported as CSV. Nothing watches or writes the original source file; XLSX parsing and automatic online research are not included.
+- Replace an existing source in `ppt_data` by importing or pasting UTF-8 CSV, TSV, TXT, or Markdown (nothing watches or writes original source files, and automatic online research is not included). To build a full presentation directly from multi-sheet `.xlsx` workbooks or `.docx` reports, use **`ppt_from_office`** (or CLI `--from-office` / Workbench **Import Office**).
 - Offline HTML retains controls and lineage (`D` opens the panel). Export scenario parameters, import them into the same DSH project, preview, and confirm to create a matching static PPTX. Foreign or stale packets are rejected. Downloads of older PPTX/JSON files are blocked while the HTML has unsaved values.
 - PPTX contains confirmed static values and native editable charts, with formulas, assumptions, source excerpts/locators, and checksums in speaker notes. Download the Markdown lineage report separately. It does not execute HTML controls inside PowerPoint.
 - A source link is not factual verification. JSON retains full imported material; HTML/PPTX include metric-referenced row excerpts, which may contain other fields from that row. Review before sharing.

@@ -20,9 +20,9 @@
 
 - **零品味负担自动导演、24 套大师主题与 6 套母版骨架**：内建 16 套明亮投影友好主题（含新增翡翠战略 `bcg-emerald`、经济学人简报 `economist-brief`、红杉创投简报 `venture-daylight`、云靛工坊 `stripe-craft`，以及 `consulting`、`cobalt-cream`、`exec-jilan`、`exec-palace`、`academic`、`editorial-forest`、`cartesian`、`course-sage`、`soft`、`keynote-light`、`financial-ft`、`medical-clean`）与 8 套深色舞台主题（含新增极光发布会 `aurora-stage`、黑曜终端 `obsidian-amber`，以及 `linear-dark`、`swiss`、`velvet`、`data`、`bold`、`luxury-noir`），匹配 **6 套差异化母版骨架**与 **20 套行业场景蓝图**。未指定主题时 `ppt_create` 默认启用 `auto` 场景导演。
 - **深度吸收外部 `.pptx` 骨架与名家范本**：内置 **8 套名家范本一键直吸**，并支持 `ppt_absorb` 工具、`referencePptx`（含 `cloneStructure: true` 结构复刻）或工作台「风格与母版」面板直接上传参考 `.pptx`（≤24 MiB），自动递归拆解嵌套组合形状 `<p:grpSp>`、解析 OOXML `sysClr`/`prstClr`/`hueMod` 修饰色板、主辅双强调色、标题/正文字体配对、深色封面+浅色正文极性、母版 Logo、骨架几何（`extractedSkeleton` / `recommendedChrome`）与 24 版式逐页序列（`slideSkeleton[]`），支持收藏到工作台品牌库复用。
-- **28+ 种原生可编辑版式/专业图示与原生 `<m:oMath>` 数学公式**：新增 **不等宽市场图（`marimekko`）**、**多层桑基流向图（`sankey`）**、**真·波特价值链（`value-chain`）**、**SWOT 战略十字矩阵（`swot`）** 及基于 `deck-math.mjs` 的原生 Office Math（`<m:oMath>`）+ W3C MathML LaTeX 公式编译（`slide.formula` / `$...$`），覆盖咨询价值链五边形咬合箭头（`chevron`）、Bento/支柱卡片（`cards`）、大数字指标（`kpi`）、双栏/痛点举措对比（`comparison`）、四象限矩阵（`matrix`）、流程/里程碑轴/漏斗/飞轮（`process`）、定理/行动清单（`callout`）、甘特图路线图（`gantt`）、分层系统架构（`architecture`）、哈维球竞品矩阵（`harvey`）、TAM/SAM/SOM 同心圆（`tam`）、组织架构/团队图谱（`org`）、咨询表与学术三线表（`table` `booktabs` `harvey`）、图表+洞察分栏（`chart-split`）及矢量瀑布桥（`waterfall`）等。
-- **第 10 个工具 `ppt_import`、PPTX 一键翻新与 Office 双向导回**：支持通过 `ppt_import`（或工作台「导入 PPTX 翻新 / 导入 Office 修改稿」）从任意 `.pptx` 提取正文、表格、原生 `<c:chart>` 图表、嵌入图片与演讲备注，既可全新翻新为高颜值工程，也可在 PowerPoint / WPS 微调后导回既有工程更新（保留 `.history/` 撤销历史）；同时支持双屏演讲者提词台（HTML 按 `P` 开启、`L` 键虚拟激光笔）与 `.handout.md` 演讲讲义导出。
-- **工程库与增强工作台**：按关键词/主题搜索排序，展示主题与页数标签；支持单页版式与单页母版骨架一键无损切换、结构化卡片/甘特图时间轴/哈维球与表格编辑、新增页面、HTML ↔ PPTX 并排分屏对比、点击质量提醒直接跳页，以及最多 20 步撤销。
+- **29+ 种原生可编辑版式/专业图示、Mermaid 原生流程图与 `<m:oMath>` 数学公式**：新增零外部依赖 **`deck-mermaid.mjs`**（支持 `layout: 'mermaid'`、`'flowchart'` / `'sequence'` 别名及 Markdown ```` ```mermaid ```` 代码块自动识别），将 `flowchart`（含 `subgraph`、菱形决策、终端胶囊、数据库圆柱与多样连线）与 `sequenceDiagram`（含生命线、激活条、消息箭头、批注与 `alt/loop` 框）编译为 100% 原生可编辑 PowerPoint `<p:sp>` 形状与吸附连接线（`<p:cxnSp>`）及高精 HTML SVG；同源涵盖 **不等宽市场图（`marimekko`）**、**多层桑基流向图（`sankey`）**、**真·波特价值链（`value-chain`）**、**SWOT 战略十字矩阵（`swot`）**、原生 Office Math（`<m:oMath>`）+ W3C MathML LaTeX 公式编译（`slide.formula` / `$...$`）、价值链五边形咬合箭头（`chevron`）、Bento/支柱卡片（`cards`）、大数字指标（`kpi`）、双栏对比（`comparison`）、四象限矩阵（`matrix`）、流程/里程碑轴/漏斗/飞轮（`process`）、定理/行动清单（`callout`）、甘特图路线图（`gantt`）、分层系统架构（`architecture`）、哈维球竞品矩阵（`harvey`）、TAM/SAM/SOM 同心圆（`tam`）、组织图谱（`org`）、咨询表与学术三线表（`table` `booktabs` `harvey`）、图表+洞察分栏（`chart-split`）及矢量瀑布桥（`waterfall`）等。
+- **全格式直吞与生态工具（`ppt_from_office`、`ppt_import`、`ppt_cite`、`ppt_remotion`）**：新增 **`ppt_from_office`** 直吞 `.xlsx` 多工作表、`.csv`/`.tsv` 与 `.docx` Word 报告（Data-to-Visual 画像器自动匹配桑基图/甘特图/Mekko/瀑布图/组合图与三线表）；保留 **`ppt_import`** 导入任意 `.pptx` 一键翻新或导回 Office 修改稿（保留 `.history/` 撤销历史）；新增 **`ppt_cite`** 对接 `dsh-cite` 文献库/BibTeX 生成真实尾注与 `References` 页，以及 **`ppt_remotion`** 导出 `dsh-remotion` 30fps 视频分镜包；内置双屏演讲者提词台（HTML 按 `P` 开启、`L` 键虚拟激光笔）、**演讲时长预算器（Speaking-Pace Budgeter，`targetMinutes`）**、**高管一页纸（`.onepager.html`）** 与 `.handout.md` 演讲讲义导出。
+- **工程库与增强工作台**：按关键词/主题搜索排序，展示主题与页数标签；支持顶栏 **`? 引导`** 四步聚光灯交互导览、空态 **「一键体验旗舰示例」**、拖拽上传 `.xlsx`/`.csv`/`.docx`/`.pptx`、单页版式与单页母版骨架一键无损切换、结构化卡片/甘特图/哈维球/Mermaid/LaTeX 公式编辑、目标演讲时长预算、HTML ↔ PPTX 并排分屏对比、点击质量提醒直接跳页，以及最多 20 步撤销。
 - **可选数字溯源与现场推演**：点击数字追到原始材料、CSV 单元格或公式（全面支持 `items`、甘特图、`tam`、架构、哈维球矩阵、`takeaway`、`source` 与图表绑定）；调整假设、预览影响并确认保存。见[数据说明](DATA.md)。
 - **可选双层 AI 视觉检查（最多 24 页）**：看实际 PPTX 渲染图，兼顾排版溢出检测与审美层级把关，支持 12 种零文本篡改排版动作、全宽画布前后对比、停止与撤销。见[看图修复](VISUAL.md)。
 - **可选高管叙事预审与模拟答辩**：把关结论先行 Action Title、SCQA 金字塔叙事与论据缺口（单轮最多 8 条建议，支持高管/投资人/学术评委/技术评审等 7 类听众画像），导出问答与待补充材料清单。见[演练说明](COACHING.md)。
@@ -40,11 +40,11 @@ dsh plugin --profile desktop add dsh-ppt
 
 ## 开始使用
 
-1. 在目标工作区提供材料、用途、听众或参考 `.pptx`，例如“做成可交付的季度汇报演示文稿，生成 HTML、PPTX 和工程文件”。
-2. 从左侧栏打开“演示文稿”，在工程库搜索或选择生成的项目。
-3. 在「内容编辑」切换 24 种单页版式与单页母版骨架、编辑文字/甘特图/哈维球/卡片/表格/图片或新增页面；在「风格与母版」一键切换 18 套主题、6 套母版骨架或拖拽 `.pptx` 吸收企业风格与骨架；需要时渲染当前 PPTX 并开启并排对比。
-4. 按需要主动开启 AI 预审、模拟答辩或看图修复；直接下载成品不要求这些步骤。
-5. 下载“分享成品包”交付，或下载“完整工程包”保留编辑能力；在目标播放器或 Office 中再核对一次。
+1. 在目标工作区提供材料（Word/Excel/CSV/Markdown/Mermaid）、用途、听众或参考 `.pptx`，例如“把这份季报 Excel 做成可交付的汇报演示文稿，导出 HTML、PPTX、高管一页纸与工程文件”。
+2. 从左侧栏打开“演示文稿”（可点右上角 **`? 引导`** 快速上手或点击 **「一键体验旗舰示例」**），在工程库搜索或选择生成的项目。
+3. 在「内容编辑」切换 29+ 种单页版式（含 Mermaid 流程图/时序图）与单页母版骨架、编辑文字/甘特图/哈维球/卡片/表格/公式/图片、设置目标演讲时长（`targetMinutes`）检查节奏，或新增页面；在「风格与母版」一键切换 24 套主题、6 套母版骨架或拖拽 `.pptx` 吸收企业风格与骨架；需要时渲染当前 PPTX 并开启并排对比。
+4. 按需要主动开启 AI 预审、模拟答辩、看图修复、`ppt_cite` 文献核验或 `ppt_remotion` 视频分镜导出；直接下载成品不要求这些步骤。
+5. 下载“分享成品包”、**高管一页纸（`.onepager.html`）**、**Remotion 分镜包（`.zip`）**、演讲讲义（`.handout.md`）交付，或下载“完整工程包”保留编辑能力；在目标播放器或 Office 中再核对一次。
 
 支持通过 `ppt_import` 或工作台「导入 Office 修改稿」将 PowerPoint / WPS 中的修改导回工程（保留撤销历史）。若外部直接修改成品且未走导回，可用面板「另存副本」或 `ppt_edit(saveAs:true)` 从 JSON 重建新文件，保留原成品。
 

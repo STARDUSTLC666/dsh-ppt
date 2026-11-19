@@ -36,6 +36,7 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'sankey', zh: '桑基流向图', en: 'Sankey flow diagram', group: 'data', quick: true, variants: [] },
   { id: 'swot', zh: 'SWOT 十字矩阵', en: 'SWOT matrix', group: 'structured', quick: true, variants: [] },
   { id: 'value-chain', zh: '波特价值链', en: 'Porter value chain', group: 'structured', quick: true, variants: [] },
+  { id: 'mermaid', zh: 'Mermaid 流程图/时序图', en: 'Mermaid Diagram', group: 'data', quick: true, variants: [['flowchart', '流程图', 'Flowchart'], ['sequence', '时序图', 'Sequence']] },
   { id: 'table', zh: '表格 / 学术三线表', en: 'Table', group: 'data', quick: true, variants: [] },
   { id: 'chart', zh: '原生数据图表', en: 'Chart', group: 'data', variants: [] },
   { id: 'chart-split', zh: '图表 + 洞察分栏', en: 'Chart + insights', group: 'data', variants: [['chart-left', '左图右洞察', 'Chart left'], ['chart-right', '左洞察右图', 'Chart right']] },
@@ -235,6 +236,16 @@ function projectDraftToLayout(draft, nextLayout) {
           { tag: '基本活动', title: '市场拓展', text: '标杆复制推广', value: '', unit: '', delta: '', status: 'accent', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
           { tag: '基本活动', title: '运营复购', text: '118% 净留存', value: '', unit: '', delta: '', status: 'positive', start: '', span: '', milestone: false, role: '', conversion: '', bullets: [] },
         ];
+  }
+  if ((nextLayout === 'mermaid' || nextLayout === 'flowchart' || nextLayout === 'sequence') && !next.mermaid?.trim()) {
+    const en = languageOf() === 'en';
+    next.mermaid = nextLayout === 'sequence' || next.variant === 'sequence'
+      ? (en
+          ? 'sequenceDiagram\n  participant User\n  participant Studio\n  participant Engine\n  User->>Studio: Upload .xlsx / .docx\n  Studio->>Engine: Profile & choreograph\n  Engine-->>User: HTML + Native PPTX'
+          : 'sequenceDiagram\n  participant 用户\n  participant 工作台\n  participant 引擎\n  用户->>工作台: 上传 .xlsx / .docx\n  工作台->>引擎: 智能剖析与编排\n  引擎-->>用户: HTML + 原生 PPTX')
+      : (en
+          ? 'flowchart LR\n  A([Inputs]) --> B{Auto-Director}\n  B -->|Data| C[Sankey & KPI]\n  B -->|Docs| D[24+ Layouts]\n  C --> E[(HTML & PPTX)]\n  D --> E'
+          : 'flowchart LR\n  A([多源输入]) --> B{智能导演}\n  B -->|数据表| C[桑基与指标]\n  B -->|文稿| D[24+ 版式]\n  C --> E[(同源交付)]\n  D --> E');
   }
   return next;
 }

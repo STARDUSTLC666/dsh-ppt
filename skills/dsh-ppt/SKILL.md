@@ -39,10 +39,10 @@ allowed-tools: "Bash, Read, Write, Edit"
    - **重要 CLI 差异**：跨 harness 直接运行 `build-deck.mjs` 时，裸 CLI 缺省 `--theme` 为兼容旧脚本仍回退 `data`，因此 **CLI 调用请务必显式传 `--theme auto` 或具体场景主题 ID（如 `--theme consulting` / `--theme exec-jilan`）**！
 4. **Build 生成**：先读 `references/syntax.md`（用到图表/多图/外源母版/编辑时读 `references/advanced.md`）。
    - **推荐方式（DSH 内）**：调 `ppt_create`，优先传结构化 `slides`（精确控制 **24 种原生版式**含 `gantt / architecture / harvey / tam / org / kpi / cards / comparison / matrix / process / chart-split / table[booktabs] / callout`），或传带 `:::` 指令与 `**加粗引导词**：说明` 的 Markdown `content`。
-   - **跨 harness CLI**：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --slides @slides.json --theme auto --lang zh --out dist`（吸收参考模板并克隆结构可加 `--reference-pptx ref.pptx --clone-structure`；显式骨架用 `--chrome academic-minimal`；仅提取风格用 `--absorb ref.pptx`）。
+   - **跨 harness CLI**：`node <skill-dir>/scripts/build-deck.mjs --title "标题" --slides @slides.json --theme auto --lang zh --out dist`（直吞 Excel/CSV/Word 可用 `--from-office report.xlsx --theme auto --target-minutes 10 --one-pager --out dist`；吸收参考模板并克隆结构可加 `--reference-pptx ref.pptx --clone-structure`；显式骨架用 `--chrome academic-minimal`；仅提取风格用 `--absorb ref.pptx`）。
    - 动效默认 `motion: 'on'`（HTML 页间淡入 + PPTX 要点点击逐条出现）；严肃政企公文、学术打印或归档传 `motion: 'off'`。
-5. **Verify 校验与看图修正**：调 `ppt_check` 检查结构、字数密度、WCAG 对比度与 `SLOP-01..10` 审美告警。若安装了 `@deepseek-ai/libreoffice-kit`，调 `ppt_render` 生成逐页 PNG/PDF 并附 `renderReceipt` 复检，逐张用看图工具核查画面（0 缺字、0 溢出、0 遮挡、0 冗余图例）。微调文字、切换主题或版式用 `ppt_edit`（带 `expectedRevision`），需要时 `ppt_undo`。静态估算、渲染成功与视觉验收必须分开如实陈述。
-6. **Deliver 交付**：向用户提供 `.html`、`.pptx`、`.json`（以及可选 `--handout` 生成的 `.handout.md`）绝对路径，说明 HTML 快捷键（`← →` 翻页 · **`P` 开启双屏演讲者提词台** · **`L` 开启虚拟激光笔** · `F` 全屏 · `G` 总览 · `S` 顶部备注 · `Ctrl/Cmd+P` 打印）及检查面板内置「下载讲义 (.md)」离线导出；说明 PPTX 100% 原生可编辑特性（含 `<m:oMath>` 原生公式、Marimekko、桑基流向图、波特价值链、SWOT、三线表与图表工作簿），以及支持 `ppt_import` / `--sync-pptx` 从 Office 改稿回导同步工程。
+5. **Verify 校验与看图修正**：调 `ppt_check` 检查结构、字数密度、WCAG 对比度与 `SLOP-01..10` 审美告警。若安装了 `@deepseek-ai/libreoffice-kit`，调 `ppt_render` 生成逐页 PNG/PDF 并附 `renderReceipt` 复检，逐张用看图工具核查画面（0 缺字、0 溢出、0 遮挡、0 冗余图例）。微调文字、切换主题、更新 `mermaid` 或调整 `targetMinutes` 配速预算用 `ppt_edit`（带 `expectedRevision`），需要时 `ppt_undo`。静态估算、渲染成功与视觉验收必须分开如实陈述。
+6. **Deliver 交付**：向用户提供 `.html`、`.pptx`、`.json`（默认严格保持三件套，仅在传 `--handout` / `--one-pager` 时同步落盘 `.handout.md` / `.onepager.html`）绝对路径，说明 HTML 快捷键（`← →` 翻页 · **`P` 开启双屏演讲者提词台含逐页配速预算** · **`L` 开启虚拟激光笔** · `F` 全屏 · `G` 总览 · `S` 顶部备注 · `Ctrl/Cmd+P` 打印）及检查面板内置「下载讲义 (.md)」与「下载一页纸战报 (.html)」（支持 A4 打印与长图战报切换）离线导出；说明 PPTX 100% 原生可编辑特性（含 `<m:oMath>` 原生公式、Marimekko、桑基流向图、波特价值链、SWOT、Mermaid 原生流程图/时序图、三线表与图表工作簿），以及支持 `ppt_import` / `--sync-pptx` 从 Office 改稿回导同步工程、`ppt_from_office` / `--from-office` 直吞 `.xlsx/.csv/.tsv/.docx`。
 
 ## 按需装载索引
 

@@ -1,6 +1,15 @@
 import { ALLOWED_CHROME_STYLES, ALLOWED_THEME_IDS, type ResolvedPptConfig } from './config.js'
 import { createPptExecutors, type PptExecution } from './execution.js'
-import type { PptAbsorbResult, PptCreateResult, PptThemesResult, PptQualityResult, PptCheckResult, PptRenderResult } from './types.js'
+import type {
+  PptAbsorbResult,
+  PptCheckResult,
+  PptCiteResult,
+  PptCreateResult,
+  PptQualityResult,
+  PptRemotionResult,
+  PptRenderResult,
+  PptThemesResult,
+} from './types.js'
 
 export interface ToolDefinition {
   name: string
@@ -185,6 +194,31 @@ function renderPreview(value: PptRenderResult): TextBlock[] {
     '\n请查看实际画面，确认文字、图片和图表后再交付。原可编辑 PPTX 保留。')
 }
 
+function renderCite(value: PptCiteResult): TextBlock[] {
+  if (value.matchedCount === 0) {
+    return oneText(
+      'dsh-cite 引文链接：未匹配到 [@citeKey] / [doi:...] 标记或指定文献' +
+      (value.missingKeys.length ? '（未找到：' + value.missingKeys.join(', ') + '）' : '') +
+      '，未修改工程文件。',
+    )
+  }
+  return oneText(
+    'dsh-cite 已链接 ' + value.matchedCount + ' 条已核验文献（' + value.citedKeys.join(', ') + '）' +
+    (value.referencesSlideIndex ? '，已同步更新第 ' + value.referencesSlideIndex + ' 页参考文献' : '') +
+    (value.missingKeys.length ? '；未匹配键：' + value.missingKeys.join(', ') : '') +
+    (value.deck ? '。\n最新修订号：' + value.deck.revision + ' · PPTX：' + value.deck.pptxPath : '。'),
+  )
+}
+
+function renderRemotion(value: PptRemotionResult): TextBlock[] {
+  return oneText(
+    'dsh-remotion 视频分镜工程已导出至：' + value.outputDir + '\n' +
+    '分镜清单：' + value.storyboardPath + '\n' +
+    '规格：' + value.slideCount + ' 页 · ' + value.fps + ' fps · 共 ' + value.totalFrames + ' 帧（约 ' + value.totalSeconds + ' 秒）\n' +
+    '进入目录运行 npm install && npm run preview 或 npm run render 即可预览与渲染 MP4。',
+  )
+}
+
 const imageObjectProperties = {
   src: { type: 'string', description: 'Local PNG/JPEG path relative to the session cwd, or image data URI. Embedded into all output files.' },
   alt: { type: 'string' }, fit: { type: 'string', enum: ['contain', 'cover'] }, caption: { type: 'string' },
@@ -261,6 +295,7 @@ const slideLayouts = [
   'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel', 'chevron', 'value-chain',
   'issue-action', 'before-after', 'matrix-2x2', 'kpi-grid', 'scorecard',
   'formula-callout', 'takeaways', 'gallery-grid', 'ablation-compare', 'roadmap', 'swimlane', 'team',
+  'mermaid', 'flowchart', 'sequence',
 ] as const
 const templateIds = [
   'weekly', 'defense', 'project', 'pitch',
@@ -279,6 +314,7 @@ const slideProperties = {
   source: { type: 'string', description: 'Bottom-left data/citation source line.' },
   text: { type: 'string' },
   formula: { type: 'string', description: 'LaTeX math expression rendered as native Office Math (<m:oMath>) in PPTX and MathML in HTML (e.g. on callout slides with variant: "formula").' },
+  mermaid: { type: 'string', description: 'Mermaid flowchart or sequenceDiagram code compiled into native editable PowerPoint shapes & attached connectors in PPTX and SVG in HTML.' },
   notes: { type: 'string' },
   start: { type: 'number' }, span: { type: 'number' },
   activeIndex: { type: 'integer' },
@@ -374,6 +410,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         slides: { type: 'array', items: { type: 'object', properties: slideProperties, additionalProperties: true }, description: 'Structured slides across 24 native layouts & pro diagrams (cover, agenda, section, bullets, kpi, cards, comparison, matrix, process, callout, gantt, architecture, harvey, tam, org, statement, quote, table, chart, chart-split, waterfall, image, image-left, image-right, closing) with items[], columns[], takeaway, source, chrome, tableStyle (consulting|booktabs|minimal|banded|harvey), local images, and 13 chart kinds.' },
         template: { type: 'string', enum: templateIds, description: 'Industry blueprint from ppt_templates (16 blueprints). Provide finished content/slides following its outline; template alone creates an unfilled draft.' },
         brand: { type: 'object', properties: brandProperties, additionalProperties: false, description: 'Shared brand: #RRGGBB primary/background/text colors, fontFamily, logo, footer, and chromeStyle (' + ALLOWED_CHROME_STYLES.join('|') + '). Applied to HTML and PPTX.' },
+        targetMinutes: { type: 'number', description: 'Optional target speaking duration in minutes for pace budgeting.' },
         dataModel: {type:'object',properties:{schemaVersion:{type:'integer',enum:[1]},sources:{type:'array',items:{type:'object',properties:sourceProperties,required:['id']}},metrics:{type:'array',items:{type:'object',properties:metricProperties,required:['id','kind']}}},additionalProperties:false,description:'Optional explicit lineage and what-if model. Use with structured slides containing {{metricId}} in text/items/takeaway/tables or an exact token as chart values. Source facts reference a real cell or text line; assumptions require value/min/max/step. Formulas compute derived metrics. HTML offers live sliders; PPTX includes confirmed static values, formulas and assumptions in speaker notes. Leave absent for ordinary finished decks.'},
         outputDir: { type: 'string', description: 'Directory to write the files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: sanitized deck title.' },
@@ -405,6 +442,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         theme: { type: 'string', description: 'Optional built-in theme id (' + ALLOWED_THEME_IDS.join(' / ') + ') to restyle the entire project atomically (undoable).' },
         referencePptx: { type: 'string', description: 'Optional local reference .pptx path to absorb sanitized palette/fonts/logo and chrome skeleton onto this project (undoable).' },
         brand: { type: ['object', 'null'], properties: brandProperties, additionalProperties: false, description: 'Merge shared branding. null clears all branding. Empty footer clears footer; logo:null clears logo.' },
+        targetMinutes: { type: ['number', 'null'], description: 'Optional target speaking duration in minutes for pace budgeting (null clears).' },
       }),
       output: { schema: createResultSchema, render: (_args, value) => renderCreate(value as PptCreateResult) },
       execute: executors.edit,
@@ -469,6 +507,62 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         render: (_args: unknown, value: unknown) => renderCreate(value as PptCreateResult),
       },
       execute: executors.importPptx,
+    },
+    {
+      name: 'ppt_from_office',
+      description: 'Import an Excel workbook (.xlsx), CSV/TSV dataset, or Word document (.docx) directly into a polished, multi-slide dsh-ppt presentation (HTML, editable PPTX, and JSON project) using deterministic data-to-visual profiling (Sankey, Gantt, Marimekko, Waterfall, combo charts, tables, and structured narrative slides). 中文：直吞本地 .xlsx / .csv / .tsv / .docx 文档并智能拆分为高颜值多页演示文稿三件套。',
+      parameters: compileParameters({
+        filePath: { type: 'string', required: true, description: 'Local .xlsx, .csv, .tsv, or .docx file path, relative to session cwd or absolute.' },
+        outputDir: { type: 'string', description: 'Directory to write the generated files into. Default: session working directory (or the plugin outputDir config).' },
+        fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: derived from source file or title.' },
+        theme: { type: 'string', description: 'Target built-in theme id (or "auto", default "auto").' },
+        persona: { type: 'string', enum: ['auto', 'consulting', 'tech-pitch', 'academic', 'gov-exec', 'education', 'editorial'], description: 'Optional scenario/audience persona for Auto-Director choreography. Default auto.' },
+        chromeStyle: { type: 'string', enum: ALLOWED_CHROME_STYLES, description: 'Optional master chrome skeleton override: ' + ALLOWED_CHROME_STYLES.join(' | ') + '.' },
+        targetMinutes: { type: 'number', description: 'Optional target speaking duration in minutes for pace budgeting.' },
+        lang: { type: 'string', description: 'UI language: zh (default), en, or bilingual.' },
+        overwrite: { type: 'boolean', description: 'Replace existing same-name output files. Default false.' },
+      }),
+      output: {
+        schema: createResultSchema,
+        render: (_args: unknown, value: unknown) => renderCreate(value as PptCreateResult),
+      },
+      execute: executors.fromOffice,
+    },
+    {
+      name: 'ppt_cite',
+      description: 'Attach verified academic citations from a dsh-cite library (.json/.jsonl), BibTeX (.bib) file, or inline BibTeX/DOIs to a dsh-ppt project. Resolves [@citeKey] and [doi:...] markers into slide.source footers and appends or updates a formatted References slide without inventing metadata. 中文：对接 dsh-cite 文献库或 BibTeX/DOI，自动将 [@citeKey] / [doi:...] 解析写入页脚并生成或更新标准参考文献页。',
+      parameters: compileParameters({
+        deckPath: { type: 'string', required: true, description: 'Path to a dsh-ppt .json project, relative to session cwd or absolute.' },
+        citePath: { type: 'string', description: 'Optional path to dsh-cite library.json, .jsonl, or .bib file. Auto-discovers workspace or ~/.dsh/data/dsh-cite/library.json if omitted.' },
+        bibtex: { type: 'string', description: 'Optional inline BibTeX entries.' },
+        dois: { type: 'array', items: { type: 'string' }, description: 'Optional verified DOI strings to resolve and cite.' },
+        citeKeys: { type: 'array', items: { type: 'string' }, description: 'Optional explicit citeKeys or DOIs to attach as citations.' },
+        style: { type: 'string', enum: ['gb-t-7714', 'apa', 'mla', 'chicago'], description: 'Bibliography formatting style: gb-t-7714 (default), apa, mla, or chicago.' },
+        appendReferences: { type: 'boolean', description: 'Append or update a References slide (default true).' },
+        expectedRevision: { type: 'integer', description: 'Use revision returned by ppt_create/ppt_check to prevent overwriting another edit.' },
+        saveAs: { type: 'boolean', description: 'Save a new uniquely named copy instead of updating in place.' },
+      }),
+      output: {
+        schema: { type: 'object', additionalProperties: true },
+        render: (_args: unknown, value: unknown) => renderCite(value as PptCiteResult),
+      },
+      execute: executors.cite,
+    },
+    {
+      name: 'ppt_remotion',
+      description: 'Export a dsh-ppt project into a ready-to-render Remotion (dsh-remotion) animated video storyboard package (remotion-storyboard.json, src/DeckVideo.tsx, src/slides-data.json, src/index.ts, package.json, README.md) with 30fps pace-budgeted durations, spring entrances, KPI count-up, progressive bars, and synchronized speaker-note captions. 中文：将演示文稿导出为可直接渲染的 Remotion 视频分镜工程包（含 30fps 时长预算、KPI 数字递增、进度条生长动画与同步字幕）。',
+      parameters: compileParameters({
+        deckPath: { type: 'string', required: true, description: 'Path to a dsh-ppt .json project, relative to session cwd or absolute.' },
+        outputDir: { type: 'string', description: 'Directory to write the Remotion package into. Default: <deck>-remotion next to deckPath.' },
+        format: { type: 'string', enum: ['landscape', 'portrait', 'square'], description: 'Video aspect ratio: landscape (1920x1080, default), portrait (1080x1920), or square (1080x1080).' },
+        fps: { type: 'integer', description: 'Frames per second (24, 30, or 60; default 30).' },
+        overwrite: { type: 'boolean', description: 'Overwrite existing files in outputDir (default false).' },
+      }),
+      output: {
+        schema: { type: 'object', additionalProperties: true },
+        render: (_args: unknown, value: unknown) => renderRemotion(value as PptRemotionResult),
+      },
+      execute: executors.remotion,
     },
   ]
 }

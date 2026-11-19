@@ -6,6 +6,10 @@
 
 ## 最新记录
 
+**0.26.0 全谱系多源直吞、原生可编辑 Mermaid、生态联动与零警告发布验收（2026-11-20）**：全量 `tsc`、客户端打包、`npm test` 全部通过（0 失败，13 个注册工具 Wire Schema 0 `type` 数组，基于 Workbench UI v3 `templates/workbench-ui.js` 字节锁保持）；`deck-layouts.mjs` 完成模块化拆分；`@office-kit/pptx` `validatePresentation()` 0 错误；实机 `@deepseek-ai/libreoffice-kit` 无头渲染（`missingFonts: []`）逐页目视核验 Mermaid `flowchart` / `sequenceDiagram` 原生吸附连线、`.xlsx` 多工作表与 `.docx` 直吞建稿、`dsh-cite` 文献页、`dsh-remotion` 分镜包、高管一页纸预览与 8 张双语 SVG。
+
+- **0.26.0 Bilingual Validation Record (2026-11-20)**: Full `tsc`, client bundle build, and `npm test` suite passed with 0 failures, 0 `type` arrays across all 13 registered tools, and Workbench UI v3 `templates/workbench-ui.js` byte lock intact; modular `deck-layouts.mjs` split verified; `@office-kit/pptx` `validatePresentation()` passed with 0 errors; real `@deepseek-ai/libreoffice-kit` rendering (`missingFonts: []`) and browser preview visually verified native-connector Mermaid `flowchart` / `sequenceDiagram`, direct `.xlsx`/`.docx` ingestion, `dsh-cite` References slides, `dsh-remotion` bundles, Executive One-Pager HTML, and all 8 workflow SVGs.
+
 **0.24.0 原生公式、巅峰图示、PPTX 双向往返与双屏提词台验收（2026-11-18）**：全量 `tsc`、客户端打包、`test/*.test.mjs` 全部通过（0 失败，Wire Schema 0 `type` 数组）；`@office-kit/pptx` `validatePresentation()` 0 错误；实机 `@deepseek-ai/libreoffice-kit` 无头渲染（`missingFonts: []`）逐页目视核验 `marimekko` 不等宽市场图、`sankey` 多层流向桑基图、`value-chain` 波特价值链、`swot` 十字矩阵、原生 `<m:oMath>` 数学公式、老旧 `.pptx` 一键翻新导入与 `.handout.md` / 双屏提词台脚本。
 
 - **0.24.0 Bilingual Validation Record (2026-11-18)**: Full `tsc`, client bundle build, and `test/*.test.mjs` suite passed with 0 failures and 0 `type` arrays on tool wire schemas; `@office-kit/pptx` `validatePresentation()` passed with 0 errors; real `@deepseek-ai/libreoffice-kit` headless rendering (`missingFonts: []`) visually verified `marimekko`, `sankey`, Porter `value-chain`, `swot`, native `<m:oMath>` equations, legacy `.pptx` round-trip refurbishment, `.handout.md`, and Dual-Screen Presenter Console.

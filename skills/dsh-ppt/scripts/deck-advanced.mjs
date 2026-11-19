@@ -10,7 +10,7 @@ import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDat
 import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
 import { absorbPptx, CHROME_STYLE_IDS } from './deck-absorb.mjs'
 import { extractPptxSlides } from './deck-import.mjs'
-import { renderHandoutMarkdown } from './deck-delivery.mjs'
+import { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './deck-delivery.mjs'
 import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, auditSlideAesthetics } from './deck-director.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
@@ -18,7 +18,8 @@ export { buildDeck, resolveLanguage } from './deck-core.mjs'
 export { listThemes, listMasterPresets, resolveTheme } from './deck-themes.mjs'
 export { absorbPptx } from './deck-absorb.mjs'
 export { extractPptxSlides } from './deck-import.mjs'
-export { renderHandoutMarkdown } from './deck-delivery.mjs'
+export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './deck-delivery.mjs'
+export { extractOfficeSource, importOfficeDeck } from './deck-office.mjs'
 export { inferThemeFromContent } from './deck-director.mjs'
 
 export function buildThemePreview(options = {}) {
@@ -198,7 +199,7 @@ function validateRawSlides(slides) {
 }
 
 function snapshot(manifest) {
-  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
+  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel', 'targetMinutes'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
 
 function collectAssets(manifest) {
@@ -426,15 +427,18 @@ function documentBytes(manifest) {
   if (Buffer.byteLength(text) > MAX_DOCUMENT) fail('JSON 工程含历史超过 64 MiB，请缩减图片或清理历史后另存工程')
   return text
 }
-function result(manifest, paths, writeHandout = false) {
+function result(manifest, paths, writeHandout = false, writeOnePager = false) {
   const handoutPath = paths.json.slice(0, -5) + '.handout.md'
+  const onePagerPath = paths.json.slice(0, -5) + '.onepager.html'
+  const paceBudget = computePaceBudget(manifest)
   return { ok: true, title: manifest.title, theme: manifest.theme, language: manifest.language,
     slideCount: manifest.slides.length, deckId: manifest.deckId, revision: manifest.revision,
     slides: manifest.slides.map((s, i) => ({ slide: i + 1, id: s.id, title: s.title, layout: s.layout })),
     undoAvailable: manifest.history.length, deliveryStatus: manifest.quality?.issues.some(i => i.code === 'template-unfilled') ? 'draft' : 'ready-for-review',
-    quality: manifest.quality, verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' }, outputDir: dirname(paths.json),
+    quality: manifest.quality, paceBudget, verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' }, outputDir: dirname(paths.json),
     files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json,
-    ...(writeHandout ? { handoutPath } : {}) }
+    ...(writeHandout ? { handoutPath } : {}),
+    ...(writeOnePager ? { onePagerPath } : {}) }
 }
 function pathsFor(jsonPath) {
   const base = jsonPath.slice(0, -5)
@@ -459,9 +463,14 @@ async function generate(manifest, signal) {
   abort(signal)
   return { json, pptx, manifest, theme, language }
 }
-function commit(paths, data, writeHandout = false) {
+function commit(paths, data, writeHandout = false, writeOnePager = false) {
   const handoutPath = paths.json.slice(0, -5) + '.handout.md'
-  const html = renderHtml(data.manifest, data.theme, data.language, { ...paths, ...(writeHandout ? { handout: handoutPath } : {}) })
+  const onePagerPath = paths.json.slice(0, -5) + '.onepager.html'
+  const html = renderHtml(data.manifest, data.theme, data.language, {
+    ...paths,
+    ...(writeHandout ? { handout: handoutPath } : {}),
+    ...(writeOnePager ? { onepager: onePagerPath } : {}),
+  })
   data.manifest.artifacts = { html: hash(html), pptx: hash(data.pptx) }
   const artifacts = [
     { path: paths.json, data: documentBytes(data.manifest), encoding: 'utf8' },
@@ -470,6 +479,9 @@ function commit(paths, data, writeHandout = false) {
   ]
   if (writeHandout) {
     artifacts.push({ path: handoutPath, data: renderHandoutMarkdown(data.manifest, data.language.id), encoding: 'utf8' })
+  }
+  if (writeOnePager) {
+    artifacts.push({ path: onePagerPath, data: renderOnePagerHtml(data.manifest, data.language.id), encoding: 'utf8' })
   }
   commitDeckArtifacts(artifacts)
 }
@@ -481,6 +493,11 @@ function validateEmbeddedImgObject(img, assets) {
 
 function validateSnapshot(value, assets) {
   resolveTheme(value.theme); resolveLanguage(value.language)
+  if (value.targetMinutes !== undefined) {
+    if (typeof value.targetMinutes !== 'number' || !Number.isFinite(value.targetMinutes) || value.targetMinutes <= 0 || value.targetMinutes > 480) {
+      fail('targetMinutes 需为 0 到 480 之间的正数')
+    }
+  }
   validateRawSlides(value.slides)
   validateDataSnapshot(value, normalizeSlides)
   if (value.brand != null) {
@@ -637,6 +654,13 @@ export async function buildDeckAsync(options = {}) {
   }
   const brand = normalizeBrand(brandInput, assets, cwd)
 
+  const targetMinutesRaw = options.targetMinutes !== undefined && options.targetMinutes !== null
+    ? Number(options.targetMinutes)
+    : undefined
+  if (targetMinutesRaw !== undefined && (!Number.isFinite(targetMinutesRaw) || targetMinutesRaw <= 0 || targetMinutesRaw > 480)) {
+    fail('targetMinutes 需为 0 到 480 之间的正数')
+  }
+
   const manifest = {
     version: DECK_VERSION,
     schemaVersion: 1,
@@ -646,6 +670,7 @@ export async function buildDeckAsync(options = {}) {
     theme: normalized.theme.id,
     language: normalized.language.id,
     motion: normalized.motion,
+    ...(targetMinutesRaw !== undefined ? { targetMinutes: targetMinutesRaw } : {}),
     ...(scenario ? { template: scenario.id } : {}),
     ...(brand ? { brand } : {}),
     ...(dataModel ? { dataModel } : {}),
@@ -659,8 +684,9 @@ export async function buildDeckAsync(options = {}) {
   const file = resolveDeckFileName(normalized.outputDir, normalized.fileName, normalized.overwrite)
   const paths = pathsFor(resolve(normalized.outputDir, file + '.json'))
   const writeHandout = options.handout === true
-  withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout) })
-  return result(manifest, paths, writeHandout)
+  const writeOnePager = options.onePager === true
+  withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout, writeOnePager) })
+  return result(manifest, paths, writeHandout, writeOnePager)
 }
 
 function readDocument(pathInput, cwd = '.') {
@@ -737,15 +763,16 @@ export async function editDeck(options = {}) {
       options.duplicate === undefined &&
       options.remove === undefined &&
       options.append === undefined &&
+      options.targetMinutes === undefined &&
       options.saveAs !== true
     ) {
-      fail('请提供 edits、theme、referencePptx、order、duplicate、remove、append 或 brand')
+      fail('请提供 edits、theme、referencePptx、order、duplicate、remove、append、targetMinutes 或 brand')
     }
   }
   const used = new Set()
   const allowed = new Set([
     'layout', 'variant', 'chrome', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
-    'text', 'formula', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
+    'text', 'formula', 'mermaid', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
     'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])
   for (const edit of options.edits ?? []) {
@@ -840,6 +867,16 @@ export async function editDeck(options = {}) {
     next.brand = normalizeBrand({ ...next.brand, ...absorbedBrand }, next.assets, cwd)
   }
 
+  if (options.targetMinutes !== undefined) {
+    if (options.targetMinutes === null) {
+      delete next.targetMinutes
+    } else {
+      const tm = Number(options.targetMinutes)
+      if (!Number.isFinite(tm) || tm <= 0 || tm > 480) fail('targetMinutes 需为 0 到 480 之间的正数')
+      next.targetMinutes = tm
+    }
+  }
+
   if (options.brand !== undefined) {
     next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
       ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, cwd)
@@ -870,7 +907,7 @@ export async function undoDeck(options = {}) {
   expected(state.manifest, options.expectedRevision)
   if (!state.manifest.history.length) fail('该工程没有可撤销的修改')
   const next = clone(state.manifest), prior = next.history.pop()
-  for (const key of ['brand', 'template', 'dataModel']) delete next[key]
+  for (const key of ['brand', 'template', 'dataModel', 'targetMinutes']) delete next[key]
   Object.assign(next, prior)
   return saveRevision(state, next, options.signal)
 }

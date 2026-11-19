@@ -4,20 +4,24 @@
 
 ## 本次改进
 
+- **0.26.0 全谱系多源直吞、原生可编辑 Mermaid 与生态联动**：新增 `deck-mermaid.mjs` 支持 `layout: 'mermaid'`（别名 `flowchart`/`sequence`）及 Markdown ```` ```mermaid ```` 代码块，把 `flowchart` 与 `sequenceDiagram` 编译为 100% 原生可编辑 PPTX 形状与吸附连接线（`<p:cxnSp>`）；新增 `ppt_from_office`（CLI `--from-office`、工作台 `import-office`）零新增依赖直吞 `.xlsx`/`.csv`/`.tsv` 与 `.docx`；新增 `ppt_cite` 对接 `dsh-cite` 核验文献并生成 `References` 页，以及 `ppt_remotion` 导出 `dsh-remotion` 30fps 视频分镜包；新增演讲时长预算器（`computePaceBudget` / `targetMinutes`）、高管一页纸（`.onepager.html`）、工作台 `? 引导` 四步聚光灯交互导览与「一键体验旗舰示例」。
 - **智能审美托管、6 套母版骨架与深度 PPTX 吸收**：`ppt_create` 默认启用 `theme: "auto"` 按语境与受众自动选定最优主题与母版骨架（裸 CLI 不传 `--theme` 时保持兼容默认 `data`，显式传 `--theme auto` 启用自动选型）；`ppt_absorb` 与 `referencePptx`（支持 `cloneStructure: true` / `--clone-structure`）可纯本地解析 OOXML `lumMod`/`tint`/`shade` 修饰色板、字体、母版 Logo、骨架几何（`extractedSkeleton` / `recommendedChrome`）与逐页版式序列（`slideSkeleton[]`），自动执行 WCAG ≥4.5:1 对比度净化。
-- **18 套内置主题、6 套差异化母版骨架、24 种页型与 16 套行业蓝图**：覆盖 12 套明亮主题与 6 套深色主题，匹配 6 套结构差异化的母版骨架（`consulting-classic` / `keynote-spatial` / `editorial-folio` / `saas-bento` / `academic-minimal` / `gov-ceremonial`）；新增 `gantt`（甘特图路线图）、`architecture`（分层系统架构）、`harvey`（哈维球竞品矩阵）、`tam`（TAM/SAM/SOM 同心圆）、`org`（组织架构/团队图谱）及 `process` 飞轮变体（`flywheel`），支持 `tableStyle: consulting | booktabs | minimal | banded | harvey`、单页 `chrome`、`columns`、`takeaway` 结论栏与 `source` 来源脚注；图表覆盖 13 类出版级图表与矢量瀑布桥。
-- **风格与母版工作台（Style Studio）**：工作台支持 18 套主题与 **6 套母版骨架（`brand.chromeStyle`）**一键切换、单页一键切换 24 种版式原型与甘特图/哈维球编辑、「+ 新建页面」、拖拽 `.pptx` 展示 `recommendedChrome` 与 `extractedSkeleton` 摘要、HTML ↔ PPTX 并排分屏对照、画布级 AI 视觉修复前后对比（上限 24 页与 12 种无损动作）及最多 8 条叙事金字塔/结论句预审建议。
-- **产物校验与交付包保护**：每次生成保存 HTML / PPTX 校验值。外部修改过成品或旧工程缺少校验记录时，`ppt_edit`、`ppt_undo` 和面板保存会拒绝覆盖。保留 Office 修改后的原件，点击「另存副本」或调用 `ppt_edit({deckPath, saveAs:true})` 从 JSON 重建不同文件名的三件套；副本不导入 Office 修改，使用新工程 ID 和修订号 0。在工作台保存修改后可下载「分享成品包 ZIP」或「完整工程包 ZIP」，单文件 ≤64 MiB、合计 ≤128 MiB，不包含配置、密钥或工作区其他文件。
+- **24 套内置主题、6 套差异化母版骨架、29+ 种页型与 20 套行业蓝图**：覆盖 16 套明亮主题与 8 套深色主题，匹配 6 套结构差异化的母版骨架（`consulting-classic` / `keynote-spatial` / `editorial-folio` / `saas-bento` / `academic-minimal` / `gov-ceremonial`）；覆盖 `mermaid`、`marimekko`、`sankey`、`value-chain`、`swot`、原生 `<m:oMath>` 公式、`gantt`、`architecture`、`harvey`、`tam`、`org` 及 `process` 飞轮/漏斗变体，支持 `tableStyle: consulting | booktabs | minimal | banded | harvey`、单页 `chrome`、`columns`、`takeaway` 结论栏与 `source` 来源脚注；图表覆盖 13 类出版级图表与矢量瀑布桥。
+- **风格与母版工作台（Style Studio）**：工作台支持 24 套主题、8 套名家范本预设与 **6 套母版骨架（`brand.chromeStyle`）**一键切换、单页一键切换 29+ 种版式原型与甘特图/哈维球/Mermaid/公式编辑、「+ 新建页面」、目标演讲时长预算、拖拽 `.pptx` 展示 `recommendedChrome` 与 `extractedSkeleton` 摘要、HTML ↔ PPTX 并排分屏对照、画布级 AI 视觉修复前后对比（上限 24 页与 12 种无损动作）及最多 8 条叙事金字塔/结论句预审建议。
+- **产物校验与交付包保护**：每次生成保存 HTML / PPTX 校验值。外部修改过成品或旧工程缺少校验记录时，`ppt_edit`、`ppt_undo` 和面板保存会拒绝覆盖。保留 Office 修改后的原件，点击「另存副本」或调用 `ppt_edit({deckPath, saveAs:true})` 从 JSON 重建不同文件名的三件套；副本不导入 Office 修改，使用新工程 ID 和修订号 0。在工作台保存修改后可下载「分享成品包 ZIP」「完整工程包 ZIP」、高管一页纸（`.onepager.html`）或 Remotion 分镜包（`.zip`），单文件 ≤64 MiB、合计 ≤128 MiB，不包含配置、密钥或工作区其他文件。
 
 ## 能力一览
 
 | 能力 | 说明 |
 | --- | --- |
-| `ppt_create` 工具 | Markdown / 结构化 `slides` → `*.html` + `*.pptx` + `*.json` 三件套；默认 `theme: "auto"` 自动匹配主题与骨架，支持 `referencePptx` 与 `cloneStructure: true` 深度复用参考结构 |
-| `ppt_import` 工具 | 第 10 个工具：导入外部 `.pptx`（正文、表格、原生图表、图片、备注）一键翻新为可编辑工程，或传入 `projectId` 将 Office 修改稿导回既有工程更新（支持撤销） |
+| `ppt_create` 工具 | Markdown / 结构化 `slides` → `*.html` + `*.pptx` + `*.json` 三件套；默认 `theme: "auto"` 自动匹配主题与骨架，支持 `referencePptx`、`cloneStructure: true` 与 `targetMinutes` 演讲时长预算 |
+| `ppt_from_office` 工具 | 零新增依赖直吞 `.xlsx` 多工作表、`.csv`/`.tsv` 与 `.docx` Word 报告，自动识别流向/排期/份额/增减桥/组合指标并生成高颜值全套工程 |
+| `ppt_import` 工具 | 导入外部 `.pptx`（正文、表格、原生图表、图片、备注）一键翻新为可编辑工程，或传入 `projectId` 将 Office 修改稿导回既有工程更新（支持撤销） |
+| `ppt_cite` 工具 | 联动 `dsh-cite` 文献库/BibTeX，核验并替换 `[@citeKey]` / `[doi:...]` 为真实 `slide.source` 学术尾注并生成 `References` 文献页（零捏造 DOI） |
+| `ppt_remotion` 工具 | 按 `computePaceBudget` 时长预算导出 `dsh-remotion` 30fps 视频分镜包（`DeckVideo.tsx` + `slides-data.json` + `remotion-storyboard.json`） |
 | `ppt_absorb` 工具 | 本地只读解析参考 `.pptx` 的主题修饰色板、字体、画幅比例、母版骨架几何（`extractedSkeleton` / `recommendedChrome`）、逐页序列（`slideSkeleton`）与可选嵌入 Logo |
 | `ppt_themes` 工具 | 列出 24 套内置主题（16 明亮 + 8 深色）与 6 套母版骨架；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套 SVG 色板卡 |
-| 28+ 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout`（支持原生 `<m:oMath>` `formula`） / `gantt` / `architecture` / `harvey` / `tam` / `org` / `marimekko` / `sankey` / `swot` / `value-chain` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `chevron`、`waterfall`、`gallery`、`flywheel` 别名） |
+| 29+ 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout`（支持原生 `<m:oMath>` `formula`） / `mermaid`（原生可编辑流程图与时序图） / `gantt` / `architecture` / `harvey` / `tam` / `org` / `marimekko` / `sankey` / `swot` / `value-chain` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `flowchart`、`sequence`、`chevron`、`waterfall`、`gallery`、`flywheel` 别名） |
 | 13 类原生图表 | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall`，支持 `highlight` 焦点项染色 |
 | `ppt_templates` | 20 套场景蓝图：`weekly`、`defense`、`project`、`pitch`、`consulting`、`keynote`、`gov-report`、`workshop`、`architecture-review`、`financial-earnings`、`medical-case`、`postmortem`、`marketing-campaign`、`promotion-review`、`legal-compliance`、`creative-lookbook`、`quarterly-okr`、`product-prd`、`vc-daylight`、`industry-research` |
 | `ppt_edit` / `ppt_undo` | 按页或整套切换主题/品牌/参考 `.pptx`、增删改排页面，支持最多 20 次历史与修订号冲突保护 |
@@ -132,7 +136,7 @@ npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.2.3
 
 `ppt_render { pptxPath: "report.pptx", format: "both" }` 读取最终 PPTX，生成逐页 PNG、PDF 和 `render-receipt.json`，不重新保存可编辑源文稿。`ppt_check` 可携带返回的 `receiptPath` 作为 `renderReceipt`，核验源文件和每个输出的摘要；编辑源文稿或修改输出后旧收据失效。静态产物不保留动画；LibreOffice 与 PowerPoint/WPS 的排版可能不同。字体诊断不保证每个字符，也不自动安装字体。更多细节见 [渲染说明](../docs/LIBREOFFICE-INTEGRATION-2026-10-01.md)。
 
-CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--reference-pptx ref.pptx`、`--absorb ref.pptx`、`--template consulting`、`--edit report.json --edits @edits.json --revision 0`、`--undo report.json --revision 1`、`--check report.json`、`--render report.pptx --format both`。收据核验用 `--check report.json --render-receipt path/to/render-receipt.json`；失败返回非零退出码。
+CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office report.xlsx`、`--import-pptx legacy.pptx`、`--one-pager`、`--target-minutes 15`、`--handout`、`--reference-pptx ref.pptx`、`--absorb ref.pptx`、`--template consulting`、`--edit report.json --edits @edits.json --revision 0`、`--undo report.json --revision 1`、`--check report.json`、`--render report.pptx --format both`。收据核验用 `--check report.json --render-receipt path/to/render-receipt.json`；失败返回非零退出码。
 
 ## 内置主题（18 套）与 6 套母版骨架
 

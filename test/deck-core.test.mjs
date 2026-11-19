@@ -237,8 +237,8 @@ test('无标题文档按段落拆要点页', () => {
   assert.equal(deck.slides.at(-1).layout, 'closing')
 })
 
-test('23 套核心零依赖版式 HTML 与 OOXML 同构输出，首尾页自动隐藏页码且单页 ID 唯一', () => {
-  assert.equal(CORE_LAYOUTS.size, 23)
+test('24 套核心零依赖版式 HTML 与 OOXML 同构输出，首尾页自动隐藏页码且单页 ID 唯一', () => {
+  assert.equal(CORE_LAYOUTS.size, 24)
   const slides = normalizeSlides([
     { layout: 'cover', title: '战略发布封面', subtitle: '副标题说明' },
     { layout: 'agenda', title: '目录导航', activeIndex: 2, bullets: ['市场洞察', '技术突破', '商业落地'] },

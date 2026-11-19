@@ -3,7 +3,7 @@ export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold' | 'consul
 export type PptChromeStyle = 'consulting-classic' | 'keynote-spatial' | 'editorial-folio' | 'saas-bento' | 'academic-minimal' | 'gov-ceremonial';
 export type PptPersonaId = 'auto' | 'consulting' | 'tech-pitch' | 'academic' | 'gov-exec' | 'education' | 'editorial';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team';
+export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team' | 'mermaid' | 'flowchart' | 'sequence';
 export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'consulting' | 'keynote' | 'gov-report' | 'workshop' | 'architecture-review' | 'financial-earnings' | 'medical-case' | 'postmortem' | 'marketing-campaign' | 'promotion-review' | 'legal-compliance' | 'creative-lookbook' | 'quarterly-okr' | 'product-prd' | 'vc-daylight' | 'industry-research';
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey';
 export interface PptImageSpec {
@@ -124,6 +124,7 @@ export interface PptEditArgs {
     theme?: string;
     referencePptx?: string;
     brand?: PptBrand | null;
+    targetMinutes?: number | null;
     expectedRevision?: number;
     saveAs?: boolean;
 }
@@ -180,6 +181,7 @@ export interface PptSlideSpec {
     source?: string;
     text?: string;
     formula?: string;
+    mermaid?: string;
     bullets?: string[];
     items?: PptSlideItem[];
     cards?: PptSlideItem[];
@@ -238,6 +240,8 @@ export interface PptCreateArgs {
     overwrite?: boolean;
     template?: PptTemplateId | string;
     brand?: PptBrand;
+    /** Optional target speaking duration in minutes for pace budgeting. */
+    targetMinutes?: number;
     /** Optional explicit source facts, assumptions and safe arithmetic; bind slides with {{metricId}}. */
     dataModel?: PptDataModel;
 }
@@ -323,6 +327,55 @@ export interface PptImportArgs {
     modernize?: boolean;
     preserveSourceTheme?: boolean;
 }
+export interface PptFromOfficeArgs {
+    filePath: string;
+    outputDir?: string;
+    fileName?: string;
+    theme?: string;
+    persona?: PptPersonaId | string;
+    chromeStyle?: PptChromeStyle | string;
+    targetMinutes?: number;
+    lang?: string;
+    overwrite?: boolean;
+}
+export type PptCitationStyle = 'gb-t-7714' | 'apa' | 'mla' | 'chicago';
+export interface PptCiteArgs {
+    deckPath: string;
+    citePath?: string;
+    bibtex?: string;
+    dois?: string[];
+    citeKeys?: string[];
+    style?: PptCitationStyle;
+    appendReferences?: boolean;
+    expectedRevision?: number;
+    saveAs?: boolean;
+}
+export interface PptCiteResult {
+    ok: boolean;
+    matchedCount: number;
+    citedKeys: string[];
+    missingKeys: string[];
+    sourcePath?: string;
+    referencesSlideIndex?: number;
+    deck?: PptCreateResult;
+}
+export interface PptRemotionArgs {
+    deckPath: string;
+    outputDir?: string;
+    format?: 'landscape' | 'portrait' | 'square';
+    fps?: number;
+    overwrite?: boolean;
+}
+export interface PptRemotionResult {
+    ok: boolean;
+    outputDir: string;
+    storyboardPath: string;
+    files: string[];
+    fps: number;
+    totalFrames: number;
+    totalSeconds: number;
+    slideCount: number;
+}
 export interface PptCreateResult {
     ok: boolean;
     title: string;
@@ -353,6 +406,7 @@ export interface PptCreateResult {
 export interface DeckEngine {
     absorbPptx(options: Record<string, unknown>): Promise<PptAbsorbResult>;
     importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>;
+    importOfficeDeck?(options: Record<string, unknown>): Promise<PptCreateResult>;
     repairDeckVisual(options: Record<string, unknown>): Promise<PptCreateResult>;
     readRenderReceipt(pptxPath: string, receiptPath: string): PptRenderResult;
     previewDeckData(options: Record<string, unknown>): Record<string, any>;
@@ -360,6 +414,8 @@ export interface DeckEngine {
     dataReport(manifest: any): string;
     dataNotes(manifest: any, slide: any): string;
     renderHandoutMarkdown?(manifest: any, lang?: string): string;
+    renderOnePagerHtml?(manifest: any, lang?: string): string;
+    computePaceBudget?(manifest: any, targetMinutes?: number): Record<string, any>;
     buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>;
     listTemplates(lang?: string): unknown[];
     editDeck(options: Record<string, unknown>): Promise<PptCreateResult>;

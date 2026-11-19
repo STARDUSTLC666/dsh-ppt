@@ -2,7 +2,18 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { ResolvedPptConfig } from './config.js'
-import type { DeckEngine, PptAbsorbResult, PptCreateArgs, PptCreateResult, PptThemesResult } from './types.js'
+import { attachCitationsToDeck, exportRemotionBundle } from './ecosystem.js'
+import type {
+  DeckEngine,
+  PptAbsorbResult,
+  PptCiteArgs,
+  PptCiteResult,
+  PptCreateArgs,
+  PptCreateResult,
+  PptRemotionArgs,
+  PptRemotionResult,
+  PptThemesResult,
+} from './types.js'
 
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
@@ -99,6 +110,7 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         maxSlides: config.maxSlides,
         template: args.template,
         brand: args.brand,
+        ...(typeof args.targetMinutes === 'number' && Number.isFinite(args.targetMinutes) ? { targetMinutes: args.targetMinutes } : {}),
         dataModel: args.dataModel,
         cwd,
         signal: exec?.signal,
@@ -186,6 +198,73 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         modernize: args.modernize !== false,
         preserveSourceTheme: args.preserveSourceTheme === true,
         signal: exec?.signal,
+      })
+    },
+    async fromOffice(rawArgs: unknown, exec?: PptExecution): Promise<PptCreateResult> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs)
+      if (typeof args.filePath !== 'string' || args.filePath.trim() === '') {
+        throw new Error('dsh-ppt：filePath 不能为空')
+      }
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      if (typeof engine.importOfficeDeck !== 'function') {
+        throw new Error('dsh-ppt：当前引擎版本暂不支持导入 Excel / Word 文档')
+      }
+      const cwd = exec?.agent?.session.header.cwd ?? process.cwd()
+      const rawOut = typeof args.outputDir === 'string' && args.outputDir.trim() !== '' ? args.outputDir.trim() : config.outputDir
+      const resolvedOut = resolve(cwd, rawOut || '.')
+      return engine.importOfficeDeck({
+        filePath: args.filePath.trim(),
+        cwd,
+        outDir: resolvedOut,
+        outputDir: resolvedOut,
+        ...(typeof args.fileName === 'string' && args.fileName.trim() !== '' ? { fileName: args.fileName.trim() } : {}),
+        theme: typeof args.theme === 'string' && args.theme.trim() !== '' ? args.theme.trim() : (config.defaultTheme || 'auto'),
+        persona: typeof args.persona === 'string' && args.persona.trim() !== '' ? args.persona.trim() : 'auto',
+        ...(typeof args.chromeStyle === 'string' && args.chromeStyle.trim() !== '' ? { chromeStyle: args.chromeStyle.trim() } : {}),
+        ...(typeof args.targetMinutes === 'number' && Number.isFinite(args.targetMinutes) ? { targetMinutes: args.targetMinutes } : {}),
+        lang: typeof args.lang === 'string' && args.lang.trim() !== '' ? args.lang.trim() : (config.defaultLang || undefined),
+        overwrite: args.overwrite === true,
+        signal: exec?.signal,
+      })
+    },
+    async cite(rawArgs: unknown, exec?: PptExecution): Promise<PptCiteResult & { jsonPath?: string }> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs) as unknown as PptCiteArgs
+      if (typeof args.deckPath !== 'string' || args.deckPath.trim() === '') {
+        throw new Error('dsh-ppt：deckPath 不能为空')
+      }
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      const cwd = exec?.agent?.session.header.cwd ?? process.cwd()
+      const result = await attachCitationsToDeck({
+        ...args,
+        deckPath: args.deckPath.trim(),
+        cwd,
+        signal: exec?.signal,
+        engine,
+      })
+      return {
+        ...result,
+        ...(result.deck?.jsonPath ? { jsonPath: result.deck.jsonPath } : {}),
+      }
+    },
+    async remotion(rawArgs: unknown, exec?: PptExecution): Promise<PptRemotionResult> {
+      exec?.signal?.throwIfAborted()
+      const args = asRecord(rawArgs) as unknown as PptRemotionArgs
+      if (typeof args.deckPath !== 'string' || args.deckPath.trim() === '') {
+        throw new Error('dsh-ppt：deckPath 不能为空')
+      }
+      const engine = await loadEngine()
+      exec?.signal?.throwIfAborted()
+      const cwd = exec?.agent?.session.header.cwd ?? process.cwd()
+      return exportRemotionBundle({
+        ...args,
+        deckPath: args.deckPath.trim(),
+        cwd,
+        signal: exec?.signal,
+        engine,
       })
     },
   }

@@ -2,8 +2,9 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { getEngine, type PptExecution } from './execution.js'
+import { buildRemotionBundleFiles, computePaceBudgetFallback, renderOnePagerHtmlFallback } from './ecosystem.js'
 import type { DeckEngine } from './types.js'
 import { bilingualQuality, englishWorkbenchMessage } from './workbench-language.js'
 import { zipSync, strToU8 } from 'fflate'
@@ -26,6 +27,7 @@ const ALLOWED_LAYOUTS = new Set([
   'marimekko', 'sankey', 'swot',
   'table', 'closing', 'image', 'image-left', 'image-right', 'chart', 'chart-split',
   'waterfall', 'gallery', 'flywheel', 'chevron', 'value-chain',
+  'mermaid', 'flowchart', 'sequence',
 ])
 const ALLOWED_TABLE_STYLES = new Set(['consulting', 'booktabs', 'minimal', 'banded', 'harvey'])
 const ALLOWED_DENSITIES = new Set(['compact', 'balanced', 'airy'])
@@ -304,6 +306,26 @@ function starterSlide(archetype: unknown, language: unknown): Record<string, unk
   if (kind === 'closing') {
     return { layout: 'closing', title: en ? 'Thank You · Next Steps' : '感谢聆听 · 下一步行动', subtitle: en ? 'Confirm pilot scope this week and review initial metrics next Friday.' : '本周内确认试点范围，下周五同步首轮评估结果。' }
   }
+  if (kind === 'mermaid' || kind === 'flowchart') {
+    return {
+      layout: 'mermaid',
+      variant: 'flowchart',
+      title: en ? 'End-to-end automated pipeline flow' : '端到端自动化构建与流转架构',
+      mermaid: en
+        ? 'flowchart LR\n  A([Inputs]) --> B{Auto-Director}\n  B -->|Data| C[Sankey & KPI]\n  B -->|Docs| D[24+ Layouts]\n  C --> E[(HTML & PPTX)]\n  D --> E'
+        : 'flowchart LR\n  A([多源输入]) --> B{智能导演}\n  B -->|数据表| C[桑基与指标卡]\n  B -->|文稿| D[24+ 版式]\n  C --> E[(同源交付)]\n  D --> E',
+    }
+  }
+  if (kind === 'sequence') {
+    return {
+      layout: 'mermaid',
+      variant: 'sequence',
+      title: en ? 'Agent & workbench synchronization sequence' : '智能编排与工作台协同交互时序',
+      mermaid: en
+        ? 'sequenceDiagram\n  participant User\n  participant Studio\n  participant Engine\n  User->>Studio: Upload .xlsx / .docx\n  Studio->>Engine: Profile & choreograph\n  Engine-->>User: HTML + Native PPTX'
+        : 'sequenceDiagram\n  participant 用户\n  participant 工作台\n  participant 引擎\n  用户->>工作台: 上传 .xlsx / .docx\n  工作台->>引擎: 智能剖析与编排\n  引擎-->>用户: HTML + 原生 PPTX',
+    }
+  }
   return {
     layout: 'bullets',
     title: en ? 'New slide key takeaway' : '请填写本页核心结论句',
@@ -411,8 +433,31 @@ export class PptWorkbench {
     const langCode = manifest.language === 'en' ? 'en' : 'zh'
     const themes = typeof engine.listThemes === 'function' ? engine.listThemes(langCode) : []
     const presets = typeof engine.listMasterPresets === 'function' ? engine.listMasterPresets(langCode) : []
+    const rawPace = typeof engine.computePaceBudget === 'function'
+      ? engine.computePaceBudget(manifest, manifest.targetMinutes)
+      : computePaceBudgetFallback(manifest, manifest.targetMinutes)
+    const overrunSlides = Array.isArray(rawPace?.overrunSlides)
+      ? rawPace.overrunSlides
+      : Array.isArray(rawPace?.overBudgetSlides)
+        ? rawPace.overBudgetSlides
+        : []
+    const overBudget = typeof rawPace?.overBudget === 'boolean'
+      ? rawPace.overBudget
+      : rawPace?.status === 'over-budget' || overrunSlides.length > 0
+    const deltaMinutes = typeof rawPace?.deltaMinutes === 'number'
+      ? rawPace.deltaMinutes
+      : typeof rawPace?.deltaSeconds === 'number'
+        ? Math.round((rawPace.deltaSeconds / 60) * 10) / 10
+        : 0
+    const paceBudget = {
+      ...rawPace,
+      slideCount: typeof rawPace?.slideCount === 'number' ? rawPace.slideCount : (Array.isArray(manifest.slides) ? manifest.slides.length : 0),
+      overBudget,
+      overrunSlides,
+      deltaMinutes,
+    }
     return { ok: true, project: { ...entry, deckId: manifest.deckId, revision: manifest.revision, theme: manifest.theme ?? 'data',
-      brand: manifest.brand ?? null, themes, presets, slides: manifest.slides,
+      brand: manifest.brand ?? null, targetMinutes: manifest.targetMinutes ?? null, paceBudget, themes, presets, slides: manifest.slides,
       undoAvailable: manifest.history.length, quality: check, html, dataModel: manifest.dataModel ?? null,
       assets: Object.fromEntries(Object.entries(manifest.assets ?? {}).map(([key, value]: [string, any]) => [key, { data: value.data, mime: value.mime }])),
       render: currentRender ? { pageCount: currentRender.pngPaths.length, missingFonts: currentRender.missingFonts ?? [] } : null } }
@@ -519,6 +564,9 @@ export class PptWorkbench {
       if (['title', 'subtitle', 'kicker', 'takeaway', 'source', 'text', 'formula', 'notes'].includes(key)) {
         if (typeof item !== 'string' || item.length > 8000) throw new Error('文字字段过长或无效')
         result[key] = item
+      } else if (key === 'mermaid') {
+        if (typeof item !== 'string' || item.length > 16000) throw new Error('Mermaid 代码无效或超过 16,000 字符')
+        result.mermaid = item
       } else if (key === 'bullets') {
         if (!Array.isArray(item) || item.length > 50 || item.some(v => typeof v !== 'string' || v.length > 2000)) throw new Error('要点内容无效')
         result[key] = item
@@ -592,6 +640,144 @@ export class PptWorkbench {
       throw new Error('请选择有效的参考 PPTX 文件（24 MiB 以内）')
     }
     return new Uint8Array(bytes)
+  }
+  private officeBytes(raw: unknown, fileName: unknown): { bytes: Uint8Array; ext: string } {
+    const name = typeof fileName === 'string' ? fileName.trim() : ''
+    const match = /\.(xlsx|csv|tsv|docx)$/i.exec(name)
+    if (!match || typeof raw !== 'string' || raw.length < 4) {
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+    }
+    const ext = '.' + match[1].toLowerCase()
+    const clean = raw.replace(/^data:[^;,]+(?:;[^;,]+)*;base64,/, '').replace(/\s+/g, '')
+    if (!clean || clean.length > 34_000_000 || clean.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) {
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+    }
+    const bytes = Buffer.from(clean, 'base64')
+    if (bytes.byteLength === 0 || bytes.byteLength > ABSORB_PPTX_LIMIT) {
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+    }
+    if ((ext === '.xlsx' || ext === '.docx') && (bytes.byteLength < 100 || bytes[0] !== 0x50 || bytes[1] !== 0x4b)) {
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+    }
+    return { bytes: new Uint8Array(bytes), ext }
+  }
+  private flagshipDemoSlides(lang: 'zh' | 'en' | 'bilingual', includeMermaid: boolean): Array<Record<string, unknown>> {
+    const en = lang === 'en'
+    const slides: Array<Record<string, unknown>> = [
+      {
+        layout: 'cover',
+        kicker: en ? 'FLAGSHIP SHOWCASE · 0.25' : '旗舰功能全景示例 · 0.25',
+        title: en ? 'Enterprise AI Delivery & Financial Telemetry' : '企业级智能交付平台：效能跃迁与经营全景',
+        subtitle: en ? 'Native PPTX + Interactive HTML + Verified Data & Diagrams' : '同源构建可编辑 PPTX · 交互放映 · 原生公式与专业图示',
+        notes: en
+          ? 'Welcome everyone. In the next eight minutes we will walk through our flagship delivery telemetry, system architecture, quarterly roadmap, and capital efficiency.'
+          : '各位领导同事好，接下来用八分钟为大家汇报本季度企业级智能交付平台的核心成效、系统架构、路线图与资金流向全景。',
+      },
+      {
+        layout: 'kpi',
+        variant: 'grid',
+        kicker: 'EXECUTIVE SUMMARY',
+        title: en ? 'Headline metrics surpassed annual targets ahead of schedule' : '三大核心指标提前达成全年基准并实现正向复利',
+        items: [
+          { tag: 'ARR', value: '1.85', unit: en ? 'B' : '亿', delta: en ? '+42% YoY' : '同比 +42%', title: en ? 'Annual Recurring Revenue' : '年度经常性收入', status: 'positive' },
+          { tag: 'NRR', value: '118%', delta: en ? '+6 pts' : '提升 6 pct', title: en ? 'Net Dollar Retention' : '核心客户净收入留存', status: 'accent' },
+          { tag: 'CYCLE', value: '5', unit: en ? 'days' : '天', delta: en ? '-64% lead time' : '交付周期缩短 64%', title: en ? 'End-to-End Delivery' : '端到端平均交付周期', status: 'positive' },
+        ],
+        takeaway: en ? 'Platform standardization drove 42% revenue expansion while cutting deployment lead time by 64%.' : '标准化工程底座驱动营收同比增长 42%，同时将客户上线周期从 14 天压缩至 5 天。',
+        source: en ? 'Source: Q4 Audited Financial & Ops Ledger' : '数据来源：Q4 经核验财务与交付运营台账',
+        notes: en ? 'First, look at our headline KPIs: ARR reached 1.85 billion with 42 percent year-over-year growth and 118 percent net retention.' : '首先看核心经营指标：年度经常性收入突破 1.85 亿，同比增长 42%，净收入留存达 118%。',
+      },
+      {
+        layout: 'architecture',
+        variant: 'layered',
+        kicker: 'SYSTEM ARCHITECTURE',
+        title: en ? 'Three-tier deterministic engine guarantees zero-drift multi-format output' : '三层确定性构建架构保障多端同源交付零漂移',
+        items: [
+          { tag: en ? 'Experience' : '交互与工作台', title: en ? 'Studio & Presenter Console' : '工作台预览与双屏提词台', bullets: en ? ['Click-to-focus editing', 'Dual-screen P / Laser L'] : ['点击画布直达编辑', 'P 键双屏提词 / L 激光笔'] },
+          { tag: en ? 'Orchestration' : '智能编排层', title: en ? 'Director, Mermaid & Office Bridge' : '导演引擎 · Office 直吞 · 文献桥接', bullets: en ? ['XLSX/DOCX profiling', 'dsh-cite & Remotion'] : ['Excel/Word 自动成稿', 'dsh-cite 文献与视频分镜'] },
+          { tag: en ? 'Foundation' : '原生底层', title: en ? 'Dual-Target OOXML & HTML Compiler' : 'OOXML 原生图形与离线 HTML 编译器', bullets: en ? ['Native <m:oMath> & charts', 'WCAG >= 4.5:1 guard'] : ['原生公式与可编辑图表', 'WCAG >= 4.5:1 对比度门禁'] },
+          { tag: en ? 'Cross-cutting' : '安全合规', title: en ? 'Zero-Exfiltration & Atomic Undo' : '离线安全沙箱与 20 步原子撤销', status: 'accent', bullets: en ? ['Zero external network', 'Revision-guarded store'] : ['零外链纯净交付', '修订号防并发覆盖'] },
+        ],
+        notes: en ? 'Our architecture separates experience, orchestration, and deterministic OOXML emission so edits stay synchronized across HTML and PowerPoint.' : '系统采用交互层、编排层与原生编译器三层解耦设计，任何微调均可原子级同步至 HTML 与 PPTX。',
+      },
+      {
+        layout: 'gantt',
+        variant: 'quarters',
+        kicker: 'DELIVERY ROADMAP',
+        title: en ? 'Four-quarter rollout moves from core engine to full ecosystem' : '全年四季度路线图：从底层双模引擎迈向全生态闭环',
+        columns: ['Q1', 'Q2', 'Q3', 'Q4'],
+        items: [
+          { tag: en ? 'Core' : '核心底座', title: en ? 'Native charts & 24 curated themes' : '原生可编辑图表与 24 套大师主题', start: 0, span: 1.5, status: 'accent' },
+          { tag: en ? 'Import' : '文档翻新', title: en ? 'Round-trip .pptx & Excel/Word ingestion' : 'PPTX 双向导回与 Excel/Word 直吞', start: 1, span: 1.5, status: 'positive' },
+          { tag: en ? 'Ecosystem' : '生态协同', title: en ? 'dsh-cite bibliography & Remotion video pack' : 'dsh-cite 学术文献与 Remotion 视频分镜', start: 2, span: 1.5, status: 'accent' },
+          { tag: en ? 'GA' : '全量验收', title: en ? 'v0.25 Enterprise Flagship Release' : 'v0.25 旗舰版全面验收发布', start: 3, span: 0, milestone: true, status: 'warning' },
+        ],
+        notes: en ? 'On the timeline, Q1 and Q2 established native charts and Office ingestion, while Q3 and Q4 completed ecosystem bridges.' : '从推进节奏看，上半年夯实了原生图表与文档解析能力，下半年打通了文献与视频分镜全生态。',
+      },
+      {
+        layout: 'sankey',
+        kicker: 'CAPITAL FLOW',
+        title: en ? 'Revenue-to-operating-income flow shows 34.5% operating leverage' : '总营收至营业利润全链路流向拆解展现 34.5% 经营杠杆',
+        items: en
+          ? [
+              { tag: 'Total Revenue', title: 'Gross Profit', value: '68.5', unit: 'M', status: 'positive' },
+              { tag: 'Total Revenue', title: 'Cost of Revenue', value: '31.5', unit: 'M', status: 'neutral' },
+              { tag: 'Gross Profit', title: 'R&D Investment', value: '22.0', unit: 'M', status: 'accent' },
+              { tag: 'Gross Profit', title: 'Sales & Ops', value: '12.0', unit: 'M', status: 'warning' },
+              { tag: 'Gross Profit', title: 'Operating Income', value: '34.5', unit: 'M', status: 'positive' },
+            ]
+          : [
+              { tag: '总营收', title: '毛利润', value: '68.5', unit: '百万', status: 'positive' },
+              { tag: '总营收', title: '交付成本', value: '31.5', unit: '百万', status: 'neutral' },
+              { tag: '毛利润', title: '研发投入', value: '22.0', unit: '百万', status: 'accent' },
+              { tag: '毛利润', title: '市场与运营', value: '12.0', unit: '百万', status: 'warning' },
+              { tag: '毛利润', title: '营业利润', value: '34.5', unit: '百万', status: 'positive' },
+            ],
+        takeaway: en ? 'Strong gross margin (68.5%) funds sustained R&D while yielding 34.5% operating profit.' : '68.5% 的高毛利空间支撑了 22% 的研发强度，并沉淀出 34.5% 的健康营业利润。',
+        notes: en ? 'This Sankey diagram traces every dollar from top-line revenue through gross profit into R&D, operations, and operating income.' : '这张桑基图清晰展示了从总营收扣除交付成本后，毛利润在研发、运营与营业利润之间的精确分配。',
+      },
+      {
+        layout: 'marimekko',
+        kicker: 'MARKET LANDSCAPE',
+        title: en ? 'Segment sizing & share show leadership across high-value verticals' : '细分市场规模与份额矩阵凸显高价值赛道领先身位',
+        rows: en
+          ? [['Vendor / Segment', 'Enterprise (45B)', 'Financial (32B)', 'Industrial (23B)'], ['Flagship', '44%', '38%', '31%'], ['Vendor B', '32%', '36%', '34%'], ['Others', '24%', '26%', '35%']]
+          : [['厂商 / 赛道', '政企数字化 (450亿)', '金融信创 (320亿)', '工业智造 (230亿)'], ['本平台', '44%', '38%', '31%'], ['厂商 B', '32%', '36%', '34%'], ['其他', '24%', '26%', '35%']],
+        notes: en ? 'Across the three major verticals sized proportionally by column width, we lead in both Enterprise and Financial sectors.' : '不等宽市场图按各赛道体量比例切分列宽，我们在政企数字化与金融信创两大核心市场份额稳居第一。',
+      },
+      {
+        layout: 'callout',
+        variant: 'formula',
+        kicker: 'QUANTITATIVE OBJECTIVE',
+        title: en ? 'Regularized scoring objective balances accuracy and visual sparsity' : '量化目标函数：以原生 Office 公式精确表达准确率与稀疏正则项',
+        formula: '\\mathcal{L}(\\theta) = \\frac{1}{N}\\sum_{i=1}^{N} \\left(y_i - \\hat{y}_i(\\theta)\\right)^2 + \\lambda \\|\\theta\\|_2^2',
+        text: en
+          ? 'Compiled into native PowerPoint Office Math (OMML) equations and HTML MathML — directly editable in Word/PowerPoint equation tools.'
+          : '同时编译为 PowerPoint 原生 Office Math (OMML) 公式对象与 HTML MathML，在 Office 公式编辑器中可直接双击修改。',
+        notes: en ? 'Notice the equation is rendered natively as Office Math rather than a static bitmap.' : '页面中的公式为原生 Office Math 对象，而非静态截图，导出后可无损放大与二次编辑。',
+      },
+    ]
+    if (includeMermaid) {
+      slides.push({
+        layout: 'mermaid',
+        variant: 'flowchart',
+        kicker: 'NATIVE MERMAID FLOW',
+        title: en ? 'Mermaid diagram compiles into editable PowerPoint shapes & connectors' : 'Mermaid 流程图直接编译为可拖拽连接的原生 PPT 矢量形状',
+        mermaid: en
+          ? 'flowchart LR\n  A([Raw Sources]) --> B{Auto-Director}\n  B -->|Excel / CSV| C[Charts & Sankey]\n  B -->|Markdown / DOCX| D[24+ Layouts]\n  C --> E[(Editable PPTX)]\n  D --> E'
+          : 'flowchart LR\n  A([多源材料输入]) --> B{智能导演引擎}\n  B -->|Excel / CSV| C[桑基与原生图表]\n  B -->|Word / 大纲| D[24+ 专业版式]\n  C --> E[(原生可编辑 PPTX)]\n  D --> E',
+        takeaway: en ? 'Moving any node box in PowerPoint automatically keeps attached <p:cxnSp> connectors linked.' : '在 PowerPoint 中拖动任意节点方框，相连的矢量连接线会自动跟随联动。',
+        notes: en ? 'This flowchart is generated directly from Mermaid syntax into native PowerPoint shapes and attached connectors.' : '该流程图由 Mermaid 语法直接编译为原生 PPT 形状与绑定连接器，非静态贴图。',
+      })
+    }
+    slides.push({
+      layout: 'closing',
+      kicker: 'NEXT STEPS',
+      title: en ? 'Ready to customize, export One-Pager, or render Video Storyboard' : '即刻体验：编辑本页、导出高管一页纸或生成 Remotion 视频分镜',
+      subtitle: en ? 'Try clicking any text on the canvas, switching themes in Style Studio, or pressing P in standalone HTML.' : '点击左侧画布文字即可定位修改，也可前往“风格与母版”一键换肤，或点击“下载成品”导出多种交付物。',
+      notes: en ? 'Thank you! Feel free to explore editing, Style Studio, One-Pager HTML, and Remotion video export.' : '感谢体验旗舰示例工程！欢迎继续试用页面编辑、换肤、高管一页纸与 Remotion 视频导出。',
+    })
+    return slides
   }
   async action(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     signal?.throwIfAborted()
@@ -677,6 +863,83 @@ export class PptWorkbench {
         return { ...await this.view(digest(created.jsonPath)), created: true }
       } finally {
         if (tmpRefPath) rmSync(tmpRefPath, { force: true })
+      }
+    }
+    if (body.operation === 'create-demo') {
+      if (['referencePptx', 'pptxPath', 'path', 'outputDir', 'filePath'].some(k => Object.hasOwn(body, k))) {
+        throw new Error('图片必须从面板上传，不能读取其他本地文件')
+      }
+      const lang: 'zh' | 'en' | 'bilingual' = body.lang === 'en' || body.lang === 'bilingual' ? body.lang : 'zh'
+      const theme = typeof body.theme === 'string' && body.theme.trim() ? this.themeId(body.theme) : 'consulting'
+      const engine = await this.loadEngine()
+      signal?.throwIfAborted()
+      const decksDir = join(dirname(this.catalogPath), 'workbench-decks')
+      mkdirSync(decksDir, { recursive: true })
+      const hasMermaidModule = existsSync(new URL('../skills/dsh-ppt/scripts/deck-mermaid.mjs', import.meta.url))
+      const demoSlides = this.flagshipDemoSlides(lang, hasMermaidModule)
+      const demoTitle = lang === 'en' ? 'DSH-PPT Flagship Showcase Deck' : 'DSH-PPT 旗舰能力全景示例'
+      const created = await (engine.buildDeckAsync ?? engine.buildDeck)({
+        title: demoTitle,
+        slides: demoSlides,
+        theme,
+        lang,
+        targetMinutes: 8,
+        outputDir: decksDir,
+        cwd: decksDir,
+        signal,
+      })
+      await this.remember(created, {})
+      return { ...await this.view(digest(created.jsonPath)), created: true, demo: true }
+    }
+    if (body.operation === 'import-office') {
+      if (['filePath', 'pptxPath', 'path', 'outputDir', 'targetProjectDir', 'referencePptx'].some(k => Object.hasOwn(body, k))) {
+        throw new Error('图片必须从面板上传，不能读取其他本地文件')
+      }
+      const { bytes, ext } = this.officeBytes(body.data, body.fileName)
+      const engine = await this.loadEngine()
+      signal?.throwIfAborted()
+      if (typeof engine.importOfficeDeck !== 'function') {
+        throw new Error('当前引擎版本暂不支持导入 Excel / Word 文档')
+      }
+      const theme = typeof body.theme === 'string' && body.theme.trim() ? (body.theme.trim() === 'auto' ? 'auto' : this.themeId(body.theme)) : 'auto'
+      const lang = body.lang === 'en' || body.lang === 'bilingual' ? body.lang : 'zh'
+      let chromeStyle: string | undefined
+      if (body.chromeStyle !== undefined && body.chromeStyle !== null && body.chromeStyle !== '') {
+        if (typeof body.chromeStyle !== 'string' || !ALLOWED_CHROME_STYLES.has(body.chromeStyle)) {
+          throw new Error('母版骨架名称无效 / Invalid chrome skeleton style')
+        }
+        chromeStyle = body.chromeStyle
+      }
+      let targetMinutes: number | undefined
+      if (body.targetMinutes !== undefined && body.targetMinutes !== null && body.targetMinutes !== '') {
+        const mins = Number(body.targetMinutes)
+        if (!Number.isFinite(mins) || mins < 1 || mins > 240) throw new Error('目标演讲时长需为 1–240 分钟的数字')
+        targetMinutes = mins
+      }
+      const decksDir = join(dirname(this.catalogPath), 'workbench-decks')
+      mkdirSync(decksDir, { recursive: true })
+      const tmpOfficePath = join(decksDir, '.office-' + randomUUID() + ext)
+      writeFileSync(tmpOfficePath, bytes)
+      try {
+        const cleanBase = typeof body.fileName === 'string'
+          ? basename(body.fileName.trim(), extname(body.fileName.trim())).replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+          : ''
+        const imported = await engine.importOfficeDeck({
+          filePath: tmpOfficePath,
+          cwd: decksDir,
+          outDir: decksDir,
+          outputDir: decksDir,
+          ...(cleanBase ? { fileName: cleanBase } : {}),
+          theme,
+          lang,
+          ...(chromeStyle ? { chromeStyle } : {}),
+          ...(targetMinutes !== undefined ? { targetMinutes } : {}),
+          signal,
+        })
+        await this.remember(imported, {})
+        return { ...await this.view(digest(imported.jsonPath)), imported: true, created: true }
+      } finally {
+        rmSync(tmpOfficePath, { force: true })
       }
     }
     if (body.operation === 'import-pptx') {
@@ -788,12 +1051,33 @@ export class PptWorkbench {
       }
     }
     if (body.operation === 'download') {
-      if (!['html', 'pptx', 'json', 'handout'].includes(String(body.kind))) throw new Error('不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'handout', 'onepager', 'remotion'].includes(String(body.kind))) throw new Error('不支持此文件类型')
       if (body.kind === 'handout') {
         const handoutPath = files.json.slice(0, -5) + '.handout.md'
         if (existsSync(handoutPath)) return { ok: true, name: basename(handoutPath), data: ordinaryFile(handoutPath).toString('base64') }
         const md = typeof engine.renderHandoutMarkdown === 'function' ? engine.renderHandoutMarkdown(manifest, manifest.language) : speakerNotes(manifest)
         return { ok: true, name: basename(entry.path, '.json') + '.handout.md', data: Buffer.from(md, 'utf8').toString('base64') }
+      }
+      if (body.kind === 'onepager') {
+        const html = typeof engine.renderOnePagerHtml === 'function'
+          ? engine.renderOnePagerHtml(manifest, manifest.language)
+          : renderOnePagerHtmlFallback(manifest, manifest.language)
+        return { ok: true, name: basename(entry.path, '.json') + '-onepager.html', data: Buffer.from(html, 'utf8').toString('base64') }
+      }
+      if (body.kind === 'remotion') {
+        const themeObj = typeof engine.resolveTheme === 'function' ? engine.resolveTheme(manifest.theme) : undefined
+        const pace = typeof engine.computePaceBudget === 'function'
+          ? engine.computePaceBudget(manifest, manifest.targetMinutes)
+          : computePaceBudgetFallback(manifest, manifest.targetMinutes)
+        const bundle = buildRemotionBundleFiles(manifest, {
+          fps: 30,
+          format: 'landscape',
+          themeTokens: (themeObj?.palette ?? {}) as Record<string, string>,
+          paceBudget: pace as any,
+        })
+        const zipEntries = Object.fromEntries(Object.entries(bundle.files).map(([k, v]) => [k, strToU8(v)]))
+        const zipped = zipSync(zipEntries, { level: 0 })
+        return { ok: true, name: basename(entry.path, '.json') + '-remotion.zip', data: Buffer.from(zipped).toString('base64') }
       }
       const path = files[body.kind as keyof typeof files]
       return { ok: true, name: basename(path), data: ordinaryFile(path).toString('base64') }
@@ -854,12 +1138,23 @@ export class PptWorkbench {
     if (body.operation === 'edit') {
       if (body.slide !== undefined && (typeof body.slide !== 'string' || !manifest.slides.some((s: any) => s.id === body.slide))) throw new Error('页面不存在')
       if (Object.hasOwn(body, 'referencePptx')) throw new Error('图片必须从面板上传，不能读取其他本地文件')
+      let targetMinutesPatch: { targetMinutes?: number | null } = {}
+      if (body.targetMinutes !== undefined) {
+        if (body.targetMinutes === null || body.targetMinutes === '') {
+          targetMinutesPatch = { targetMinutes: null }
+        } else {
+          const mins = Number(body.targetMinutes)
+          if (!Number.isFinite(mins) || mins < 1 || mins > 240) throw new Error('目标演讲时长需为 1–240 分钟的数字')
+          targetMinutesPatch = { targetMinutes: mins }
+        }
+      }
       const args = { deckPath: entry.path, expectedRevision: body.expectedRevision, signal,
         saveAs: body.saveAs === true,
         ...(body.slide === undefined ? {} : { edits: [{ slide: body.slide, patch: this.patch(body.patch) }] }),
         ...(body.order === undefined ? {} : { order: body.order }),
         ...(body.theme === undefined ? {} : { theme: this.themeId(body.theme) }),
-        ...(body.brand === undefined ? {} : { brand: this.brandPatch(body.brand) }) }
+        ...(body.brand === undefined ? {} : { brand: this.brandPatch(body.brand) }),
+        ...targetMinutesPatch }
       const result = await engine.editDeck(args)
       await this.remember(result, args)
       return { ...await this.view(digest(result.jsonPath)), changed: (result as any).changed }
@@ -895,7 +1190,7 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle', 'share', 'notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle', 'share', 'notes', 'handout', 'onepager', 'remotion', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files, engine } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
@@ -920,6 +1215,26 @@ export class PptWorkbench {
           bytes = strToU8(md)
           name = basename(entry.path, '.json') + '.handout.md'
         }
+      } else if (kind === 'onepager') {
+        const html = typeof engine.renderOnePagerHtml === 'function'
+          ? engine.renderOnePagerHtml(manifest, manifest.language)
+          : renderOnePagerHtmlFallback(manifest, manifest.language)
+        bytes = strToU8(html)
+        name = basename(entry.path, '.json') + '-onepager.html'
+      } else if (kind === 'remotion') {
+        const themeObj = typeof engine.resolveTheme === 'function' ? engine.resolveTheme(manifest.theme) : undefined
+        const pace = typeof engine.computePaceBudget === 'function'
+          ? engine.computePaceBudget(manifest, manifest.targetMinutes)
+          : computePaceBudgetFallback(manifest, manifest.targetMinutes)
+        const bundle = buildRemotionBundleFiles(manifest, {
+          fps: 30,
+          format: 'landscape',
+          themeTokens: (themeObj?.palette ?? {}) as Record<string, string>,
+          paceBudget: pace as any,
+        })
+        const zipEntries = Object.fromEntries(Object.entries(bundle.files).map(([k, v]) => [k, strToU8(v)]))
+        bytes = zipSync(zipEntries, { level: 0 })
+        name = basename(entry.path, '.json') + '-remotion.zip'
       } else if (kind === 'bundle' || kind === 'share') {
         const entries: Record<string, Uint8Array> = {}
         let total = 0
@@ -949,11 +1264,11 @@ export class PptWorkbench {
       }
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
-      const archive = kind === 'bundle' || kind === 'share'
-      const type = ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind)) ? 'text/markdown; charset=utf-8' : archive ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : kind === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const archive = kind === 'bundle' || kind === 'share' || kind === 'remotion'
+      const type = ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind)) ? 'text/markdown; charset=utf-8' : archive ? 'application/zip' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : (kind === 'html' || kind === 'onepager') ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${archive ? 'zip' : ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind)) ? 'md' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${archive ? 'zip' : ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind)) ? 'md' : kind === 'onepager' ? 'html' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }

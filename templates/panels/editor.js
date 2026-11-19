@@ -63,7 +63,7 @@ function PptWorkflowGuide({ defaultOpen = false, onOpenCreate, onCopied }) {
         onOpenCreate ? h(W.Button, { size: 'sm', variant: 'primary', icon: 'plus', onClick: onOpenCreate }, pptText('直接新建演示文稿', 'Create in workbench')) : null)));
 }
 
-function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate, onImport, onError }) {
+function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate, onCreateDemo, onImport, onImportOffice, onError }) {
   const fieldId = React.useId();
   const [meta, setMeta] = React.useState({ themes: [], templates: [] });
   const [dialogMode, setDialogMode] = React.useState(initialMode);
@@ -74,6 +74,8 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
   const [refFile, setRefFile] = React.useState(null);
   const [cloneStructure, setCloneStructure] = React.useState(true);
   const [importFile, setImportFile] = React.useState(null);
+  const [officeFile, setOfficeFile] = React.useState(null);
+  const [targetMinutes, setTargetMinutes] = React.useState('');
   const [preserveSourceTheme, setPreserveSourceTheme] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -130,6 +132,37 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
     reader.readAsDataURL(file);
   }
 
+  function handleOfficeSelect(file) {
+    if (!file) { setOfficeFile(null); return; }
+    if (!/\.(xlsx|csv|tsv|docx)$/i.test(file.name) || file.size > 24 * 1024 * 1024) {
+      onError?.(pptText('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件。', 'Choose an .xlsx, .csv, .tsv, or .docx file up to 24 MiB.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setOfficeFile({ name: file.name, data: String(reader.result || '') });
+    };
+    reader.onerror = () => onError?.(pptText('无法读取 Office 文档，请重试。', 'Could not read the Office document.'));
+    reader.readAsDataURL(file);
+  }
+
+  async function submitOffice() {
+    if (!officeFile?.data || !onImportOffice) return;
+    setSubmitting(true);
+    try {
+      const mins = targetMinutes.trim() ? Number(targetMinutes.trim()) : undefined;
+      await onImportOffice({
+        fileName: officeFile.name,
+        data: officeFile.data,
+        theme: theme || 'auto',
+        lang: languageOf(),
+        ...(mins && Number.isFinite(mins) && mins >= 1 ? { targetMinutes: mins } : {}),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function submitImport() {
     if (!importFile?.data || !onImport) return;
     setSubmitting(true);
@@ -164,7 +197,11 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
 
   return h(W.Dialog, {
     className: 'pptw ppt-dialog',
-    title: dialogMode === 'import' ? pptText('导入 PPTX 翻新', 'Import & Modernize .pptx') : pptText('新建演示文稿', 'New presentation'),
+    title: dialogMode === 'import'
+      ? pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')
+      : dialogMode === 'office'
+        ? pptText('导入 Excel / Word 文档', 'Import Excel / CSV / Word')
+        : pptText('新建演示文稿', 'New presentation'),
     closeLabel: pptText('关闭', 'Close'),
     busy: disabled,
     onClose,
@@ -172,8 +209,39 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
     h('div', { className: 'ppt-create-wizard' },
       h('div', { className: 'ppt-archetype-pills', role: 'tablist', 'aria-label': pptText('创建方式', 'Creation mode') },
         h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'create' ? 'true' : 'false', 'aria-pressed': dialogMode === 'create' ? 'true' : 'false', disabled, onClick: () => setDialogMode('create') }, pptText('从蓝图 / 大纲新建', 'New from blueprint / notes')),
+        onImportOffice ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'office' ? 'true' : 'false', 'aria-pressed': dialogMode === 'office' ? 'true' : 'false', disabled, onClick: () => setDialogMode('office') }, pptText('导入 Excel / Word', 'Import Excel / Word')) : null,
         onImport ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'import' ? 'true' : 'false', 'aria-pressed': dialogMode === 'import' ? 'true' : 'false', disabled, onClick: () => setDialogMode('import') }, pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')) : null),
-      dialogMode === 'import' ? h(React.Fragment, null,
+      dialogMode === 'office' ? h(React.Fragment, null,
+        h('p', { className: 'muted' }, pptText('拖拽或上传 .xlsx / .csv / .tsv 数据表或 .docx 文档（≤24 MiB），自动识别流向、进度、市场份额与章节结构并生成多页演示文稿。', 'Drop or upload an .xlsx / .csv / .tsv workbook or .docx report (≤24 MiB) to auto-profile charts, Sankey, Gantt, tables, and narrative slides.')),
+        h('div', {
+          className: 'ppt-create-refbox',
+          onDragOver: e => { e.preventDefault(); },
+          onDrop: e => { e.preventDefault(); if (!disabled) handleOfficeSelect(e.dataTransfer?.files?.[0]); },
+        },
+          h('label', { htmlFor: fieldId + '-office-file' }, pptText('拖拽或选择 .xlsx / .csv / .tsv / .docx 文件（≤24 MiB）', 'Drop or choose .xlsx / .csv / .tsv / .docx (≤24 MiB)')),
+          h('input', {
+            id: fieldId + '-office-file',
+            type: 'file',
+            accept: '.xlsx,.csv,.tsv,.docx',
+            disabled,
+            onChange: e => { const f = e.target.files?.[0]; e.target.value = ''; handleOfficeSelect(f); },
+          }),
+          officeFile ? h('div', { className: 'ppt-create-refmeta' },
+            h('span', { className: 'w-tag' }, officeFile.name),
+            h(W.Button, { size: 'sm', variant: 'ghost', icon: 'close', disabled, onClick: () => setOfficeFile(null) }, pptText('移除文件', 'Clear'))) : null),
+        h('div', { className: 'ppt-create-grid' },
+          h('div', null,
+            h('label', { htmlFor: fieldId + '-office-theme' }, pptText('视觉主题（24 套大师主题）', 'Visual theme (24 curated themes)')),
+            h('select', { id: fieldId + '-office-theme', value: theme, disabled, onChange: e => setTheme(e.target.value) },
+              h('option', { value: 'auto' }, pptText('自动导演智能匹配', 'Auto-Director match')),
+              meta.themes.map(th => h('option', { key: th.id, value: th.id }, (th.name || th.id) + (th.dark ? pptText(' · 深色', ' · Dark') : pptText(' · 浅色', ' · Light')))))),
+          h('div', null,
+            h('label', { htmlFor: fieldId + '-office-mins' }, pptText('目标演讲时长（分钟，可选）', 'Target duration (min, optional)')),
+            h(W.Input, { id: fieldId + '-office-mins', type: 'number', min: 1, max: 240, value: targetMinutes, disabled, placeholder: '10', onChange: e => setTargetMinutes(e.target.value) }))),
+        h('div', { className: 'w-toolbar' },
+          h(W.Button, { variant: 'primary', icon: 'upload', disabled: disabled || !officeFile?.data, onClick: submitOffice }, submitting ? pptText('正在剖析文档并生成工程…', 'Profiling & building deck…') : pptText('立即导入并生成演示文稿', 'Import & build presentation')),
+          h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel'))))
+      : dialogMode === 'import' ? h(React.Fragment, null,
         h('p', { className: 'muted' }, pptText('上传外部 .pptx（≤24 MiB），自动提取每页文字、表格、原生图表、图片与演讲备注并重排版为可编辑工程，同时生成演讲讲义（.handout.md）。', 'Upload an external .pptx (≤24 MiB) to extract slides, tables, live charts, images, and speaker notes into an editable dsh-ppt project with speaker handout (.handout.md).')),
         h('div', { className: 'ppt-create-refbox' },
           h('label', { htmlFor: fieldId + '-import-file' }, pptText('选择需要导入翻新的 .pptx 文件（≤24 MiB）', 'Choose a .pptx file to import & modernize (≤24 MiB)')),
@@ -260,6 +328,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
           h(W.Button, { size: 'sm', variant: 'ghost', icon: 'close', disabled, onClick: () => setRefFile(null) }, pptText('移除参考文件', 'Clear'))) : null),
       h('div', { className: 'w-toolbar' },
         h(W.Button, { variant: 'primary', icon: 'plus', disabled, onClick: submitCreate }, submitting ? pptText('正在生成三件套…', 'Generating HTML & PPTX…') : pptText('立即生成演示文稿', 'Create presentation')),
+        onCreateDemo ? h(W.Button, { icon: 'sparkles', disabled, onClick: async () => { setSubmitting(true); try { await onCreateDemo(); } finally { setSubmitting(false); } } }, pptText('一键体验旗舰示例', 'Load Flagship Demo')) : null,
         h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel'))))));
 }
 
@@ -285,6 +354,7 @@ function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide
     ['harvey', pptText('哈维球竞品矩阵页', 'Harvey-ball matrix')],
     ['tam', pptText('TAM/SAM/SOM 同心圆页', 'TAM/SAM/SOM concentric')],
     ['org', pptText('组织架构 / 团队图谱页', 'Org chart / team')],
+    ['mermaid', pptText('Mermaid 流程图 / 时序图', 'Mermaid flowchart / sequence')],
     ['table', pptText('咨询表 / 学术三线表', 'Table / 3-line booktabs')],
     ['callout', pptText('核心结论与行动清单', 'Key takeaways & callout')],
     ['bullets', pptText('精炼要点列表页', 'Concise bullets')],

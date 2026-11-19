@@ -88,6 +88,9 @@ export type PptSlideLayout =
   | 'roadmap'
   | 'swimlane'
   | 'team'
+  | 'mermaid'
+  | 'flowchart'
+  | 'sequence'
 
 export type PptTemplateId =
   | 'weekly'
@@ -185,6 +188,7 @@ export interface PptEditArgs {
   theme?: string
   referencePptx?: string
   brand?: PptBrand | null
+  targetMinutes?: number | null
   expectedRevision?: number
   saveAs?: boolean
 }
@@ -205,6 +209,7 @@ export interface PptSlideSpec {
   source?: string
   text?: string
   formula?: string
+  mermaid?: string
   bullets?: string[]
   items?: PptSlideItem[]
   cards?: PptSlideItem[]
@@ -258,6 +263,8 @@ export interface PptCreateArgs {
   overwrite?: boolean
   template?: PptTemplateId | string
   brand?: PptBrand
+  /** Optional target speaking duration in minutes for pace budgeting. */
+  targetMinutes?: number
   /** Optional explicit source facts, assumptions and safe arithmetic; bind slides with {{metricId}}. */
   dataModel?: PptDataModel
 }
@@ -345,6 +352,61 @@ export interface PptImportArgs {
   preserveSourceTheme?: boolean
 }
 
+export interface PptFromOfficeArgs {
+  filePath: string
+  outputDir?: string
+  fileName?: string
+  theme?: string
+  persona?: PptPersonaId | string
+  chromeStyle?: PptChromeStyle | string
+  targetMinutes?: number
+  lang?: string
+  overwrite?: boolean
+}
+
+export type PptCitationStyle = 'gb-t-7714' | 'apa' | 'mla' | 'chicago'
+
+export interface PptCiteArgs {
+  deckPath: string
+  citePath?: string
+  bibtex?: string
+  dois?: string[]
+  citeKeys?: string[]
+  style?: PptCitationStyle
+  appendReferences?: boolean
+  expectedRevision?: number
+  saveAs?: boolean
+}
+
+export interface PptCiteResult {
+  ok: boolean
+  matchedCount: number
+  citedKeys: string[]
+  missingKeys: string[]
+  sourcePath?: string
+  referencesSlideIndex?: number
+  deck?: PptCreateResult
+}
+
+export interface PptRemotionArgs {
+  deckPath: string
+  outputDir?: string
+  format?: 'landscape' | 'portrait' | 'square'
+  fps?: number
+  overwrite?: boolean
+}
+
+export interface PptRemotionResult {
+  ok: boolean
+  outputDir: string
+  storyboardPath: string
+  files: string[]
+  fps: number
+  totalFrames: number
+  totalSeconds: number
+  slideCount: number
+}
+
 export interface PptCreateResult {
   ok: boolean
   title: string
@@ -371,6 +433,7 @@ export interface PptCreateResult {
 export interface DeckEngine {
   absorbPptx(options: Record<string, unknown>): Promise<PptAbsorbResult>
   importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>
+  importOfficeDeck?(options: Record<string, unknown>): Promise<PptCreateResult>
   repairDeckVisual(options: Record<string, unknown>): Promise<PptCreateResult>
   readRenderReceipt(pptxPath: string, receiptPath: string): PptRenderResult
   previewDeckData(options: Record<string, unknown>): Record<string, any>
@@ -378,6 +441,8 @@ export interface DeckEngine {
   dataReport(manifest: any): string
   dataNotes(manifest: any, slide: any): string
   renderHandoutMarkdown?(manifest: any, lang?: string): string
+  renderOnePagerHtml?(manifest: any, lang?: string): string
+  computePaceBudget?(manifest: any, targetMinutes?: number): Record<string, any>
   buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>
   listTemplates(lang?: string): unknown[]
   editDeck(options: Record<string, unknown>): Promise<PptCreateResult>

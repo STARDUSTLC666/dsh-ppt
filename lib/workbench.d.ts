@@ -37,6 +37,8 @@ export declare class PptWorkbench {
     private itemsPatch;
     private patch;
     private pptxBytes;
+    private officeBytes;
+    private flagshipDemoSlides;
     action(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
     fetchDownload(request: Request): Promise<Response>;
     fetch(request: Request): Promise<Response>;

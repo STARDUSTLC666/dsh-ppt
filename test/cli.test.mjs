@@ -319,3 +319,44 @@ test('CLI --import-pptx、--preserve-theme、--handout 与 --sync-pptx 闭环', 
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('CLI --from-office、--one-pager 与 --target-minutes 闭环且互斥校验生效', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-cli-office-'))
+  try {
+    const parsed = parseArgv(['--from-office', 'metrics.csv', '--one-pager', '--target-minutes', '8'])
+    assert.equal(parsed.fromOffice, 'metrics.csv')
+    assert.equal(parsed.onePager, true)
+    assert.equal(parsed.targetMinutes, 8)
+
+    const csvPath = join(dir, 'revenue.csv')
+    writeFileSync(csvPath, '季度,营收(万元),毛利率\nQ1,1200,32%\nQ2,1650,35%\nQ3,2100,38%\nQ4,2680,41%\n', 'utf8')
+
+    await assert.rejects(main(['--from-office', csvPath, '--check', 'x.json'], { log() {} }), /只能选择一项/)
+
+    const outDir = join(dir, 'out')
+    const logs = []
+    assert.equal(await main([
+      '--from-office', csvPath,
+      '--theme', 'consulting',
+      '--target-minutes', '6',
+      '--one-pager',
+      '--out', outDir,
+      '--file', 'office-cli',
+    ], { log: (l) => logs.push(l) }), 0)
+
+    const imported = JSON.parse(logs.join('\n'))
+    assert.equal(imported.ok, true)
+    assert.ok(imported.onePagerPath && existsSync(imported.onePagerPath))
+    assert.equal(imported.paceBudget.targetMinutes, 6)
+    const manifest = JSON.parse(readFileSync(imported.jsonPath, 'utf8'))
+    assert.equal(manifest.targetMinutes, 6)
+    assert.ok(manifest.slides.some(s => s.layout === 'chart-split' && s.chart?.kind === 'combo'))
+    assert.match(readFileSync(imported.onePagerPath, 'utf8'), /切换长图战报/)
+
+    // CLI --edit --target-minutes updates budget cleanly
+    assert.equal(await main(['--edit', imported.jsonPath, '--target-minutes', '10'], { log() {} }), 0)
+    assert.equal(JSON.parse(readFileSync(imported.jsonPath, 'utf8')).targetMinutes, 10)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

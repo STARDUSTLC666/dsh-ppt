@@ -34,10 +34,13 @@ test('parseSkillFile 兼容 CRLF 与带引号的单行 frontmatter', () => {
   assert.match(parsed.content, /^# Body/)
 })
 
-test('apply 空配置即可注册 10 个工具与 1 个技能（加载不失败）', () => {
+test('apply 空配置即可注册 13 个工具与 1 个技能（加载不失败）', () => {
   const ctx = fakeCtx()
   apply(ctx, {})
-  assert.deepEqual(ctx.tools.defs.map((def) => def.name).sort(), ['ppt_absorb', 'ppt_check', 'ppt_create', 'ppt_data', 'ppt_edit', 'ppt_import', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo'])
+  assert.deepEqual(ctx.tools.defs.map((def) => def.name).sort(), [
+    'ppt_absorb', 'ppt_check', 'ppt_cite', 'ppt_create', 'ppt_data', 'ppt_edit',
+    'ppt_from_office', 'ppt_import', 'ppt_remotion', 'ppt_render', 'ppt_templates', 'ppt_themes', 'ppt_undo',
+  ])
   assert.equal(ctx.skills.defs.length, 1)
   assert.equal(ctx.skills.defs[0].name, 'dsh-ppt')
   assert.ok(ctx.skills.defs[0].content.length > 500)
@@ -258,12 +261,25 @@ test('ppt_absorb、扩展版式与编辑参数均通过编译契约与参数校�
   assert.equal(create.parameters.properties.referencePptx.type, 'string')
   assert.equal(create.parameters.properties.cloneStructure.type, 'boolean')
   assert.equal(create.parameters.properties.template.enum.length, 20)
-  for (const layoutId of ['kpi', 'chart-split', 'gantt', 'architecture', 'harvey', 'tam', 'org', 'chevron', 'value-chain', 'marimekko', 'sankey', 'swot']) {
+  for (const layoutId of ['kpi', 'chart-split', 'gantt', 'architecture', 'harvey', 'tam', 'org', 'chevron', 'value-chain', 'marimekko', 'sankey', 'swot', 'mermaid', 'flowchart', 'sequence']) {
     assert.ok(create.parameters.properties.slides.items.properties.layout.enum.includes(layoutId), layoutId + ' missing')
   }
   assert.equal(create.parameters.properties.slides.items.properties.formula.type, 'string')
+  assert.equal(create.parameters.properties.slides.items.properties.mermaid.type, 'string')
+  assert.equal(create.parameters.properties.targetMinutes.type, 'number')
+  assert.deepEqual(edit.parameters.properties.targetMinutes.oneOf.map(n => n.type), ['number', 'null'])
   const pptImport = ctx.tools.defs.find((def) => def.name === 'ppt_import')
   assert.ok(pptImport, 'ppt_import 10th tool missing')
+  const pptFromOffice = ctx.tools.defs.find((def) => def.name === 'ppt_from_office')
+  const pptCite = ctx.tools.defs.find((def) => def.name === 'ppt_cite')
+  const pptRemotion = ctx.tools.defs.find((def) => def.name === 'ppt_remotion')
+  assert.ok(pptFromOffice && pptCite && pptRemotion, 'Phase 5 ecosystem/office tools missing')
+  assert.deepEqual(pptFromOffice.parameters.required, ['filePath'])
+  assert.deepEqual(pptCite.parameters.required, ['deckPath'])
+  assert.deepEqual(pptRemotion.parameters.required, ['deckPath'])
+  await assert.rejects(() => pptFromOffice.execute({ filePath: '   ' }), /filePath 不能为空/)
+  await assert.rejects(() => pptCite.execute({ deckPath: '   ' }), /deckPath 不能为空/)
+  await assert.rejects(() => pptRemotion.execute({ deckPath: '   ' }), /deckPath 不能为空/)
   assert.deepEqual(pptImport.parameters.required, ['pptxPath'])
   assert.equal(pptImport.parameters.properties.projectId.type, 'string')
   assert.equal(pptImport.parameters.properties.modernize.type, 'boolean')
@@ -340,10 +356,10 @@ test('ppt_import 工具可导入外部 PPTX 生成可编辑工程，并支持 pr
   }
 })
 
-test('ppt_import 支持 preserveSourceTheme=true 保留原稿品牌色，且 10 个工具 wire schema 无 type 数组', async () => {
+test('ppt_import 支持 preserveSourceTheme=true 保留原稿品牌色，且 13 个工具 wire schema 无 type 数组', async () => {
   const ctx = fakeCtx()
   apply(ctx, {})
-  assert.equal(ctx.tools.defs.length, 10)
+  assert.equal(ctx.tools.defs.length, 13)
   const walk = node => {
     assert.equal(Array.isArray(node.type), false)
     if (node.oneOf) node.oneOf.forEach(walk)
@@ -412,6 +428,59 @@ test('ppt_create 与 ppt_edit 工具支持 marimekko、sankey、swot、value-cha
     })
     assert.equal(edited.revision, 1)
     assert.match(readFileSync(edited.htmlPath, 'utf8'), /<mi>E<\/mi>/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('ppt_cite 与 ppt_remotion 工具端到端执行并产出核验引文与视频分镜包', async () => {
+  const ctx = fakeCtx()
+  apply(ctx, {})
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-eco-tools-'))
+  try {
+    const create = ctx.tools.defs.find((def) => def.name === 'ppt_create')
+    const cite = ctx.tools.defs.find((def) => def.name === 'ppt_cite')
+    const remotion = ctx.tools.defs.find((def) => def.name === 'ppt_remotion')
+    const out = await create.execute({
+      title: 'Research Deck',
+      slides: [
+        { layout: 'cover', title: 'Research Deck', subtitle: 'AI Systems' },
+        { layout: 'kpi', title: 'Transformer Baseline', items: [{ value: '98.5%', title: 'Accuracy' }], notes: 'Based on attention mechanisms [@vaswani2017].' },
+      ],
+      outputDir: dir,
+    })
+    const citeOut = await cite.execute({
+      deckPath: out.jsonPath,
+      bibtex: '@inproceedings{vaswani2017, author={Vaswani, Ashish and Shazeer, Noam}, title={Attention Is All You Need}, booktitle={NeurIPS}, year={2017}, doi={10.5555/3295222.3295349}}',
+      style: 'apa',
+    })
+    assert.equal(citeOut.ok, true)
+    assert.equal(citeOut.matchedCount, 1)
+    assert.deepEqual(citeOut.citedKeys, ['vaswani2017'])
+    assert.match(cite.output.render({}, citeOut)[0].text, /已链接 1 条已核验文献/)
+
+    const remOut = await remotion.execute({
+      deckPath: out.jsonPath,
+      fps: 30,
+      format: 'landscape',
+    })
+    assert.equal(remOut.ok, true)
+    assert.equal(remOut.fps, 30)
+    assert.ok(remOut.totalFrames >= 180)
+    assert.ok(existsSync(remOut.storyboardPath))
+    assert.ok(existsSync(join(remOut.outputDir, 'src', 'DeckVideo.tsx')))
+    assert.match(remotion.output.render({}, remOut)[0].text, /视频分镜工程已导出/)
+
+    const fromOffice = ctx.tools.defs.find((def) => def.name === 'ppt_from_office')
+    const csvPath = join(dir, 'quarterly.csv')
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(csvPath, 'Segment,Q1,Q2,Q3,Q4\nEnterprise,120,145,170,210\nFinancial,80,95,112,135\n', 'utf8')
+    const officeOut = await fromOffice.execute({ filePath: csvPath, outputDir: join(dir, 'office-out'), targetMinutes: 6 })
+    assert.equal(officeOut.ok, true)
+    assert.ok(officeOut.slideCount >= 3)
+    assert.ok(existsSync(officeOut.pptxPath))
+    assert.ok(existsSync(officeOut.htmlPath))
+    assert.ok(existsSync(officeOut.jsonPath))
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

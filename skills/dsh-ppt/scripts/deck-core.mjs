@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { resolve as resolvePath } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 import * as deckMedia from './deck-media.mjs'
-import { renderDelivery, renderHandoutMarkdown } from './deck-delivery.mjs'
+import { renderDelivery, renderHandoutMarkdown, renderOnePagerHtml } from './deck-delivery.mjs'
 import { renderDataView } from './deck-data-view.mjs'
 import { normalizeVisual, visualHtmlStyle, visualShapeXml, VISUAL_CSS } from './deck-visual.mjs'
 import {
@@ -78,6 +78,7 @@ import {
   ooxmlShape,
   ooxmlCustGeomShape,
   ooxmlMathShape,
+  ooxmlConnector,
   ooxmlRichParagraph,
   getChromeConfig,
   parseHarveyValue,
@@ -85,6 +86,15 @@ import {
   computeSankeyLayout,
   partitionValueChainItems,
   computeSwotModel,
+  extractMermaidSource,
+  detectMermaidMode,
+  parseMermaidFlowchart,
+  layoutMermaidFlowchart,
+  parseMermaidSequence,
+  layoutMermaidSequence,
+  compileMermaidSlide,
+  renderMermaidPptx,
+  renderMermaidHtml,
   renderSlideChromePptx,
   renderCoreSlidePptx,
   renderCoreSlideHtml,
@@ -125,12 +135,22 @@ export {
   roundRectAdj,
   ooxmlCustGeomShape,
   ooxmlMathShape,
+  ooxmlConnector,
   getChromeConfig,
   parseHarveyValue,
   computeMarimekkoModel,
   computeSankeyLayout,
   partitionValueChainItems,
   computeSwotModel,
+  extractMermaidSource,
+  detectMermaidMode,
+  parseMermaidFlowchart,
+  layoutMermaidFlowchart,
+  parseMermaidSequence,
+  layoutMermaidSequence,
+  compileMermaidSlide,
+  renderMermaidPptx,
+  renderMermaidHtml,
   renderSlideChromePptx,
   containsLatexMath,
   looksLikeRawLatex,
@@ -391,6 +411,7 @@ function createSection(heading = '', level = 0, coverOnly = false) {
     notes: [],
     directive: null,
     formula: '',
+    mermaid: '',
     takeaway: '',
     source: '',
   }
@@ -506,12 +527,14 @@ function directiveSlideFrom(section, ui, pointIndexRef) {
   const dirRows = section.table && ['marimekko', 'harvey', 'sankey'].includes(spec.layout)
     ? [section.table.header, ...section.table.rows]
     : undefined
+  const effVariant = spec.variant || (spec.layout === 'mermaid' && section.mermaid ? detectMermaidMode(section.mermaid) : '')
   const slide = {
     layout: spec.layout,
-    ...(spec.variant ? { variant: spec.variant } : {}),
+    ...(effVariant ? { variant: effVariant } : {}),
     kicker: label,
     title: label,
     ...(section.formula ? { formula: section.formula } : {}),
+    ...(section.mermaid ? { mermaid: section.mermaid } : {}),
     ...(spec.layout === 'callout' && section.paragraphs[0] ? { text: section.paragraphs[0] } : {}),
     ...(dirRows ? { rows: dirRows } : {}),
     ...(rawPoints.length > 0 ? { bullets: rawPoints } : {}),
@@ -543,14 +566,25 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   let awaitingTakeawayLine = false
   let inMathBlock = false
   let mathBlockLines = []
+  let inMermaidFence = false
+  let mermaidFenceMarker = ''
+  let mermaidFenceLines = []
 
   const flush = () => {
+    if (inMermaidFence && mermaidFenceLines.length > 0) {
+      if (current === null) current = createSection()
+      const pendingMermaid = mermaidFenceLines.join('\n').trim()
+      if (pendingMermaid !== '') {
+        current.mermaid = current.mermaid ? current.mermaid + '\n' + pendingMermaid : pendingMermaid
+      }
+    }
     if (
       current !== null &&
       (current.heading !== '' ||
         current.bullets.length > 0 ||
         current.paragraphs.length > 0 ||
         current.formula !== '' ||
+        current.mermaid !== '' ||
         current.table !== null ||
         current.quote.length > 0 ||
         current.directive !== null)
@@ -562,10 +596,38 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     awaitingTakeawayLine = false
     inMathBlock = false
     mathBlockLines = []
+    inMermaidFence = false
+    mermaidFenceMarker = ''
+    mermaidFenceLines = []
   }
 
   for (const rawLine of body.split('\n')) {
     const line = rawLine.trim()
+    if (inMermaidFence) {
+      if (line.startsWith(mermaidFenceMarker) && new RegExp('^' + mermaidFenceMarker + '\\s*$').test(line)) {
+        if (current === null) current = createSection()
+        const joinedMermaid = mermaidFenceLines.join('\n').trim()
+        if (joinedMermaid !== '') {
+          current.mermaid = current.mermaid ? current.mermaid + '\n' + joinedMermaid : joinedMermaid
+        }
+        inMermaidFence = false
+        mermaidFenceMarker = ''
+        mermaidFenceLines = []
+      } else {
+        mermaidFenceLines.push(rawLine)
+      }
+      continue
+    }
+
+    const mermaidOpen = /^(`{3,}|~{3,})\s*mermaid\b.*$/i.exec(line)
+    if (mermaidOpen !== null) {
+      if (current === null) current = createSection()
+      inMermaidFence = true
+      mermaidFenceMarker = mermaidOpen[1]
+      mermaidFenceLines = []
+      continue
+    }
+
     if (inMathBlock) {
       if (line === '$$') {
         if (current === null) current = createSection()
@@ -681,6 +743,11 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     }
     awaitingTakeawayLine = false
 
+    if (inDirective && current?.directive?.layout === 'mermaid') {
+      current.mermaid = current.mermaid ? current.mermaid + '\n' + rawLine : rawLine
+      continue
+    }
+
     const bulletMatch = /^\s*(?:[-*+]|\d+[.)])\s+(.+)$/.exec(line)
     if (bulletMatch !== null) {
       const bullet = cleanRichText(bulletMatch[1])
@@ -746,10 +813,11 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     }
   }
 
-  if (coverSource && (coverSource.table !== null || coverSource.quote.length > 0)) {
+  if (coverSource && (coverSource.table !== null || coverSource.quote.length > 0 || coverSource.mermaid !== '')) {
     const special = createSection()
     special.table = coverSource.table
     special.quote = coverSource.quote
+    special.mermaid = coverSource.mermaid
     special.notes = coverSource.notes
     special.takeaway = coverSource.takeaway
     special.source = coverSource.source
@@ -769,7 +837,9 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
   }
 
-  const hadHeadings = bodySections.some((section) => section.heading !== '' || section.directive !== null)
+  const hadHeadings = bodySections.some(
+    (section) => section.heading !== '' || section.directive !== null || section.mermaid !== '',
+  )
 
   if (!hadHeadings) {
     const ordered = bodySections.map((section) => ({
@@ -820,6 +890,24 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     if (section.directive && section.directive.layout !== 'table') {
       const dirSlide = directiveSlideFrom(section, ui, pointRef)
       if (dirSlide) slides.push(dirSlide)
+      continue
+    }
+
+    if (section.mermaid !== '') {
+      const label = section.heading || (ui.pointKicker + ' ' + (++pointRef.count))
+      const rawPoints = [...section.bullets, ...section.paragraphs]
+      const slide = {
+        layout: 'mermaid',
+        variant: detectMermaidMode(section.mermaid),
+        kicker: label,
+        title: label,
+        mermaid: section.mermaid,
+        ...(rawPoints.length > 0 ? { bullets: rawPoints } : {}),
+        ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+        ...(section.source ? { source: section.source } : {}),
+      }
+      if (specials.length === 0 && notes !== '') slide.notes = notes
+      slides.push(slide)
       continue
     }
 
@@ -919,13 +1007,18 @@ function normalizeSlideContent(raw, index) {
   const rawLayoutKey = String(source.layout ?? '').trim().toLowerCase()
   const alias = LAYOUT_ALIASES[rawLayoutKey]
   const candidateLayout = alias ? alias.layout : rawLayoutKey
+  const rawMermaid = typeof source.mermaid === 'string'
+    ? source.mermaid.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
+    : ''
   const layout = (CORE_LAYOUTS.has(candidateLayout) || deckMedia.MEDIA_LAYOUTS.has(candidateLayout))
     ? candidateLayout
     : source.chart
       ? 'chart'
       : (source.image || (Array.isArray(source.images) && source.images.length > 0))
         ? 'image-right'
-        : 'bullets'
+        : rawMermaid !== ''
+          ? 'mermaid'
+          : 'bullets'
 
   const variant = stripInlineMarkdown(source.variant ?? alias?.variant ?? '')
   const rawChrome = typeof source.chrome === 'string' ? source.chrome.trim() : ''
@@ -937,6 +1030,11 @@ function normalizeSlideContent(raw, index) {
   const formula = typeof source.formula === 'string'
     ? source.formula.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
     : ''
+  const mermaid = rawMermaid !== ''
+    ? rawMermaid
+    : (layout === 'mermaid' && typeof source.text === 'string' && source.text.trim() !== ''
+        ? source.text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
+        : '')
   const takeaway = cleanRichText(source.takeaway ?? '')
   const slideSource = stripInlineMarkdown(source.source ?? '')
   const notes = String(source.notes ?? '').trim()
@@ -971,6 +1069,7 @@ function normalizeSlideContent(raw, index) {
     ...(variant !== '' ? { variant } : {}),
     ...(chrome ? { chrome } : {}),
     ...(formula !== '' ? { formula } : {}),
+    ...(mermaid !== '' ? { mermaid } : {}),
     ...(takeaway !== '' ? { takeaway } : {}),
     ...(slideSource !== '' ? { source: slideSource } : {}),
     ...(activeIndex !== undefined ? { activeIndex } : {}),
@@ -1171,12 +1270,18 @@ export function buildDeck(options = {}) {
   mkdirSync(outputDir, { recursive: true })
   const fileName = resolveDeckFileName(outputDir, normalized.fileName, overwrite)
 
+  const rawTargetMin = options.targetMinutes !== undefined && options.targetMinutes !== null
+    ? Number(options.targetMinutes)
+    : NaN
+  const targetMinutes = Number.isFinite(rawTargetMin) && rawTargetMin > 0 ? rawTargetMin : undefined
+
   const manifest = {
     version: DECK_VERSION,
     title,
     theme: theme.id,
     language: language.id,
     motion,
+    ...(targetMinutes !== undefined ? { targetMinutes } : {}),
     slideCount: deck.slides.length,
     slides: deck.slides,
   }
@@ -1184,14 +1289,18 @@ export function buildDeck(options = {}) {
   const htmlPath = resolvePath(outputDir, fileName + '.html')
   const pptxPath = resolvePath(outputDir, fileName + '.pptx')
   const handoutPath = options.handout === true ? resolvePath(outputDir, fileName + '.handout.md') : undefined
+  const onePagerPath = options.onePager === true ? resolvePath(outputDir, fileName + '.onepager.html') : undefined
 
   const artifacts = [
     { path: jsonPath, data: JSON.stringify(manifest, null, 2) + '\n', encoding: 'utf8' },
-    { path: htmlPath, data: renderHtml(manifest, theme, language, { pptx: pptxPath, json: jsonPath, ...(handoutPath ? { handout: handoutPath } : {}) }), encoding: 'utf8' },
+    { path: htmlPath, data: renderHtml(manifest, theme, language, { pptx: pptxPath, json: jsonPath, ...(handoutPath ? { handout: handoutPath } : {}), ...(onePagerPath ? { onepager: onePagerPath } : {}) }), encoding: 'utf8' },
     { path: pptxPath, data: buildPptx(manifest, theme, language) },
   ]
   if (handoutPath) {
     artifacts.push({ path: handoutPath, data: renderHandoutMarkdown(manifest, language.id), encoding: 'utf8' })
+  }
+  if (onePagerPath) {
+    artifacts.push({ path: onePagerPath, data: renderOnePagerHtml(manifest, language.id), encoding: 'utf8' })
   }
   commitDeckArtifacts(artifacts)
 
@@ -1211,6 +1320,7 @@ export function buildDeck(options = {}) {
     pptxPath,
     jsonPath,
     ...(handoutPath ? { handoutPath } : {}),
+    ...(onePagerPath ? { onePagerPath } : {}),
   }
 }
 

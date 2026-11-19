@@ -83,15 +83,16 @@ Agent 先提炼真实内容与数据结论，再通过结构化参数生成可�
 
 ---
 
-## 五、双屏演讲者提词台、演讲讲义、按页编辑与撤销
+## 五、双屏演讲者提词台、配速预算、高管一页纸战报与按页编辑
 
-- **双屏演讲者提词台（独立 HTML 放映内置）**：按 **`P`** 或点击 `#presenter-toggle` 打开双屏控制窗口（通过 `BroadcastChannel` + `postMessage` 双向实时同步），支持当前页与下一页预览、大字号提词器（`A+ / A-` 缩放，无手写备注时自动回退为 `takeaway` 与要点提示）、正计时与目标配速倒计时、缩略图条快速跳页，以及按 **`L`** 在观众主屏同步投射虚拟激光笔！
-- **演讲讲义导出（`<slug>.handout.md`）**：HTML 检查面板内置「下载讲义 (.md)」按钮（客户端离线生成下载）；CLI 传 `--handout`（或 API `handout: true`）可同时落盘 `<slug>.handout.md`，包含演示概览、预计总时长、每页核心指标/表格/要点与逐页演讲手稿。
+- **双屏演讲者提词台与配速预算（`computePaceBudget`）**：按 **`P`** 或点击 `#presenter-toggle` 打开双屏控制窗口（通过 `BroadcastChannel` + `postMessage` 双向实时同步），支持当前页与下一页预览、大字号提词器（`A+ / A-` 缩放，无手写备注时自动回退为 `takeaway` 与要点提示）、正计时与目标配速倒计时、逐页演讲预算徽章（按中文 `220 字/分`、英文 `145 词/分` + 图表/图示 `+12s` 理解缓冲测算，超 `1.45x` 目标切片或 `>150s` 自动标红 `over-budget`），以及按 **`L`** 在观众主屏同步投射虚拟激光笔！
+- **演讲讲义与高管一页纸战报（`.handout.md` / `.onepager.html`）**：HTML 检查面板内置「下载讲义 (.md)」与「下载一页纸战报 (.html)」离线 `Blob` 下载按钮（默认仍严格保持 3 件套落盘不变）；CLI 传 `--handout` / `--one-pager`（或 API `handout: true` / `onePager: true`）可同步落盘，其中高管一页纸支持 **A4 打印版 ↔ 移动端长图战报（Mobile Long-Card）** 一键切换，浓缩展示核心结论、KPI 条、关键图表/表格/流程图摘要、支柱行动与逐页配速预算。
+- **Office 文件直吞引擎（`ppt_from_office` / `--from-office`）**：零新增依赖直读 `.xlsx` / `.csv` / `.tsv`（自动识别 `[Source, Target, Amount]` 桑基图、任务排期甘特图、市场份额 Marimekko、增减桥瀑布图、>10x 量纲差双轴组合图、通用 `chart-split` + 明细附录表）与 `.docx` Word 报告（标题/中文编号标题、加粗导语、Word 表格、嵌入图片、Mermaid 代码块与 `$...$` 公式），直出完整 5–20 页演示工程。
 
 1. **先查后改**：调 `ppt_check { deckPath: "report.json" }` 获取当前 `revision` 与稳定页面 `id`。
 2. **原子编辑（`ppt_edit`）**：
-   - **单页局部补丁 `edits`**：支持修改 `title, subtitle, kicker, takeaway, source, formula, layout, variant, chrome, tableStyle, bullets, items, columns, rows, image, images, chart, notes, visual`（`slide` 传 1 起始页码或稳定 ID）。
-   - **整套换肤与品牌更新**：顶层可传 `theme: "exec-jilan"`、`referencePptx: "ref.pptx"` 或 `brand`（`brand: null` 清空品牌，`logo: null` 清空 Logo）。
+   - **单页局部补丁 `edits`**：支持修改 `title, subtitle, kicker, takeaway, source, formula, mermaid, layout, variant, chrome, tableStyle, bullets, items, columns, rows, image, images, chart, notes, visual`（`slide` 传 1 起始页码或稳定 ID）。
+   - **整套换肤、目标时长与品牌更新**：顶层可传 `theme: "exec-jilan"`、`targetMinutes: 12`、`referencePptx: "ref.pptx"` 或 `brand`（`brand: null` 清空品牌，`logo: null` 清空 Logo）。
    - **追加、复制、排序与删除**：`append: [slide1, ...]`（单次追加 1–5 页新页面）、`duplicate: [2]`、`remove: [4]`、`order: [id1, id2, ...]`（包含全部原始页面 ID 各一次；执行顺序：先编辑/排序，再复制/删除/追加，最终保留 1–120 页）。
    - 每次修改原子重写 HTML / PPTX / JSON，失败自动回滚，保留最近 20 步历史。
 3. **一键撤销（`ppt_undo`）**：`ppt_undo { deckPath: "report.json", expectedRevision: 1 }` 完整恢复上一状态（含主题、页面结构、图表、图片与数据模型），`revision` 单调递增。
@@ -125,6 +126,10 @@ node scripts/build-deck.mjs --absorb corp.pptx
 
 # 全量导入旧 PPTX 并一键翻新（支持 --preserve-theme 与 --handout）
 node scripts/build-deck.mjs --import-pptx legacy.pptx --theme auto --handout --out dist
+
+# 直吞 Excel/CSV/TSV/Word 生成全套演示文稿（可选 --target-minutes 与 --one-pager）
+node scripts/build-deck.mjs --from-office financials.xlsx --theme auto --target-minutes 10 --one-pager --out dist
+node scripts/build-deck.mjs --from-office annual-report.docx --theme consulting --handout --out dist
 
 # 将 Office 修改后的 PPTX 导回已有工程（自动快照至 .history/ 支持撤销）
 node scripts/build-deck.mjs --sync-pptx dist/deck.pptx --edit dist/deck.json

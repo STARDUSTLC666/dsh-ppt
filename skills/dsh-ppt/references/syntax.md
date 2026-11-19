@@ -32,6 +32,7 @@
 | **`harvey`** | `matrix` | `kicker, title, rows[][]`（支持 `● ◕ ◑ ◔ ○ ✓ ✗` 或 `100%/75%/50%/25%/0%`） | **麦肯锡式哈维球竞品/能力矩阵**：自动高亮「本方案 / Ours」列并将符号渲染为精确矢量圆球 |
 | **`tam`** | `concentric` | `kicker, title, items[]`（3 项 TAM/SAM/SOM，含 `value, title, text`） | **同心圆市场空间测算图**：左侧 3 个底切原生同心椭圆 + 右侧 3 张规模与口径说明卡 |
 | **`org`** | `tree \| team` | `kicker, title, items[]`（`tree` 首项为根节点，2–5 项为子节点；`team` 2–4 人） | **组织架构树 / 核心管理团队介绍**：`tree` 带正交直角连接线；`team` 带圆标首字母头像与履历标签 |
+| **`mermaid`** | `flowchart \| sequence`（亦支持顶层别名） | `kicker, title, mermaid`（Mermaid 代码串）, `takeaway` | **原生可编辑 Mermaid 流程图与时序图**：Markdown 中 ```` ```mermaid ```` 自动识别，PPTX 编译为带附着连接点（`stCxn`/`endCxn`）的原生矢量图形与箭头 |
 | `closing` | `standard \| cta-cards \| inverted` | `kicker, title, subtitle, items / bullets` | 结束与行动号召页（自动隐藏页码；支持下一步行动卡片，拒绝孤立「谢谢」） |
 
 ### B. 5 套媒体与出版级图表版式（`@office-kit/pptx` 增强）

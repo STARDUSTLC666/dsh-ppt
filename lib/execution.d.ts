@@ -1,5 +1,5 @@
 import type { ResolvedPptConfig } from './config.js';
-import type { DeckEngine, PptAbsorbResult, PptCreateResult, PptThemesResult } from './types.js';
+import type { DeckEngine, PptAbsorbResult, PptCiteResult, PptCreateResult, PptRemotionResult, PptThemesResult } from './types.js';
 /** The Harness execution fields used by this plugin; optional for direct callers. */
 export interface PptExecution {
     readonly signal?: AbortSignal;
@@ -29,4 +29,9 @@ export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine
     render(rawArgs: unknown, exec?: PptExecution): Promise<import("./types.js").PptRenderResult>;
     data(rawArgs: unknown, exec?: PptExecution): Promise<PptCreateResult | Record<string, any>>;
     importPptx(rawArgs: unknown, exec?: PptExecution): Promise<PptCreateResult>;
+    fromOffice(rawArgs: unknown, exec?: PptExecution): Promise<PptCreateResult>;
+    cite(rawArgs: unknown, exec?: PptExecution): Promise<PptCiteResult & {
+        jsonPath?: string;
+    }>;
+    remotion(rawArgs: unknown, exec?: PptExecution): Promise<PptRemotionResult>;
 };

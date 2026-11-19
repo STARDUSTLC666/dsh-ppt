@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { buildDeckAsync, editDeck, undoDeck, renderHandoutMarkdown } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
+import { buildDeckAsync, editDeck, undoDeck, renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { renderHtml, resolveLanguage, resolveTheme } from '../skills/dsh-ppt/scripts/deck-core.mjs'
 
 const link = (html, id) => new RegExp(`id="${id}" href="([^"]+)"`).exec(html)?.[1]
@@ -82,4 +82,84 @@ test('delivery includes Presenter Console (BroadcastChannel, Laser, Pace, A+/A-)
   const standaloneMd = renderHandoutMarkdown({ title: 'Standalone', slides: [{ layout: 'bullets', title: 'Slide A', bullets: ['Fact 1'] }] }, 'en')
   assert.match(standaloneMd, /Speaker Handout & Script/)
   assert.match(standaloneMd, /Fact 1/)
+})
+
+test('Speaking-Pace Time Budgeter, Executive One-Pager, and 3-file default invariant', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'ppt-onepager-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+
+  // Default mode strictly preserves 3 files on disk (.html, .pptx, .json) while embedding #download-onepager Blob
+  const defaultOut = await buildDeckAsync({
+    title: '配速与一页纸测试',
+    targetMinutes: 5,
+    slides: [
+      { layout: 'cover', title: '配速与一页纸测试', subtitle: '副标题论证' },
+      { layout: 'kpi', title: '核心增长指标', items: [{ tag: '营收', value: '1.84', unit: '亿', delta: '+38%' }], takeaway: '增长稳健' },
+      {
+        layout: 'chart-split',
+        title: '季度趋势领跑',
+        chart: { kind: 'column', categories: ['Q1', 'Q2', 'Q3'], series: [{ name: '收入', values: [40, 55, 78] }], highlight: 'max' },
+        items: [{ tag: '峰值', title: 'Q3 达 78', text: '创年内新高' }],
+        notes: '这是一段非常长的演讲者备注，用来触发单页超过目标配速切片或者超过一百五十秒的预算告警。'.repeat(10),
+      },
+      { layout: 'closing', title: '下一步计划', subtitle: 'Q1 启动试点' },
+    ],
+    outputDir: dir,
+    fileName: 'default-three',
+  })
+
+  assert.deepEqual(readdirSync(dir).sort(), ['default-three.html', 'default-three.json', 'default-three.pptx'])
+  assert.equal(Object.keys(defaultOut.files).length, 3)
+  assert.equal(defaultOut.onePagerPath, undefined)
+  assert.ok(defaultOut.paceBudget.overBudgetSlides.includes(3), 'long notes + chart bonus triggers over-budget on slide 3')
+
+  const defaultHtml = readFileSync(defaultOut.htmlPath, 'utf8')
+  assert.match(defaultHtml, /id="download-onepager"/)
+  assert.match(defaultHtml, /id="review-pace"/)
+
+  // Explicit onePager: true writes .onepager.html
+  const opDir = mkdtempSync(join(tmpdir(), 'ppt-onepager-explicit-'))
+  t.after(() => rmSync(opDir, { recursive: true, force: true }))
+  const opOut = await buildDeckAsync({
+    title: '显式一页纸导出',
+    onePager: true,
+    targetMinutes: 4,
+    slides: [
+      { layout: 'cover', title: '显式一页纸导出', subtitle: '高管摘要' },
+      { layout: 'kpi', title: '关键指标', items: [{ tag: 'ARR', value: '$12M', delta: '+42%' }] },
+      { layout: 'closing', title: '行动清单', items: [{ tag: 'W1', title: '完成签核', text: '负责人确认' }] },
+    ],
+    outputDir: opDir,
+    fileName: 'with-op',
+  })
+  assert.equal(Object.keys(opOut.files).length, 3)
+  assert.ok(opOut.onePagerPath && existsSync(opOut.onePagerPath))
+  const opHtml = readFileSync(opOut.onePagerPath, 'utf8')
+  assert.match(opHtml, /切换长图战报|Mobile Long-Card/)
+  assert.match(opHtml, /@media print/)
+  assert.match(opHtml, /\$12M/)
+
+  // Standalone computePaceBudget + renderOnePagerHtml
+  const pace = computePaceBudget({
+    title: 'Pace Unit',
+    slides: [
+      { layout: 'cover', title: 'Cover' },
+      { layout: 'bullets', title: 'Dense', notes: 'word '.repeat(420) },
+      { layout: 'bullets', title: 'Short', notes: 'Hi' },
+    ],
+  }, 5)
+  assert.equal(pace.targetMinutes, 5)
+  assert.ok(pace.overBudgetSlides.includes(2))
+  assert.ok(pace.underBudgetSlides.includes(3))
+
+  const standaloneOp = renderOnePagerHtml({
+    title: 'One Pager EN',
+    theme: 'consulting',
+    slides: [
+      { layout: 'cover', title: 'One Pager EN', subtitle: 'Thesis line' },
+      { layout: 'chart', title: 'Revenue', chart: { kind: 'column', categories: ['A', 'B'], series: [{ name: 'Rev', values: [10, 20] }] } },
+    ],
+  }, 'en')
+  assert.match(standaloneOp, /Mobile Long-Card/)
+  assert.match(standaloneOp, /<svg/)
 })
