@@ -1,6 +1,7 @@
 // Shared geometry, media framing, and publication-grade chart compilers (SVG + OOXML + @office-kit/pptx).
 import { resolveChromeStyle } from './deck-themes.mjs'
 import { getChromeConfig, computeBadgePillWidth, roundRectAdj } from './deck-layouts.mjs'
+import { resolveActiveTaste } from './deck-taste.mjs'
 
 export const MEDIA_LAYOUTS = new Set(['image', 'image-left', 'image-right', 'chart', 'chart-split'])
 export const CHART_KINDS = Object.freeze([
@@ -11,10 +12,25 @@ export const CANVAS = { w: 13.3333333333, h: 7.5 }
 export const LOGO_BOX = { x: 11.55, y: 0.18, w: 0.95, h: 0.42 }
 export const FOOTER_BOX = { x: 0.65, y: 6.98, w: 9.2, h: 0.28 }
 
-export function mediaBoxes(layout, variantInput, slide = {}) {
+function hasChartAnnotationStrip(slide, manifest = {}) {
+  if (!slide?.chart || slide.chart.kind === 'waterfall') return false
+  if (slide.layout !== 'chart' && slide.layout !== 'chart-split') return false
+  const c = slide.chart
+  if (c.referenceLine && Number.isFinite(c.referenceLine.value)) return true
+  if (c.callout?.label) return true
+  const taste = resolveActiveTaste(manifest, slide)
+  if ((c.showGrowthCallout || taste.chartGrowthCallout) && ['column', 'bar', 'line', 'area', 'combo'].includes(c.kind)) {
+    const vals = c.series?.[0]?.values || []
+    if (vals.length >= 2 && Math.abs(vals[0]) > 1e-9) return true
+  }
+  return false
+}
+
+export function mediaBoxes(layout, variantInput, slide = {}, manifest = {}) {
   const variant = String(variantInput ?? slide?.variant ?? '').trim().toLowerCase()
   const hasTakeaway = Boolean(slide?.takeaway && String(slide.takeaway).trim())
   const hasCaption = Boolean((slide?.image?.caption && String(slide.image.caption).trim()) || (slide?.chart?.caption && String(slide.chart.caption).trim()))
+  const annotReserve = hasChartAnnotationStrip(slide, manifest) ? 0.36 : 0
   const bottomLimit = hasTakeaway ? (hasCaption ? 5.80 : 6.04) : 6.42
   const bodyTop = 1.68
   const bodyH = +(bottomLimit - bodyTop).toFixed(3)
@@ -52,8 +68,8 @@ export function mediaBoxes(layout, variantInput, slide = {}) {
   if (layout === 'chart-split') {
     const chartRight = variant === 'chart-right'
     const chartBox = chartRight
-      ? { x: 5.32, y: bodyTop, w: 7.36, h: bodyH }
-      : { x: 0.65, y: bodyTop, w: 7.36, h: bodyH }
+      ? { x: 5.32, y: +(bodyTop + annotReserve).toFixed(3), w: 7.36, h: +(bodyH - annotReserve).toFixed(3) }
+      : { x: 0.65, y: +(bodyTop + annotReserve).toFixed(3), w: 7.36, h: +(bodyH - annotReserve).toFixed(3) }
     const sideBox = chartRight
       ? { x: 0.65, y: bodyTop, w: 4.35, h: bodyH }
       : { x: 8.33, y: bodyTop, w: 4.35, h: bodyH }
@@ -91,7 +107,7 @@ export function mediaBoxes(layout, variantInput, slide = {}) {
     image: { ...imageTarget, h: +(bodyH - 0.14).toFixed(3) },
     gallery,
     body: layout === 'image-left' ? right : layout === 'image-right' ? left : null,
-    chart: { ...full, h: +(bodyH - 0.12).toFixed(3) },
+    chart: { ...full, y: +(full.y + annotReserve).toFixed(3), h: +(bodyH - 0.12 - annotReserve).toFixed(3) },
     caption: captionBox,
     takeaway,
   }
@@ -201,12 +217,33 @@ export function normalizeChart(input, page = 1) {
   const totalIndices = Array.isArray(input.totalIndices)
     ? input.totalIndices.filter(n => Number.isInteger(n) && n >= 0 && n < categories.length)
     : undefined
+  const rawRef = input.referenceLine && typeof input.referenceLine === 'object' ? input.referenceLine : null
+  const refVal = rawRef ? Number(rawRef.value) : NaN
+  const referenceLine = Number.isFinite(refVal)
+    ? {
+        value: refVal,
+        ...(rawRef.label ? { label: String(rawRef.label).trim() } : {}),
+        ...(rawRef.color ? { color: String(rawRef.color).trim() } : {}),
+      }
+    : undefined
+  const rawCallout = input.callout && typeof input.callout === 'object' ? input.callout : null
+  const callout = rawCallout && String(rawCallout.label ?? '').trim()
+    ? {
+        label: String(rawCallout.label).trim(),
+        ...(Number.isInteger(rawCallout.fromIndex) ? { fromIndex: rawCallout.fromIndex } : {}),
+        ...(Number.isInteger(rawCallout.toIndex) ? { toIndex: rawCallout.toIndex } : {}),
+      }
+    : undefined
 
   return {
     kind,
     categories: categories.map(c => String(c).trim()),
     series: clean,
     ...(highlight !== undefined ? { highlight } : {}),
+    ...(typeof input.spotlight === 'boolean' ? { spotlight: input.spotlight } : {}),
+    ...(typeof input.showGrowthCallout === 'boolean' ? { showGrowthCallout: input.showGrowthCallout } : {}),
+    ...(referenceLine ? { referenceLine } : {}),
+    ...(callout ? { callout } : {}),
     ...(typeof input.showValues === 'boolean' ? { showValues: input.showValues } : {}),
     ...(typeof input.showLegend === 'boolean' ? { showLegend: input.showLegend } : {}),
     ...(totalIndices?.length ? { totalIndices } : {}),
@@ -589,8 +626,11 @@ export function renderChartSvg(chart, theme) {
       else shapes += text(left + (i + 0.5) * (right - left) / n, bottom + 28, category, 'middle', fg, 15)
     })
 
+    const effectiveHighlight = chart.highlight !== undefined
+      ? chart.highlight
+      : (chart.spotlight === true ? 'max' : undefined)
     const singleHighlights = chart.series.length === 1 && (kind === 'column' || kind === 'bar')
-      ? resolveHighlights(chart.series[0].values, chart.highlight)
+      ? resolveHighlights(chart.series[0].values, effectiveHighlight)
       : null
 
     if (isStacked || isPercent) {
@@ -652,7 +692,10 @@ export function renderChartSvg(chart, theme) {
             shapes += rect(bx, by, Math.max(3, w - 3), bh, color, 3)
             if (showDirectValues && barSeries.length <= 2) {
               if (kind === 'combo' && bh >= 24 && v >= 0) {
-                shapes += text(bx + (w - 3) / 2, by + 18, fmtNum(v), 'middle', tokens.inkOnAccent || '#FFFFFF', 13, 700)
+                const secYAtI = lineSeries[0] ? (lineSeries[0].secondaryAxis ? ySec : y)(lineSeries[0].values[i]) : -999
+                const topLabelY = by + 18
+                const safeBarY = Math.abs(secYAtI - topLabelY) < 28 && bh >= 48 ? by + bh - 12 : topLabelY
+                shapes += text(bx + (w - 3) / 2, safeBarY, fmtNum(v), 'middle', tokens.inkOnAccent || '#FFFFFF', 13, 700)
               } else {
                 shapes += text(bx + (w - 3) / 2, v >= 0 ? by - 8 : by + bh + 16, fmtNum(v), 'middle', isFocal ? fg : muted, 14, isFocal && singleHighlights ? 700 : 500)
               }
@@ -679,6 +722,53 @@ export function renderChartSvg(chart, theme) {
           }
         })
       })
+    }
+
+    // 基准参考虚线（Target / Average Benchmark Reference Line）
+    if (chart.referenceLine && Number.isFinite(chart.referenceLine.value)) {
+      const rv = chart.referenceLine.value
+      const rCol = chart.referenceLine.color || tokens.accentSecondary || focalColor
+      const rLbl = chart.referenceLine.label || `Target ${fmtNum(rv)}`
+      if (isHoriz && rv >= min && rv <= max) {
+        const rx = x(rv)
+        shapes += `<line x1="${rx.toFixed(1)}" y1="${top}" x2="${rx.toFixed(1)}" y2="${bottom}" stroke="${rCol}" stroke-width="1.8" stroke-dasharray="6 4"/>`
+        shapes += rect(Math.min(right - 130, rx + 6), top + 4, Math.max(84, rLbl.length * 10 + 18), 22, bg, 11)
+        shapes += text(Math.min(right - 122, rx + 14), top + 19, rLbl, 'start', rCol, 12, 700)
+      } else if (!isHoriz && rv >= min && rv <= max) {
+        const ry = y(rv)
+        const pw = Math.min(220, Math.max(82, rLbl.length * 11 + 22))
+        shapes += `<line x1="${left}" y1="${ry.toFixed(1)}" x2="${right}" y2="${ry.toFixed(1)}" stroke="${rCol}" stroke-width="1.8" stroke-dasharray="6 4"/>`
+        shapes += `<rect x="${(right - pw).toFixed(1)}" y="${(ry - 24).toFixed(1)}" width="${pw.toFixed(1)}" height="20" rx="10" fill="${bg}" stroke="${rCol}" stroke-width="1"/>`
+        shapes += text(right - pw / 2, ry - 10, rLbl, 'middle', rCol, 12, 700)
+      }
+    }
+
+    // 麦肯锡增长飞线标注箭弧（CAGR / Growth Callout Arc）
+    if (!isHoriz && !isStacked && !isPercent && n >= 2 && (chart.callout?.label || chart.showGrowthCallout)) {
+      const vals = chart.series[0]?.values || []
+      const fromIdx = Number.isInteger(chart.callout?.fromIndex) ? Math.max(0, Math.min(n - 1, chart.callout.fromIndex)) : 0
+      const toIdx = Number.isInteger(chart.callout?.toIndex) ? Math.max(0, Math.min(n - 1, chart.callout.toIndex)) : n - 1
+      const v0 = vals[fromIdx]
+      const v1 = vals[toIdx]
+      let badgeLabel = chart.callout?.label || ''
+      if (!badgeLabel && Number.isFinite(v0) && Number.isFinite(v1) && Math.abs(v0) > 1e-9 && fromIdx !== toIdx) {
+        const pct = ((v1 - v0) / Math.abs(v0)) * 100
+        badgeLabel = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'
+      }
+      if (badgeLabel && fromIdx !== toIdx) {
+        const x0 = left + (fromIdx + 0.5) * (right - left) / n
+        const x1 = left + (toIdx + 0.5) * (right - left) / n
+        const y0 = Math.max(top + 24, y(v0) - 24)
+        const y1 = Math.max(top + 24, y(v1) - 24)
+        const yArc = Math.max(top + 4, Math.min(y0, y1) - 22)
+        const midX = (x0 + x1) / 2
+        const cCol = v1 >= v0 ? posColor : negColor
+        const pw = Math.min(180, Math.max(76, badgeLabel.length * 10 + 24))
+        shapes += `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} L ${x0.toFixed(1)} ${yArc.toFixed(1)} L ${x1.toFixed(1)} ${yArc.toFixed(1)} L ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${cCol}" stroke-width="1.8"/>`
+        shapes += `<polygon points="${(x1 - 5).toFixed(1)},${(y1 - 7).toFixed(1)} ${(x1 + 5).toFixed(1)},${(y1 - 7).toFixed(1)} ${x1.toFixed(1)},${(y1 + 1).toFixed(1)}" fill="${cCol}"/>`
+        shapes += `<rect x="${(midX - pw / 2).toFixed(1)}" y="${(yArc - 11).toFixed(1)}" width="${pw.toFixed(1)}" height="22" rx="11" fill="${bg}" stroke="${cCol}" stroke-width="1.2"/>`
+        shapes += text(midX, yArc + 4, badgeLabel, 'middle', cCol, 12.5, 700)
+      }
     }
 
     shapes += isHoriz ? line(x(0), top, x(0), bottom, axisColor, 1.5) : line(left, y(0), right, y(0), axisColor, 1.5)
@@ -737,7 +827,7 @@ function projectInsightCards(slide) {
 }
 
 export function renderMediaHtml(slide, manifest, theme) {
-  const boxes = mediaBoxes(slide.layout, slide.variant, slide)
+  const boxes = mediaBoxes(slide.layout, slide.variant, slide, manifest)
   const variant = String(slide.variant ?? '').trim().toLowerCase()
   const chromeStyle = resolveChromeStyle(theme, slide, manifest?.brand)
   const slidesArr = Array.isArray(manifest?.slides) ? manifest.slides : []
@@ -783,7 +873,13 @@ export function renderMediaHtml(slide, manifest, theme) {
   }
 
   if (slide.layout === 'chart' || slide.layout === 'chart-split') {
-    body += `<div class="media-chart" style="${position(boxes.chart)}">${renderChartSvg(slide.chart, theme)}</div>`
+    const taste = resolveActiveTaste(manifest, slide)
+    const chartWithTaste = {
+      ...slide.chart,
+      ...(slide.chart?.highlight === undefined && slide.chart?.spotlight === undefined && taste.chartSpotlight ? { spotlight: true } : {}),
+      ...(slide.chart?.showGrowthCallout === undefined && !slide.chart?.callout && taste.chartGrowthCallout ? { showGrowthCallout: true } : {}),
+    }
+    body += `<div class="media-chart" style="${position(boxes.chart)}">${renderChartSvg(chartWithTaste, theme)}</div>`
     if (slide.layout === 'chart-split' && boxes.body) {
       const cards = projectInsightCards(slide)
       const cardsHtml = cards.map((card, idx) =>
@@ -955,16 +1051,17 @@ export function buildOfficeKitChartSpec(chart, theme, visual = {}, font = 'Micro
     : 'clustered'
 
   let highlightSet = null
-  if (chart.series.length === 1 && (kind === 'column' || kind === 'bar') && chart.highlight !== undefined && chart.highlight !== 'none') {
+  const effHighlight = chart.highlight !== undefined ? chart.highlight : (chart.spotlight === true ? 'max' : undefined)
+  if (chart.series.length === 1 && (kind === 'column' || kind === 'bar') && effHighlight !== undefined && effHighlight !== 'none') {
     const vals = chart.series[0].values
-    if (typeof chart.highlight === 'number') highlightSet = new Set([chart.highlight])
-    else if (Array.isArray(chart.highlight)) highlightSet = new Set(chart.highlight)
-    else if (chart.highlight === 'last') highlightSet = new Set([vals.length - 1])
-    else if (chart.highlight === 'max') {
+    if (typeof effHighlight === 'number') highlightSet = new Set([effHighlight])
+    else if (Array.isArray(effHighlight)) highlightSet = new Set(effHighlight)
+    else if (effHighlight === 'last') highlightSet = new Set([vals.length - 1])
+    else if (effHighlight === 'max') {
       let best = 0
       for (let i = 1; i < vals.length; i++) if (vals[i] > vals[best]) best = i
       highlightSet = new Set([best])
-    } else if (chart.highlight === 'min') {
+    } else if (effHighlight === 'min') {
       let best = 0
       for (let i = 1; i < vals.length; i++) if (vals[i] < vals[best]) best = i
       highlightSet = new Set([best])
@@ -1124,7 +1221,7 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
 
   const toEmu = v => Math.round(v * 914400)
   const boxEmu = b => ({ x: toEmu(b.x), y: toEmu(b.y), w: toEmu(b.w), h: toEmu(b.h) })
-  const boxes = mediaBoxes(slide.layout, slide.variant, slide)
+  const boxes = mediaBoxes(slide.layout, slide.variant, slide, manifest)
   const variant = String(slide.variant ?? '').trim().toLowerCase()
   const isBleed = variant === 'full-bleed' || variant === 'split-bleed'
   let nextId = (index + 1) * 100 + 2
@@ -1348,6 +1445,53 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
     shapes.push(spLine('Waterfall Baseline', plotLeft, Math.round(geom.zeroY), plotRight, Math.round(geom.zeroY), secondary, 15875, 'solid'))
     if (slide.chart.unit) {
       shapes.push(spText('Waterfall Unit', { x: plotRight - 1400000, y: cb.y, w: 1400000, h: 200000 }, [paraRich(slide.chart.unit, { size: 1100, color: muted, align: 'r' })], { ins: [0, 0, 0, 0] }))
+    }
+  }
+
+  // 原生图表顶部精修标注徽章（麦肯锡增长飞线结论 / 基准参考线提示，避免遮挡柱体，原生可编辑）
+  if ((slide.layout === 'chart' || slide.layout === 'chart-split') && slide.chart && slide.chart.kind !== 'waterfall') {
+    const taste = resolveActiveTaste(manifest, slide)
+    const chartObj = slide.chart
+    const badges = []
+    if (chartObj.callout?.label || chartObj.showGrowthCallout || taste.chartGrowthCallout) {
+      const vals = chartObj.series?.[0]?.values || []
+      const fromIdx = Number.isInteger(chartObj.callout?.fromIndex) ? Math.max(0, Math.min(vals.length - 1, chartObj.callout.fromIndex)) : 0
+      const toIdx = Number.isInteger(chartObj.callout?.toIndex) ? Math.max(0, Math.min(vals.length - 1, chartObj.callout.toIndex)) : vals.length - 1
+      let gText = chartObj.callout?.label || ''
+      let isPos = true
+      if (vals.length >= 2 && fromIdx !== toIdx) {
+        const v0 = vals[fromIdx]
+        const v1 = vals[toIdx]
+        isPos = v1 >= v0
+        if (!gText && Math.abs(v0) > 1e-9 && ['column', 'bar', 'line', 'area', 'combo'].includes(chartObj.kind)) {
+          const pct = ((v1 - v0) / Math.abs(v0)) * 100
+          gText = `${chartObj.categories[fromIdx]}→${chartObj.categories[toIdx]}  ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+        }
+      }
+      if (gText) badges.push({ text: gText, color: isPos ? posColor : negColor })
+    }
+    if (chartObj.referenceLine && Number.isFinite(chartObj.referenceLine.value)) {
+      const rLbl = chartObj.referenceLine.label || `${isEn ? 'Target' : '基准线'} ${chartObj.referenceLine.value}`
+      badges.push({ text: '┄ ' + rLbl, color: chartObj.referenceLine.color || accent2 })
+    }
+    if (badges.length > 0 && boxes.chart) {
+      let curRight = boxes.chart.x + boxes.chart.w
+      const badgeY = Math.max(1.66, boxes.chart.y - 0.35)
+      badges.forEach((b, bi) => {
+        const bw = computeBadgePillWidth(b.text, 10.5, 3.6, 1.15)
+        curRight -= bw
+        if (curRight >= boxes.chart.x + 0.4) {
+          shapes.push(spText('Chart Annotation ' + (bi + 1), { x: curRight, y: badgeY, w: bw, h: 0.28 }, [paraRich(b.text, { size: 1050, color: b.color, bold: true, align: 'ctr' })], {
+            anchor: 'ctr',
+            fill: t.canvas || p.bg || '#FFFFFF',
+            stroke: b.color,
+            strokeW: 9525,
+            roundAdj: 50000,
+            ins: [45720, 9144, 45720, 9144],
+          }))
+          curRight -= 0.12
+        }
+      })
     }
   }
 

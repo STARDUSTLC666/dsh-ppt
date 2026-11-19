@@ -1023,6 +1023,10 @@ function normalizeSlideContent(raw, index) {
   const variant = stripInlineMarkdown(source.variant ?? alias?.variant ?? '')
   const rawChrome = typeof source.chrome === 'string' ? source.chrome.trim() : ''
   const chrome = VALID_CHROME_STYLES.has(rawChrome) ? rawChrome : undefined
+  const rawMat = typeof source.cardMaterial === 'string' ? source.cardMaterial.trim().toLowerCase() : ''
+  const cardMaterial = ['solid', 'frameless', 'glass', 'editorial-rule'].includes(rawMat) ? rawMat : undefined
+  const rawIconMode = typeof source.iconMode === 'string' ? source.iconMode.trim().toLowerCase() : ''
+  const iconMode = ['off', 'explicit', 'auto'].includes(rawIconMode) ? rawIconMode : undefined
   const title = stripInlineMarkdown(source.title ?? '')
   const subtitle = cleanRichText(source.subtitle ?? '')
   const kicker = stripInlineMarkdown(source.kicker ?? '')
@@ -1068,6 +1072,8 @@ function normalizeSlideContent(raw, index) {
   const commonExtras = {
     ...(variant !== '' ? { variant } : {}),
     ...(chrome ? { chrome } : {}),
+    ...(cardMaterial ? { cardMaterial } : {}),
+    ...(iconMode ? { iconMode } : {}),
     ...(formula !== '' ? { formula } : {}),
     ...(mermaid !== '' ? { mermaid } : {}),
     ...(takeaway !== '' ? { takeaway } : {}),

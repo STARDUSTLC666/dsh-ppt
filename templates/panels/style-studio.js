@@ -17,12 +17,12 @@ function pptChromeLabel(id) {
 }
 
 const PPT_LAYOUT_CATALOG = Object.freeze([
-  { id: 'cover', zh: '封面', en: 'Cover', group: 'framing', variants: [['standard', '标准', 'Standard'], ['monolith', '色块横幅', 'Monolith'], ['editorial', '社论留白', 'Editorial'], ['swiss-grid', '瑞士栅格', 'Swiss grid'], ['inverted', '深底反白', 'Inverted']] },
+  { id: 'cover', zh: '封面', en: 'Cover', group: 'framing', variants: [['default', '标准', 'Standard'], ['keynote-glow', '发布会光晕', 'Keynote glow'], ['editorial-grid', '瑞士网格杂志', 'Editorial grid'], ['architectural', '建筑感非对称', 'Architectural'], ['split-bleed', '满版分屏', 'Split bleed'], ['monolith', '色块横幅', 'Monolith'], ['inverted', '深底反白', 'Inverted']] },
   { id: 'agenda', zh: '目录议程', en: 'Agenda', group: 'framing', variants: [['list', '列表目录', 'List'], ['cards', '卡片目录', 'Cards']] },
-  { id: 'section', zh: '章节过渡', en: 'Section', group: 'framing', variants: [['minimal', '极简章节', 'Minimal'], ['number-hero', '大数字序号', 'Number hero'], ['inverted', '深色反白', 'Inverted']] },
+  { id: 'section', zh: '章节过渡', en: 'Section', group: 'framing', variants: [['agenda', '实时议程进度', 'Live agenda'], ['minimal', '极简章节', 'Minimal'], ['number-hero', '大数字序号', 'Number hero'], ['inverted', '深色反白', 'Inverted']] },
   { id: 'bullets', zh: '核心要点', en: 'Bullets', group: 'structured', quick: true, variants: [['clean', '清爽列表', 'Clean'], ['accent-rail', '强调竖线', 'Accent rail'], ['ruled', '分割细线', 'Ruled'], ['two-column', '双栏要点', 'Two-column']] },
-  { id: 'cards', zh: 'Bento / 支柱卡', en: 'Cards & Bento', group: 'structured', quick: true, variants: [['pillars', '并列支柱卡', 'Pillars'], ['bento', 'Bento 网格', 'Bento grid'], ['exec-summary', '结论+三支柱', 'Exec summary'], ['numbered', '编号卡片', 'Numbered']] },
-  { id: 'kpi', zh: '大数字指标 KPI', en: 'KPI metrics', group: 'structured', quick: true, variants: [['grid', '指标矩阵', 'Grid'], ['hero-left', '主指标左置', 'Hero left'], ['banner', '通栏指标', 'Banner']] },
+  { id: 'cards', zh: 'Bento / 支柱卡', en: 'Cards & Bento', group: 'structured', quick: true, variants: [['pillars', '并列支柱卡', 'Pillars'], ['frameless', '无框通透列', 'Frameless'], ['bento-hero', '反白主卡 Bento', 'Bento hero'], ['bento', 'Bento 网格', 'Bento grid'], ['exec-summary', '结论+三支柱', 'Exec summary'], ['numbered', '编号卡片', 'Numbered']] },
+  { id: 'kpi', zh: '大数字指标 KPI', en: 'KPI metrics', group: 'structured', quick: true, variants: [['spotlight', '主次聚光灯', 'Spotlight'], ['frameless', '无框大数字', 'Frameless'], ['grid', '指标矩阵', 'Grid'], ['hero-left', '主指标左置', 'Hero left'], ['banner', '通栏指标', 'Banner']] },
   { id: 'comparison', zh: '双栏 / 痛点对比', en: 'Comparison', group: 'structured', quick: true, variants: [['versus', 'A/B 对比', 'Versus'], ['before-after', '前后对比', 'Before / after'], ['do-dont', '推荐 vs 避免', 'Do / don’t'], ['issue-action', '痛点 → 举措', 'Issue → action']] },
   { id: 'process', zh: '流程 / 价值链 / 飞轮', en: 'Process & value chain', group: 'structured', quick: true, variants: [['steps', '推进步骤', 'Steps'], ['chevron', '价值链箭头', 'Value-chain chevrons'], ['timeline', '里程碑时间轴', 'Timeline'], ['layers', '架构分层', 'Layers'], ['funnel', '转化漏斗', 'Funnel'], ['flywheel', '增长飞轮', 'Flywheel']] },
   { id: 'matrix', zh: '2×2 四象限矩阵', en: '2×2 Matrix', group: 'structured', quick: true, variants: [['2x2', '四象限坐标轴', '2×2 quadrant'], ['grid', '四宫格', 'Grid']] },
@@ -476,11 +476,17 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   const masterPresets = Array.isArray(project?.presets) && project.presets.length > 0
     ? project.presets
     : PPT_FALLBACK_MASTER_PRESETS.map(p => ({ id: p.id, name: L(p.zh, p.en), sourceStyle: L(p.metaZh, p.metaEn), theme: p.theme, brand: p.brand }));
+  const tasteRecipes = Array.isArray(project?.tasteRecipes) ? project.tasteRecipes : [];
+  const activeTasteId = typeof project?.taste === 'string'
+    ? project.taste
+    : (project?.taste?.id || project?.brand?.taste || '');
   const lightThemes = themes.filter(item => !item.dark);
   const darkThemes = themes.filter(item => item.dark);
   const savedBrand = project?.brand || {};
   const activeThemeMeta = themes.find(item => item.id === project?.theme);
   const activeChromeStyle = savedBrand.chromeStyle || activeThemeMeta?.chromeStyle || '';
+  const activeCardMaterial = savedBrand.cardMaterial || 'solid';
+  const activeIconMode = savedBrand.iconMode || 'explicit';
   const [brandDraft, setBrandDraft] = React.useState(() => ({
     name: savedBrand.name || '',
     primaryColor: savedBrand.primaryColor || '',
@@ -658,6 +664,65 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     h('p', { className: 'muted' }, L('无需手调设计参数：可一键直吸名家范本、切换 24 套大师明暗主题，或拖拽企业参考 PPTX 提取配色、双字体、封面反白与母版骨架。所有更改同步更新 HTML 与可编辑 PPTX，且支持撤销。', 'Apply curated master deck DNA in one click, switch 24 themes, or drop a reference .pptx to absorb its palette, font pairing, cover polarity, and skeleton with undo.')),
     blocked ? h('p', { className: 'dirty' }, L('请先保存或取消“内容编辑 / 数据推演”中的未保存修改，再切换全稿风格。', 'Save or discard unsaved content or scenario edits before restyling the presentation.')) : null,
 
+    tasteRecipes.length > 0 ? h('div', { className: 'ppt-theme-section' },
+      h('div', { className: 'ppt-theme-card-top' },
+        h('h4', null, L('大师审美配方（8 大流派一键换灵魂）', 'Aesthetic Taste Recipes (8 Design Schools)')),
+        activeTasteId ? h('button', {
+          type: 'button',
+          className: 'ppt-pill',
+          disabled,
+          onClick: () => onApplyAbsorbed({ taste: null }),
+        }, L('清除配方', 'Clear recipe')) : null),
+      h('p', { className: 'muted' }, L('一键同步切换海报级封面构图、卡片材质（无框/玻璃/出版双线）、议程进度章节页、原生矢量图标与图表聚光灯标注。', 'Atomically applies poster covers, surface materiality (frameless/glass/editorial), live agenda chapters, native vector icons, and spotlight charts.')),
+      h('div', { className: 'ppt-theme-grid', role: 'group', 'aria-label': L('大师审美配方', 'Aesthetic Taste Recipes') }, tasteRecipes.map(recipe => {
+        const isCurrent = activeTasteId === recipe.id;
+        const sw = Array.isArray(recipe.swatches) ? recipe.swatches : [];
+        return h('button', {
+          type: 'button',
+          key: recipe.id,
+          className: 'ppt-theme-card',
+          'data-dsh-card': '',
+          'data-taste-id': recipe.id,
+          'aria-pressed': isCurrent ? 'true' : 'false',
+          disabled,
+          onClick: () => onApplyAbsorbed({ taste: recipe.id }),
+        },
+          h('div', { className: 'ppt-theme-card-top' },
+            h('span', { className: 'ppt-swatch-row', 'aria-hidden': 'true' },
+              sw.slice(0, 4).map((hex, si) => h('span', { key: si, className: 'ppt-swatch-dot', style: { backgroundColor: hex } }))),
+            isCurrent ? h('span', { className: 'w-tag' }, L('已应用', 'Active')) : (!recipe.builtin ? h('span', { className: 'w-tag' }, L('已吸收', 'Absorbed')) : null)),
+          h('strong', { className: 'ppt-theme-name', 'data-dsh-serif': '' }, languageOf() === 'en' ? (recipe.enName || recipe.name) : recipe.name),
+          h('span', { className: 'ppt-theme-meta' }, languageOf() === 'en' ? (recipe.enDescription || recipe.description) : recipe.description));
+      }))) : null,
+
+    h('div', { className: 'ppt-theme-section' },
+      h('h4', null, L('卡片材质与原生矢量图标', 'Surface Materiality & Native Vector Icons')),
+      h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('卡片材质', 'Card materiality') }, [
+        ['solid', '实心卡片', 'Solid cards'],
+        ['frameless', '无框发丝线', 'Frameless'],
+        ['glass', '玻璃拟态', 'Glass'],
+        ['editorial-rule', '出版物双线', 'Editorial rule'],
+      ].map(([id, zh, en]) => h('button', {
+        type: 'button',
+        key: id,
+        className: 'ppt-pill',
+        'aria-pressed': activeCardMaterial === id ? 'true' : 'false',
+        disabled,
+        onClick: () => onApplyBrand({ cardMaterial: id }),
+      }, L(zh, en)))),
+      h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('矢量图标模式', 'Vector icon mode') }, [
+        ['auto', '自动语义图标', 'Auto semantic icons'],
+        ['explicit', '仅显式图标', 'Explicit icons'],
+        ['off', '关闭图标', 'Icons off'],
+      ].map(([id, zh, en]) => h('button', {
+        type: 'button',
+        key: id,
+        className: 'ppt-pill',
+        'aria-pressed': activeIconMode === id ? 'true' : 'false',
+        disabled,
+        onClick: () => onApplyBrand({ iconMode: id }),
+      }, L(zh, en))))),
+
     savedVault.length > 0 ? h('div', { className: 'ppt-theme-section' },
       h('h4', null, L('我的已收藏企业品牌（一键复用）', 'My Saved Brand Presets')),
       h('div', { className: 'ppt-theme-grid' }, savedVault.map(item =>
@@ -760,7 +825,10 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
           L('页面骨架序列：', 'Slide sequence: ') + absorbed.slideSkeleton.slice(0, 10).map(s => 'P' + s.slideNumber + ':' + s.inferredLayout + (s.variant ? '[' + s.variant + ']' : '')).join(' → ') + (absorbed.slideSkeleton.length > 10 ? ' …' : '')) : null,
         absorbed.narrativeProfile && typeof absorbed.narrativeProfile.diagramRatio === 'number' ? h('p', { className: 'muted' },
           L('版式诊断：专业图示占比 ', 'Layout recipe: diagram ratio ') + Math.round(absorbed.narrativeProfile.diagramRatio * 100) + '%' +
-          (absorbed.recommendedTableStyle ? ' · ' + L('推荐表格：', 'Table style: ') + absorbed.recommendedTableStyle : '')) : null,
+          (absorbed.recommendedTableStyle ? ' · ' + L('推荐表格：', 'Table style: ') + absorbed.recommendedTableStyle : '') +
+          (absorbed.styleRecipe && typeof absorbed.styleRecipe.whitespaceRatio === 'number'
+            ? ' · ' + L('留白率 ', 'Whitespace ') + Math.round(absorbed.styleRecipe.whitespaceRatio * 100) + '% · ' + L('材质 ', 'Material ') + absorbed.styleRecipe.cardMaterial
+            : '')) : null,
         absorbed.sanitizedBrand ? h('div', { className: 'ppt-swatch-row' },
           [absorbed.sanitizedBrand.backgroundColor, absorbed.sanitizedBrand.primaryColor, absorbed.sanitizedBrand.secondaryColor, absorbed.sanitizedBrand.textColor].filter(Boolean).map((hex, i) =>
             h('span', { key: i, className: 'ppt-swatch-chip' },
@@ -771,9 +839,15 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
         Array.isArray(absorbed.warnings) && absorbed.warnings.length > 0 ? h('p', { className: 'muted' }, absorbed.warnings.join(' ')) : null,
         absorbed.sanitizedBrand?.logo ? h('img', { className: 'image-preview', src: absorbed.sanitizedBrand.logo, alt: L('提取的母版 Logo', 'Extracted master logo') }) : null,
         h('div', { className: 'tools' },
-          h('button', {
+          absorbed.styleRecipe ? h('button', {
             type: 'button',
             className: 'primary',
+            disabled,
+            onClick: () => onApplyAbsorbed({ taste: absorbed.styleRecipe }),
+          }, L('套用完整品味配方（含材质与节奏）', 'Apply full absorbed Taste Recipe')) : null,
+          h('button', {
+            type: 'button',
+            className: absorbed.styleRecipe ? '' : 'primary',
             disabled,
             onClick: () => onApplyAbsorbed({
               theme: absorbed.recommendedTheme || project.theme,
@@ -781,7 +855,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
                 ? { ...(absorbed.sanitizedBrand || {}), ...(!absorbed.sanitizedBrand?.chromeStyle && absorbed.recommendedChrome ? { chromeStyle: absorbed.recommendedChrome } : {}) }
                 : null,
             }),
-          }, L('一键应用吸收的主题与品牌', 'Apply absorbed theme & brand')),
+          }, L('仅应用吸收的配色与字体', 'Apply palette & fonts only')),
           h('button', { type: 'button', disabled, onClick: saveCurrentAbsorbedToVault }, L('收藏到我的品牌库', 'Save to My Brand Library')),
           h('button', { type: 'button', disabled, onClick: () => { setAbsorbed(null); setAbsorbedName(''); } }, L('清除预览', 'Dismiss')))) : null),
 

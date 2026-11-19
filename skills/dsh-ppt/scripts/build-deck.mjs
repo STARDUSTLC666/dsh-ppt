@@ -17,7 +17,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listThemes, THEME_IDS, DEFAULT_THEME } from './deck-themes.mjs'
 import { CHROME_STYLE_IDS } from './deck-absorb.mjs'
-import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck } from './deck-advanced.mjs'
+import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes } from './deck-advanced.mjs'
 
 const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
@@ -33,7 +33,10 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --reference-pptx <path> 只读吸收本地参考 .pptx 的净化双色板、双字体、封面反白、母版 Logo 与骨架
   --clone-structure       配合 --reference-pptx 使用，克隆参考文稿的逐页版式骨架与母版 chrome
   --chrome <style>        母版骨架风格：${CHROME_STYLE_IDS.join(' / ')}
-  --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架与逐页分布 JSON
+  --taste <id>            大师审美配方 ID（mckinsey-partner / apple-keynote-dark / apple-keynote-light / swiss-editorial / linear-craft / ft-data-journal / nature-academic / oriental-zen 或已吸收自定义 ID）
+  --save-taste <id>       配合 --absorb 将标杆 .pptx 深度提炼并保存为可复用品味配方
+  --list-tastes           列出内置 8 套大师审美配方及当前工作区已吸收的标杆配方
+  --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架、深度审美配方 styleRecipe 与逐页分布 JSON
   --import-pptx <path>    导入外部 .pptx 全量内容（标题/要点/表格/图表/图片/备注）并一键翻新为 dsh-ppt 工程
   --from-office <path>    直吞 .xlsx / .csv / .tsv / .docx 数据表或 Word 报告，自动画像并生成全套文稿
   --sync-pptx <path>      将 Office 修改后的 .pptx 内容回导同步至已有工程（自动写入 .history/ 支持撤销）
@@ -91,11 +94,14 @@ export function parseArgv(argv) {
     if (key === '--help' || key === '-h') args.help = true
     else if (key === '--list-themes') args.listThemes = true
     else if (key === '--list-templates') args.listTemplates = true
+    else if (key === '--list-tastes') args.listTastes = true
     else if (key === '--overwrite') args.overwrite = true
     else if (key === '--smart-layout') args.smartLayout = true
     else if (key === '--no-smart-layout') args.smartLayout = false
     else if (key === '--clone-structure') args.cloneStructure = true
     else if (key === '--chrome') args.chrome = nextValue()
+    else if (key === '--taste') args.taste = nextValue()
+    else if (key === '--save-taste') args.saveTaste = nextValue()
     else if (key === '--title') args.title = nextValue()
     else if (key === '--content') args.content = nextValue()
     else if (key === '--slides') args.slides = readJson(nextValue())
@@ -159,6 +165,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return 0
   }
   if (args.listTemplates) { log(JSON.stringify({ templates: listTemplates(args.lang) }, null, 2)); return 0 }
+  if (args.listTastes) { log(JSON.stringify({ tasteRecipes: listAllTasteRecipes(process.cwd()) }, null, 2)); return 0 }
   if ([args.edit && !args.syncPptx ? args.edit : null, args.undo, args.check, args.render, args.absorb, args.importPptx, args.syncPptx, args.fromOffice].filter(Boolean).length > 1) {
     throw new Error('dsh-ppt CLI：--edit / --undo / --check / --render / --absorb / --import-pptx / --sync-pptx / --from-office 只能选择一项')
   }
@@ -209,7 +216,10 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return 0
   }
   if (args.absorb) {
-    const absorbed = await absorbPptx({ pptxPath: args.absorb })
+    const absorbed = await absorbPptx({
+      pptxPath: args.absorb,
+      ...(args.saveTaste ? { saveTasteAs: args.saveTaste } : {}),
+    })
     log(JSON.stringify(absorbed, null, 2))
     return 0
   }
@@ -231,6 +241,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
           deckPath: args.edit,
           edits: args.edits,
           theme: args.theme,
+          ...(args.taste ? { taste: args.taste } : {}),
           referencePptx: args.referencePptx,
           brand: effectiveBrand,
           ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
@@ -258,6 +269,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     content,
     slides,
     theme: args.theme,
+    ...(args.taste ? { taste: args.taste } : {}),
     persona: args.persona,
     referencePptx: args.referencePptx,
     cloneStructure: args.cloneStructure,

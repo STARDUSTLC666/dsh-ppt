@@ -14,9 +14,10 @@
  */
 
 import { lstatSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { inflateSync } from 'node:zlib'
 import { sanitizeAbsorbedTheme, normalizeHex, hexToHsl, relativeLuminance } from './deck-themes.mjs'
+import { sanitizeCustomTasteRecipe, saveWorkspaceTasteRecipe } from './deck-taste.mjs'
 
 const MAX_PPTX_BYTES = 64 * 1024 * 1024
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -1316,6 +1317,116 @@ export async function absorbPptx(options = {}) {
     recommendedTableStyle,
   }
 
+  // Phase 6：深度审美 DNA 提炼（留白比、卡片材质倾向、字阶倍率、封面构图、跨页节奏分 -> 可复用 StyleRecipe）
+  const canvasArea = Math.max(1, widthEmu * heightEmu)
+  let wsSamples = []
+  let filledBoxCount = 0
+  let totalContentShapes = 0
+  let maxTitlePt = 0
+  const bodyPts = []
+  for (const s of slides.slice(1, 9)) {
+    try {
+      const shs = flattenShapes(lib, lib.getSlideShapes(s) ?? [])
+      let covered = 0
+      for (const sh of shs) {
+        const b = getBoundsSafe(lib, sh)
+        if (!b || b.w <= 0 || b.h <= 0) continue
+        if (b.w >= widthEmu * 0.88 && b.h >= heightEmu * 0.88) continue
+        totalContentShapes += 1
+        covered += Math.min(canvasArea * 0.45, b.w * b.h)
+        const fill = resolveShapeFillSafe(lib, pres, sh, rawTheme, colorMap)
+        if (fill) filledBoxCount += 1
+        const xml = typeof sh?.xml === 'string' ? sh.xml : ''
+        for (const m of xml.matchAll(/\bsz="(\d{3,4})"/g)) {
+          const pt = Number(m[1]) / 100
+          if (pt >= 22 && pt <= 72) maxTitlePt = Math.max(maxTitlePt, pt)
+          else if (pt >= 10 && pt <= 20) bodyPts.push(pt)
+        }
+      }
+      wsSamples.push(Math.max(0.18, Math.min(0.82, 1 - Math.min(0.82, covered / canvasArea))))
+    } catch { /* ignore */ }
+  }
+  const whitespaceRatio = wsSamples.length > 0
+    ? Number((wsSamples.reduce((a, b) => a + b, 0) / wsSamples.length).toFixed(2))
+    : 0.48
+  const density = whitespaceRatio >= 0.54 ? 'airy' : whitespaceRatio < 0.34 ? 'compact' : 'balanced'
+  const filledRatio = totalContentShapes > 0 ? filledBoxCount / totalContentShapes : 0.4
+  const inferredCardMaterial = sanitized.dark && rawSkeleton.cornerStyle !== 'sharp'
+    ? 'glass'
+    : recommendedChrome === 'editorial-folio'
+      ? 'editorial-rule'
+      : (filledRatio < 0.28 || whitespaceRatio >= 0.58)
+        ? 'frameless'
+        : 'solid'
+  const medianBodyPt = bodyPts.length > 0
+    ? bodyPts.sort((a, b) => a - b)[Math.floor(bodyPts.length / 2)]
+    : 15
+  const typeScaleRatio = maxTitlePt > 0
+    ? Number(Math.max(1.4, Math.min(3.0, maxTitlePt / Math.max(11, medianBodyPt))).toFixed(2))
+    : (recommendedChrome === 'keynote-spatial' ? 2.2 : 1.8)
+  const coverVariant = sanitized.dark
+    ? 'keynote-glow'
+    : recommendedChrome === 'editorial-folio'
+      ? 'editorial-grid'
+      : sanitized.sanitizedTokens.coverMode === 'inverted-accent'
+        ? 'inverted'
+        : rawSkeleton.hasSideSpine
+          ? 'architectural'
+          : 'architectural'
+  const sectionCount = slideSkeleton.filter((s) => s.inferredLayout === 'section').length
+  let layoutTransitions = 0
+  for (let i = 1; i < slideSkeleton.length; i += 1) {
+    if (slideSkeleton[i].inferredLayout !== slideSkeleton[i - 1].inferredLayout) layoutTransitions += 1
+  }
+  const rhythmScore = slideSkeleton.length > 1
+    ? Math.round((layoutTransitions / (slideSkeleton.length - 1)) * 100)
+    : 85
+
+  const baseId = String(options.saveTasteAs || coreTitle || (resolvedPath ? basename(resolvedPath, '.pptx') : 'absorbed-deck'))
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48) || 'absorbed-taste'
+
+  const styleRecipe = sanitizeCustomTasteRecipe({
+    id: baseId,
+    name: options.tasteName || coreTitle || (resolvedPath ? basename(resolvedPath, '.pptx') : '吸收的标杆品味'),
+    enName: options.tasteName || coreTitle || baseId,
+    school: recommendedChrome,
+    description: `提取自标杆 PPTX（${slideCount} 页）：${recommendedChrome} 骨架 · ${inferredCardMaterial} 材质 · 留白率 ${Math.round(whitespaceRatio * 100)}%`,
+    enDescription: `Absorbed benchmark (${slideCount} slides): ${recommendedChrome} chrome, ${inferredCardMaterial} cards, ${Math.round(whitespaceRatio * 100)}% whitespace`,
+    theme: sanitized.recommendedTheme,
+    chromeStyle: recommendedChrome,
+    tableStyle: recommendedTableStyle,
+    cardMaterial: inferredCardMaterial,
+    coverVariant,
+    sectionVariant: sectionCount >= 2 ? 'agenda' : 'default',
+    kpiVariant: whitespaceRatio >= 0.46 ? 'spotlight' : 'grid',
+    cardsVariant: inferredCardMaterial === 'frameless' ? 'frameless' : (sanitized.dark ? 'bento-hero' : 'pillars'),
+    iconMode: recommendedChrome === 'keynote-spatial' || recommendedChrome === 'saas-bento' ? 'auto' : 'explicit',
+    iconBadgeStyle: inferredCardMaterial === 'frameless' ? 'bare' : (inferredCardMaterial === 'glass' ? 'ring' : 'soft'),
+    chartSpotlight: true,
+    chartGrowthCallout: chartCount > 0,
+    density,
+    typeScaleRatio,
+    whitespaceRatio,
+    rhythmScore,
+    brand: sanitizedBrand,
+    swatches: [
+      sanitized.sanitizedTokens.canvas,
+      sanitized.sanitizedTokens.accentPrimary,
+      sanitized.sanitizedTokens.accentSecondary,
+      sanitized.sanitizedTokens.inkPrimary,
+    ],
+    ...(resolvedPath ? { sourceFile: basename(resolvedPath) } : {}),
+  })
+
+  let savedTastePath
+  if (typeof options.saveTasteAs === 'string' && options.saveTasteAs.trim()) {
+    const saved = saveWorkspaceTasteRecipe(styleRecipe, cwd)
+    savedTastePath = saved.path
+  }
+
   return {
     ok: true,
     ...(resolvedPath ? { pptxPath: resolvedPath } : {}),
@@ -1329,6 +1440,8 @@ export async function absorbPptx(options = {}) {
     recommendedChrome,
     recommendedTableStyle,
     narrativeProfile,
+    styleRecipe,
+    ...(savedTastePath ? { savedTastePath } : {}),
     dark: sanitized.dark,
     warnings: sanitized.warnings,
     layoutSummary,

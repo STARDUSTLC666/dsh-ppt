@@ -504,6 +504,7 @@ export function normalizeSlideItems(rawItems, layout) {
       const milestone = entry.milestone === true ? true : undefined
       const role = stripInlineMarkdown(entry.role ?? '')
       const conversion = stripInlineMarkdown(entry.conversion ?? '')
+      const icon = stripInlineMarkdown(entry.icon ?? '')
       const bullets = Array.isArray(entry.bullets ?? entry.items)
         ? (entry.bullets ?? entry.items).map((b) => cleanRichText(String(b))).filter(Boolean).slice(0, 8)
         : undefined
@@ -520,6 +521,7 @@ export function normalizeSlideItems(rawItems, layout) {
         ...(milestone ? { milestone } : {}),
         ...(role ? { role } : {}),
         ...(conversion ? { conversion } : {}),
+        ...(icon ? { icon } : {}),
         ...(status ? { status } : {}),
         ...(bullets?.length ? { bullets } : {}),
       }
@@ -575,6 +577,21 @@ export function ooxmlLinearGradientFill(stops, angleDeg = 135) {
   }).join('')
   const ang = Math.round((((angleDeg % 360) + 360) % 360) * 60000)
   return '<a:gradFill rotWithShape="1"><a:gsLst>' + gsLst + '</a:gsLst><a:lin ang="' + ang + '" scaled="1"/></a:gradFill>'
+}
+
+export function ooxmlRadialGradientFill(stops, pathType = 'circle', fillToRect = { l: 50000, t: 50000, r: 50000, b: 50000 }) {
+  const gsLst = stops.map((s) => {
+    const pos = Math.round(Math.max(0, Math.min(1, s.offset)) * 100000)
+    const alpha = s.alpha !== undefined && s.alpha < 0.999
+      ? '<a:alpha val="' + Math.round(Math.max(0, Math.min(1, s.alpha)) * 100000) + '"/>'
+      : ''
+    return '<a:gs pos="' + pos + '"><a:srgbClr val="' + hex6(s.color) + '">' + alpha + '</a:srgbClr></a:gs>'
+  }).join('')
+  const f = fillToRect || { l: 50000, t: 50000, r: 50000, b: 50000 }
+  return (
+    '<a:gradFill rotWithShape="1"><a:gsLst>' + gsLst + '</a:gsLst>' +
+    '<a:path path="' + escapeXml(pathType) + '"><a:fillToRect l="' + Math.round(f.l) + '" t="' + Math.round(f.t) + '" r="' + Math.round(f.r) + '" b="' + Math.round(f.b) + '"/></a:path></a:gradFill>'
+  )
 }
 
 export function ooxmlRichParagraph(textOrRuns, options = {}) {
@@ -666,7 +683,10 @@ export function ooxmlShape(id, name, boxIn, options = {}) {
     fillAlpha = 1,
     gradientStops = null,
     gradientAngle = 135,
+    radialGradientStops = null,
+    radialFillToRect = null,
     stroke = '',
+    strokeAlpha = 1,
     strokePt = 0.75,
     dash = '',
     shadow = false,
@@ -684,13 +704,15 @@ export function ooxmlShape(id, name, boxIn, options = {}) {
     : adj !== undefined && preset === 'roundRect'
       ? '<a:avLst><a:gd name="adj" fmla="val ' + Math.round(adj) + '"/></a:avLst>'
       : '<a:avLst/>'
-  const fillXml = gradientStops
-    ? ooxmlLinearGradientFill(gradientStops, gradientAngle)
-    : fill
-      ? ooxmlSolidFill(fill, fillAlpha)
-      : '<a:noFill/>'
+  const fillXml = radialGradientStops
+    ? ooxmlRadialGradientFill(radialGradientStops, 'circle', radialFillToRect)
+    : gradientStops
+      ? ooxmlLinearGradientFill(gradientStops, gradientAngle)
+      : fill
+        ? ooxmlSolidFill(fill, fillAlpha)
+        : '<a:noFill/>'
   const lnXml = stroke
-    ? '<a:ln w="' + ptToEmu(strokePt) + '" cap="flat">' + ooxmlSolidFill(stroke) + (dash ? '<a:prstDash val="' + dash + '"/>' : '') + '</a:ln>'
+    ? '<a:ln w="' + ptToEmu(strokePt) + '" cap="flat">' + ooxmlSolidFill(stroke, strokeAlpha) + (dash ? '<a:prstDash val="' + dash + '"/>' : '') + '</a:ln>'
     : '<a:ln><a:noFill/></a:ln>'
   const effectXml = shadow
     ? '<a:effectLst><a:outerShdw blurRad="152400" dist="38100" dir="5400000" algn="tl" rotWithShape="0"><a:srgbClr val="0F172A"><a:alpha val="9000"/></a:srgbClr></a:outerShdw></a:effectLst>'
@@ -1033,6 +1055,7 @@ export function renderSurfaceCardPptx(name, box, opts, nextIdFn, chromeCfg, them
     focal = false,
     stroke,
     accentBarColor = tk.accentPrimary,
+    cardMaterial = 'solid',
     paragraphs = [],
     anchor = 't',
     marginsIn = { l: 0.08, r: 0.08, t: 0.05, b: 0.05 },
@@ -1041,6 +1064,91 @@ export function renderSurfaceCardPptx(name, box, opts, nextIdFn, chromeCfg, them
   } = opts
   const radius = chromeCfg.cardRadiusPx
   const preset = radius > 0 ? 'roundRect' : 'rect'
+
+  // 材质 A：无框通透模式（McKinsey / Apple Editorial —— 零底色框，仅顶部强规则线与底部极细发丝线）
+  if (cardMaterial === 'frameless') {
+    const out = [
+      ooxmlLine(nextIdFn(), name + ' top hairline', { x: box.x, y: box.y }, { x: box.x + box.w, y: box.y }, {
+        color: focal ? accentBarColor : tk.hairline,
+        widthPt: focal ? 2.0 : 0.85,
+      }),
+      ooxmlLine(nextIdFn(), name + ' bottom hairline', { x: box.x, y: box.y + box.h }, { x: box.x + box.w, y: box.y + box.h }, {
+        color: tk.hairline,
+        widthPt: 0.5,
+      }),
+    ]
+    if (paragraphs.length > 0) {
+      out.push(ooxmlShape(nextIdFn(), name, box, {
+        txBox: true,
+        anchor,
+        marginsIn,
+        fontScale,
+        paragraphs,
+      }))
+    }
+    return out.join('')
+  }
+
+  // 材质 B：出版物双发丝线模式（Monocle / FT / Nature —— 顶部双轨发丝线 + 极克制底衬）
+  if (cardMaterial === 'editorial-rule') {
+    const out = [
+      ooxmlLine(nextIdFn(), name + ' editorial rule 1', { x: box.x, y: box.y }, { x: box.x + box.w, y: box.y }, {
+        color: focal ? accentBarColor : tk.inkPrimary,
+        widthPt: focal ? 1.75 : 1.0,
+      }),
+      ooxmlLine(nextIdFn(), name + ' editorial rule 2', { x: box.x, y: box.y + 0.045 }, { x: box.x + box.w, y: box.y + 0.045 }, {
+        color: tk.hairline,
+        widthPt: 0.5,
+      }),
+      ooxmlLine(nextIdFn(), name + ' editorial bottom', { x: box.x, y: box.y + box.h }, { x: box.x + box.w, y: box.y + box.h }, {
+        color: tk.hairline,
+        widthPt: 0.5,
+      }),
+    ]
+    if (paragraphs.length > 0) {
+      out.push(ooxmlShape(nextIdFn(), name, box, {
+        txBox: true,
+        anchor,
+        marginsIn,
+        fontScale,
+        paragraphs,
+      }))
+    }
+    return out.join('')
+  }
+
+  // 材质 C：发布会玻璃拟态（Apple Keynote / Linear Craft —— 半透明叠加 + 微亮边缘描边 + 顶部 1px 高光条）
+  if (cardMaterial === 'glass') {
+    const glassRadius = Math.max(12, radius || 14)
+    const glassFill = theme.dark ? (focal ? tk.surface2 : tk.surface1) : tk.surface1
+    const glassStroke = stroke !== undefined
+      ? stroke
+      : (focal ? accentBarColor : (theme.dark ? '#FFFFFF' : tk.hairline))
+    const glassStrokeAlpha = focal ? (theme.dark ? 0.65 : 0.85) : (theme.dark ? 0.16 : 0.72)
+    const out = [
+      ooxmlShape(nextIdFn(), name, box, {
+        preset: 'roundRect',
+        adj: roundRectAdj(box.w, box.h, glassRadius),
+        fill: glassFill,
+        fillAlpha: theme.dark ? (focal ? 0.84 : 0.66) : 0.86,
+        stroke: glassStroke,
+        strokeAlpha: glassStrokeAlpha,
+        strokePt: focal ? 1.0 : 0.75,
+        shadow: theme.shadow,
+        txBox,
+        anchor,
+        marginsIn,
+        fontScale,
+        paragraphs,
+      }),
+      ooxmlLine(nextIdFn(), name + ' glass specular', { x: box.x + 0.16, y: box.y + 0.012 }, { x: box.x + box.w - 0.16, y: box.y + 0.012 }, {
+        color: focal ? accentBarColor : (theme.dark ? '#FFFFFF' : accentBarColor),
+        widthPt: focal ? 1.25 : 0.6,
+      }),
+    ]
+    return out.join('')
+  }
+
   const resolvedFill = chromeCfg.cardBorderless && focal && fill === tk.surface1 ? tk.surface2 : fill
   const resolvedStroke = stroke !== undefined
     ? stroke

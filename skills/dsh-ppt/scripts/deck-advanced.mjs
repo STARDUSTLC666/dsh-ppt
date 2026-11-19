@@ -11,7 +11,18 @@ import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
 import { absorbPptx, CHROME_STYLE_IDS } from './deck-absorb.mjs'
 import { extractPptxSlides } from './deck-import.mjs'
 import { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './deck-delivery.mjs'
-import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, auditSlideAesthetics } from './deck-director.mjs'
+import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, optimizeVisualRhythm, auditSlideAesthetics } from './deck-director.mjs'
+import {
+  CARD_MATERIALS,
+  ICON_MODES,
+  resolveTasteRecipe,
+  resolveActiveTaste,
+  sanitizeCustomTasteRecipe,
+  loadWorkspaceTasteRecipes,
+  saveWorkspaceTasteRecipe,
+  listAllTasteRecipes,
+  listCuratedTasteRecipes,
+} from './deck-taste.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
@@ -20,7 +31,8 @@ export { absorbPptx } from './deck-absorb.mjs'
 export { extractPptxSlides } from './deck-import.mjs'
 export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './deck-delivery.mjs'
 export { extractOfficeSource, importOfficeDeck } from './deck-office.mjs'
-export { inferThemeFromContent } from './deck-director.mjs'
+export { inferThemeFromContent, optimizeVisualRhythm } from './deck-director.mjs'
+export { listAllTasteRecipes, listCuratedTasteRecipes, loadWorkspaceTasteRecipes, saveWorkspaceTasteRecipe, resolveTasteRecipe } from './deck-taste.mjs'
 
 export function buildThemePreview(options = {}) {
   return buildThemePreviewFromThemes(options, resolveLanguage, DECK_VERSION)
@@ -141,6 +153,23 @@ function normalizeBrand(input, assets, cwd) {
     if (!CHROME_STYLE_SET.has(cs)) fail('brand.chromeStyle 需为 ' + CHROME_STYLE_IDS.join(' / '))
     brand.chromeStyle = cs
   }
+  if (input.cardMaterial !== undefined && input.cardMaterial !== null && input.cardMaterial !== '') {
+    const cm = String(input.cardMaterial).trim().toLowerCase()
+    if (!CARD_MATERIALS.includes(cm)) fail('brand.cardMaterial 需为 ' + CARD_MATERIALS.join(' / '))
+    brand.cardMaterial = cm
+  }
+  if (input.iconMode !== undefined && input.iconMode !== null && input.iconMode !== '') {
+    const im = String(input.iconMode).trim().toLowerCase()
+    if (!ICON_MODES.includes(im)) fail('brand.iconMode 需为 ' + ICON_MODES.join(' / '))
+    brand.iconMode = im
+  }
+  if (input.taste !== undefined && input.taste !== null && input.taste !== '') {
+    brand.taste = String(input.taste).trim().slice(0, 64)
+  }
+  if (input.tasteRecipe && typeof input.tasteRecipe === 'object' && !Array.isArray(input.tasteRecipe)) {
+    const cleanRecipe = sanitizeCustomTasteRecipe(input.tasteRecipe)
+    if (cleanRecipe) brand.tasteRecipe = cleanRecipe
+  }
   if (input.logo) brand.logoAssetId = addAsset({ src: input.logo }, assets, cwd, '品牌 Logo')
   else if (input.logoAssetId) {
     if (!assets[input.logoAssetId]) fail('品牌 Logo 嵌入资产不存在')
@@ -199,7 +228,7 @@ function validateRawSlides(slides) {
 }
 
 function snapshot(manifest) {
-  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel', 'targetMinutes'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
+  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
 
 function collectAssets(manifest) {
@@ -389,7 +418,7 @@ async function exportPptx(manifest, theme, language, signal) {
   manifest.slides.forEach((source, index) => {
     abort(signal)
     const slide = slides[index]
-    const boxes = MEDIA_LAYOUTS.has(source.layout) ? mediaBoxes(source.layout, source.variant, source) : mediaBoxes('image')
+    const boxes = MEDIA_LAYOUTS.has(source.layout) ? mediaBoxes(source.layout, source.variant, source, manifest) : mediaBoxes('image')
     if (Array.isArray(boxes.gallery) && Array.isArray(source.images) && source.images.length > 1) {
       boxes.gallery.forEach((gBox, gIdx) => {
         const img = source.images[gIdx]
@@ -405,12 +434,16 @@ async function exportPptx(manifest, theme, language, signal) {
         }
       } else {
         const font = pptxEastAsianFont(theme.fonts.body)
-        const spec = buildOfficeKitChartSpec(source.chart, theme, source.visual, font)
+        const activeTaste = resolveActiveTaste(manifest, source)
+        const chartForSpec = activeTaste.chartSpotlight && source.chart.highlight === undefined && source.chart.spotlight === undefined
+          ? { ...source.chart, spotlight: true }
+          : source.chart
+        const spec = buildOfficeKitChartSpec(chartForSpec, theme, source.visual, font)
         lib.addSlideChart(slide, { ...emu(boxes.chart), name: 'Editable data chart', spec })
       }
     }
     if (manifest.brand?.logoAssetId) putImage(slide, manifest.brand.logoAssetId, LOGO_BOX, 'contain', 'Brand logo', manifest.brand.name)
-    if (manifest.brand?.footer && !lib.findShapeByName(slide, 'Footer source')) {
+    if (manifest.brand?.footer && source.layout !== 'cover' && source.layout !== 'closing' && !lib.findShapeByName(slide, 'Footer source')) {
       const footer = lib.addSlideTextBox(slide, { ...emu(FOOTER_BOX), text: manifest.brand.footer, name: 'Brand footer' })
       lib.setShapeTextFormat(footer, { size: 10, font: pptxEastAsianFont(theme.fonts.body), color: theme.palette.muted })
     }
@@ -502,7 +535,7 @@ function validateSnapshot(value, assets) {
   validateDataSnapshot(value, normalizeSlides)
   if (value.brand != null) {
     if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
-    for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'name', 'footer', 'chromeStyle']) {
+    for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'name', 'footer', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste']) {
       if (value.brand[key] !== undefined && typeof value.brand[key] !== 'string') fail('工程 brand.' + key + ' 必须为字符串')
     }
     normalizeBrand(value.brand, assets, '.')
@@ -587,11 +620,21 @@ export async function buildDeckAsync(options = {}) {
     absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
   }
 
+  const workspaceTastes = loadWorkspaceTasteRecipes(cwd)
+  const resolvedTaste = options.taste !== undefined && options.taste !== null && options.taste !== ''
+    ? resolveTasteRecipe(options.taste, workspaceTastes)
+    : (absorbed?.styleRecipe && options.cloneStructure === true ? absorbed.styleRecipe : null)
+  if (options.taste !== undefined && options.taste !== null && options.taste !== '' && !resolvedTaste) {
+    fail('未知品味配方 taste：' + String(options.taste))
+  }
+
   const rawThemeOpt = typeof options.theme === 'string' && options.theme.trim() ? options.theme.trim() : undefined
   let chosenThemeId = rawThemeOpt
   let directorHint = null
-  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario))) {
-    if (absorbed && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona && !scenario) {
+  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario || resolvedTaste))) {
+    if (resolvedTaste?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
+      chosenThemeId = resolvedTaste.theme
+    } else if (absorbed && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona && !scenario) {
       chosenThemeId = absorbed.recommendedTheme
     } else {
       directorHint = inferThemeFromContent({
@@ -631,12 +674,27 @@ export async function buildDeckAsync(options = {}) {
       }
     }
   }
-  if (directorHint?.tableStyle === 'booktabs') {
-    normalized.deck.slides = normalized.deck.slides.map(s => s.layout === 'table' && !s.tableStyle ? { ...s, tableStyle: 'booktabs' } : s)
+  if (directorHint?.tableStyle === 'booktabs' || resolvedTaste?.tableStyle) {
+    const effTableStyle = resolvedTaste?.tableStyle || directorHint?.tableStyle
+    normalized.deck.slides = normalized.deck.slides.map(s => s.layout === 'table' && !s.tableStyle ? { ...s, tableStyle: effTableStyle } : s)
+  }
+  if (resolvedTaste && options.smartLayout !== false) {
+    normalized.deck.slides = optimizeVisualRhythm(normalized.deck.slides, resolvedTaste)
   }
 
   const assets = {}
   let brandInput = options.brand
+  if (resolvedTaste && options.brand !== null) {
+    const tasteBrandBase = {
+      ...(resolvedTaste.brand && typeof resolvedTaste.brand === 'object' ? resolvedTaste.brand : {}),
+      ...(resolvedTaste.chromeStyle ? { chromeStyle: resolvedTaste.chromeStyle } : {}),
+      ...(resolvedTaste.cardMaterial ? { cardMaterial: resolvedTaste.cardMaterial } : {}),
+      ...(resolvedTaste.iconMode ? { iconMode: resolvedTaste.iconMode } : {}),
+      taste: resolvedTaste.id,
+      ...(!listCuratedTasteRecipes().some(r => r.id === resolvedTaste.id) ? { tasteRecipe: resolvedTaste } : {}),
+    }
+    brandInput = { ...tasteBrandBase, ...(brandInput || {}) }
+  }
   if (absorbed) {
     const baseAbsorbedBrand = {
       ...absorbed.sanitizedBrand,
@@ -650,7 +708,7 @@ export async function buildDeckAsync(options = {}) {
     ) {
       delete baseAbsorbedBrand.backgroundColor
     }
-    brandInput = options.brand === null ? null : { ...baseAbsorbedBrand, ...(options.brand || {}) }
+    brandInput = options.brand === null ? null : { ...baseAbsorbedBrand, ...(brandInput || {}) }
   }
   const brand = normalizeBrand(brandInput, assets, cwd)
 
@@ -670,6 +728,7 @@ export async function buildDeckAsync(options = {}) {
     theme: normalized.theme.id,
     language: normalized.language.id,
     motion: normalized.motion,
+    ...(resolvedTaste ? { taste: listCuratedTasteRecipes().some(r => r.id === resolvedTaste.id) ? resolvedTaste.id : resolvedTaste } : {}),
     ...(targetMinutesRaw !== undefined ? { targetMinutes: targetMinutesRaw } : {}),
     ...(scenario ? { template: scenario.id } : {}),
     ...(brand ? { brand } : {}),
@@ -758,6 +817,7 @@ export async function editDeck(options = {}) {
     if (
       options.brand === undefined &&
       options.theme === undefined &&
+      options.taste === undefined &&
       options.referencePptx === undefined &&
       options.order === undefined &&
       options.duplicate === undefined &&
@@ -766,12 +826,12 @@ export async function editDeck(options = {}) {
       options.targetMinutes === undefined &&
       options.saveAs !== true
     ) {
-      fail('请提供 edits、theme、referencePptx、order、duplicate、remove、append、targetMinutes 或 brand')
+      fail('请提供 edits、theme、taste、referencePptx、order、duplicate、remove、append、targetMinutes 或 brand')
     }
   }
   const used = new Set()
   const allowed = new Set([
-    'layout', 'variant', 'chrome', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
+    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
     'text', 'formula', 'mermaid', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
     'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])
@@ -867,6 +927,37 @@ export async function editDeck(options = {}) {
     next.brand = normalizeBrand({ ...next.brand, ...absorbedBrand }, next.assets, cwd)
   }
 
+  if (options.taste !== undefined) {
+    if (options.taste === null || options.taste === '') {
+      delete next.taste
+      if (next.brand) {
+        delete next.brand.taste
+        delete next.brand.tasteRecipe
+        delete next.brand.cardMaterial
+        delete next.brand.iconMode
+      }
+    } else {
+      const wsTastes = loadWorkspaceTasteRecipes(cwd)
+      const tr = resolveTasteRecipe(options.taste, wsTastes)
+      if (!tr) fail('未知品味配方 taste：' + String(options.taste))
+      const isBuiltin = listCuratedTasteRecipes().some(r => r.id === tr.id)
+      next.taste = isBuiltin ? tr.id : tr
+      if (options.theme === undefined && tr.theme) next.theme = resolveTheme(tr.theme).id
+      next.brand = normalizeBrand({
+        ...(next.brand || {}),
+        ...(tr.brand && typeof tr.brand === 'object' ? tr.brand : {}),
+        ...(tr.chromeStyle ? { chromeStyle: tr.chromeStyle } : {}),
+        ...(tr.cardMaterial ? { cardMaterial: tr.cardMaterial } : {}),
+        ...(tr.iconMode ? { iconMode: tr.iconMode } : {}),
+        taste: tr.id,
+        ...(!isBuiltin ? { tasteRecipe: tr } : {}),
+      }, next.assets, cwd)
+      if (options.optimizeRhythm !== false) {
+        next.slides = optimizeVisualRhythm(next.slides, tr)
+      }
+    }
+  }
+
   if (options.targetMinutes !== undefined) {
     if (options.targetMinutes === null) {
       delete next.targetMinutes
@@ -907,7 +998,7 @@ export async function undoDeck(options = {}) {
   expected(state.manifest, options.expectedRevision)
   if (!state.manifest.history.length) fail('该工程没有可撤销的修改')
   const next = clone(state.manifest), prior = next.history.pop()
-  for (const key of ['brand', 'template', 'dataModel', 'targetMinutes']) delete next[key]
+  for (const key of ['brand', 'template', 'dataModel', 'targetMinutes', 'taste']) delete next[key]
   Object.assign(next, prior)
   return saveRevision(state, next, options.signal)
 }

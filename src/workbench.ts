@@ -33,8 +33,10 @@ const ALLOWED_TABLE_STYLES = new Set(['consulting', 'booktabs', 'minimal', 'band
 const ALLOWED_DENSITIES = new Set(['compact', 'balanced', 'airy'])
 const ALLOWED_ITEM_STATUS = new Set(['neutral', 'accent', 'positive', 'negative', 'warning'])
 const ALLOWED_CHROME_STYLES = new Set(['consulting-classic', 'keynote-spatial', 'editorial-folio', 'saas-bento', 'academic-minimal', 'gov-ceremonial'])
-const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'status', 'tone', 'bullets'])
-const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'chromeStyle'])
+const ALLOWED_CARD_MATERIALS = new Set(['solid', 'frameless', 'glass', 'editorial-rule'])
+const ALLOWED_ICON_MODES = new Set(['off', 'explicit', 'auto'])
+const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'icon', 'status', 'tone', 'bullets'])
+const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste'])
 const VISUAL_KEYS = new Set(['titleSize', 'bodySize', 'chartLabelSize', 'density', 'tableStyle', 'chrome'])
 
 /** Sharing keeps the offline deck, but omits the control for a project not in the ZIP. */
@@ -433,6 +435,7 @@ export class PptWorkbench {
     const langCode = manifest.language === 'en' ? 'en' : 'zh'
     const themes = typeof engine.listThemes === 'function' ? engine.listThemes(langCode) : []
     const presets = typeof engine.listMasterPresets === 'function' ? engine.listMasterPresets(langCode) : []
+    const tasteRecipes = typeof engine.listAllTasteRecipes === 'function' ? engine.listAllTasteRecipes(dirname(entry.path)) : []
     const rawPace = typeof engine.computePaceBudget === 'function'
       ? engine.computePaceBudget(manifest, manifest.targetMinutes)
       : computePaceBudgetFallback(manifest, manifest.targetMinutes)
@@ -457,7 +460,8 @@ export class PptWorkbench {
       deltaMinutes,
     }
     return { ok: true, project: { ...entry, deckId: manifest.deckId, revision: manifest.revision, theme: manifest.theme ?? 'data',
-      brand: manifest.brand ?? null, targetMinutes: manifest.targetMinutes ?? null, paceBudget, themes, presets, slides: manifest.slides,
+      taste: manifest.taste ?? null,
+      brand: manifest.brand ?? null, targetMinutes: manifest.targetMinutes ?? null, paceBudget, themes, presets, tasteRecipes, slides: manifest.slides,
       undoAvailable: manifest.history.length, quality: check, html, dataModel: manifest.dataModel ?? null,
       assets: Object.fromEntries(Object.entries(manifest.assets ?? {}).map(([key, value]: [string, any]) => [key, { data: value.data, mime: value.mime }])),
       render: currentRender ? { pageCount: currentRender.pngPaths.length, missingFonts: currentRender.missingFonts ?? [] } : null } }
@@ -499,6 +503,18 @@ export class PptWorkbench {
         if (item === null) { out.chromeStyle = null; continue }
         if (typeof item !== 'string' || !ALLOWED_CHROME_STYLES.has(item)) throw new Error('母版骨架名称无效 / Invalid chrome skeleton style')
         out.chromeStyle = item
+      } else if (key === 'cardMaterial') {
+        if (item === null || item === '') { out.cardMaterial = null; continue }
+        if (typeof item !== 'string' || !ALLOWED_CARD_MATERIALS.has(item)) throw new Error('卡片材质名称无效 / Invalid cardMaterial')
+        out.cardMaterial = item
+      } else if (key === 'iconMode') {
+        if (item === null || item === '') { out.iconMode = null; continue }
+        if (typeof item !== 'string' || !ALLOWED_ICON_MODES.has(item)) throw new Error('图标模式无效 / Invalid iconMode')
+        out.iconMode = item
+      } else if (key === 'taste') {
+        if (item === null || item === '') { out.taste = null; continue }
+        if (typeof item !== 'string' || item.length > 64) throw new Error('品味配方 ID 无效')
+        out.taste = item.trim()
       }
     }
     return out
@@ -542,16 +558,19 @@ export class PptWorkbench {
       const milestone = raw.milestone
       const role = raw.role
       const conversion = raw.conversion
+      const icon = raw.icon
       if (start !== undefined && (typeof start !== 'number' || !Number.isFinite(start) || start < 0 || start > 999)) throw new Error('结构化卡片内容无效')
       if (span !== undefined && (typeof span !== 'number' || !Number.isFinite(span) || span < 0 || span > 999)) throw new Error('结构化卡片内容无效')
       if (milestone !== undefined && typeof milestone !== 'boolean') throw new Error('结构化卡片内容无效')
       if (role !== undefined && (typeof role !== 'string' || role.length > 120)) throw new Error('结构化卡片内容无效')
       if (conversion !== undefined && (typeof conversion !== 'string' || conversion.length > 120)) throw new Error('结构化卡片内容无效')
+      if (icon !== undefined && (typeof icon !== 'string' || icon.length > 48)) throw new Error('结构化卡片内容无效')
       if (typeof start === 'number') clean.start = start
       if (typeof span === 'number') clean.span = span
       if (milestone === true) clean.milestone = true
       if (typeof role === 'string' && role.trim()) clean.role = role.trim()
       if (typeof conversion === 'string' && conversion.trim()) clean.conversion = conversion.trim()
+      if (typeof icon === 'string' && icon.trim()) clean.icon = icon.trim()
       return clean
     })
   }
@@ -579,6 +598,12 @@ export class PptWorkbench {
       } else if (key === 'chrome') {
         if (item !== null && item !== '' && (typeof item !== 'string' || !ALLOWED_CHROME_STYLES.has(item))) throw new Error('母版骨架名称无效 / Invalid chrome skeleton style')
         result.chrome = item ? item : undefined
+      } else if (key === 'cardMaterial') {
+        if (item !== null && item !== '' && (typeof item !== 'string' || !ALLOWED_CARD_MATERIALS.has(item))) throw new Error('卡片材质名称无效 / Invalid cardMaterial')
+        result.cardMaterial = item ? item : undefined
+      } else if (key === 'iconMode') {
+        if (item !== null && item !== '' && (typeof item !== 'string' || !ALLOWED_ICON_MODES.has(item))) throw new Error('图标模式无效 / Invalid iconMode')
+        result.iconMode = item ? item : undefined
       } else if (key === 'tableStyle') {
         if (item !== null && item !== '' && (typeof item !== 'string' || !ALLOWED_TABLE_STYLES.has(item))) throw new Error('表格样式无效')
         result.tableStyle = item ? item : undefined
@@ -790,6 +815,7 @@ export class PptWorkbench {
         ok: true,
         themes: typeof engine.listThemes === 'function' ? engine.listThemes(langCode) : [],
         presets: typeof engine.listMasterPresets === 'function' ? engine.listMasterPresets(langCode) : [],
+        tasteRecipes: typeof engine.listAllTasteRecipes === 'function' ? engine.listAllTasteRecipes(dirname(this.catalogPath)) : [],
         templates: typeof engine.listTemplates === 'function' ? engine.listTemplates(langCode) : [],
       }
     }
@@ -1044,6 +1070,7 @@ export class PptWorkbench {
           recommendedChrome: absorbed?.recommendedChrome ?? null,
           recommendedTableStyle: absorbed?.recommendedTableStyle ?? null,
           narrativeProfile: absorbed?.narrativeProfile ?? null,
+          styleRecipe: absorbed?.styleRecipe ?? null,
           warnings: absorbed?.warnings ?? [],
           slideSkeleton: absorbed?.slideSkeleton ?? null,
           layoutSummary: absorbed?.layoutSummary ?? null,
@@ -1148,12 +1175,25 @@ export class PptWorkbench {
           targetMinutesPatch = { targetMinutes: mins }
         }
       }
+      let tastePatch: { taste?: unknown } = {}
+      if (body.taste !== undefined) {
+        if (body.taste === null || body.taste === '') {
+          tastePatch = { taste: null }
+        } else if (typeof body.taste === 'string' && /^[a-z0-9\u4e00-\u9fff-]{1,64}$/i.test(body.taste.trim())) {
+          tastePatch = { taste: body.taste.trim() }
+        } else if (body.taste && typeof body.taste === 'object' && !Array.isArray(body.taste)) {
+          tastePatch = { taste: body.taste }
+        } else {
+          throw new Error('品味配方参数无效')
+        }
+      }
       const args = { deckPath: entry.path, expectedRevision: body.expectedRevision, signal,
         saveAs: body.saveAs === true,
         ...(body.slide === undefined ? {} : { edits: [{ slide: body.slide, patch: this.patch(body.patch) }] }),
         ...(body.order === undefined ? {} : { order: body.order }),
         ...(body.theme === undefined ? {} : { theme: this.themeId(body.theme) }),
         ...(body.brand === undefined ? {} : { brand: this.brandPatch(body.brand) }),
+        ...tastePatch,
         ...targetMinutesPatch }
       const result = await engine.editDeck(args)
       await this.remember(result, args)

@@ -1938,8 +1938,76 @@ export function promoteMarkdownSlides(slides, options = {}) {
   return result
 }
 
+/**
+ * 视觉节奏编排器（Visual Rhythm Engine）：
+ * 按 Taste Recipe 规则打破连续等宽方框卡片的视觉疲劳，自动交替无框/聚光灯/Bento-Hero 并激活多章节实时议程页。
+ */
+export function optimizeVisualRhythm(slides, tasteRecipe = null) {
+  if (!Array.isArray(slides) || slides.length === 0) return slides
+  const sectionCount = slides.filter((s) => s?.layout === 'section').length
+  let boxedStreak = 0
+  return slides.map((slide, idx) => {
+    if (!slide || typeof slide !== 'object') return slide
+    const layout = slide.layout || 'bullets'
+    const hasExplicitVariant = typeof slide.variant === 'string' && slide.variant.trim() !== ''
+    let next = slide
+
+    if (layout === 'cover' && !hasExplicitVariant && tasteRecipe?.coverVariant && tasteRecipe.coverVariant !== 'default') {
+      next = { ...next, variant: tasteRecipe.coverVariant }
+    } else if (layout === 'section' && !hasExplicitVariant && sectionCount >= 2 && tasteRecipe?.sectionVariant === 'agenda') {
+      next = { ...next, variant: 'agenda' }
+    } else if (layout === 'kpi' && !hasExplicitVariant) {
+      const itemCount = Array.isArray(slide.items) ? slide.items.length : (Array.isArray(slide.bullets) ? slide.bullets.length : 0)
+      if (tasteRecipe?.kpiVariant === 'spotlight' && itemCount >= 2) {
+        next = { ...next, variant: 'spotlight' }
+      } else if (tasteRecipe?.kpiVariant === 'frameless') {
+        next = { ...next, variant: 'frameless' }
+      }
+      boxedStreak = 0
+    } else if (layout === 'cards') {
+      const itemCount = Array.isArray(slide.items) ? slide.items.length : (Array.isArray(slide.bullets) ? slide.bullets.length : 0)
+      if (!hasExplicitVariant) {
+        if (boxedStreak >= 2) {
+          next = { ...next, variant: itemCount >= 2 && itemCount <= 4 ? 'bento-hero' : 'frameless' }
+          boxedStreak = 0
+        } else if (tasteRecipe?.cardsVariant && tasteRecipe.cardsVariant !== 'pillars') {
+          if (tasteRecipe.cardsVariant === 'bento-hero' && (itemCount < 2 || itemCount > 4)) {
+            next = { ...next, variant: 'frameless' }
+          } else {
+            next = { ...next, variant: tasteRecipe.cardsVariant }
+          }
+          boxedStreak = 0
+        } else {
+          boxedStreak += 1
+        }
+      } else {
+        boxedStreak = ['frameless', 'bento-hero', 'bento'].includes(slide.variant) ? 0 : boxedStreak + 1
+      }
+    } else if (['bullets', 'comparison', 'matrix'].includes(layout)) {
+      boxedStreak += 1
+    } else {
+      boxedStreak = 0
+    }
+
+    if ((layout === 'chart' || layout === 'chart-split') && next.chart && tasteRecipe) {
+      const c = next.chart
+      const patch = {}
+      if (tasteRecipe.chartSpotlight && c.highlight === undefined && c.spotlight === undefined && c.series?.length === 1 && ['column', 'bar'].includes(c.kind)) {
+        patch.spotlight = true
+      }
+      if (tasteRecipe.chartGrowthCallout && c.showGrowthCallout === undefined && !c.callout && c.categories?.length >= 3 && ['column', 'line', 'area'].includes(c.kind)) {
+        patch.showGrowthCallout = true
+      }
+      if (Object.keys(patch).length > 0) {
+        next = { ...next, chart: { ...c, ...patch } }
+      }
+    }
+    return next
+  })
+}
+
 // ---------------------------------------------------------------------------
-// SLOP-01..10 审美门禁（校准零误报边界，精准拦截平庸排版反模式）
+// SLOP-01..12 审美门禁（校准零误报边界，精准拦截平庸排版反模式）
 // ---------------------------------------------------------------------------
 
 const WEAK_TOPIC_TITLE_RE = /^(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s-]*)?(?:项目背景|研究背景|背景介绍|关于我们|目录页|数据分析|图表展示|相关内容|内容介绍|情况说明|总结汇报|Overview|Introduction|Background|Data\s*Analysis|Chart|Slide\s*\d+)$/i
@@ -2127,6 +2195,55 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
         '穿插使用 kpi 指标页、cards 卡片页、process 流程页、comparison 对比页或 chart-split 图文解读页打破单调',
       )
     }
+    // SLOP-11: 连续等宽方框卡片视觉疲劳检查
+    let boxedRun = 0
+    let maxBoxedRun = 0
+    let boxedRunSlide = 1
+    slides.forEach((s, idx) => {
+      const lay = s.layout || 'bullets'
+      const v = String(s.variant || '').toLowerCase()
+      const isPlainBoxed = (lay === 'cards' && (!v || v === 'pillars')) || (lay === 'kpi' && (!v || v === 'grid'))
+      if (isPlainBoxed) {
+        boxedRun += 1
+        if (boxedRun > maxBoxedRun) { maxBoxedRun = boxedRun; boxedRunSlide = idx }
+      } else {
+        boxedRun = 0
+      }
+    })
+    if (maxBoxedRun >= 4) {
+      push(
+        boxedRunSlide,
+        'visual-card-monotony',
+        '连续 ' + maxBoxedRun + ' 页使用等宽方框卡片，视觉节奏趋于平淡（SLOP-11）',
+        '建议穿插使用 kpi[spotlight]、cards[frameless]、cards[bento-hero] 或配置 taste 大师审美配方建立主次留白节奏',
+      )
+    }
+  }
+
+  // SLOP-12: 单系列柱状/条形图缺少聚光灯聚焦强调提示（>= 5 项且未设 highlight/spotlight/referenceLine）
+  if (slides.length >= 5) {
+    slides.forEach((s, idx) => {
+      if ((s.layout === 'chart' || s.layout === 'chart-split') && s.chart) {
+        const c = s.chart
+        if (
+          ['column', 'bar'].includes(c.kind) &&
+          (c.series?.length ?? 0) === 1 &&
+          (c.categories?.length ?? 0) >= 5 &&
+          c.highlight === undefined &&
+          c.spotlight !== true &&
+          !c.referenceLine &&
+          !c.callout &&
+          c.showGrowthCallout !== true
+        ) {
+          push(
+            idx,
+            'chart-emphasis-missing',
+            '单系列柱状/条形图包含 ' + c.categories.length + ' 项但缺少焦点聚光灯或基准参考线（SLOP-12）',
+            '可添加 highlight: "max" / spotlight: true、referenceLine 基准线或 showGrowthCallout: true 突出主角数据',
+          )
+        }
+      }
+    })
   }
 
   return issues

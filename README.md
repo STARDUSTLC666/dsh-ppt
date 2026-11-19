@@ -9,14 +9,15 @@
 **[安装使用](#安装) · [使用流程](#开始使用) · [完整说明](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)**
 
 <picture>
-  <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-dark.svg?v=0.26.0">
-  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-light.svg?v=0.26.0">
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-dark.svg?v=0.26.0">
-  <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-light.svg?v=0.26.0" alt="从文档、表格、流程图或旧 PPTX 出发，一键生成高审美可交付全套产物。 · 流程示意" width="100%">
+  <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-dark.svg?v=0.27.0">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-light.svg?v=0.27.0">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-dark.svg?v=0.27.0">
+  <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-light.svg?v=0.27.0" alt="从文档、表格、流程图或旧 PPTX 出发，一键生成高审美可交付全套产物。 · 流程示意" width="100%">
 </picture>
 
 ## 功能
 
+- **大师审美工坊（8 套品味配方 + 61 枚原生矢量图标 + 标杆 PPTX 品味学习）**：内置 **8 套大师级 Taste Recipes**（`mckinsey-partner`、`apple-keynote-dark`、`apple-keynote-light`、`swiss-editorial`、`linear-craft`、`ft-data-journal`、`nature-academic`、`oriental-zen`），一键驱动 **4 套海报级封面**（径向光晕 `keynote-glow` / 瑞士网格 `editorial-grid` / 建筑深色侧翼 `architectural` / `split-bleed`）、**`section[agenda]` 实时章节进度页**、**4 种卡片材质**（`solid` / `frameless` / `glass` 玻璃拟态 / `editorial-rule` 双发丝）、**反单调主次构图**（`kpi[spotlight]` / `cards[bento-hero]`）、**61 枚零依赖原生矢量图标**（HTML `<svg>` + PPTX 原生 `<a:custGeom>` + 中英语义自动配图）及出版级图表精修（`spotlight` 焦点染色、`referenceLine` 目标虚线、`showGrowthCallout` 增长飞线）；上传任意优秀 `.pptx` 还可提取留白率/材质/字阶比等深层审美 DNA（`styleRecipe`）持久化复用。
 - **零品味负担自动导演 & 原生可编辑 Mermaid 流程图**：无需懂排版配色，一句话或文档自动匹配 **24 套大师主题**（16 套明亮投影友好 + 8 套沉浸深色，涵盖麦肯锡、BCG 翡翠战略、经济学人、金融时报、红杉创投、Stripe 工程、Apple 空间白与故宫霁蓝政务）与 **6 套差异化母版骨架**，覆盖 **20 套行业场景蓝图**、**原生 `<m:oMath>` 数学公式**、**Mermaid 流程图/时序图直转原生可编辑 PPTX 形状与吸附连接线（`<p:cxnSp>`）**，以及 **29+ 种原生可编辑版式与专业图示**（麦肯锡不等宽市场图 `marimekko`、财报级多层桑基图 `sankey`、波特价值链 `value-chain`、SWOT 十字矩阵 `swot`、价值链箭头 `chevron`、Bento 网格、KPI 大数字、2×2 矩阵、痛点对比、飞轮/漏斗、甘特图路线图、分层系统架构、哈维球竞品矩阵、TAM/SAM/SOM 同心圆、组织图谱、学术三线表、13 种出版级图表与矢量瀑布桥）。
 - **全格式直吞与生态联动（Word / Excel / CSV / PPTX / Cite / Remotion）**：新增 `ppt_from_office` 支持零外部依赖直吞 **`.xlsx` 多工作表 / `.csv` / `.tsv` 与 `.docx` Word 报告**（自动识别流向表→桑基图、排期→甘特图、份额→Mekko、增减桥→瀑布图、指标→组合图与三线表）；保留 `ppt_import` 外部 `.pptx` 一键翻新与 Office 双向导回（≤24 MiB 内存解析，保留撤销历史）；新增 `ppt_cite` 联动 **`dsh-cite`** 核验文献并生成真实参考文献页，以及 `ppt_remotion` 导出 **`dsh-remotion`** 动画视频分镜包。
 - **符合直觉的工作台、`? 引导` 交互导览与全场景交付**：适配 DeepSeek Harness `>=0.2.2-rc.3`，内置五套明亮主题切换；支持右上角 **`? 引导`** 四步聚光灯交互导览、空态/新建向导 **「一键体验旗舰示例」** 与 **「导入 Office / PPTX」**、点击预览画面直定位编辑文字 / LaTeX 公式 / Mermaid 代码、**演讲时长预算器（Speaking-Pace Budgeter，设置目标分钟数并实时标记超预算页）**；导出除原生 PPTX / 工程包 / 讲义 `.handout.md` 外，新增 **高管一页纸（Executive One-Pager，支持 A4 打印 PDF 与长图战报切换）**、**Remotion 视频分镜包（`.zip`）** 与独立 HTML 放映 **`P` 键双屏演讲者提词台 + `L` 键虚拟激光笔**。

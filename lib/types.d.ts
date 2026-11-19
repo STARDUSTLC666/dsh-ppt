@@ -1,6 +1,38 @@
 /** dsh-ppt 的公共类型。 */
 export type PptThemeId = 'swiss' | 'velvet' | 'data' | 'soft' | 'bold' | 'consulting' | 'cobalt-cream' | 'exec-jilan' | 'exec-palace' | 'academic' | 'editorial-forest' | 'cartesian' | 'course-sage' | 'linear-dark' | 'keynote-light' | 'financial-ft' | 'medical-clean' | 'luxury-noir' | 'bcg-emerald' | 'economist-brief' | 'venture-daylight' | 'stripe-craft' | 'aurora-stage' | 'obsidian-amber';
 export type PptChromeStyle = 'consulting-classic' | 'keynote-spatial' | 'editorial-folio' | 'saas-bento' | 'academic-minimal' | 'gov-ceremonial';
+export type PptCardMaterial = 'solid' | 'frameless' | 'glass' | 'editorial-rule';
+export type PptIconMode = 'off' | 'explicit' | 'auto';
+export type PptTasteRecipeId = 'mckinsey-partner' | 'apple-keynote-dark' | 'apple-keynote-light' | 'swiss-editorial' | 'linear-craft' | 'ft-data-journal' | 'nature-academic' | 'oriental-zen';
+export interface PptTasteRecipe {
+    id: string;
+    name: string;
+    enName?: string;
+    school?: string;
+    description?: string;
+    enDescription?: string;
+    theme?: string;
+    chromeStyle?: PptChromeStyle | string;
+    tableStyle?: PptTableStyle | string;
+    cardMaterial: PptCardMaterial;
+    coverVariant: string;
+    sectionVariant?: string;
+    kpiVariant?: string;
+    cardsVariant?: string;
+    iconMode?: PptIconMode;
+    iconBadgeStyle?: 'soft' | 'ring' | 'bare' | 'solid';
+    chartSpotlight?: boolean;
+    chartGrowthCallout?: boolean;
+    density?: 'airy' | 'balanced' | 'compact';
+    typeScaleRatio?: number;
+    whitespaceRatio?: number;
+    rhythmScore?: number;
+    brand?: PptBrand;
+    swatches?: string[];
+    builtin?: boolean;
+    sourceFile?: string;
+    absorbedAt?: string;
+}
 export type PptPersonaId = 'auto' | 'consulting' | 'tech-pitch' | 'academic' | 'gov-exec' | 'education' | 'editorial';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
 export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team' | 'mermaid' | 'flowchart' | 'sequence';
@@ -28,6 +60,7 @@ export interface PptSlideItem {
     milestone?: boolean;
     role?: string;
     conversion?: string;
+    icon?: string;
     status?: 'positive' | 'negative' | 'warning' | 'neutral' | 'accent';
     tone?: 'positive' | 'negative' | 'warning' | 'neutral' | 'accent';
 }
@@ -45,6 +78,18 @@ export interface PptChartSpec {
     caption?: string;
     source?: string;
     highlight?: number | number[] | 'max' | 'last' | 'none';
+    spotlight?: boolean;
+    showGrowthCallout?: boolean;
+    referenceLine?: {
+        value: number;
+        label?: string;
+        color?: string;
+    };
+    callout?: {
+        label: string;
+        fromIndex?: number;
+        toIndex?: number;
+    };
     showValues?: boolean;
     totalIndices?: number[];
 }
@@ -61,6 +106,10 @@ export interface PptBrand {
     logo?: string | null;
     footer?: string;
     chromeStyle?: PptChromeStyle | string | null;
+    cardMaterial?: PptCardMaterial | null;
+    iconMode?: PptIconMode | null;
+    taste?: PptTasteRecipeId | string | null;
+    tasteRecipe?: PptTasteRecipe | null;
 }
 export interface PptQualityIssue {
     slide: number;
@@ -122,6 +171,7 @@ export interface PptEditArgs {
     remove?: Array<number | string>;
     append?: PptSlideSpec[];
     theme?: string;
+    taste?: PptTasteRecipeId | string | PptTasteRecipe | null;
     referencePptx?: string;
     brand?: PptBrand | null;
     targetMinutes?: number | null;
@@ -174,6 +224,8 @@ export interface PptSlideSpec {
     layout?: PptSlideLayout;
     variant?: string;
     chrome?: PptChromeStyle | string;
+    cardMaterial?: PptCardMaterial;
+    iconMode?: PptIconMode;
     title?: string;
     subtitle?: string;
     kicker?: string;
@@ -227,6 +279,7 @@ export interface PptCreateArgs {
     /** 结构化幻灯片（高级用法，与 content 二选一）。 */
     slides?: PptSlideSpec[];
     theme?: string;
+    taste?: PptTasteRecipeId | string | PptTasteRecipe;
     persona?: PptPersonaId | string;
     referencePptx?: string;
     cloneStructure?: boolean;
@@ -271,6 +324,7 @@ export interface PptThemePreviewResult {
 export interface PptThemesResult {
     ok: boolean;
     themes: PptThemeInfo[];
+    tasteRecipes?: PptTasteRecipe[];
     /** 传 preview: true 时返回：主题对比页 + 每套主题的 SVG 色板卡。 */
     preview?: PptThemePreviewResult;
 }
@@ -279,6 +333,8 @@ export interface PptAbsorbArgs {
     bytes?: Uint8Array | Buffer;
     cwd?: string;
     extractLogo?: boolean;
+    saveTasteAs?: string;
+    tasteName?: string;
     signal?: AbortSignal;
 }
 export interface PptAbsorbSkeleton {
@@ -314,6 +370,8 @@ export interface PptAbsorbResult {
     recommendedChrome?: PptChromeStyle | string;
     recommendedTableStyle?: PptTableStyle | string;
     narrativeProfile?: Record<string, unknown>;
+    styleRecipe?: PptTasteRecipe;
+    savedTastePath?: string;
     slideSkeleton?: PptAbsorbSlideSkeleton[];
     layoutSummary?: Record<string, unknown>;
 }
@@ -427,6 +485,12 @@ export interface DeckEngine {
     buildThemePreview(options: Record<string, unknown>): PptThemePreviewResult;
     listThemes(lang?: string): PptThemeInfo[];
     listMasterPresets?(lang?: string): unknown[];
+    listAllTasteRecipes?(cwd?: string): PptTasteRecipe[];
+    saveWorkspaceTasteRecipe?(recipe: PptTasteRecipe, cwd?: string): {
+        path: string;
+        recipe: PptTasteRecipe;
+        totalSaved: number;
+    };
     resolveTheme(input: unknown): Record<string, unknown>;
     resolveLanguage(input: unknown): Record<string, unknown>;
 }

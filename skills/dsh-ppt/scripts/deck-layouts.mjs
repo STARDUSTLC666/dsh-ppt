@@ -10,7 +10,23 @@
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
-import { relativeLuminance, resolveChromeStyle } from './deck-themes.mjs'
+import { relativeLuminance, resolveChromeStyle, mixHex } from './deck-themes.mjs'
+import {
+  normalizeIconName,
+  resolveSemanticIcon,
+  renderIconBadgePptx,
+  renderIconBadgeHtml,
+} from './deck-icons.mjs'
+import { resolveActiveTaste } from './deck-taste.mjs'
+import {
+  POSTER_COVER_VARIANTS,
+  renderPosterCoverPptx,
+  renderPosterCoverHtml,
+  resolveSectionAgendaChapters,
+  renderSectionAgendaPptx,
+  renderSectionAgendaHtml,
+  AESTHETIC_STUDIO_CSS,
+} from './deck-covers.mjs'
 import {
   containsLatexMath,
   looksLikeRawLatex,
@@ -141,6 +157,9 @@ export {
   renderMermaidPptx,
   renderMermaidHtml,
   MERMAID_CSS,
+  POSTER_COVER_VARIANTS,
+  resolveSectionAgendaChapters,
+  AESTHETIC_STUDIO_CSS,
 }
 
 export const CORE_LAYOUTS = new Set([
@@ -339,6 +358,14 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   const layout = slide.layout || 'bullets'
   const variant = slide.variant || ''
+  const taste = resolveActiveTaste(manifest, slide)
+  const cardMaterial = variant === 'frameless' ? 'frameless' : taste.cardMaterial
+  const resolveItemIcon = (it, idx) => {
+    const explicit = normalizeIconName(it?.icon)
+    if (explicit) return explicit
+    if (it?.icon === 'auto' || taste.iconMode === 'auto') return resolveSemanticIcon(it, idx)
+    return ''
+  }
   const title = slide.title || ''
   const subtitle = slide.subtitle || ''
   const kicker = slide.kicker || ''
@@ -352,7 +379,26 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
   const shapes = []
 
   if (layout === 'cover') {
-    const inverted = variant === 'inverted' || (!variant && tk.coverMode === 'inverted-accent')
+    const coverVariant = variant || taste.recipe?.coverVariant || ''
+    const metaParts = [slide.text, slide.source, manifest.brand?.footer].filter(Boolean)
+    const metaText = metaParts.join('  ·  ')
+
+    const posterCover = renderPosterCoverPptx(slide, {
+      coverVariant,
+      title,
+      subtitle,
+      kicker,
+      metaText,
+      total,
+      theme,
+      langAttr,
+      manifest,
+      idBase,
+      nextId,
+    })
+    if (posterCover !== null) return posterCover
+
+    const inverted = coverVariant === 'inverted' || (!coverVariant && tk.coverMode === 'inverted-accent')
     const coverFill = inverted ? tk.coverBg : tk.canvas
     const coverDark = relativeLuminance(coverFill) < 0.36
     const fg = inverted ? (coverDark ? '#F8FAFC' : '#0F172A') : tk.inkPrimary
@@ -365,7 +411,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         preset: 'rect',
         fill: coverFill,
       }))
-    } else if (variant === 'monolith') {
+    } else if (coverVariant === 'monolith') {
       shapes.push(ooxmlShape(nextId(), 'Cover monolith band', { x: 0, y: 0, w: 0.42, h: CANVAS_IN.h }, {
         preset: 'rect',
         fill: tk.accentPrimary,
@@ -456,7 +502,6 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       color: inverted ? hexToRgbaSafeHex(accentRule, coverFill, 0.45) : tk.hairline,
       widthPt: 0.75,
     }))
-    const metaText = [slide.text, slide.source, manifest.brand?.footer].filter(Boolean).join('  ·  ')
     if (metaText) {
       shapes.push(ooxmlShape(nextId(), 'Cover meta', { x: 0.88, y: 6.62, w: 8.3, h: 0.36 }, {
         txBox: true,
@@ -562,6 +607,24 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
   }
 
   if (layout === 'section') {
+    const secVariant = variant || taste.recipe?.sectionVariant || ''
+    if (secVariant === 'agenda') {
+      const agendaPptx = renderSectionAgendaPptx(slide, {
+        index,
+        total,
+        title,
+        subtitle,
+        kicker,
+        theme,
+        langAttr,
+        manifest,
+        chromeCfg,
+        idBase,
+        nextId,
+      })
+      if (agendaPptx !== null) return agendaPptx
+    }
+
     shapes.push(ooxmlShape(nextId(), 'Section side band', { x: 0, y: 0, w: 0.16, h: CANVAS_IN.h }, {
       preset: 'rect',
       fill: tk.accentPrimary,
@@ -885,25 +948,213 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   if (layout === 'kpi') {
     const items = resolveEffectiveItems(slide).slice(0, 4)
+    const kpiVariant = variant || taste.recipe?.kpiVariant || ''
     const n = Math.max(1, items.length)
+    const cardH = Math.min(3.75, bodyH - 0.24)
+    const cardY = bodyTopY + (bodyH - cardH) / 2
+
+    // 非对称 Spotlight 主次聚光灯变体（Hero 50% + 右侧无框细线副指标栈 —— 破除等宽三联框疲劳）
+    if (kpiVariant === 'spotlight' && items.length >= 2) {
+      const hero = items[0]
+      const sats = items.slice(1, 4)
+      const heroBox = { x: 0.62, y: cardY, w: 5.82, h: cardH }
+      const heroMat = cardMaterial === 'glass' ? 'glass' : (cardMaterial === 'solid' ? 'solid' : 'editorial-rule')
+      shapes.push(renderSurfaceCardPptx('KPI Hero Surface', heroBox, {
+        fill: tk.surface2,
+        focal: true,
+        cardMaterial: heroMat,
+      }, nextId, chromeCfg, theme))
+
+      const heroIcon = resolveItemIcon(hero, 0)
+      let labelX = heroBox.x + 0.30
+      if (heroIcon) {
+        shapes.push(renderIconBadgePptx('KPI Hero Badge', { x: heroBox.x + 0.30, y: heroBox.y + 0.28, w: 0.44, h: 0.44 }, heroIcon, nextId, theme, {
+          style: taste.iconBadgeStyle,
+        }))
+        labelX += 0.56
+      }
+      const heroLabel = hero.value ? (hero.title || '') : ''
+      if (heroLabel) {
+        shapes.push(ooxmlShape(nextId(), 'KPI Hero Label', { x: labelX, y: heroBox.y + 0.30, w: heroBox.x + heroBox.w - labelX - 0.26, h: 0.40 }, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+          paragraphs: [
+            ooxmlRichParagraph(heroLabel, {
+              sizePt: 15,
+              color: tk.inkSecondary,
+              bold: true,
+              lang: langAttr,
+              font: theme.fonts.body,
+            }),
+          ],
+        }))
+      }
+      const heroValText = (hero.value || hero.title || '—') + (hero.unit ? ' ' + hero.unit : '')
+      const hvBox = { x: heroBox.x + 0.30, y: heroBox.y + 0.88, w: heroBox.w - 0.60, h: 1.38 }
+      const hvFit = computeTextFit(heroValText, hvBox, 'kpiValue', { maxPt: 60, minPt: 30, padXPt: 2, padYPt: 2 })
+      shapes.push(ooxmlShape(nextId(), 'KPI Hero Value', hvBox, {
+        txBox: true,
+        anchor: 'ctr',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        fontScale: hvFit.fontScale,
+        paragraphs: [
+          ooxmlRichParagraph(heroValText, {
+            sizePt: hvFit.fontPt,
+            color: tk.accentText,
+            bold: true,
+            lang: langAttr,
+            font: theme.fonts.heading,
+            lineHeight: 1.02,
+          }),
+        ],
+      }))
+      const heroSt = statusPalette(hero.status, tk)
+      if (hero.delta) {
+        const pw = computeBadgePillWidth(hero.delta, 12.5, heroBox.w - 0.60, 1.25)
+        shapes.push(ooxmlShape(nextId(), 'KPI Hero Delta', { x: heroBox.x + 0.30, y: heroBox.y + 2.34, w: pw, h: 0.38 }, {
+          preset: 'roundRect',
+          adj: 50000,
+          fill: heroSt.bg,
+          stroke: tk.accentPrimary,
+          strokePt: 0.6,
+          anchor: 'ctr',
+          marginsIn: { l: 0.06, r: 0.06, t: 0.02, b: 0.02 },
+          paragraphs: [
+            ooxmlRichParagraph(hero.delta, {
+              sizePt: 12.5,
+              color: heroSt.fg,
+              bold: true,
+              lang: langAttr,
+              align: 'ctr',
+              font: theme.fonts.body,
+            }),
+          ],
+        }))
+      }
+      if (hero.text) {
+        const dy = hero.delta ? heroBox.y + 2.84 : heroBox.y + 2.40
+        shapes.push(ooxmlShape(nextId(), 'Card 1', { x: heroBox.x + 0.30, y: dy, w: heroBox.w - 0.60, h: Math.max(0.55, heroBox.y + heroBox.h - dy - 0.16) }, {
+          txBox: true,
+          anchor: 't',
+          marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+          paragraphs: [
+            ooxmlRichParagraph(hero.text, {
+              sizePt: 14.5,
+              color: tk.inkSecondary,
+              lang: langAttr,
+              font: theme.fonts.body,
+              lineHeight: 1.4,
+            }),
+          ],
+        }))
+      }
+
+      // 右侧副指标栈（无框细线通透分层）
+      const rightX = 6.86
+      const rightW = 5.85
+      const satGap = 0.18
+      const satH = (cardH - satGap * (sats.length - 1)) / sats.length
+      sats.forEach((it, si) => {
+        const sy = cardY + si * (satH + satGap)
+        const sIcon = resolveItemIcon(it, si + 1)
+        const st = statusPalette(it.status, tk)
+        shapes.push(ooxmlLine(nextId(), 'KPI Sat Top ' + (si + 1), { x: rightX, y: sy }, { x: rightX + rightW, y: sy }, {
+          color: si === 0 ? tk.accentPrimary : tk.hairline,
+          widthPt: si === 0 ? 1.5 : 0.75,
+        }))
+        if (si === sats.length - 1) {
+          shapes.push(ooxmlLine(nextId(), 'KPI Sat Bot', { x: rightX, y: sy + satH }, { x: rightX + rightW, y: sy + satH }, {
+            color: tk.hairline,
+            widthPt: 0.6,
+          }))
+        }
+        let infoX = rightX + 0.04
+        if (sIcon) {
+          shapes.push(renderIconBadgePptx('KPI Sat Icon ' + (si + 1), { x: rightX + 0.04, y: sy + (satH - 0.38) / 2, w: 0.38, h: 0.38 }, sIcon, nextId, theme, {
+            style: taste.iconBadgeStyle,
+          }))
+          infoX += 0.50
+        }
+        const valText = (it.value || it.title || '—') + (it.unit ? ' ' + it.unit : '')
+        const lblText = it.value ? (it.title || '') : ''
+        const valW = Math.min(2.35, Math.max(1.55, rightW * 0.38))
+        const leftW = Math.max(1.8, rightX + rightW - valW - infoX - 0.16)
+        shapes.push(ooxmlShape(nextId(), 'Card ' + (si + 2), { x: infoX, y: sy + 0.10, w: leftW, h: satH - 0.18 }, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+          paragraphs: [
+            ...(lblText ? [ooxmlRichParagraph(lblText, { sizePt: 14, color: tk.inkPrimary, bold: true, lang: langAttr, font: theme.fonts.heading, spaceAfterPt: it.text ? 3 : 0 })] : []),
+            ...(it.text ? [ooxmlRichParagraph(it.text, { sizePt: 12.5, color: tk.inkSecondary, lang: langAttr, font: theme.fonts.body, lineHeight: 1.3 })] : []),
+          ],
+        }))
+        const valX = rightX + rightW - valW
+        shapes.push(ooxmlShape(nextId(), 'KPI Sat Val ' + (si + 1), { x: valX, y: sy + 0.08, w: valW, h: satH - (it.delta ? 0.38 : 0.14) }, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+          paragraphs: [
+            ooxmlRichParagraph(valText, {
+              sizePt: sats.length >= 3 ? 26 : 32,
+              color: tk.inkPrimary,
+              bold: true,
+              lang: langAttr,
+              align: 'r',
+              font: theme.fonts.heading,
+              lineHeight: 1.05,
+            }),
+          ],
+        }))
+        if (it.delta) {
+          shapes.push(ooxmlShape(nextId(), 'KPI Sat Delta ' + (si + 1), { x: valX, y: sy + satH - 0.34, w: valW, h: 0.28 }, {
+            txBox: true,
+            anchor: 'ctr',
+            marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+            paragraphs: [
+              ooxmlRichParagraph(it.delta, {
+                sizePt: 11.5,
+                color: st.fg,
+                bold: true,
+                lang: langAttr,
+                align: 'r',
+                font: theme.fonts.body,
+              }),
+            ],
+          }))
+        }
+      })
+      shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+      return shapes.join('')
+    }
+
     const gap = 0.28
     const cardW = (12.09 - gap * (n - 1)) / n
-    const cardH = Math.min(3.55, bodyH - 0.3)
-    const cardY = bodyTopY + (bodyH - cardH) / 2
+    const effKpiMat = kpiVariant === 'frameless' ? 'frameless' : cardMaterial
 
     items.forEach((it, idx) => {
       const x = 0.62 + idx * (cardW + gap)
       const st = statusPalette(it.status, tk)
       const valText = (it.value || it.title || '—') + (it.unit ? ' ' + it.unit : '')
       const labelText = it.value ? (it.title || '') : ''
+      const iconName = resolveItemIcon(it, idx)
 
       shapes.push(renderSurfaceCardPptx('KPI Surface ' + (idx + 1), { x, y: cardY, w: cardW, h: cardH }, {
         fill: tk.surface1,
         focal: idx === 0,
+        cardMaterial: effKpiMat,
       }, nextId, chromeCfg, theme))
 
+      const padX = effKpiMat === 'frameless' || effKpiMat === 'editorial-rule' ? 0.04 : 0.24
+      let lblLeft = x + padX
+      if (iconName) {
+        shapes.push(renderIconBadgePptx('KPI Icon ' + (idx + 1), { x: lblLeft, y: cardY + 0.22, w: 0.38, h: 0.38 }, iconName, nextId, theme, {
+          style: taste.iconBadgeStyle,
+        }))
+        lblLeft += 0.48
+      }
       if (labelText) {
-        shapes.push(ooxmlShape(nextId(), 'KPI Label ' + (idx + 1), { x: x + 0.24, y: cardY + 0.24, w: cardW - 0.48, h: 0.38 }, {
+        shapes.push(ooxmlShape(nextId(), 'KPI Label ' + (idx + 1), { x: lblLeft, y: cardY + 0.24, w: Math.max(0.8, x + cardW - padX - lblLeft), h: 0.38 }, {
           txBox: true,
           anchor: 'ctr',
           marginsIn: { l: 0, r: 0, t: 0, b: 0 },
@@ -919,8 +1170,8 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         }))
       }
 
-      const vBox = { x: x + 0.24, y: cardY + 0.72, w: cardW - 0.48, h: 1.15 }
-      const vFit = computeTextFit(valText, vBox, 'kpiValue', { maxPt: n >= 4 ? 38 : 46, minPt: 24, padXPt: 2, padYPt: 2 })
+      const vBox = { x: x + padX, y: cardY + 0.72, w: cardW - padX * 2, h: 1.15 }
+      const vFit = computeTextFit(valText, vBox, 'kpiValue', { maxPt: effKpiMat === 'frameless' ? (n >= 4 ? 42 : 52) : (n >= 4 ? 38 : 46), minPt: 24, padXPt: 2, padYPt: 2 })
       shapes.push(ooxmlShape(nextId(), 'KPI Value ' + (idx + 1), vBox, {
         txBox: true,
         anchor: 'ctr',
@@ -939,8 +1190,8 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       }))
 
       if (it.delta) {
-        const pillW = computeBadgePillWidth(it.delta, 12, cardW - 0.48, 1.15)
-        shapes.push(ooxmlShape(nextId(), 'KPI Delta ' + (idx + 1), { x: x + 0.24, y: cardY + 1.98, w: pillW, h: 0.36 }, {
+        const pillW = computeBadgePillWidth(it.delta, 12, cardW - padX * 2, 1.15)
+        shapes.push(ooxmlShape(nextId(), 'KPI Delta ' + (idx + 1), { x: x + padX, y: cardY + 1.98, w: pillW, h: 0.36 }, {
           preset: 'roundRect',
           adj: 50000,
           fill: st.bg,
@@ -963,7 +1214,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
       if (it.text) {
         const descY = it.delta ? cardY + 2.46 : cardY + 2.02
-        const descBox = { x: x + 0.24, y: descY, w: cardW - 0.48, h: Math.max(0.5, cardY + cardH - descY - 0.18) }
+        const descBox = { x: x + padX, y: descY, w: cardW - padX * 2, h: Math.max(0.5, cardY + cardH - descY - 0.18) }
         const dFit = computeTextFit(it.text, descBox, 'cardBody', { maxPt: 14.5, minPt: 13.5, padXPt: 2, padYPt: 2 })
         shapes.push(ooxmlShape(nextId(), 'Card ' + (idx + 1), descBox, {
           txBox: true,
@@ -988,13 +1239,17 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   if (layout === 'cards') {
     const items = resolveEffectiveItems(slide)
+    const cardsVariant = variant || taste.recipe?.cardsVariant || ''
+    const isBentoHero = cardsVariant === 'bento-hero' && items.length >= 2 && items.length <= 4
+    const isFramelessCards = cardsVariant === 'frameless'
+    const effCardMat = isFramelessCards ? 'frameless' : cardMaterial
     const n = Math.max(1, items.length)
-    const gap = 0.24
+    const gap = isFramelessCards ? 0.34 : 0.24
     let topOffset = bodyTopY
     let availH = bodyH
 
     // exec-summary 变体：顶部通栏核心论断横幅 + 下方支柱卡
-    if (variant === 'exec-summary' && (subtitle || slide.text)) {
+    if (cardsVariant === 'exec-summary' && (subtitle || slide.text)) {
       const thesisText = slide.text || subtitle
       const bannerBox = { x: 0.62, y: bodyTopY, w: 12.09, h: 0.96 }
       shapes.push(ooxmlShape(nextId(), 'Exec thesis banner', bannerBox, {
@@ -1020,26 +1275,98 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       availH = bodyBottomY - topOffset
     }
 
-    // 计算每张卡片的几何坐标（支持 bento 非对称网格与 pillars 等分网格）
-    const cardBoxes = computeCardGridBoxes(n, variant, { x: 0.62, y: topOffset, w: 12.09, h: availH }, gap)
+    // 计算每张卡片的几何坐标（支持 bento / bento-hero 非对称网格与 pillars/frameless 等分网格）
+    const cardBoxes = isBentoHero
+      ? (() => {
+          const leftW = 12.09 * 0.43 - gap / 2
+          const rightW = 12.09 - leftW - gap
+          const rightCount = items.length - 1
+          const rH = (availH - gap * (rightCount - 1)) / rightCount
+          return [
+            { x: 0.62, y: topOffset, w: leftW, h: availH },
+            ...Array.from({ length: rightCount }, (_, ri) => ({
+              x: 0.62 + leftW + gap,
+              y: topOffset + ri * (rH + gap),
+              w: rightW,
+              h: rH,
+            })),
+          ]
+        })()
+      : computeCardGridBoxes(n, cardsVariant, { x: 0.62, y: topOffset, w: 12.09, h: availH }, gap)
+
     items.slice(0, cardBoxes.length).forEach((it, idx) => {
       const box = cardBoxes[idx]
-      const isHero = variant === 'bento' && idx === 0
-      shapes.push(renderSurfaceCardPptx('Card Surface ' + (idx + 1), box, {
-        fill: isHero ? tk.surface2 : tk.surface1,
-        focal: isHero || idx === 0,
-      }, nextId, chromeCfg, theme))
+      const isInvertedHero = isBentoHero && idx === 0
+      const isHero = (cardsVariant === 'bento' || isBentoHero) && idx === 0
+      const iconName = resolveItemIcon(it, idx)
 
+      if (isInvertedHero) {
+        const heroGradA = tk.coverBg || tk.accentPrimary
+        const heroGradB = mixHex(heroGradA, tk.accentSecondary, 0.35)
+        shapes.push(ooxmlShape(nextId(), 'Card Hero Surface', box, {
+          preset: 'roundRect',
+          adj: roundRectAdj(box.w, box.h, Math.max(10, chromeCfg.cardRadiusPx)),
+          gradientStops: [
+            { offset: 0, color: heroGradA },
+            { offset: 1, color: heroGradB },
+          ],
+          gradientAngle: 140,
+          shadow: theme.shadow,
+        }))
+      } else {
+        shapes.push(renderSurfaceCardPptx('Card Surface ' + (idx + 1), box, {
+          fill: isHero ? tk.surface2 : tk.surface1,
+          focal: isHero || idx === 0,
+          cardMaterial: effCardMat,
+        }, nextId, chromeCfg, theme))
+        if (isFramelessCards && idx > 0 && box.y === cardBoxes[idx - 1].y) {
+          shapes.push(ooxmlLine(nextId(), 'Frameless Divider ' + idx, { x: box.x - gap / 2, y: box.y + 0.10 }, { x: box.x - gap / 2, y: box.y + box.h - 0.10 }, {
+            color: tk.hairline,
+            widthPt: 0.5,
+          }))
+        }
+      }
+
+      const padX = !isInvertedHero && (effCardMat === 'frameless' || effCardMat === 'editorial-rule') ? 0.04 : 0.24
       const badge = it.tag || String(idx + 1).padStart(2, '0')
-      if (chromeCfg.useDisplayNumeral) {
-        shapes.push(ooxmlShape(nextId(), 'Card Badge ' + (idx + 1), { x: box.x + 0.22, y: box.y + 0.16, w: Math.min(2.8, box.w - 0.44), h: 0.44 }, {
+      const titleColor = isInvertedHero ? '#F8FAFC' : tk.inkPrimary
+      const bodyColor = isInvertedHero ? '#E2E8F0' : tk.inkSecondary
+      const statColor = isInvertedHero ? '#FDE68A' : tk.accentText
+
+      let headerRowH = 0.42
+      if (iconName) {
+        shapes.push(renderIconBadgePptx('Card Icon ' + (idx + 1), { x: box.x + padX, y: box.y + 0.20, w: 0.40, h: 0.40 }, iconName, nextId, theme, {
+          style: isInvertedHero ? 'ring' : taste.iconBadgeStyle,
+          color: isInvertedHero ? '#FFFFFF' : tk.accentPrimary,
+          stroke: isInvertedHero ? '#FFFFFF' : tk.accentPrimary,
+        }))
+        if (it.tag) {
+          shapes.push(ooxmlShape(nextId(), 'Card Tag ' + (idx + 1), { x: box.x + padX + 0.50, y: box.y + 0.22, w: Math.max(0.8, box.w - padX * 2 - 0.50), h: 0.34 }, {
+            txBox: true,
+            anchor: 'ctr',
+            marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+            paragraphs: [
+              ooxmlRichParagraph(it.tag.toUpperCase(), {
+                sizePt: 10.5,
+                color: isInvertedHero ? '#CBD5E1' : tk.accentText,
+                bold: true,
+                lang: langAttr,
+                font: theme.fonts.body,
+                spc: 120,
+              }),
+            ],
+          }))
+        }
+        headerRowH = 0.52
+      } else if (chromeCfg.useDisplayNumeral || isFramelessCards) {
+        shapes.push(ooxmlShape(nextId(), 'Card Badge ' + (idx + 1), { x: box.x + padX, y: box.y + 0.16, w: Math.min(2.8, box.w - padX * 2), h: 0.44 }, {
           txBox: true,
           anchor: 'ctr',
           marginsIn: { l: 0, r: 0, t: 0, b: 0 },
           paragraphs: [
             ooxmlRichParagraph(badge, {
-              sizePt: /^\d+$/.test(badge) ? 24 : 12.5,
-              color: tk.accentText,
+              sizePt: /^\d+$/.test(badge) ? 24 : 12,
+              color: isInvertedHero ? '#FDE68A' : tk.accentText,
               bold: true,
               lang: langAttr,
               font: theme.fonts.heading,
@@ -1047,18 +1374,20 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
             }),
           ],
         }))
+        headerRowH = 0.50
       } else {
-        const badgeW = computeBadgePillWidth(badge, 11, box.w - 0.44, 0.54)
-        shapes.push(ooxmlShape(nextId(), 'Card Badge ' + (idx + 1), { x: box.x + 0.22, y: box.y + 0.20, w: badgeW, h: 0.30 }, {
+        const badgeW = computeBadgePillWidth(badge, 11, box.w - padX * 2, 0.54)
+        shapes.push(ooxmlShape(nextId(), 'Card Badge ' + (idx + 1), { x: box.x + padX, y: box.y + 0.20, w: badgeW, h: 0.30 }, {
           preset: cardPreset,
           adj: roundRectAdj(badgeW, 0.30, Math.min(6, chromeCfg.cardRadiusPx)),
-          fill: isHero ? tk.accentPrimary : tk.accentSoft,
+          fill: isInvertedHero ? '#FFFFFF' : (isHero ? tk.accentPrimary : tk.accentSoft),
+          fillAlpha: isInvertedHero ? 0.16 : 1,
           anchor: 'ctr',
           marginsIn: { l: 0.04, r: 0.04, t: 0.01, b: 0.01 },
           paragraphs: [
             ooxmlRichParagraph(badge, {
               sizePt: 11,
-              color: isHero ? tk.inkOnAccent : tk.accentText,
+              color: isInvertedHero ? '#FFFFFF' : (isHero ? tk.inkOnAccent : tk.accentText),
               bold: true,
               lang: langAttr,
               align: 'ctr',
@@ -1066,31 +1395,32 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
             }),
           ],
         }))
+        headerRowH = 0.42
       }
 
-      const innerTop = box.y + (chromeCfg.useDisplayNumeral ? 0.66 : 0.58)
-      const innerBox = { x: box.x + 0.22, y: innerTop, w: box.w - 0.44, h: Math.max(0.5, box.y + box.h - innerTop - 0.16) }
+      const innerTop = box.y + 0.20 + headerRowH
+      const innerBox = { x: box.x + padX, y: innerTop, w: box.w - padX * 2, h: Math.max(0.5, box.y + box.h - innerTop - 0.16) }
       const bodyLines = [
         ...(it.text ? [it.text] : []),
         ...(it.bullets ?? []),
       ]
-      const fit = computeTextFit([it.title || '', ...bodyLines], innerBox, 'cardBody', { maxPt: 15.5, minPt: 13.5, padXPt: 2, padYPt: 2 })
+      const fit = computeTextFit([it.title || '', ...bodyLines], innerBox, 'cardBody', { maxPt: isInvertedHero ? 16 : 15.5, minPt: 13.5, padXPt: 2, padYPt: 2 })
       const paras = []
       if (it.title) {
         paras.push(ooxmlRichParagraph(it.title, {
-          sizePt: Math.min(18, fit.fontPt + 2),
-          color: tk.inkPrimary,
+          sizePt: Math.min(isInvertedHero ? 21 : 18, fit.fontPt + (isInvertedHero ? 4 : 2)),
+          color: titleColor,
           bold: true,
           lang: langAttr,
           font: theme.fonts.heading,
           lineHeight: 1.25,
-          spaceAfterPt: bodyLines.length ? 6 : 0,
+          spaceAfterPt: bodyLines.length || it.value ? 6 : 0,
         }))
       }
       if (it.value) {
         paras.push(ooxmlRichParagraph(it.value + (it.unit ? ' ' + it.unit : ''), {
-          sizePt: 24,
-          color: tk.accentText,
+          sizePt: isInvertedHero ? 30 : 24,
+          color: statColor,
           bold: true,
           lang: langAttr,
           font: theme.fonts.heading,
@@ -1100,8 +1430,8 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       if (it.text) {
         paras.push(ooxmlRichParagraph(it.text, {
           sizePt: fit.fontPt,
-          color: tk.inkSecondary,
-          accentColor: tk.accentText,
+          color: bodyColor,
+          accentColor: statColor,
           lang: langAttr,
           font: theme.fonts.body,
           lineHeight: 1.42,
@@ -1111,10 +1441,10 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       for (const b of it.bullets ?? []) {
         paras.push(ooxmlRichParagraph(b, {
           sizePt: fit.fontPt,
-          color: tk.inkSecondary,
-          accentColor: tk.accentText,
+          color: bodyColor,
+          accentColor: statColor,
           bullet: true,
-          bulletColor: tk.accentPrimary,
+          bulletColor: isInvertedHero ? '#FDE68A' : tk.accentPrimary,
           lang: langAttr,
           font: theme.fonts.body,
           lineHeight: 1.38,
@@ -1661,12 +1991,22 @@ function computeCardGridBoxes(count, variant, area, gap) {
 export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = {}, theme) {
   const layout = slide.layout || 'bullets'
   const variant = slide.variant || ''
+  const taste = resolveActiveTaste(manifest, slide)
+  const cardMaterial = variant === 'frameless' ? 'frameless' : taste.cardMaterial
+  const matClass = cardMaterial && cardMaterial !== 'solid' ? ' mat-' + cardMaterial : ''
+  const resolveItemIcon = (it, idx) => {
+    const explicit = normalizeIconName(it?.icon)
+    if (explicit) return explicit
+    if (it?.icon === 'auto' || taste.iconMode === 'auto') return resolveSemanticIcon(it, idx)
+    return ''
+  }
   const kicker = slide.kicker || (layout === 'cover' ? ui.coverKicker : '')
   const title = slide.title || ''
   const subtitle = slide.subtitle || ''
   const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
   const isFraming = layout === 'cover' || layout === 'closing'
-  const inverted = isFraming && (variant === 'inverted' || (!variant && theme.tokens.coverMode === 'inverted-accent'))
+  const coverVariant = layout === 'cover' ? (variant || taste.recipe?.coverVariant || '') : variant
+  const inverted = isFraming && (coverVariant === 'inverted' || (!coverVariant && theme.tokens.coverMode === 'inverted-accent'))
   const chromeStyle = resolveChromeStyle(theme, slide, manifest.brand)
   const folioText = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
   const renderHeader = (fallbackKicker = '') =>
@@ -1677,15 +2017,30 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
 
   if (layout === 'cover') {
     const meta = [slide.text, slide.source, !manifest.brand?.footer ? ui.generatedBy : ''].filter(Boolean)[0] || ''
-    inner =
-      '<div class="cover-shell' + (inverted ? ' is-inverted' : '') + '">' +
-      '<div class="cover-lockup">' +
-      (kicker !== '' ? '<div class="kicker">' + escapeHtml(kicker) + '</div>' : '') +
-      '<h1>' + renderInlineHtml(title) + '</h1>' +
-      (subtitle !== '' ? '<div class="subtitle">' + renderInlineHtml(subtitle) + '</div>' : '') +
-      '</div>' +
-      (meta !== '' ? '<div class="meta">' + escapeHtml(meta) + '</div>' : '') +
-      '</div>'
+    const posterHtml = renderPosterCoverHtml(slide, {
+      coverVariant,
+      title,
+      subtitle,
+      kicker,
+      meta,
+      total,
+      langId,
+      manifest,
+      theme,
+    })
+    if (posterHtml !== null) {
+      inner = posterHtml
+    } else {
+      inner =
+        '<div class="cover-shell' + (inverted ? ' is-inverted' : '') + '">' +
+        '<div class="cover-lockup">' +
+        (kicker !== '' ? '<div class="kicker">' + escapeHtml(kicker) + '</div>' : '') +
+        '<h1>' + renderInlineHtml(title) + '</h1>' +
+        (subtitle !== '' ? '<div class="subtitle">' + renderInlineHtml(subtitle) + '</div>' : '') +
+        '</div>' +
+        (meta !== '' ? '<div class="meta">' + escapeHtml(meta) + '</div>' : '') +
+        '</div>'
+    }
   } else if (layout === 'closing') {
     const items = resolveEffectiveItems(slide)
     const showCtaCards = (variant === 'cta-cards' || items.length >= 2) && (slide.items?.length || bullets.length >= 2)
@@ -1697,7 +2052,7 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
       (showCtaCards
         ? '<div class="layout-grid cols-' + Math.min(3, items.length) + ' closing-cards">' +
           items.slice(0, 3).map((it) =>
-            '<div class="surface-card"><div class="card-title">' + renderInlineHtml(it.title || '') + '</div>' +
+            '<div class="surface-card' + matClass + '"><div class="card-title">' + renderInlineHtml(it.title || '') + '</div>' +
             (it.text ? '<div class="card-body">' + renderInlineHtml(it.text) + '</div>' : '') + '</div>',
           ).join('') +
           '</div>'
@@ -1705,14 +2060,22 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
       (!manifest.brand?.footer ? '<div class="meta">' + escapeHtml(ui.generatedBy) + '</div>' : '') +
       '</div>'
   } else if (layout === 'section') {
-    inner =
-      (chromeStyle === 'editorial-folio'
-        ? '<div class="editorial-folio-bar"><span class="kicker">' + escapeHtml(kicker || '') + '</span><span class="slide-folio">' + folioText + '</span></div>'
-        : '') +
-      (kicker !== '' && kicker !== title ? '<div class="kicker section-index">' + escapeHtml(kicker) + '</div>' : '') +
-      '<div class="accent-line"></div>' +
-      '<h2>' + renderInlineHtml(title) + '</h2>' +
-      (subtitle !== '' ? '<div class="subtitle">' + renderInlineHtml(subtitle) + '</div>' : '')
+    const secVariant = variant || taste.recipe?.sectionVariant || ''
+    const agendaHtml = secVariant === 'agenda'
+      ? renderSectionAgendaHtml(slide, { index, title, subtitle, kicker, langId, manifest })
+      : null
+    if (agendaHtml !== null) {
+      inner = agendaHtml
+    } else {
+      inner =
+        (chromeStyle === 'editorial-folio'
+          ? '<div class="editorial-folio-bar"><span class="kicker">' + escapeHtml(kicker || '') + '</span><span class="slide-folio">' + folioText + '</span></div>'
+          : '') +
+        (kicker !== '' && kicker !== title ? '<div class="kicker section-index">' + escapeHtml(kicker) + '</div>' : '') +
+        '<div class="accent-line"></div>' +
+        '<h2>' + renderInlineHtml(title) + '</h2>' +
+        (subtitle !== '' ? '<div class="subtitle">' + renderInlineHtml(subtitle) + '</div>' : '')
+    }
   } else if (layout === 'statement') {
     inner =
       (chromeStyle === 'editorial-folio'
@@ -1766,43 +2129,106 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
       '</ol>'
   } else if (layout === 'kpi') {
     const items = resolveEffectiveItems(slide).slice(0, 4)
-    inner =
-      renderHeader() +
-      '<div class="layout-grid kpi-grid cols-' + Math.max(1, items.length) + '">' +
-      items.map((it, idx) =>
-        '<div class="surface-card kpi-card' + (idx === 0 ? ' is-focal' : '') + '" data-item-index="' + idx + '">' +
-        (it.value && it.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '') +
-        '<div class="kpi-value"><span data-item-field="value">' + escapeHtml(it.value || it.title || '—') + '</span>' +
-        (it.unit ? '<small class="kpi-unit" data-item-field="unit">' + escapeHtml(it.unit) + '</small>' : '') + '</div>' +
-        (it.delta ? '<span class="kpi-delta tone-' + escapeHtml(it.status || 'positive') + '" data-item-field="delta">' + escapeHtml(it.delta) + '</span>' : '') +
-        (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
-        '</div>',
-      ).join('') +
-      '</div>'
+    const kpiVariant = variant || taste.recipe?.kpiVariant || ''
+    const effKpiMatClass = kpiVariant === 'frameless' ? ' mat-frameless' : matClass
+    if (kpiVariant === 'spotlight' && items.length >= 2) {
+      const hero = items[0]
+      const heroIcon = resolveItemIcon(hero, 0)
+      const heroHeadMarkup = heroIcon
+        ? '<div class="kpi-head-row">' + renderIconBadgeHtml(heroIcon, { style: taste.iconBadgeStyle, size: 20 }) +
+          (hero.value && hero.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(hero.title) + '</div>' : '') +
+          '</div>'
+        : (hero.value && hero.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(hero.title) + '</div>' : '')
+      const sats = items.slice(1, 4)
+      inner =
+        renderHeader() +
+        '<div class="kpi-spotlight">' +
+        '<div class="surface-card kpi-card kpi-hero is-focal' + effKpiMatClass + '" data-item-index="0">' +
+        heroHeadMarkup +
+        '<div class="kpi-value is-hero-val"><span data-item-field="value">' + escapeHtml(hero.value || hero.title || '—') + '</span>' +
+        (hero.unit ? '<small class="kpi-unit" data-item-field="unit">' + escapeHtml(hero.unit) + '</small>' : '') + '</div>' +
+        (hero.delta ? '<span class="kpi-delta tone-' + escapeHtml(hero.status || 'positive') + '" data-item-field="delta">' + escapeHtml(hero.delta) + '</span>' : '') +
+        (hero.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(hero.text) + '</div>' : '') +
+        '</div>' +
+        '<div class="kpi-sat-stack">' +
+        sats.map((it, si) => {
+          const sIcon = resolveItemIcon(it, si + 1)
+          return (
+            '<div class="kpi-sat-row" data-item-index="' + (si + 1) + '">' +
+            (sIcon ? renderIconBadgeHtml(sIcon, { style: taste.iconBadgeStyle, size: 18 }) : '') +
+            '<div class="kpi-sat-copy">' +
+            (it.value && it.title ? '<div class="card-title" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '') +
+            (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
+            '</div>' +
+            '<div class="kpi-sat-metric">' +
+            '<div class="kpi-sat-val"><span data-item-field="value">' + escapeHtml(it.value || it.title || '—') + '</span>' +
+            (it.unit ? '<small class="kpi-unit" data-item-field="unit">' + escapeHtml(it.unit) + '</small>' : '') + '</div>' +
+            (it.delta ? '<span class="kpi-sat-delta tone-' + escapeHtml(it.status || 'positive') + '" data-item-field="delta">' + escapeHtml(it.delta) + '</span>' : '') +
+            '</div></div>'
+          )
+        }).join('') +
+        '</div></div>'
+    } else {
+      inner =
+        renderHeader() +
+        '<div class="layout-grid kpi-grid cols-' + Math.max(1, items.length) + '">' +
+        items.map((it, idx) => {
+          const iconName = resolveItemIcon(it, idx)
+          const headMarkup = iconName
+            ? '<div class="kpi-head-row">' + renderIconBadgeHtml(iconName, { style: taste.iconBadgeStyle, size: 18 }) +
+              (it.value && it.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '') +
+              '</div>'
+            : (it.value && it.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '')
+          return (
+            '<div class="surface-card kpi-card' + (idx === 0 ? ' is-focal' : '') + effKpiMatClass + '" data-item-index="' + idx + '">' +
+            headMarkup +
+            '<div class="kpi-value"><span data-item-field="value">' + escapeHtml(it.value || it.title || '—') + '</span>' +
+            (it.unit ? '<small class="kpi-unit" data-item-field="unit">' + escapeHtml(it.unit) + '</small>' : '') + '</div>' +
+            (it.delta ? '<span class="kpi-delta tone-' + escapeHtml(it.status || 'positive') + '" data-item-field="delta">' + escapeHtml(it.delta) + '</span>' : '') +
+            (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
+            '</div>'
+          )
+        }).join('') +
+        '</div>'
+    }
   } else if (layout === 'cards') {
     const items = resolveEffectiveItems(slide)
-    const thesis = variant === 'exec-summary' && (slide.text || subtitle)
+    const cardsVariant = variant || taste.recipe?.cardsVariant || ''
+    const isBentoHero = cardsVariant === 'bento-hero' && items.length >= 2 && items.length <= 4
+    const isFramelessCards = cardsVariant === 'frameless'
+    const effMatClass = isFramelessCards ? ' mat-frameless' : matClass
+    const thesis = cardsVariant === 'exec-summary' && (slide.text || subtitle)
       ? '<div class="exec-thesis">' + renderInlineHtml(slide.text || subtitle) + '</div>'
       : ''
-    const gridClass = variant === 'bento'
-      ? 'bento-grid bento-' + Math.min(6, Math.max(2, items.length))
-      : 'cols-' + Math.min(4, Math.max(2, items.length <= 4 ? items.length : 3))
-    const badgeClass = chromeStyle === 'editorial-folio' ? 'item-badge is-editorial-num' : 'item-badge'
+    const gridClass = isBentoHero
+      ? 'bento-hero-grid bento-hero-' + items.length
+      : cardsVariant === 'bento'
+        ? 'bento-grid bento-' + Math.min(6, Math.max(2, items.length))
+        : 'cols-' + Math.min(4, Math.max(2, items.length <= 4 ? items.length : 3)) + (isFramelessCards ? ' is-frameless-grid' : '')
+    const badgeClass = chromeStyle === 'editorial-folio' || isFramelessCards ? 'item-badge is-editorial-num' : 'item-badge'
     inner =
       renderHeader() +
       thesis +
       '<div class="layout-grid cards-grid ' + gridClass + '">' +
-      items.slice(0, 6).map((it, idx) =>
-        '<article class="surface-card' + (variant === 'bento' && idx === 0 ? ' is-hero' : '') + '" data-item-index="' + idx + '">' +
-        '<span class="' + badgeClass + '">' + escapeHtml(it.tag || String(idx + 1).padStart(2, '0')) + '</span>' +
-        (it.title ? '<h3 class="card-title" data-item-field="title">' + renderInlineHtml(it.title) + '</h3>' : '') +
-        (it.value ? '<div class="card-stat" data-item-field="value">' + escapeHtml(it.value + (it.unit ? ' ' + it.unit : '')) + '</div>' : '') +
-        (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
-        (it.bullets?.length
-          ? '<ul class="card-bullets">' + it.bullets.map((b) => '<li>' + renderInlineHtml(b, { autoLeadBold: true }) + '</li>').join('') + '</ul>'
-          : '') +
-        '</article>',
-      ).join('') +
+      items.slice(0, 6).map((it, idx) => {
+        const isInvHero = isBentoHero && idx === 0
+        const iconName = resolveItemIcon(it, idx)
+        const badgeMarkup = iconName
+          ? '<div class="card-icon-row">' + renderIconBadgeHtml(iconName, { style: isInvHero ? 'ring' : taste.iconBadgeStyle, size: 19 }) +
+            (it.tag ? '<span class="card-icon-tag">' + escapeHtml(it.tag) + '</span>' : '') + '</div>'
+          : '<span class="' + badgeClass + '">' + escapeHtml(it.tag || String(idx + 1).padStart(2, '0')) + '</span>'
+        return (
+          '<article class="surface-card' + (isInvHero ? ' is-inverted-hero' : ((cardsVariant === 'bento' && idx === 0) ? ' is-hero' : '') + effMatClass) + '" data-item-index="' + idx + '">' +
+          badgeMarkup +
+          (it.title ? '<h3 class="card-title" data-item-field="title">' + renderInlineHtml(it.title) + '</h3>' : '') +
+          (it.value ? '<div class="card-stat" data-item-field="value">' + escapeHtml(it.value + (it.unit ? ' ' + it.unit : '')) + '</div>' : '') +
+          (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
+          (it.bullets?.length
+            ? '<ul class="card-bullets">' + it.bullets.map((b) => '<li>' + renderInlineHtml(b, { autoLeadBold: true }) + '</li>').join('') + '</ul>'
+            : '') +
+          '</article>'
+        )
+      }).join('') +
       '</div>'
   } else if (layout === 'comparison') {
     const items = resolveEffectiveItems(slide)
@@ -2027,12 +2453,13 @@ math.deck-math.is-block{display:block;font-size:clamp(20px,2.2vw,32px);margin:4p
 math.deck-math.is-inline{font-size:1.06em;vertical-align:middle}
 .callout-hero.is-omath{padding:22px 30px;display:flex;align-items:center;justify-content:center}
 .formula-caption{text-align:center;color:var(--ink-secondary);font-size:clamp(14px,1.35vw,18px);margin-top:-6px}
+${AESTHETIC_STUDIO_CSS}
 ${DIAGRAMS_CSS}
 ${CHROME_CSS}
 ${MERMAID_CSS}
 @media (max-width:900px){
-  .cols-3,.cols-4,.cols-5,.cols-6,.bento-grid.bento-3,.bento-grid.bento-4,.bento-grid.bento-5,.bento-grid.bento-6,.tam-board,.arch-board.has-sidecar,.org-children,.flywheel-stage,.mekko-board,.porter-board,.swot-cross{grid-template-columns:1fr}
-  .bento-grid.bento-3 > :first-child,.bento-grid.bento-4 > *{grid-row:auto;grid-column:auto}
+  .cols-3,.cols-4,.cols-5,.cols-6,.bento-grid.bento-3,.bento-grid.bento-4,.bento-grid.bento-5,.bento-grid.bento-6,.bento-hero-grid,.kpi-spotlight,.section-agenda-shell,.cover-shell.is-architectural,.ed-main-grid,.ed-meta-strip,.tam-board,.arch-board.has-sidecar,.org-children,.flywheel-stage,.mekko-board,.porter-board,.swot-cross{grid-template-columns:1fr}
+  .bento-grid.bento-3 > :first-child,.bento-grid.bento-4 > *,.bento-hero-grid > :first-child{grid-row:auto;grid-column:auto}
   .issue-action-row,.gantt-head,.gantt-row,.arch-tier,.porter-support-zone{grid-template-columns:1fr}
   .flywheel-hub,.swot-anchor{position:static;transform:none;margin:0 auto}
 }
