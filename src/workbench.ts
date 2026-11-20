@@ -1377,7 +1377,7 @@ export class PptWorkbench {
             signal: request.signal,
           })
           if (!rendered.ok) {
-            return fail(400, rendered.message || '导出失败：当前环境未安装 @deepseek-ai/libreoffice-kit 渲染引擎 / PDF/PNG export requires @deepseek-ai/libreoffice-kit')
+            return fail(rendered.status === 'unavailable' ? 503 : 500, rendered.message || '导出失败：当前环境未安装 @deepseek-ai/libreoffice-kit 渲染引擎 / PDF/PNG export requires @deepseek-ai/libreoffice-kit')
           }
           if (kind === 'pdf') {
             if (!rendered.pdfPath || !existsSync(rendered.pdfPath)) return fail(400, 'PDF 渲染产物缺失')
