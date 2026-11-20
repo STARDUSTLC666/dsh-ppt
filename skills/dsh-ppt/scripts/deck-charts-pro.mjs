@@ -646,19 +646,37 @@ export function renderProChartSlideBodyPptx(slide, ctx) {
         stroke: tk.canvas,
         strokePt: 1.25,
       }))
-      // 外侧防撞数值标签
+      // 外侧防撞数值标签（靠近左/右数轴边界时自动上移至圆点正上方，杜绝与行标题或徽章重叠）
       const bLeft = bx <= ax
-      shapes.push(ooxmlShape(nextId(), `Dumbbell Val B ${idx + 1}`, { x: bLeft ? bx - 0.78 : bx + 0.18, y: cy - 0.15, w: 0.62, h: 0.30 }, {
+      const bText = fmtNum(r.before, r.unit)
+      const aText = fmtNum(r.after, r.unit)
+      const bW = Math.max(0.68, Math.min(1.15, bText.length * 0.13 + 0.16))
+      const aW = Math.max(0.70, Math.min(1.15, aText.length * 0.13 + 0.18))
+      const bTightLeft = bLeft && (bx - trackX < bW + 0.14)
+      const bTightRight = !bLeft && (trackX + trackW - bx < bW + 0.14)
+      const aTightLeft = !bLeft && (ax - trackX < aW + 0.14)
+      const aTightRight = bLeft && (trackX + trackW - ax < aW + 0.14)
+      const bBox = bTightLeft
+        ? { x: Math.max(trackX, bx - 0.10), y: cy - 0.39, w: bW, h: 0.26, align: 'l' }
+        : bTightRight
+          ? { x: Math.min(trackX + trackW - bW, bx - bW + 0.12), y: cy - 0.39, w: bW, h: 0.26, align: 'r' }
+          : { x: bLeft ? bx - bW - 0.16 : bx + 0.18, y: cy - 0.15, w: bW, h: 0.30, align: bLeft ? 'r' : 'l' }
+      const aBox = aTightLeft
+        ? { x: Math.max(trackX, ax - 0.10), y: cy - 0.39, w: aW, h: 0.26, align: 'l' }
+        : aTightRight
+          ? { x: Math.min(trackX + trackW - aW, ax - aW + 0.12), y: cy - 0.39, w: aW, h: 0.26, align: 'r' }
+          : { x: bLeft ? ax + 0.18 : ax - aW - 0.16, y: cy - 0.15, w: aW, h: 0.30, align: bLeft ? 'l' : 'r' }
+      shapes.push(ooxmlShape(nextId(), `Dumbbell Val B ${idx + 1}`, { x: bBox.x, y: bBox.y, w: bBox.w, h: bBox.h }, {
         txBox: true,
         anchor: 'ctr',
         marginsIn: { l: 0, r: 0, t: 0, b: 0 },
-        paragraphs: [ooxmlRichParagraph(fmtNum(r.before, r.unit), { sizePt: 11, color: tk.inkMuted, bold: true, lang: 'en-US', align: bLeft ? 'r' : 'l', font: theme.fonts.body })],
+        paragraphs: [ooxmlRichParagraph(bText, { sizePt: 11, color: tk.inkMuted, bold: true, lang: 'en-US', align: bBox.align, font: theme.fonts.body })],
       }))
-      shapes.push(ooxmlShape(nextId(), `Dumbbell Val A ${idx + 1}`, { x: bLeft ? ax + 0.18 : ax - 0.80, y: cy - 0.15, w: 0.64, h: 0.30 }, {
+      shapes.push(ooxmlShape(nextId(), `Dumbbell Val A ${idx + 1}`, { x: aBox.x, y: aBox.y, w: aBox.w, h: aBox.h }, {
         txBox: true,
         anchor: 'ctr',
         marginsIn: { l: 0, r: 0, t: 0, b: 0 },
-        paragraphs: [ooxmlRichParagraph(fmtNum(r.after, r.unit), { sizePt: 11.5, color: barCol, bold: true, lang: 'en-US', align: bLeft ? 'l' : 'r', font: theme.fonts.heading })],
+        paragraphs: [ooxmlRichParagraph(aText, { sizePt: 11.5, color: barCol, bold: true, lang: 'en-US', align: aBox.align, font: theme.fonts.heading })],
       }))
       // 右侧变化量胶囊
       const pillX = 12.71 - deltaW
@@ -908,14 +926,24 @@ export function renderProChartSlideBodyHtml(slide, ctx = {}) {
       const ax = mapX(r.after)
       const col = r.status === 'negative' ? tk.negative : (r.status === 'positive' ? tk.positive : tk.accentPrimary)
       const bLeft = bx <= ax
+      const bTightL = bLeft && (bx - lx < 68)
+      const bTightR = !bLeft && (rx - bx < 68)
+      const aTightL = !bLeft && (ax - lx < 68)
+      const aTightR = bLeft && (rx - ax < 68)
+      const bLblX = bTightL ? Math.max(lx, bx - 4) : bTightR ? Math.min(rx, bx + 4) : (bLeft ? bx - 14 : bx + 14)
+      const bLblY = (bTightL || bTightR) ? cy - 15 : cy + 4
+      const bAnchor = bTightL ? 'start' : bTightR ? 'end' : (bLeft ? 'end' : 'start')
+      const aLblX = aTightL ? Math.max(lx, ax - 4) : aTightR ? Math.min(rx, ax + 4) : (bLeft ? ax + 14 : ax - 14)
+      const aLblY = (aTightL || aTightR) ? cy - 15 : cy + 4
+      const aAnchor = aTightL ? 'start' : aTightR ? 'end' : (bLeft ? 'start' : 'end')
       return (
         `<text x="${lx - 18}" y="${(cy + 5).toFixed(1)}" text-anchor="end" font-size="14" font-weight="700" fill="${tk.inkPrimary}">${escapeHtml(r.title)}</text>` +
         `<line x1="${lx}" y1="${cy.toFixed(1)}" x2="${rx}" y2="${cy.toFixed(1)}" stroke="${tk.hairline}" stroke-width="1"/>` +
         `<line x1="${bx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${ax.toFixed(1)}" y2="${cy.toFixed(1)}" stroke="${col}" stroke-width="6" stroke-linecap="round" stroke-opacity="0.85"/>` +
         `<circle cx="${bx.toFixed(1)}" cy="${cy.toFixed(1)}" r="8" fill="${tk.canvas}" stroke="${tk.inkMuted}" stroke-width="2.5"/>` +
         `<circle cx="${ax.toFixed(1)}" cy="${cy.toFixed(1)}" r="9" fill="${col}" stroke="${tk.canvas}" stroke-width="2"/>` +
-        `<text x="${(bLeft ? bx - 14 : bx + 14).toFixed(1)}" y="${(cy + 4).toFixed(1)}" text-anchor="${bLeft ? 'end' : 'start'}" font-size="12" font-weight="700" fill="${tk.inkMuted}">${escapeHtml(fmtNum(r.before, r.unit))}</text>` +
-        `<text x="${(bLeft ? ax + 14 : ax - 14).toFixed(1)}" y="${(cy + 4).toFixed(1)}" text-anchor="${bLeft ? 'start' : 'end'}" font-size="12.5" font-weight="800" fill="${col}">${escapeHtml(fmtNum(r.after, r.unit))}</text>` +
+        `<text x="${bLblX.toFixed(1)}" y="${bLblY.toFixed(1)}" text-anchor="${bAnchor}" font-size="12" font-weight="700" fill="${tk.inkMuted}">${escapeHtml(fmtNum(r.before, r.unit))}</text>` +
+        `<text x="${aLblX.toFixed(1)}" y="${aLblY.toFixed(1)}" text-anchor="${aAnchor}" font-size="12.5" font-weight="800" fill="${col}">${escapeHtml(fmtNum(r.after, r.unit))}</text>` +
         `<rect x="${rx + 18}" y="${(cy - 13).toFixed(1)}" width="94" height="26" rx="13" fill="${tk.surface1}" stroke="${col}" stroke-width="1.2"/>` +
         `<text x="${rx + 65}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${col}">${escapeHtml(r.delta)}</text>`
       )

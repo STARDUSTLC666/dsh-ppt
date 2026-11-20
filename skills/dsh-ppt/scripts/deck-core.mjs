@@ -1125,10 +1125,13 @@ function normalizeSlideContent(raw, index) {
     ? source.columns.map((c) => stripInlineMarkdown(c)).filter(Boolean)
     : undefined
 
+  const fencedTextMatch = (!source.code && typeof source.text === 'string')
+    ? /```([a-zA-Z0-9_-]*)\r?\n([\s\S]+?)\r?\n```/.exec(source.text)
+    : null
   const rawCode = typeof source.code === 'string'
     ? source.code.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trimEnd()
-    : ''
-  const codeLanguage = stripInlineMarkdown(source.language ?? '')
+    : (fencedTextMatch ? fencedTextMatch[2].replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trimEnd() : '')
+  const codeLanguage = stripInlineMarkdown(source.language ?? (fencedTextMatch?.[1] || ''))
   const filename = stripInlineMarkdown(source.filename ?? '')
   const url = stripInlineMarkdown(source.url ?? '')
   const rawCoverPattern = String(source.coverPattern ?? '').trim().toLowerCase()

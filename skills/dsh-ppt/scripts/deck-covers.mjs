@@ -937,7 +937,7 @@ export const AESTHETIC_STUDIO_CSS = `
 .bento-hero-grid.bento-hero-2 > :first-child{grid-row:1}
 .bento-hero-grid.bento-hero-3 > :first-child{grid-row:1 / span 2}
 .bento-hero-grid.bento-hero-4 > :first-child{grid-row:1 / span 3}
-.surface-card.is-inverted-hero{background:linear-gradient(140deg,var(--cover-bg),color-mix(in srgb,var(--cover-bg) 65%,var(--accent2))) !important;border:0 !important;color:#F8FAFC !important}
+.surface-card.is-inverted-hero{background:linear-gradient(140deg,color-mix(in srgb,var(--accent) 82%,#0F172A),color-mix(in srgb,var(--accent) 55%,#0B1120)) !important;border:0 !important;color:#F8FAFC !important}
 .surface-card.is-inverted-hero .card-title{color:#F8FAFC}
 .surface-card.is-inverted-hero .card-body,.surface-card.is-inverted-hero .card-bullets{color:#E2E8F0}
 .surface-card.is-inverted-hero .card-stat{color:#FDE68A}

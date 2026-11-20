@@ -1377,8 +1377,12 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       const iconName = resolveItemIcon(it, idx)
 
       if (isInvertedHero) {
-        const heroGradA = tk.coverBg || tk.accentPrimary
-        const heroGradB = mixHex(heroGradA, tk.accentSecondary, 0.35)
+        const rawCoverBg = tk.coverBg || ''
+        const heroGradA = rawCoverBg && relativeLuminance(rawCoverBg) < 0.18
+          ? rawCoverBg
+          : (relativeLuminance(tk.accentPrimary) < 0.22 ? tk.accentPrimary : mixHex(tk.accentPrimary, '#0F172A', 0.42))
+        const darkMixTarget = tk.accentSecondary && relativeLuminance(tk.accentSecondary) < 0.28 ? tk.accentSecondary : '#0F172A'
+        const heroGradB = mixHex(heroGradA, darkMixTarget, 0.34)
         shapes.push(ooxmlShape(nextId(), 'Card Hero Surface', box, {
           preset: 'roundRect',
           adj: roundRectAdj(box.w, box.h, Math.max(10, chromeCfg.cardRadiusPx)),

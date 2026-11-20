@@ -65,10 +65,11 @@ function PptWorkflowGuide({ defaultOpen = false, onOpenCreate, onCopied }) {
 
 function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate, onCreateDemo, onImport, onImportOffice, onError }) {
   const fieldId = React.useId();
-  const [meta, setMeta] = React.useState({ themes: [], templates: [] });
+  const [meta, setMeta] = React.useState({ themes: [], templates: [], exemplars: [] });
   const [dialogMode, setDialogMode] = React.useState(initialMode);
   const [title, setTitle] = React.useState('');
   const [template, setTemplate] = React.useState('');
+  const [exemplar, setExemplar] = React.useState('');
   const [theme, setTheme] = React.useState('auto');
   const [content, setContent] = React.useState('');
   const [refFile, setRefFile] = React.useState(null);
@@ -88,6 +89,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
         setMeta({
           themes: Array.isArray(res.themes) ? res.themes : [],
           templates: Array.isArray(res.templates) ? res.templates : [],
+          exemplars: Array.isArray(res.exemplars) ? res.exemplars : [],
         });
       }
     }).catch(() => {});
@@ -185,6 +187,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
       await onCreate({
         title: effectiveTitle,
         ...(template ? { template } : {}),
+        ...(exemplar ? { exemplar } : {}),
         theme: theme || 'auto',
         lang: languageOf(),
         ...(content.trim() ? { content } : {}),
@@ -287,15 +290,20 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
       }),
       h('div', { className: 'ppt-create-grid' },
         h('div', null,
+          h('label', { htmlFor: fieldId + '-exemplar' }, pptText('标杆范本契约（8 套高审美范本 + 已吸收）', 'Gold Exemplar Contract (8 curated + absorbed)')),
+          h('select', { id: fieldId + '-exemplar', value: exemplar, disabled, onChange: e => setExemplar(e.target.value) },
+            h('option', { value: '' }, pptText('自动防退化升维（不限定单一范本）', 'Auto anti-slop upgrade (no fixed exemplar)')),
+            meta.exemplars.map(ex => h('option', { key: ex.id, value: ex.id }, (languageOf() === 'en' ? (ex.enName || ex.name) : ex.name) + (ex.source === 'workspace' ? pptText(' · 已吸收', ' · Absorbed') : '') + ' (' + (ex.slideCount || 0) + pptText('页)', 'p)'))))),
+        h('div', null,
           h('label', { htmlFor: fieldId + '-tpl' }, pptText('行业场景蓝图（可选，20 套）', 'Scenario blueprint (optional, 20 built-in)')),
           h('select', { id: fieldId + '-tpl', value: template, disabled, onChange: e => setTemplate(e.target.value) },
             h('option', { value: '' }, pptText('不限蓝图（按大纲自动升维版式）', 'Auto-choreograph from outline')),
-            meta.templates.map(tp => h('option', { key: tp.id, value: tp.id }, tp.name + ' (' + tp.id + ')')))),
-        h('div', null,
-          h('label', { htmlFor: fieldId + '-theme' }, pptText('视觉主题（24 套大师主题）', 'Visual theme (24 curated themes)')),
-          h('select', { id: fieldId + '-theme', value: theme, disabled, onChange: e => setTheme(e.target.value) },
-            h('option', { value: 'auto' }, pptText('自动导演匹配场景（推荐明亮投影风）', 'Auto-Director match (recommended)')),
-            meta.themes.map(th => h('option', { key: th.id, value: th.id }, (th.name || th.id) + (th.dark ? pptText(' · 深色', ' · Dark') : pptText(' · 浅色', ' · Light'))))))),
+            meta.templates.map(tp => h('option', { key: tp.id, value: tp.id }, tp.name + ' (' + tp.id + ')'))))),
+      h('div', null,
+        h('label', { htmlFor: fieldId + '-theme' }, pptText('视觉主题（24 套大师主题）', 'Visual theme (24 curated themes)')),
+        h('select', { id: fieldId + '-theme', value: theme, disabled, onChange: e => setTheme(e.target.value) },
+          h('option', { value: 'auto' }, pptText('自动导演匹配（选范本时优先继承范本主题）', 'Auto-Director match (inherits exemplar theme)')),
+          meta.themes.map(th => h('option', { key: th.id, value: th.id }, (th.name || th.id) + (th.dark ? pptText(' · 深色', ' · Dark') : pptText(' · 浅色', ' · Light')))))),
       h('div', { className: 'ppt-create-head-row' },
         h('label', { htmlFor: fieldId + '-content' }, pptText('汇报材料或 Markdown 大纲（可选，用 ## 分页、- 写要点）', 'Outline or Markdown notes (optional; use ## for slides, - for bullets)')),
         h(W.Button, { size: 'sm', variant: 'ghost', icon: 'sparkles', disabled, onClick: fillSampleOutline }, pptText('填入示例大纲', 'Fill sample outline'))),

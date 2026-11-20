@@ -23,6 +23,19 @@ import {
   listAllTasteRecipes,
   listCuratedTasteRecipes,
 } from './deck-taste.mjs'
+import {
+  CURATED_EXEMPLARS,
+  CURATED_EXEMPLAR_IDS,
+  listCuratedExemplars,
+  resolveExemplar,
+  loadWorkspaceExemplars,
+  saveWorkspaceExemplar,
+  extractExemplarFromAbsorbed,
+  ingestExemplarDirectory,
+  matchBestExemplar,
+  renderExemplarPromptGuide,
+} from './deck-exemplars.mjs'
+import { upgradeWeakDeck } from './deck-upgrader.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
@@ -33,6 +46,30 @@ export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './
 export { extractOfficeSource, importOfficeDeck } from './deck-office.mjs'
 export { inferThemeFromContent, optimizeVisualRhythm } from './deck-director.mjs'
 export { listAllTasteRecipes, listCuratedTasteRecipes, loadWorkspaceTasteRecipes, saveWorkspaceTasteRecipe, resolveTasteRecipe } from './deck-taste.mjs'
+export {
+  CURATED_EXEMPLARS,
+  CURATED_EXEMPLAR_IDS,
+  listCuratedExemplars,
+  resolveExemplar,
+  loadWorkspaceExemplars,
+  saveWorkspaceExemplar,
+  extractExemplarFromAbsorbed,
+  ingestExemplarDirectory,
+  matchBestExemplar,
+  renderExemplarPromptGuide,
+} from './deck-exemplars.mjs'
+export { upgradeWeakDeck } from './deck-upgrader.mjs'
+
+export async function ingestExemplarCorpus(options = {}) {
+  return ingestExemplarDirectory({
+    dirPath: options.dirPath,
+    cwd: options.cwd || '.',
+    limit: options.limit,
+    signal: options.signal,
+    absorbFn: absorbPptx,
+    saveTasteFn: (cwdPath, recipe) => saveWorkspaceTasteRecipe(recipe, cwdPath),
+  })
+}
 
 export function buildThemePreview(options = {}) {
   return buildThemePreviewFromThemes(options, resolveLanguage, DECK_VERSION)
@@ -483,6 +520,7 @@ function result(manifest, paths, writeHandout = false, writeOnePager = false) {
     undoAvailable: manifest.history.length, deliveryStatus: manifest.quality?.issues.some(i => i.code === 'template-unfilled') ? 'draft' : 'ready-for-review',
     quality: manifest.quality, paceBudget, verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' }, outputDir: dirname(paths.json),
     files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json,
+    ...(manifest.exemplar ? { exemplar: manifest.exemplar } : {}),
     ...(writeHandout ? { handoutPath } : {}),
     ...(writeOnePager ? { onePagerPath } : {}) }
 }
@@ -633,9 +671,20 @@ export async function buildDeckAsync(options = {}) {
     absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
   }
 
+  const workspaceExemplars = loadWorkspaceExemplars(cwd)
+  const resolvedExemplar = options.exemplar !== undefined && options.exemplar !== null && options.exemplar !== ''
+    ? resolveExemplar(options.exemplar, workspaceExemplars)
+    : null
+  if (options.exemplar !== undefined && options.exemplar !== null && options.exemplar !== '' && !resolvedExemplar) {
+    fail('未知标杆范本 exemplar：' + String(options.exemplar))
+  }
+
   const workspaceTastes = loadWorkspaceTasteRecipes(cwd)
-  const resolvedTaste = options.taste !== undefined && options.taste !== null && options.taste !== ''
-    ? resolveTasteRecipe(options.taste, workspaceTastes)
+  const effectiveTasteInput = (options.taste !== undefined && options.taste !== null && options.taste !== '')
+    ? options.taste
+    : (resolvedExemplar?.styleRecipe || resolvedExemplar?.taste || undefined)
+  const resolvedTaste = effectiveTasteInput !== undefined
+    ? resolveTasteRecipe(effectiveTasteInput, workspaceTastes)
     : (absorbed?.styleRecipe && options.cloneStructure === true ? absorbed.styleRecipe : null)
   if (options.taste !== undefined && options.taste !== null && options.taste !== '' && !resolvedTaste) {
     fail('未知品味配方 taste：' + String(options.taste))
@@ -644,8 +693,10 @@ export async function buildDeckAsync(options = {}) {
   const rawThemeOpt = typeof options.theme === 'string' && options.theme.trim() ? options.theme.trim() : undefined
   let chosenThemeId = rawThemeOpt
   let directorHint = null
-  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario || resolvedTaste))) {
-    if (resolvedTaste?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
+  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario || resolvedTaste || resolvedExemplar))) {
+    if (resolvedExemplar?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
+      chosenThemeId = resolvedExemplar.theme
+    } else if (resolvedTaste?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
       chosenThemeId = resolvedTaste.theme
     } else if (absorbed && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona && !scenario) {
       chosenThemeId = absorbed.recommendedTheme
@@ -677,15 +728,29 @@ export async function buildDeckAsync(options = {}) {
   const normalized = normalizeBuildOptions({ ...input, ...(prepared ? { slides: prepared } : {}) })
   if (prepared) normalized.deck.slides = prepared
 
+  let upgradeReport = null
+  const shouldPromote = options.smartLayout === true || (options.smartLayout !== false && (rawThemeOpt === 'auto' || Boolean(options.persona) || Boolean(absorbed) || Boolean(resolvedExemplar)))
   if (fromMarkdown) {
     if (absorbed && options.cloneStructure === true && Array.isArray(absorbed.slideSkeleton) && absorbed.slideSkeleton.length > 0) {
       normalized.deck.slides = mapSlidesToAbsorbedSkeleton(normalized.deck.slides, absorbed.slideSkeleton, langId)
-    } else {
-      const shouldPromote = options.smartLayout === true || (options.smartLayout !== false && (rawThemeOpt === 'auto' || Boolean(options.persona) || Boolean(absorbed)))
-      if (shouldPromote) {
-        normalized.deck.slides = promoteMarkdownSlides(normalized.deck.slides, { explicitSmartLayout: options.smartLayout === true })
-      }
+    } else if (shouldPromote) {
+      normalized.deck.slides = promoteMarkdownSlides(normalized.deck.slides, { explicitSmartLayout: options.smartLayout === true })
     }
+  }
+  const shouldAutoUpgrade = !dataModel && options.autoUpgrade !== false && options.smartLayout !== false && (
+    options.autoUpgrade === true ||
+    Boolean(resolvedExemplar) ||
+    (fromMarkdown && shouldPromote) ||
+    (Array.isArray(options.slides) && options.slides.length >= 4 && (rawThemeOpt === 'auto' || Boolean(options.persona)))
+  )
+  if (shouldAutoUpgrade) {
+    const upgraded = upgradeWeakDeck(normalized.deck.slides, {
+      exemplar: resolvedExemplar,
+      lang: langId,
+      allowSplit: !fromMarkdown || normalized.deck.slides.length <= 24,
+    })
+    normalized.deck.slides = upgraded.slides
+    if (upgraded.report.applied) upgradeReport = upgraded.report
   }
   if (directorHint?.tableStyle === 'booktabs' || resolvedTaste?.tableStyle) {
     const effTableStyle = resolvedTaste?.tableStyle || directorHint?.tableStyle
@@ -742,6 +807,7 @@ export async function buildDeckAsync(options = {}) {
     language: normalized.language.id,
     motion: normalized.motion,
     ...(resolvedTaste ? { taste: listCuratedTasteRecipes().some(r => r.id === resolvedTaste.id) ? resolvedTaste.id : resolvedTaste } : {}),
+    ...(resolvedExemplar ? { exemplar: resolvedExemplar.id } : {}),
     ...(targetMinutesRaw !== undefined ? { targetMinutes: targetMinutesRaw } : {}),
     ...(scenario ? { template: scenario.id } : {}),
     ...(brand ? { brand } : {}),
@@ -758,7 +824,8 @@ export async function buildDeckAsync(options = {}) {
   const writeHandout = options.handout === true
   const writeOnePager = options.onePager === true
   withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout, writeOnePager) })
-  return result(manifest, paths, writeHandout, writeOnePager)
+  const builtResult = result(manifest, paths, writeHandout, writeOnePager)
+  return upgradeReport ? { ...builtResult, upgradeReport } : builtResult
 }
 
 function readDocument(pathInput, cwd = '.') {

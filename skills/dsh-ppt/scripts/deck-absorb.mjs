@@ -18,6 +18,7 @@ import { basename, resolve } from 'node:path'
 import { inflateSync } from 'node:zlib'
 import { sanitizeAbsorbedTheme, normalizeHex, hexToHsl, relativeLuminance } from './deck-themes.mjs'
 import { sanitizeCustomTasteRecipe, saveWorkspaceTasteRecipe } from './deck-taste.mjs'
+import { extractExemplarFromAbsorbed, saveWorkspaceExemplar } from './deck-exemplars.mjs'
 
 const MAX_PPTX_BYTES = 64 * 1024 * 1024
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -498,6 +499,8 @@ function inspectTableForHarveyAndStyle(lib, tables) {
 function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH) {
   const result = { slideNumber: slideIndex + 1, inferredLayout: 'bullets' }
   try {
+    const slideXmlStr = typeof slide?.xml === 'string' ? slide.xml : ''
+    if (/<p:sld\b[^>]*\bshow="0"/.test(slideXmlStr)) result.hidden = true
     const rawShapes = lib.getSlideShapes(slide) ?? []
     const shapes = flattenShapes(lib, rawShapes)
     let layoutType = ''
@@ -1427,9 +1430,9 @@ export async function absorbPptx(options = {}) {
     savedTastePath = saved.path
   }
 
-  return {
+  const baseResult = {
     ok: true,
-    ...(resolvedPath ? { pptxPath: resolvedPath } : {}),
+    ...(resolvedPath ? { pptxPath: resolvedPath, sourceFile: basename(resolvedPath) } : {}),
     slideCount,
     slideSize,
     extractedPalette,
@@ -1446,6 +1449,27 @@ export async function absorbPptx(options = {}) {
     warnings: sanitized.warnings,
     layoutSummary,
     extractedSkeleton,
-    slideSkeleton,
+    slideSkeleton: slideSkeleton.map((entry) => (
+      entry.titleSample && /\(hidden\)|模板说明|使用说明|template\s+instructions/i.test(entry.titleSample)
+        ? { ...entry, hidden: true }
+        : entry
+    )),
+  }
+
+  let savedExemplarPath
+  let exemplar
+  if (typeof options.saveExemplarAs === 'string' && options.saveExemplarAs.trim()) {
+    const extracted = extractExemplarFromAbsorbed(baseResult, {
+      id: options.saveExemplarAs.trim(),
+      name: options.tasteName || options.exemplarName,
+    })
+    const savedEx = saveWorkspaceExemplar(cwd, extracted)
+    savedExemplarPath = savedEx.path
+    exemplar = savedEx.exemplar
+  }
+
+  return {
+    ...baseResult,
+    ...(savedExemplarPath ? { savedExemplarPath, exemplar } : {}),
   }
 }

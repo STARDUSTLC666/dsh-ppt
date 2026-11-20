@@ -17,7 +17,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listThemes, THEME_IDS, DEFAULT_THEME } from './deck-themes.mjs'
 import { CHROME_STYLE_IDS } from './deck-absorb.mjs'
-import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes } from './deck-advanced.mjs'
+import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus } from './deck-advanced.mjs'
 
 const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
@@ -34,6 +34,11 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --clone-structure       配合 --reference-pptx 使用，克隆参考文稿的逐页版式骨架与母版 chrome
   --chrome <style>        母版骨架风格：${CHROME_STYLE_IDS.join(' / ')}
   --taste <id>            大师审美配方 ID（mckinsey-partner / apple-keynote-dark / apple-keynote-light / swiss-editorial / linear-craft / ft-data-journal / nature-academic / oriental-zen 或已吸收自定义 ID）
+  --exemplar <id>         标杆范本槽位契约 ID（8 套内置满分范本或 .dsh-ppt/exemplars.json 已吸收范本，锁定叙事节奏与版式升维）
+  --list-exemplars        列出内置 8 套满分标杆范本及工作区已吸收的标杆 .pptx 范本
+  --ingest-exemplars <dir> 批量吸收目录下所有优质 .pptx 语料并持久化至 .dsh-ppt/exemplars.json 与 taste-recipes.json
+  --save-exemplar <id>    配合 --absorb 将单份标杆 .pptx 同步保存为可复用范本契约
+  --no-auto-upgrade       关闭弱模型自动兜底升维与反文字墙拆分
   --save-taste <id>       配合 --absorb 将标杆 .pptx 深度提炼并保存为可复用品味配方
   --list-tastes           列出内置 8 套大师审美配方及当前工作区已吸收的标杆配方
   --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架、深度审美配方 styleRecipe 与逐页分布 JSON
@@ -95,6 +100,11 @@ export function parseArgv(argv) {
     else if (key === '--list-themes') args.listThemes = true
     else if (key === '--list-templates') args.listTemplates = true
     else if (key === '--list-tastes') args.listTastes = true
+    else if (key === '--list-exemplars') args.listExemplars = true
+    else if (key === '--exemplar') args.exemplar = nextValue()
+    else if (key === '--ingest-exemplars') args.ingestExemplars = nextValue()
+    else if (key === '--save-exemplar') args.saveExemplar = nextValue()
+    else if (key === '--no-auto-upgrade') args.autoUpgrade = false
     else if (key === '--overwrite') args.overwrite = true
     else if (key === '--smart-layout') args.smartLayout = true
     else if (key === '--no-smart-layout') args.smartLayout = false
@@ -166,6 +176,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   }
   if (args.listTemplates) { log(JSON.stringify({ templates: listTemplates(args.lang) }, null, 2)); return 0 }
   if (args.listTastes) { log(JSON.stringify({ tasteRecipes: listAllTasteRecipes(process.cwd()) }, null, 2)); return 0 }
+  if (args.listExemplars) { log(JSON.stringify({ exemplars: listCuratedExemplars(loadWorkspaceExemplars(process.cwd())) }, null, 2)); return 0 }
+  if (args.ingestExemplars) {
+    const report = await ingestExemplarCorpus({ dirPath: args.ingestExemplars, cwd: process.cwd() })
+    log(JSON.stringify(report, null, 2))
+    return 0
+  }
   if ([args.edit && !args.syncPptx ? args.edit : null, args.undo, args.check, args.render, args.absorb, args.importPptx, args.syncPptx, args.fromOffice].filter(Boolean).length > 1) {
     throw new Error('dsh-ppt CLI：--edit / --undo / --check / --render / --absorb / --import-pptx / --sync-pptx / --from-office 只能选择一项')
   }
@@ -219,6 +235,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     const absorbed = await absorbPptx({
       pptxPath: args.absorb,
       ...(args.saveTaste ? { saveTasteAs: args.saveTaste } : {}),
+      ...(args.saveExemplar ? { saveExemplarAs: args.saveExemplar } : {}),
     })
     log(JSON.stringify(absorbed, null, 2))
     return 0
@@ -270,6 +287,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     slides,
     theme: args.theme,
     ...(args.taste ? { taste: args.taste } : {}),
+    ...(args.exemplar ? { exemplar: args.exemplar } : {}),
+    ...(args.autoUpgrade !== undefined ? { autoUpgrade: args.autoUpgrade } : {}),
     persona: args.persona,
     referencePptx: args.referencePptx,
     cloneStructure: args.cloneStructure,

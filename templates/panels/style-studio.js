@@ -700,16 +700,19 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     const reader = new FileReader();
     reader.onload = async () => {
       try {
+        const cleanSlug = file.name.replace(/\.pptx$/i, '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'absorbed-deck';
         const response = await action({
           operation: 'absorb-upload',
           id: project.id,
           expectedRevision: project.revision,
           data: String(reader.result || ''),
           extractLogo: true,
+          saveExemplarAs: cleanSlug,
+          exemplarName: file.name.replace(/\.pptx$/i, ''),
         });
         setAbsorbed(response.absorbed);
         setAbsorbedName(file.name);
-        onMessage(L('已解析参考 PPTX 配色、字体与对比度净化方案，确认后可一键应用。', 'Extracted and contrast-sanitized the reference PPTX palette and fonts. Review and apply below.'));
+        onMessage(L('已解析参考 PPTX 配色、字体与对比度净化方案，并同步沉淀为可复用标杆范本（' + cleanSlug + '）。', 'Extracted palette, fonts & contrast-sanitized recipe, and saved as reusable Exemplar (' + cleanSlug + ').'));
       } catch (err) {
         onError(err.message || L('解析参考 PPTX 失败。', 'Could not extract style from this PPTX.'));
       } finally {

@@ -305,6 +305,10 @@ export interface PptCreateArgs {
   slides?: PptSlideSpec[]
   theme?: string
   taste?: PptTasteRecipeId | string | PptTasteRecipe
+  /** Curated exemplar ID (8 built-in) or workspace absorbed exemplar ID for slot-filling & auto-upgrade. */
+  exemplar?: string
+  /** Deterministic weak-LLM compensator & anti-slop upgrader (default true in async mode; set false to keep raw slides verbatim). */
+  autoUpgrade?: boolean
   persona?: PptPersonaId | string
   referencePptx?: string
   cloneStructure?: boolean
@@ -356,12 +360,33 @@ export interface PptThemesResult {
 
 export interface PptAbsorbArgs {
   pptxPath?: string
+  corpusDir?: string
+  limit?: number
   bytes?: Uint8Array | Buffer
   cwd?: string
   extractLogo?: boolean
   saveTasteAs?: string
   tasteName?: string
+  saveExemplarAs?: string
+  exemplarName?: string
   signal?: AbortSignal
+}
+
+export interface PptExemplarSummary {
+  id: string
+  name: string
+  enName?: string
+  persona?: string
+  theme?: string
+  taste?: string
+  chromeStyle?: string
+  slideCount: number
+  description?: string
+  enDescription?: string
+  source?: 'curated' | 'workspace'
+  sourceFile?: string
+  layoutCadence?: string[]
+  slots?: Array<Record<string, unknown>>
 }
 
 export interface PptAbsorbSkeleton {
@@ -382,21 +407,29 @@ export interface PptAbsorbSlideSkeleton {
 export interface PptAbsorbResult {
   ok: boolean
   pptxPath?: string
-  slideCount: number
+  dirPath?: string
+  scanned?: number
+  ingestedCount?: number
+  failedCount?: number
+  exemplars?: Array<Record<string, unknown>>
+  failed?: Array<{ file: string; error: string }>
+  slideCount?: number
   slideSize?: { width: number; height: number; aspect?: string }
   dark?: boolean
   warnings?: string[]
   extractedPalette?: Record<string, string>
   extractedFonts?: Record<string, string>
   extractedSkeleton?: PptAbsorbSkeleton
-  sanitizedBrand: PptBrand
-  sanitizedTokens: Record<string, unknown>
-  recommendedTheme: string
+  sanitizedBrand?: PptBrand
+  sanitizedTokens?: Record<string, unknown>
+  recommendedTheme?: string
   recommendedChrome?: PptChromeStyle | string
   recommendedTableStyle?: PptTableStyle | string
   narrativeProfile?: Record<string, unknown>
   styleRecipe?: PptTasteRecipe
   savedTastePath?: string
+  savedExemplarPath?: string
+  exemplar?: PptExemplarSummary
   slideSkeleton?: PptAbsorbSlideSkeleton[]
   layoutSummary?: Record<string, unknown>
 }
@@ -485,6 +518,8 @@ export interface PptCreateResult {
   deliveryStatus?: 'draft' | 'ready-for-review'
   importedFrom?: string
   syncedProject?: boolean
+  exemplar?: string
+  upgradeReport?: Record<string, unknown>
   quality?: PptQualityResult
   verification?: PptVerification
 }
@@ -492,6 +527,13 @@ export interface PptCreateResult {
 /** Shared generator and optional renderer exposed to the plugin. */
 export interface DeckEngine {
   absorbPptx(options: Record<string, unknown>): Promise<PptAbsorbResult>
+  ingestExemplarCorpus?(options: Record<string, unknown>): Promise<PptAbsorbResult>
+  listCuratedExemplars?(workspaceExemplars?: Record<string, unknown>): PptExemplarSummary[]
+  loadWorkspaceExemplars?(cwd?: string): Record<string, PptExemplarSummary>
+  saveWorkspaceExemplar?(cwd: string, exemplar: Record<string, unknown>): { exemplar: PptExemplarSummary; path: string }
+  resolveExemplar?(idOrObj: unknown, workspaceExemplars?: Record<string, unknown>): PptExemplarSummary | null
+  renderExemplarPromptGuide?(exemplar: unknown, lang?: string): string
+  extractExemplarFromAbsorbed?(absorbed: unknown, options?: Record<string, unknown>): Record<string, unknown>
   importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>
   importOfficeDeck?(options: Record<string, unknown>): Promise<PptCreateResult>
   repairDeckVisual(options: Record<string, unknown>): Promise<PptCreateResult>
