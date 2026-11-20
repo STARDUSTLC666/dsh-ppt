@@ -248,6 +248,16 @@ export interface PptProjectArgs { deckPath: string; expectedRevision?: number }
 export interface PptDataSource { id: string; name?: string; format?: 'csv' | 'tsv' | 'text'; path?: string; content?: string; kind?: 'table' | 'text'; rows?: Array<Array<string | number>>; text?: string }
 export interface PptDataMetric { id: string; label?: string; kind: 'source' | 'input' | 'formula'; source?: { sourceId: string; cell?: string; line?: number; numberIndex?: number }; value?: number; min?: number; max?: number; step?: number; note?: string; formula?: string; format?: { style?: 'number' | 'percent'; digits?: number; unit?: string } }
 export interface PptDataModel { schemaVersion?: 1; sources: PptDataSource[]; metrics: PptDataMetric[] }
+export interface PptEvidenceEntry {
+  id?: string
+  claim: string
+  source: string
+  date?: string
+  scope?: string
+  url?: string
+  confidence?: 'verified' | 'estimated' | 'conflicting' | 'unverified'
+  note?: string
+}
 
 export interface PptSlideSpec {
   id?: string
@@ -261,6 +271,7 @@ export interface PptSlideSpec {
   kicker?: string
   takeaway?: string
   source?: string
+  evidenceIds?: string[]
   text?: string
   formula?: string
   mermaid?: string
@@ -328,6 +339,10 @@ export interface PptCreateArgs {
   targetMinutes?: number
   /** Optional explicit source facts, assumptions and safe arithmetic; bind slides with {{metricId}}. */
   dataModel?: PptDataModel
+  /** Structured verified Evidence Ledger from external research & fact-checking; binds [E#] / evidenceIds to source footers, speaker notes & SLOP-13 audit. */
+  evidence?: PptEvidenceEntry[]
+  /** When evidence[] is supplied, automatically insert a booktabs Sources & Fact-Verification Ledger appendix slide before closing. */
+  evidenceAppendix?: boolean
 }
 
 export interface PptThemeInfo {
@@ -521,6 +536,7 @@ export interface PptCreateResult {
   importedFrom?: string
   syncedProject?: boolean
   exemplar?: string
+  evidenceCount?: number
   upgradeReport?: Record<string, unknown>
   quality?: PptQualityResult
   verification?: PptVerification
@@ -536,6 +552,7 @@ export interface DeckEngine {
   resolveExemplar?(idOrObj: unknown, workspaceExemplars?: Record<string, unknown>): PptExemplarSummary | null
   renderExemplarPromptGuide?(exemplar: unknown, lang?: string): string
   getExemplarFewShotSlides?(exemplarId: string, lang?: string): Array<Record<string, unknown>>
+  buildResearchPlan?(options?: Record<string, unknown>): Record<string, unknown>
   extractExemplarFromAbsorbed?(absorbed: unknown, options?: Record<string, unknown>): Record<string, unknown>
   importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>
   importOfficeDeck?(options: Record<string, unknown>): Promise<PptCreateResult>

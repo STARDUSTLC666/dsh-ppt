@@ -17,7 +17,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listThemes, THEME_IDS, DEFAULT_THEME } from './deck-themes.mjs'
 import { CHROME_STYLE_IDS } from './deck-absorb.mjs'
-import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus } from './deck-advanced.mjs'
+import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus, buildResearchPlan } from './deck-advanced.mjs'
 
 const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
@@ -34,8 +34,11 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --clone-structure       配合 --reference-pptx 使用，克隆参考文稿的逐页版式骨架与母版 chrome
   --chrome <style>        母版骨架风格：${CHROME_STYLE_IDS.join(' / ')}
   --taste <id>            大师审美配方 ID（mckinsey-partner / apple-keynote-dark / apple-keynote-light / swiss-editorial / linear-craft / ft-data-journal / nature-academic / oriental-zen 或已吸收自定义 ID）
-  --exemplar <id>         标杆范本槽位契约 ID（8 套内置满分范本或 .dsh-ppt/exemplars.json 已吸收范本，锁定叙事节奏与版式升维）
-  --list-exemplars        列出内置 8 套满分标杆范本及工作区已吸收的标杆 .pptx 范本
+  --exemplar <id>         标杆范本槽位契约 ID（20 套内置满分范本、auto 或 .dsh-ppt/exemplars.json 已吸收范本，锁定叙事节奏与版式升维）
+  --list-exemplars        列出内置 20 套满分标杆范本及工作区已吸收的标杆 .pptx 范本
+  --plan <topic>          零资料调研策划器：按选题匹配标杆范本、生成 3 轮检索清单、证据缺口诊断与逐页分镜策划表
+  --evidence <json|@path> 外部调研并交叉核验后的结构化证据账本（自动注入 source 脚注、notes 溯源卡与 SLOP-13 核验）
+  --evidence-appendix     配合 --evidence 在封底前自动追加「事实核验与数据来源清单」三线表附录页
   --ingest-exemplars <dir> 批量吸收目录下所有优质 .pptx 语料并持久化至 .dsh-ppt/exemplars.json 与 taste-recipes.json
   --save-exemplar <id>    配合 --absorb 将单份标杆 .pptx 同步保存为可复用范本契约
   --no-auto-upgrade       关闭弱模型自动兜底升维与反文字墙拆分
@@ -102,6 +105,9 @@ export function parseArgv(argv) {
     else if (key === '--list-tastes') args.listTastes = true
     else if (key === '--list-exemplars') args.listExemplars = true
     else if (key === '--exemplar') args.exemplar = nextValue()
+    else if (key === '--plan') args.plan = nextValue()
+    else if (key === '--evidence') args.evidence = readJson(nextValue())
+    else if (key === '--evidence-appendix') args.evidenceAppendix = true
     else if (key === '--ingest-exemplars') args.ingestExemplars = nextValue()
     else if (key === '--save-exemplar') args.saveExemplar = nextValue()
     else if (key === '--align-order') args.alignOrder = true
@@ -179,6 +185,18 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   if (args.listTemplates) { log(JSON.stringify({ templates: listTemplates(args.lang) }, null, 2)); return 0 }
   if (args.listTastes) { log(JSON.stringify({ tasteRecipes: listAllTasteRecipes(process.cwd()) }, null, 2)); return 0 }
   if (args.listExemplars) { log(JSON.stringify({ exemplars: listCuratedExemplars(loadWorkspaceExemplars(process.cwd())) }, null, 2)); return 0 }
+  if (args.plan) {
+    const plan = buildResearchPlan({
+      topic: args.plan,
+      persona: args.persona,
+      exemplarId: args.exemplar,
+      evidence: args.evidence,
+      lang: args.lang,
+      workspaceExemplars: loadWorkspaceExemplars(process.cwd()),
+    })
+    log(JSON.stringify(plan, null, 2))
+    return 0
+  }
   if (args.ingestExemplars) {
     const report = await ingestExemplarCorpus({ dirPath: args.ingestExemplars, cwd: process.cwd() })
     log(JSON.stringify(report, null, 2))
@@ -305,6 +323,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     template: args.template,
     brand: effectiveBrand,
     dataModel: args.dataModel,
+    ...(args.evidence !== undefined ? { evidence: args.evidence } : {}),
+    ...(args.evidenceAppendix ? { evidenceAppendix: true } : {}),
     ...(args.handout ? { handout: true } : {}),
     ...(args.onePager ? { onePager: true } : {}),
     ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),

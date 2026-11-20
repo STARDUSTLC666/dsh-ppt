@@ -117,6 +117,8 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         brand: args.brand,
         ...(typeof args.targetMinutes === 'number' && Number.isFinite(args.targetMinutes) ? { targetMinutes: args.targetMinutes } : {}),
         dataModel: args.dataModel,
+        ...(Array.isArray(args.evidence) ? { evidence: args.evidence } : {}),
+        ...(args.evidenceAppendix === true ? { evidenceAppendix: true } : {}),
         cwd,
         signal: exec?.signal,
       })
@@ -172,6 +174,25 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
       const workspaceExemplars = typeof engine.loadWorkspaceExemplars === 'function' ? engine.loadWorkspaceExemplars(cwd) : {}
       const exemplars = typeof engine.listCuratedExemplars === 'function' ? engine.listCuratedExemplars(workspaceExemplars) : undefined
       const exemplarId = typeof args.exemplarId === 'string' ? args.exemplarId.trim() : ''
+      const topic = typeof args.topic === 'string' ? args.topic.trim() : ''
+      if (topic && typeof engine.buildResearchPlan === 'function') {
+        const researchPlan = engine.buildResearchPlan({
+          topic,
+          persona: typeof args.persona === 'string' ? args.persona.trim() : undefined,
+          exemplarId: exemplarId || undefined,
+          evidence: Array.isArray(args.evidence) ? args.evidence : undefined,
+          lang,
+          workspaceExemplars,
+        })
+        return {
+          ok: true,
+          templates,
+          ...(exemplars ? { exemplars } : {}),
+          researchPlan,
+          planMarkdown: typeof researchPlan.planMarkdown === 'string' ? researchPlan.planMarkdown : '',
+          ...(Array.isArray(researchPlan.fewShotSlides) ? { fewShotSlides: researchPlan.fewShotSlides } : {}),
+        }
+      }
       if (exemplarId && typeof engine.resolveExemplar === 'function') {
         const exemplar = engine.resolveExemplar(exemplarId, workspaceExemplars)
         if (!exemplar) {

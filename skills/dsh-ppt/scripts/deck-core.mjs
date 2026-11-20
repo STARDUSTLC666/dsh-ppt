@@ -1150,6 +1150,10 @@ function normalizeSlideContent(raw, index) {
     ?? (layout === 'sankey' && bullets.length > 0 ? bullets : undefined)
   const items = normalizeSlideItems(rawItemsInput, layout)
 
+  const rawEvidenceIds = Array.isArray(source.evidenceIds)
+    ? [...new Set(source.evidenceIds.map((id) => stripInlineMarkdown(id).trim().toUpperCase()).filter(Boolean))].slice(0, 12)
+    : undefined
+
   const commonExtras = {
     ...(variant !== '' ? { variant } : {}),
     ...(chrome ? { chrome } : {}),
@@ -1167,6 +1171,7 @@ function normalizeSlideContent(raw, index) {
     ...(quadrantLabels ? { quadrants: quadrantLabels } : {}),
     ...(takeaway !== '' ? { takeaway } : {}),
     ...(slideSource !== '' ? { source: slideSource } : {}),
+    ...(rawEvidenceIds?.length ? { evidenceIds: rawEvidenceIds } : {}),
     ...(activeIndex !== undefined ? { activeIndex } : {}),
     ...(columns?.length ? { columns } : {}),
     ...(start !== undefined ? { start } : {}),

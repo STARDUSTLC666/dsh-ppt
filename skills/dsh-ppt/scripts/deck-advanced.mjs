@@ -38,6 +38,7 @@ import {
   renderExemplarPromptGuide,
 } from './deck-exemplars.mjs'
 import { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
+import { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
@@ -63,6 +64,7 @@ export {
   renderExemplarPromptGuide,
 } from './deck-exemplars.mjs'
 export { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
+export { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
 
 export async function ingestExemplarCorpus(options = {}) {
   return ingestExemplarDirectory({
@@ -269,7 +271,7 @@ function validateRawSlides(slides) {
 }
 
 function snapshot(manifest) {
-  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
+  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel', 'evidence', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
 
 function collectAssets(manifest) {
@@ -373,9 +375,13 @@ export function checkManifest(manifest) {
   if (manifest.brand?.logoAssetId && !manifest.assets?.[manifest.brand.logoAssetId]) issue(0, 'missing-logo', '品牌 Logo 资产不存在', '重新提供 Logo', 'error')
   else if (manifest.brand?.logoAssetId && assetError(manifest.brand.logoAssetId)) issue(0, 'invalid-logo', assetError(manifest.brand.logoAssetId), '重新提供 Logo', 'error')
 
-  // 追加 SLOP-01..10 审美反模式静态诊断
+  // 追加 SLOP-01..12 审美反模式静态诊断
   for (const aestheticIssue of auditSlideAesthetics(manifest, theme, textWidth)) {
     issues.push(aestheticIssue)
+  }
+  // 追加 SLOP-13 事实出处与证据账本静态门禁
+  for (const evidenceIssue of auditEvidenceAndSourcing(manifest)) {
+    issues.push(evidenceIssue)
   }
 
   return { ok: !issues.some(i => i.severity === 'error'), slideCount: manifest.slides.length,
@@ -525,6 +531,7 @@ function result(manifest, paths, writeHandout = false, writeOnePager = false) {
     quality: manifest.quality, paceBudget, verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' }, outputDir: dirname(paths.json),
     files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json,
     ...(manifest.exemplar ? { exemplar: manifest.exemplar } : {}),
+    ...(Array.isArray(manifest.evidence) && manifest.evidence.length > 0 ? { evidenceCount: manifest.evidence.length } : {}),
     ...(writeHandout ? { handoutPath } : {}),
     ...(writeOnePager ? { onePagerPath } : {}) }
 }
@@ -588,6 +595,7 @@ function validateSnapshot(value, assets) {
   }
   validateRawSlides(value.slides)
   validateDataSnapshot(value, normalizeSlides)
+  if (value.evidence !== undefined) normalizeEvidenceLedger(value.evidence)
   if (value.brand != null) {
     if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
     for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'name', 'footer', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste']) {
@@ -773,6 +781,15 @@ export async function buildDeckAsync(options = {}) {
     normalized.deck.slides = optimizeVisualRhythm(normalized.deck.slides, resolvedTaste)
   }
 
+  const evidence = normalizeEvidenceLedger(options.evidence)
+  if (evidence.length > 0) {
+    const appliedEvidence = applyEvidenceLedgerToSlides(normalized.deck.slides, evidence, {
+      lang: langId,
+      evidenceAppendix: options.evidenceAppendix === true,
+    })
+    normalized.deck.slides = appliedEvidence.slides
+  }
+
   const assets = {}
   let brandInput = options.brand
   if (resolvedTaste && options.brand !== null) {
@@ -825,6 +842,7 @@ export async function buildDeckAsync(options = {}) {
     ...(scenario ? { template: scenario.id } : {}),
     ...(brand ? { brand } : {}),
     ...(dataModel ? { dataModel } : {}),
+    ...(evidence.length > 0 ? { evidence } : {}),
     assets,
     history: [],
     slides: embedSlides(normalized.deck.slides, assets, cwd).map(s => ({ ...s, id: randomUUID() })),
@@ -952,7 +970,7 @@ export async function editDeck(options = {}) {
   }
   const used = new Set()
   const allowed = new Set([
-    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'coverPattern', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
+    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'coverPattern', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
     'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'activeIndex', 'tableStyle',
     'bullets', 'items', 'cards', 'metrics', 'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])

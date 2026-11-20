@@ -1,6 +1,6 @@
 ---
 name: dsh-ppt
-description: "Turn one sentence, a Markdown document, structured slides, Office files (.xlsx/.csv/.docx), or a benchmark .pptx corpus into a world-class presentation deck: standalone HTML web slideshow (with Dual-Screen Presenter Console & Executive One-Pager) + 100% native-editable PPTX (with 8 Curated Gold Exemplars & Slot-Filling Contracts, Deterministic Weak-LLM Compensator & Anti-Slop Upgrader, 8 Curated Taste Recipes, 4 poster covers + Hero Photo Split + coverPattern, 61 native <a:custGeom> vector icons, glass/frameless/editorial materiality, device mockups, 9-language syntax-highlighted code terminals, Magic Quadrant, Radar, Dumbbell, Heatmap, native <m:oMath> formulas, Mermaid flowcharts/sequences, Marimekko, Sankey, Porter Value Chain, SWOT) + project manifest + Speaker Handout. Supports batch .pptx exemplar ingestion (.dsh-ppt/exemplars.json), Zero-Question Scenario Auto-Direction (theme: auto), 24 curated themes, 6 Master Chrome Skeletons, 35+ native-editable layouts, 20 industry blueprints, 13 publication-grade charts, and bilingual ZH/EN support. 中文：内置 8 套标杆范本槽位契约、确定性防退化升维器（专治中弱模型文字墙与平庸标题）与批量优质 .pptx 目录吸收引擎，让任意模型稳定输出麦肯锡/红杉/Stripe 级可编辑演示文稿。"
+description: "Turn one sentence, a zero-material research topic, a Markdown document, structured slides, Office files (.xlsx/.csv/.docx), or a benchmark .pptx corpus into a world-class presentation deck: standalone HTML web slideshow (with Dual-Screen Presenter Console & Executive One-Pager) + 100% native-editable PPTX (with 20 Curated Gold Exemplars & Slot-Filling Contracts, Zero-Material Research-to-Deck Planner, Verified Evidence Ledger & SLOP-13 Fact-Grounding Gate, Deterministic Weak-LLM Compensator & Zero-LLM Self-Repair Loop, 8 Curated Taste Recipes, 4 poster covers + Hero Photo Split + coverPattern, 61 native <a:custGeom> vector icons, glass/frameless/editorial materiality, device mockups, 9-language syntax-highlighted code terminals, Magic Quadrant, Radar, Dumbbell, Heatmap, native <m:oMath> formulas, Mermaid flowcharts/sequences, Marimekko, Sankey, Porter Value Chain, SWOT) + project manifest + Speaker Handout. Supports batch .pptx exemplar ingestion (.dsh-ppt/exemplars.json), Zero-Question Scenario Auto-Direction (theme: auto), 24 curated themes, 6 Master Chrome Skeletons, 35+ native-editable layouts, 20 industry blueprints, 13 publication-grade charts, and bilingual ZH/EN support. 中文：内置 20 套标杆范本、零资料深度调研与事实核验协议（Evidence Ledger + SLOP-13 出处门禁）、确定性防退化升维器与零模型自检修复闭环，支持有资料直出与无资料先调研策划再出稿双模式。"
 compatibility: "Node ^22.19.0 or >=24.0.0. Images/charts/PPTX absorption use @office-kit/pptx@0.21.0; optional data models use jsep@1.4.0 and csv-parse@6.1.0. Optional PNG/PDF renderer: @deepseek-ai/libreoffice-kit@0.2.3 (bundled by DSH 0.2.2+; 0.1.5 also supported). Cross-harness: copy the full directory and run npm install --ignore-scripts there."
 allowed-tools: "Bash, Read, Write, Edit"
 ---
@@ -32,9 +32,12 @@ allowed-tools: "Bash, Read, Write, Edit"
 - **字体与跨平台零缺字**：正文最小字号硬底线 `13.5pt`，超长内容必须拆页而非强行缩字。若 `ppt_render` 报告 `missingFonts` 非空，必须替换为环境与接收方可用字体（Windows `Microsoft YaHei`、macOS `PingFang SC`/`Songti SC`、Linux `Noto Sans/Serif CJK SC`），重新生成并逐页复核；未解决前不得声称已验收。CLI 与工具报错信息统一为中文。
 - **语言分工**：`lang`（`zh | en | bilingual`）仅控制播放器界面与默认标签；正文与双语表达由你在写作阶段完成。
 
-## 核心流水线
+## 核心流水线（双模路由）
 
-1. **Probe & Auto-Direct 定调**：读入用户句子/文档/数据，静默判定听众与六大画像（见 `references/themes.md`）。若用户给了参考 `.pptx`，调 `ppt_absorb` 查看提取结果或在创建时传 `referencePptx`。一句话输入不反问，直接推断并生成完整成品。
+- **Mode A（有资料直出）**：用户已给出文档、大纲、表格、数据或参考 `.pptx` 时，零追问自动定调并直接生成可交付三件套。
+- **Mode B（零资料深研策划）**：用户**没有资料**、只给主题或明确要求「你去搜索资料、核验准确性、先策划 PPT 方案再生成」时，**严禁凭训练记忆编造具体统计数字**！必须先读 `references/research-plan.md`，按四步闭环执行：① 调 `ppt_templates({ topic })`（或 CLI `--plan`）获取标杆分镜与 3 轮检索指南 → ② 用宿主 Agent 联网搜索工具开展 3 轮一手源检索与双源交叉核验，沉淀 `evidence[]` 账本（冲突报区间、缺数改定性图示）→ ③ 向用户展示策划方案（含核验事实摘要与逐页分镜表）并获确认（除非用户明示跳过确认直出）→ ④ 带 `evidence[]` + `evidenceAppendix: true` + `slides[].evidenceIds` 调 `ppt_create` 出稿并通过 `SLOP-13` 事实出处门禁。
+
+1. **Probe & Auto-Direct 定调**：读入用户句子/文档/数据（或 Mode B 核验后的证据账本），静默判定听众与六大画像（见 `references/themes.md`）。若用户给了参考 `.pptx`，调 `ppt_absorb` 查看提取结果或在创建时传 `referencePptx`。Mode A 一句话输入不反问，直接推断并生成完整成品。
 2. **Storyline & Choreography 叙事与排布**：先读 `references/copywriting.md`。按金字塔原理 / SCQA 组织 5–16 页大纲，为每页撰写结论先行 Action Title、章节面包屑 `kicker`（如 `01 · 市场诊断`，禁止满屏重复「要点」）、底栏核心结论 `takeaway` 与数据出处 `source`，并规划多版式交替节奏。可调 `ppt_templates` 参考 **20 套行业结构蓝图**（`weekly | defense | project | pitch | consulting | keynote | gov-report | workshop | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook | quarterly-okr | product-prd | vc-daylight | industry-research`）。
 3. **Theme 选主题与骨架**：不确定时在 `ppt_create` 传 `theme: 'auto'`（自动路由至明亮高质感场景主题与匹配骨架），或从 **24 套内置主题**中精确指定（调 `ppt_themes` 查看），并可通过 `brand.chromeStyle` 或单页 `chrome` 覆盖 6 套母版骨架。
    - **重要 CLI 差异**：跨 harness 直接运行 `build-deck.mjs` 时，裸 CLI 缺省 `--theme` 为兼容旧脚本仍回退 `data`，因此 **CLI 调用请务必显式传 `--theme auto` 或具体场景主题 ID（如 `--theme consulting` / `--theme exec-jilan`）**！
@@ -49,7 +52,8 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 | 何时必读 | 参考文件 | 核心内容 |
 | --- | --- | --- |
-| 按标杆范本槽位填空或批量投喂 `.pptx` 语料 | `references/exemplars.md` | 8 套标杆范本槽位契约、`ppt_templates(exemplarId)`、批量 `--ingest-exemplars` 与弱模型升维补偿器 |
+| **零资料联网调研、核验准确性与先策划再出稿** | `references/research-plan.md` | 双模路由、3 轮定向检索法、Tier 1/2/3 交叉核验红线、`evidence[]` 账本、分镜策划确认与 `SLOP-13` 门禁 |
+| 按标杆范本槽位填空或批量投喂 `.pptx` 语料 | `references/exemplars.md` | 20 套标杆范本槽位契约、`ppt_templates(exemplarId)`、批量 `--ingest-exemplars` 与弱模型升维补偿器 |
 | 写大纲、标题与正文前 | `references/copywriting.md` | 六大画像叙事骨架、Action Title 写法、字数预算、反空话与双语规范 |
 | 选主题、配色、骨架或吸收母版 | `references/themes.md` | 18 套大师主题色板（12 浅 6 深）、6 套母版骨架（Chrome）、18 语义 Token、六大画像选型树 |
 | 写结构化 `slides` 或扩展 Markdown | `references/syntax.md` | 24 套原生版式与专业图示 + `variant`、统一 `items` 结构、`:::` 容器指令、三线表与 `takeaway` |
@@ -57,7 +61,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 | 数字溯源、公式与现场推演 | `references/data.md` | `dataModel` 源绑定、公式约束、全字段 `{{metricId}}` 联动与预览确认流 |
 | 遇到报错或渲染异常 | `references/troubleshooting.md` | 症状 → 根因与处理速查表 |
 
-## 质量与反土味门禁（SLOP-01..10，交付前逐项核对）
+## 质量与反土味门禁（SLOP-01..13，交付前逐项核对）
 
 - [ ] **SLOP-01 结论标题**：内容页与图表页标题均为完整判断句（Action Title），无「项目背景 / 数据图表 / 总结」等纯名词短标题。
 - [ ] **SLOP-02 章节面包屑**：`kicker` 体现章节脉络（如 `01 · 增长引擎`），未连续多页硬编码重复「要点 / Point」。
@@ -69,6 +73,8 @@ allowed-tools: "Bash, Read, Write, Edit"
 - [ ] **SLOP-08 版式多样性**：≥ 6 页的文稿至少组合 4 种不同版式原型，封面与封底不误印页码。
 - [ ] **SLOP-09 可执行收尾**：`closing` 页包含明确的下一步行动号召（CTA / 里程碑 / 联络方式），绝不仅写两个字「谢谢」。
 - [ ] **SLOP-10 真实性与跨平台完备**：无未填占位草稿（除非用户明确要求空模板并标注 `draft`），全部产物为工作区绝对路径；若已运行渲染，确认 `missingFonts: []` 且收据匹配最新 PPTX。
+- [ ] **SLOP-11/12 卡片材质节奏与图表聚光灯**：长篇文稿避免连续 ≥ 4 页等宽方框卡片；单系列 ≥ 5 项柱状/条形图须通过 `highlight` / `spotlight` / `referenceLine` 聚焦核心主角。
+- [ ] **SLOP-13 事实出处与证据账本卫生**：严禁「数据来源：网络整理 / 公开资料 / 综合整理」等空洞假出处；零资料调研模式下所有量化数据页均须绑定已核验 `evidenceIds`（或一手 `source`），无悬空 `[E#]` 引用，`unverified` / `conflicting` 证据必须在画面可见文案中如实注明口径差异或区间。
 
 ## 跨 harness 安装
 

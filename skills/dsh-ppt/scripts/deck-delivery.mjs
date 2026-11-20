@@ -3,6 +3,7 @@ import { deriveBrandedTheme, resolveTheme, relativeLuminance } from './deck-them
 import { renderChartSvg } from './deck-media.mjs'
 import { renderMermaidHtml, MERMAID_CSS } from './deck-mermaid.mjs'
 import { latexToMathMl } from './deck-math.mjs'
+import { renderEvidenceHandoutSection } from './deck-evidence.mjs'
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
@@ -300,6 +301,9 @@ export function renderHandoutMarkdown(manifest, language) {
     lines.push('---')
     lines.push('')
   })
+
+  const evidenceSection = renderEvidenceHandoutSection(manifest, lang)
+  if (evidenceSection) lines.push(evidenceSection)
 
   return lines.join('\n')
 }

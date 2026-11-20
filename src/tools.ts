@@ -182,6 +182,9 @@ function renderCreate(value: PptCreateResult): TextBlock[] {
   const upgradeLine = up && (Number(up.promotedCount || 0) > 0 || Number(up.splitCount || 0) > 0 || Number(up.rescuedTitles || 0) > 0 || Number(up.brokenStreaks || 0) > 0 || Boolean(up.resequenced) || Number(sr?.fixedCount || 0) > 0)
     ? '\n智能升维补偿：版式升维 ' + (up.promotedCount ?? 0) + ' 页 · 拆分长文本墙 ' + (up.splitCount ?? 0) + ' 页 · 打断单调连页 ' + (up.brokenStreaks ?? 0) + ' 处 · 提炼结论标题 ' + (up.rescuedTitles ?? 0) + ' 页' + seqNote + srNote + (value.exemplar ? '（范本契约：' + value.exemplar + '）' : '')
     : (value.exemplar ? '\n标杆范本契约：' + value.exemplar : '')
+  const evidenceLine = typeof value.evidenceCount === 'number' && value.evidenceCount > 0
+    ? '\n事实溯源账本：已绑定 ' + value.evidenceCount + ' 条核验证据（SLOP-13 事实出处门禁已校验）'
+    : ''
   return oneText(
     'dsh-ppt 已生成 ' + value.slideCount + ' 页' + (value.deliveryStatus === 'draft' ? '草稿（还有待填写内容，不能作为成品交付）' : '演示文稿') + '（主题 ' + value.theme + '，语言 ' + value.language + '）：\n' +
     '打开演示文稿：' + value.htmlPath + '\n' +
@@ -190,6 +193,7 @@ function renderCreate(value: PptCreateResult): TextBlock[] {
     (value.handoutPath ? '演讲讲义：' + value.handoutPath + '\n' : '') +
     'HTML 双击即可放映；可点击上一页/下一页、输入页码，以及“检查与导出”定位问题或下载 PPTX。PPTX 可用 PowerPoint / WPS / Keynote 直接编辑。' +
     upgradeLine +
+    evidenceLine +
     (value.revision !== undefined ? '\n修订号：' + value.revision + '；可撤销修改：' + value.undoAvailable + '。用 ppt_edit 修改指定页，ppt_undo 撤销。' : '') +
     (value.quality ? '\n\n' + qualityText(value.quality) : ''),
   )
@@ -391,6 +395,7 @@ const slideProperties = {
   title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' },
   takeaway: { type: 'string', description: 'Bottom key-takeaway synthesis banner.' },
   source: { type: 'string', description: 'Bottom-left data/citation source line.' },
+  evidenceIds: { type: 'array', items: { type: 'string' }, description: 'Evidence ledger IDs cited on this slide (e.g. ["E1", "E2"]); automatically populates clean source footer & full speaker-notes provenance.' },
   text: { type: 'string' },
   formula: { type: 'string', description: 'LaTeX math expression rendered as native Office Math (<m:oMath>) in PPTX and MathML in HTML (e.g. on callout slides with variant: "formula").' },
   mermaid: { type: 'string', description: 'Mermaid flowchart or sequenceDiagram code compiled into native editable PowerPoint shapes & attached connectors in PPTX and SVG in HTML.' },
@@ -447,6 +452,21 @@ const metricProperties = {
   formula:{type:'string',description:'Metric IDs, + - * / % **, parentheses and min/max/sum/abs/floor/ceil/round only. No JS property access or I/O.'},
   format:{type:'object',properties:{style:{type:'string',enum:['number','percent']},digits:{type:'integer'},unit:{type:'string'}}},
 }
+const evidenceEntrySchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Short uppercase evidence ID such as E1, E2, E3.' },
+    claim: { type: 'string', description: 'Verified factual claim or quantitative metric.' },
+    source: { type: 'string', description: 'Primary publisher, official report, filing, or paper name (never vague placeholders like "internet" or "网络整理").' },
+    date: { type: 'string', description: 'Publication date or reporting period (e.g. "2025-Q4", "2026-03").' },
+    scope: { type: 'string', description: 'Geographic/segment scope or statistical definition (e.g. "Global", "中国大陆", "乘用车口径").' },
+    url: { type: 'string', description: 'Optional verified http:// or https:// source URL (stored in speaker notes & handout).' },
+    confidence: { type: 'string', enum: ['verified', 'estimated', 'conflicting', 'unverified'], description: 'Fact-check verification status (default "verified").' },
+    note: { type: 'string', description: 'Optional methodology caveat or cross-check discrepancy note.' },
+  },
+  required: ['claim', 'source'],
+  additionalProperties: false,
+}
 
 /** Assemble presentation schemas, rendering and the session-aware executors. */
 export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
@@ -488,7 +508,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_create',
-      description: 'Generate a standalone HTML slideshow, editable 16:9 PPTX and JSON project from prepared Markdown or structured slides. Supports 24 themes, 6 master chrome skeletons, 20 Curated Gold Exemplars (8 built-in + 12 distilled from Apache-2.0/MIT/CC-BY-4.0 open-source GitHub decks + exemplar: "auto" semantic routing + workspace absorbed exemplars), Deterministic Weak-LLM Compensator & Anti-Slop Upgrader (autoUpgrade), 35+ native editable layouts & pro diagrams (KPI, Bento, mockup, syntax-highlighted code, Magic Quadrant, radar, dumbbell, heatmap, Marimekko, Sankey, SWOT, Porter value chain, Gantt, architecture, Harvey balls, TAM, org, Mermaid, booktabs), and deep .pptx absorption. 中文：先按 20 套标杆范本（支持 exemplar: "auto" 自动匹配或指定 ID）槽位组织内容或传入粗纲，由确定性升维器自动打破纯文字墙与平庸标题，输出可直接放映与编辑的三件套。',
+      description: 'Generate a standalone HTML slideshow, editable 16:9 PPTX and JSON project from prepared Markdown or structured slides. Supports 24 themes, 6 master chrome skeletons, 20 Curated Gold Exemplars (8 built-in + 12 distilled from Apache-2.0/MIT/CC-BY-4.0 open-source GitHub decks + exemplar: "auto" semantic routing + workspace absorbed exemplars), Deterministic Weak-LLM Compensator & Anti-Slop Upgrader (autoUpgrade), Verified Evidence Ledger (evidence[] + evidenceAppendix + SLOP-13 fact-sourcing gate), 35+ native editable layouts & pro diagrams (KPI, Bento, mockup, syntax-highlighted code, Magic Quadrant, radar, dumbbell, heatmap, Marimekko, Sankey, SWOT, Porter value chain, Gantt, architecture, Harvey balls, TAM, org, Mermaid, booktabs), and deep .pptx absorption. 中文：先按 20 套标杆范本槽位组织内容或传入粗纲；零资料调研场景可附带交叉核验后的 evidence[] 证据账本与 evidenceAppendix，自动注入规范 source 脚注、演讲备注溯源卡、三线表附录页并通过 SLOP-13 事实出处门禁。',
       parameters: compileParameters({
         title: { type: 'string', required: true, description: 'Deck title (used for the cover and file names).' },
         content: { type: 'string', description: 'Markdown content: # cover title, ## slides, -/* bullets (supports **bold** lead-ins), | ... | tables, > quotes, > [!TAKEAWAY] bottom summary bar, ::: kpi|cards|comparison|process|matrix|callout|gantt|architecture|harvey|tam|org blocks, and <!-- 备注: ... --> speaker notes. Required unless slides or template is provided.' },
@@ -508,6 +528,8 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         brand: { type: 'object', properties: brandProperties, additionalProperties: false, description: 'Shared brand: #RRGGBB primary/background/text colors, fontFamily, logo, footer, and chromeStyle (' + ALLOWED_CHROME_STYLES.join('|') + '). Applied to HTML and PPTX.' },
         targetMinutes: { type: 'number', description: 'Optional target speaking duration in minutes for pace budgeting.' },
         dataModel: {type:'object',properties:{schemaVersion:{type:'integer',enum:[1]},sources:{type:'array',items:{type:'object',properties:sourceProperties,required:['id']}},metrics:{type:'array',items:{type:'object',properties:metricProperties,required:['id','kind']}}},additionalProperties:false,description:'Optional explicit lineage and what-if model. Use with structured slides containing {{metricId}} in text/items/takeaway/tables or an exact token as chart values. Source facts reference a real cell or text line; assumptions require value/min/max/step. Formulas compute derived metrics. HTML offers live sliders; PPTX includes confirmed static values, formulas and assumptions in speaker notes. Leave absent for ordinary finished decks.'},
+        evidence: { type: 'array', items: evidenceEntrySchema, description: 'Structured verified Evidence Ledger collected via external search & fact-checking. Automatically binds [E#] / evidenceIds to clean slide source footers, detailed speaker-notes provenance blocks, handout ledger table, and SLOP-13 fact-hygiene auditing.' },
+        evidenceAppendix: { type: 'boolean', description: 'When evidence[] is provided, automatically insert a clean booktabs "Sources & Fact-Verification Ledger" appendix slide before the closing slide (default false).' },
         outputDir: { type: 'string', description: 'Directory to write the files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: sanitized deck title.' },
         overwrite: { type: 'boolean', description: 'Replace an existing same-name HTML/PPTX/JSON trio. Default false: choose a unique numeric suffix instead.' },
@@ -520,15 +542,21 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_templates',
-      description: 'List all 20 industry scenario blueprints AND 20 Curated Gold Exemplars (8 built-in + 12 distilled from vetted Apache-2.0/MIT/CC-BY-4.0 open-source GitHub decks + any workspace-absorbed .pptx exemplars). Pass exemplarId to retrieve the exact per-slide Slot-Filling Contract, gold Action-Title examples, AND ready-to-mirror Few-Shot JSON slides so any model can deterministically fill a publication-grade deck without inventing layout design from scratch. 中文：查看 20 套行业蓝图与 20 套标杆范本（含 12 套开源 GitHub 优质 PPTX 蒸馏范本与工作区吸收范本）；传入 exemplarId 直接获取逐页槽位契约、满分标题示范与 Few-Shot JSON 样板，显著提升中弱模型成稿稳定性。',
+      description: 'List all 20 industry scenario blueprints AND 20 Curated Gold Exemplars (8 built-in + 12 distilled from vetted Apache-2.0/MIT/CC-BY-4.0 open-source GitHub decks + any workspace-absorbed .pptx exemplars). Pass exemplarId for a per-slide Slot-Filling Contract & Few-Shot JSON, OR pass topic (with optional evidence[]) for Zero-Material Research & Storyboard Planning (matches Gold Exemplar, generates 3-round retrieval checklist, diagnoses missing quantitative data gaps, and outputs a user-ready planMarkdown storyboard). 中文：查看 20 套行业蓝图与 20 套标杆范本；传入 exemplarId 获取逐页槽位契约与 Few-Shot JSON，或传入 topic（配合可选 evidence[]）一键生成「零资料 3 轮调研清单 + 证据缺口诊断 + 逐页分镜策划表」供用户确认后再成稿。',
       parameters: compileParameters({
         lang: { type: 'string', description: 'zh / en / bilingual, default zh.' },
         exemplarId: { type: 'string', description: 'Optional curated or workspace exemplar ID (20 built-in incl. mckinsey-strategy, sequoia-pitch, stripe-product-launch, quarterly-exec-review, tech-arch-rfc, academic-defense, enterprise-proposal, gov-institutional, mckinsey-evolution, luxury-budget-review, swiss-bauhaus-workshop, dark-stage-investor, blueprint-ai-factory, warm-brand-story, ted-storytelling-keynote, msft-enterprise-discovery, daylight-earnings-research, okr-performance-review, quiet-canvas-keynote, medical-clinical-course) to return its slot-filling contract, promptGuide & fewShotSlides.' },
+        topic: { type: 'string', description: 'Optional presentation topic for Zero-Material Research & Storyboard Planning: matches best Gold Exemplar, generates 3-round search & fact-check checklist, diagnoses missing quantitative evidence slots, and returns user-ready planMarkdown.' },
+        persona: { type: 'string', enum: ['auto', 'consulting', 'tech-pitch', 'academic', 'gov-exec', 'education', 'editorial'], description: 'Optional audience/scenario persona when planning with topic.' },
+        evidence: { type: 'array', items: evidenceEntrySchema, description: 'Optional already-collected Evidence Ledger entries when planning with topic, used to map [E#] bindings and detect remaining quantitative data gaps.' },
       }),
       output: {
         schema: { type: 'object', additionalProperties: true },
         render: (_args, value) => {
           const rec = (value && typeof value === 'object') ? value as Record<string, unknown> : {}
+          if (typeof rec.planMarkdown === 'string' && rec.planMarkdown.trim()) {
+            return oneText(rec.planMarkdown)
+          }
           if (typeof rec.promptGuide === 'string' && rec.promptGuide.trim()) {
             return oneText(rec.promptGuide + '\n\n' + JSON.stringify({ exemplar: rec.exemplar }, null, 2))
           }

@@ -1,5 +1,18 @@
 # 更新记录
 
+## 0.32.0 (2026-11-20)
+
+- **零资料深度调研、事实核验与策划出稿引擎（`deck-evidence.mjs` + `references/research-plan.md`）**：专为「用户手头无现成文档/数据，仅给主题要求 Agent 自主检索资料、交叉核验准确性、先策划 PPT 方案再出稿」场景构建确定性离线引擎（0 新增依赖、0 引擎内联外网，严格保持 13 个注册工具）：
+  - **调研与分镜策划器（`buildResearchPlan` / `ppt_templates({ topic, evidence })` / CLI `--plan`）**：按主题自动匹配 20 套标杆范本，生成 3 轮定向检索指南（权威基线 → 竞品实测 → 最新进展与反方风险）、量化槽位证据缺口诊断（`evidenceAudit.gaps`）、逐页分镜蓝图（`storyboard`）及可直接供用户确认的 `planMarkdown`。
+  - **结构化证据账本绑定（`evidence[]` + `slides[].evidenceIds` + `evidenceAppendix: true`）**：严格校验 `E1..En` 条目（含 `claim`/`source`/`date`/`scope`/`http(s)://` URL 防护/`confidence: verified|estimated|conflicting|unverified`）；自动为引用 `[E#]` 的页面生成单行精简 `source` 脚注，将完整原文 URL 与口径说明写入演讲备注 `notes` 与讲义 `.handout.md` 证据总表；开启 `evidenceAppendix: true` 时在封底前自动插入零溢出、按编号自然排序的 4 列 `booktabs` 三线表核验清单页，并在 `editDeck` / `undoDeck` 中完整保留 `manifest.evidence`。
+  - **`SLOP-13` 事实出处与证据卫生静态门禁（`auditEvidenceAndSourcing`）**：零误报拦截 4 类事实风险——悬空 `[E99]` 引用（`dangling-evidence-ref`）、将 `unverified`/`conflicting` 证据当作无声明定论展示（`unverified-evidence-claim`，严格要求画面可见文案声明口径/区间）、空洞假出处如「数据来源：网络整理 / 公开资料 / Internet」（`vague-placeholder-source`），以及调研模式下无出处的量化数据页（`unsourced-research-numbers`）。
+  - **Skill 双模路由 SOP（`SKILL.md` + `references/research-plan.md`）**：明确划分 **Mode A（有资料直出）** 与 **Mode B（零资料 4 步深研 → Tier 1/2/3 双源核验 → 方案确认 → 带证据成稿）**，严禁凭记忆编造数据。
+- **Zero-Material Research-to-Deck Planner, Verified Evidence Ledger & `SLOP-13` Fact-Grounding Gate (`deck-evidence.mjs` + `references/research-plan.md`)**: Adds a 100%-offline, zero-new-dependency research & fact-grounding engine (strictly preserving 13 registered Agent tools and 0 wire JSON Schema `type` arrays):
+  - **Storyboard & Retrieval Planner (`buildResearchPlan` / `ppt_templates({ topic, evidence })` / CLI `--plan`)**: Matches the best of 20 Gold Exemplars, generates a 3-round retrieval & fact-check rubric, diagnoses missing quantitative evidence slots, and produces a user-ready `planMarkdown` storyboard before generation.
+  - **Verified Evidence Ledger (`evidence[]` + `slides[].evidenceIds` + `evidenceAppendix: true`)**: Validates `E1..En` entries (`claim`, `source`, `date`, `scope`, `http(s)://` URL sanitization, `confidence`), auto-injects single-line compact `source` footers, writes full provenance cards + URLs to speaker `notes` & `.handout.md`, optionally appends a naturally sorted zero-overflow 4-column `booktabs` Sources & Fact-Verification Ledger slide before `closing`, and preserves `manifest.evidence` across `editDeck` / `undoDeck`.
+  - **`SLOP-13` Grounding & Fact-Hygiene Audit (`auditEvidenceAndSourcing`)**: Deterministically intercepts `dangling-evidence-ref`, `unverified-evidence-claim` (requiring visible on-slide caveat/range disclosure), `vague-placeholder-source` (e.g. `"internet"`, `"网络整理"`), and `unsourced-research-numbers` in research mode with zero false positives on ordinary decks.
+  - **Dual-Mode Skill Protocol (`SKILL.md` + `references/research-plan.md`)**: Routes between Mode A (material provided → direct build) and Mode B (zero-material topic → 3-round search → Tier 1/2/3 dual-source cross-check → user plan gate → grounded build).
+
 ## 0.31.0 (2026-11-20)
 
 - **标杆叙事弧线自动重排与槽位亲和投影（`resequenceSlidesToExemplar` / `alignOrder: true`）**：针对中弱模型（如 DeepSeek）输出页序散乱、把排期表塞在开篇或将核心 KPI 埋在末尾的痛点，`ppt_create` / CLI `--align-order` / 工作台新建向导新增 **`alignOrder: true`**，按目标标杆范本的经典叙事弧线（封面 → 核心判断/摘要 → 关键 KPI → 痛点对比 → 方案图谱 → 量化证明 → 排期路线 → 行动封底）确定性重排草稿页序，完整保留显式 `section` 分章边界并消除相邻同版式撞车。

@@ -20,6 +20,13 @@ export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine
     create(rawArgs: unknown, exec?: PptExecution): Promise<PptCreateResult>;
     absorb(rawArgs: unknown, exec?: PptExecution): Promise<PptAbsorbResult>;
     templates(rawArgs: unknown, exec?: PptExecution): Promise<{
+        fewShotSlides?: any[] | undefined;
+        researchPlan: Record<string, unknown>;
+        planMarkdown: string;
+        exemplars?: import("./types.js").PptExemplarSummary[] | undefined;
+        ok: boolean;
+        templates: unknown[];
+    } | {
         promptGuide: string;
         fewShotSlides?: Record<string, unknown>[] | undefined;
         exemplar: import("./types.js").PptExemplarSummary;
