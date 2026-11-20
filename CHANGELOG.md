@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.29.1 (2026-11-20)
+
+- 升级共享更新组件至 `@stardustlc/dsh-updates@0.2.7`：对话页「有新版本」提醒浮卡支持无交互 15 秒自动收起（悬停、聚焦、查看记录或确认弹窗时自动暂停，安装成功提示 6 秒收起，安装中/失败/需要重启仍保持常驻不隐藏）。
+- Upgrade `@stardustlc/dsh-updates` to `0.2.7`: auto-dismiss idle update reminder cards after 15s and silent complete cards after 6s while pausing on hover/focus/notes/dialogs and keeping active, failed, or restart-required cards pinned.
+
 ## 0.29.0 (2026-11-20)
 
 - **8 套标杆范本槽位契约与批量 `.pptx` 语料投喂引擎（`deck-exemplars.mjs`）**：针对中弱模型（如 DeepSeek 等）开放式规划 PPT 易退化为连续文字墙的痛点，新增零外部依赖 `deck-exemplars.mjs`，内置 **8 套满分标杆范本**（`mckinsey-strategy` 麦肯锡战略、`sequoia-pitch` 红杉/YC 融资、`stripe-product-launch` Stripe/Apple 产品发布、`quarterly-exec-review` 季度经营复盘、`tech-arch-rfc` 架构 RFC、`academic-defense` 顶会学术答辩、`enterprise-proposal` 政企竞标提案、`gov-institutional` 现代东方政务），将开放设计降维为逐页机器可读的 **Slot-Filling 槽位填空契约**（通过 `ppt_templates({ exemplarId })` / `--list-exemplars` 获取）；同时支持 **`ppt_absorb` 直接传入 `.pptx` 目录（或 `corpusDir` / CLI `--ingest-exemplars <dir>`）** 离线批量吸收 GitHub 开源或企业内部优质 `.pptx` 语料，自动过滤 `<p:sld show="0">` / `(hidden)` 隐藏说明页与 1 页母版兜底，统一沉淀至 `.dsh-ppt/exemplars.json` 与 `.dsh-ppt/taste-recipes.json` 持久复用。
