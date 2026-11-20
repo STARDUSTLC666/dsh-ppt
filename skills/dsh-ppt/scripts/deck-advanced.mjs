@@ -37,7 +37,7 @@ import {
   matchBestExemplar,
   renderExemplarPromptGuide,
 } from './deck-exemplars.mjs'
-import { upgradeWeakDeck } from './deck-upgrader.mjs'
+import { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
@@ -62,7 +62,7 @@ export {
   matchBestExemplar,
   renderExemplarPromptGuide,
 } from './deck-exemplars.mjs'
-export { upgradeWeakDeck } from './deck-upgrader.mjs'
+export { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
 
 export async function ingestExemplarCorpus(options = {}) {
   return ingestExemplarDirectory({
@@ -760,6 +760,7 @@ export async function buildDeckAsync(options = {}) {
       exemplar: resolvedExemplar,
       lang: langId,
       allowSplit: !fromMarkdown || normalized.deck.slides.length <= 24,
+      alignOrder: options.alignOrder === true,
     })
     normalized.deck.slides = upgraded.slides
     if (upgraded.report.applied) upgradeReport = upgraded.report
@@ -828,7 +829,35 @@ export async function buildDeckAsync(options = {}) {
     history: [],
     slides: embedSlides(normalized.deck.slides, assets, cwd).map(s => ({ ...s, id: randomUUID() })),
   }
-  const data = await generate(manifest, options.signal)
+  let activeManifest = manifest
+  const hasUnfilledDraft = Boolean(scenario && !options.content?.trim() && !options.slides?.length)
+  const shouldSelfRepair = !dataModel && !hasUnfilledDraft && options.autoUpgrade !== false && options.selfRepair !== false && options.smartLayout !== false && (
+    options.selfRepair === true ||
+    shouldAutoUpgrade ||
+    Boolean(resolvedExemplar) ||
+    fromMarkdown
+  )
+  if (shouldSelfRepair) {
+    const repaired = selfRepairDeck(manifest, {
+      checkFn: checkManifest,
+      maxPasses: 2,
+      maxSlides: normalized.maxSlides || options.maxSlides || 60,
+      lang: langId,
+      allowSplit: !fromMarkdown || manifest.slides.length <= 24,
+    })
+    if (repaired.report.repairs.length > 0) {
+      repaired.manifest.slides = repaired.manifest.slides.map((s) => (s && !s.id ? { ...s, id: randomUUID() } : s))
+      activeManifest = repaired.manifest
+      upgradeReport = {
+        ...(upgradeReport || { applied: true, exemplarId: resolvedExemplar?.id || null, resequenced: false, upgradeCount: 0, promotedCount: 0, splitCount: 0, brokenStreaks: 0, rescuedTitles: 0, upgrades: [] }),
+        applied: true,
+        selfRepair: repaired.report,
+      }
+    } else if (upgradeReport) {
+      upgradeReport = { ...upgradeReport, selfRepair: repaired.report }
+    }
+  }
+  const data = await generate(activeManifest, options.signal)
   mkdirSync(normalized.outputDir, { recursive: true })
   // Resolve collisions after asynchronous rendering; an earlier call may have committed meanwhile.
   const file = resolveDeckFileName(normalized.outputDir, normalized.fileName, normalized.overwrite)
@@ -836,7 +865,7 @@ export async function buildDeckAsync(options = {}) {
   const writeHandout = options.handout === true
   const writeOnePager = options.onePager === true
   withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout, writeOnePager) })
-  const builtResult = result(manifest, paths, writeHandout, writeOnePager)
+  const builtResult = result(activeManifest, paths, writeHandout, writeOnePager)
   return upgradeReport ? { ...builtResult, upgradeReport } : builtResult
 }
 

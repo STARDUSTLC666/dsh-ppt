@@ -174,8 +174,13 @@ function renderAbsorb(value: PptAbsorbResult): TextBlock[] {
 
 function renderCreate(value: PptCreateResult): TextBlock[] {
   const up = value.upgradeReport as Record<string, unknown> | undefined
-  const upgradeLine = up && (Number(up.promotedCount || 0) > 0 || Number(up.splitCount || 0) > 0 || Number(up.rescuedTitles || 0) > 0 || Number(up.brokenStreaks || 0) > 0)
-    ? '\n智能升维补偿：版式升维 ' + (up.promotedCount ?? 0) + ' 页 · 拆分长文本墙 ' + (up.splitCount ?? 0) + ' 页 · 打断单调连页 ' + (up.brokenStreaks ?? 0) + ' 处 · 提炼结论标题 ' + (up.rescuedTitles ?? 0) + ' 页' + (value.exemplar ? '（范本契约：' + value.exemplar + '）' : '')
+  const sr = (up?.selfRepair && typeof up.selfRepair === 'object') ? up.selfRepair as Record<string, unknown> : undefined
+  const srNote = sr && Number(sr.fixedCount || 0) > 0
+    ? ' · 自检修复 ' + sr.fixedCount + ' 项（告警 ' + (sr.initialWarnings ?? 0) + '→' + (sr.finalWarnings ?? 0) + '）'
+    : ''
+  const seqNote = up?.resequenced ? ' · 标杆弧线重排' : ''
+  const upgradeLine = up && (Number(up.promotedCount || 0) > 0 || Number(up.splitCount || 0) > 0 || Number(up.rescuedTitles || 0) > 0 || Number(up.brokenStreaks || 0) > 0 || Boolean(up.resequenced) || Number(sr?.fixedCount || 0) > 0)
+    ? '\n智能升维补偿：版式升维 ' + (up.promotedCount ?? 0) + ' 页 · 拆分长文本墙 ' + (up.splitCount ?? 0) + ' 页 · 打断单调连页 ' + (up.brokenStreaks ?? 0) + ' 处 · 提炼结论标题 ' + (up.rescuedTitles ?? 0) + ' 页' + seqNote + srNote + (value.exemplar ? '（范本契约：' + value.exemplar + '）' : '')
     : (value.exemplar ? '\n标杆范本契约：' + value.exemplar : '')
   return oneText(
     'dsh-ppt 已生成 ' + value.slideCount + ' 页' + (value.deliveryStatus === 'draft' ? '草稿（还有待填写内容，不能作为成品交付）' : '演示文稿') + '（主题 ' + value.theme + '，语言 ' + value.language + '）：\n' +
@@ -490,7 +495,8 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         theme: { type: 'string', description: 'Visual theme id: auto (default: Scenario Auto-Director picks optimal theme & chrome) or ' + ALLOWED_THEME_IDS.join(' / ') + '. See ppt_themes.' },
         taste: { type: 'string', description: 'Curated Aesthetic Taste Recipe ID (mckinsey-partner | apple-keynote-dark | apple-keynote-light | swiss-editorial | linear-craft | ft-data-journal | nature-academic | oriental-zen) or a workspace-absorbed custom recipe ID.' },
         exemplar: { type: 'string', description: 'Curated Gold Exemplar ID ("auto" to match best of 20 curated + workspace exemplars; built-in 20: mckinsey-strategy | sequoia-pitch | stripe-product-launch | quarterly-exec-review | tech-arch-rfc | academic-defense | enterprise-proposal | gov-institutional | mckinsey-evolution | luxury-budget-review | swiss-bauhaus-workshop | dark-stage-investor | blueprint-ai-factory | warm-brand-story | ted-storytelling-keynote | msft-enterprise-discovery | daylight-earnings-research | okr-performance-review | quiet-canvas-keynote | medical-clinical-course) or workspace-absorbed ID. Inherits optimal theme, palette/taste DNA & visual cadence.' },
-        autoUpgrade: { type: 'boolean', description: 'Run deterministic Weak-LLM Compensator & Anti-Slop Upgrader (promotes buried metrics/before-after/radar/quadrant/heatmap/code/mockup, auto-splits >6-bullet walls, breaks monotonous bullet streaks, rescues generic titles & bare closings). Default true; set false to preserve raw slides verbatim.' },
+        alignOrder: { type: 'boolean', description: 'Re-sequence disordered draft slides to follow the active exemplar narrative arc (cover → thesis/KPI → problem → solution → quantitative proof → roadmap → closing) while preserving chapter boundaries. Default false.' },
+        autoUpgrade: { type: 'boolean', description: 'Run deterministic Weak-LLM Compensator, evidence-anchored Action-Title synthesizer & Zero-LLM Self-Repair Loop (fixes title overflow, bullet walls, card/table overload, pie spaghetti, missing chart spotlight/takeaways, SLOP-01..12 before commit). Default true; set false to preserve raw slides verbatim.' },
         persona: { type: 'string', enum: ['auto', 'consulting', 'tech-pitch', 'academic', 'gov-exec', 'education', 'editorial'], description: 'Optional scenario/audience persona for Auto-Art-Direction, layout rhythm promotion, and table/chart styling. Default auto.' },
         referencePptx: { type: 'string', description: 'Optional local reference .pptx path; absorbs its sanitized palette, CJK/Latin fonts, chrome skeleton, and master logo before applying explicit brand overrides.' },
         cloneStructure: { type: 'boolean', description: 'When referencePptx is provided, align generated slide archetypes and master chrome skeleton with the absorbed reference slideSkeleton[] where compatible (default false).' },

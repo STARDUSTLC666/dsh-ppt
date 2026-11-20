@@ -70,6 +70,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
   const [title, setTitle] = React.useState('');
   const [template, setTemplate] = React.useState('');
   const [exemplar, setExemplar] = React.useState('');
+  const [alignOrder, setAlignOrder] = React.useState(false);
   const [theme, setTheme] = React.useState('auto');
   const [content, setContent] = React.useState('');
   const [refFile, setRefFile] = React.useState(null);
@@ -188,6 +189,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
         title: effectiveTitle,
         ...(template ? { template } : {}),
         ...(exemplar ? { exemplar } : {}),
+        ...(exemplar && alignOrder ? { alignOrder: true } : {}),
         theme: theme || 'auto',
         lang: languageOf(),
         ...(content.trim() ? { content } : {}),
@@ -294,7 +296,13 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
           h('select', { id: fieldId + '-exemplar', value: exemplar, disabled, onChange: e => setExemplar(e.target.value) },
             h('option', { value: '' }, pptText('自动防退化升维（不限定单一范本）', 'Auto anti-slop upgrade (no fixed exemplar)')),
             h('option', { value: 'auto' }, pptText('智能路由匹配最佳标杆范本（Auto Exemplar）', 'Auto-match best Gold Exemplar (auto)')),
-            meta.exemplars.map(ex => h('option', { key: ex.id, value: ex.id }, (languageOf() === 'en' ? (ex.enName || ex.name) : ex.name) + (ex.source === 'workspace' ? pptText(' · 已吸收', ' · Absorbed') : ex.source === 'github-curated' ? pptText(' · 开源蒸馏', ' · OSS') : '') + ' (' + (ex.slideCount || 0) + pptText('页)', 'p)'))))),
+            meta.exemplars.map(ex => h('option', { key: ex.id, value: ex.id }, (languageOf() === 'en' ? (ex.enName || ex.name) : ex.name) + (ex.source === 'workspace' ? pptText(' · 已吸收', ' · Absorbed') : ex.source === 'github-curated' ? pptText(' · 开源蒸馏', ' · OSS') : '') + ' (' + (ex.slideCount || 0) + pptText('页)', 'p)')))),
+          exemplar ? h(W.Checkbox, {
+            checked: alignOrder,
+            disabled,
+            onChange: next => setAlignOrder(next),
+            label: pptText('按标杆叙事弧线自动重排草稿页序', 'Auto-align draft slide order to exemplar narrative arc'),
+          }) : null),
         h('div', null,
           h('label', { htmlFor: fieldId + '-tpl' }, pptText('行业场景蓝图（可选，20 套）', 'Scenario blueprint (optional, 20 built-in)')),
           h('select', { id: fieldId + '-tpl', value: template, disabled, onChange: e => setTemplate(e.target.value) },

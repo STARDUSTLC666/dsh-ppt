@@ -280,9 +280,11 @@ export interface PptCreateArgs {
     slides?: PptSlideSpec[];
     theme?: string;
     taste?: PptTasteRecipeId | string | PptTasteRecipe;
-    /** Curated exemplar ID (8 built-in) or workspace absorbed exemplar ID for slot-filling & auto-upgrade. */
+    /** Curated exemplar ID (20 built-in or "auto") or workspace absorbed exemplar ID for slot-filling & auto-upgrade. */
     exemplar?: string;
-    /** Deterministic weak-LLM compensator & anti-slop upgrader (default true in async mode; set false to keep raw slides verbatim). */
+    /** Re-sequence slides to match the active exemplar's narrative arc (cover -> thesis/KPI -> problem -> solution -> proof -> roadmap -> closing). Default false. */
+    alignOrder?: boolean;
+    /** Deterministic weak-LLM compensator, anti-slop upgrader & zero-LLM self-repair loop (default true in async mode; set false to keep raw slides verbatim). */
     autoUpgrade?: boolean;
     persona?: PptPersonaId | string;
     referencePptx?: string;

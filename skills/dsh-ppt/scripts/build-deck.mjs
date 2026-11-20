@@ -104,7 +104,9 @@ export function parseArgv(argv) {
     else if (key === '--exemplar') args.exemplar = nextValue()
     else if (key === '--ingest-exemplars') args.ingestExemplars = nextValue()
     else if (key === '--save-exemplar') args.saveExemplar = nextValue()
+    else if (key === '--align-order') args.alignOrder = true
     else if (key === '--no-auto-upgrade') args.autoUpgrade = false
+    else if (key === '--no-self-repair') args.selfRepair = false
     else if (key === '--overwrite') args.overwrite = true
     else if (key === '--smart-layout') args.smartLayout = true
     else if (key === '--no-smart-layout') args.smartLayout = false
@@ -288,7 +290,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     theme: args.theme,
     ...(args.taste ? { taste: args.taste } : {}),
     ...(args.exemplar ? { exemplar: args.exemplar } : {}),
+    ...(args.alignOrder ? { alignOrder: true } : {}),
     ...(args.autoUpgrade !== undefined ? { autoUpgrade: args.autoUpgrade } : {}),
+    ...(args.selfRepair !== undefined ? { selfRepair: args.selfRepair } : {}),
     persona: args.persona,
     referencePptx: args.referencePptx,
     cloneStructure: args.cloneStructure,

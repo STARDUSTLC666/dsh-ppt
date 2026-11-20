@@ -131,7 +131,11 @@ node skills/dsh-ppt/scripts/build-deck.mjs --title "2026 Q1 汇报" --exemplar c
    - 单页 `>6` 条 bullets 自动拆分为两页（`（续）` / `(Cont.)`），杜绝挤压溢出；
    - 连续 `>=2` 页 `bullets` 自动打断为 `cards` / `comparison` / `process`；
    - 无加粗引导词的长要点自动切分加粗 `**主语**：说明`，提升扫视效率。
-4. **反 AI 土味标题与结尾兜底（`SLOP-01 / 02 / 09`）**：
-   - 「项目背景 / 核心指标 / 竞品分析 / 性能提升 / 总结」等空洞标签自动结合正文首条核心结论提炼为 Action Title；
-   - 自动补齐有意义的章节面包屑 `kicker`；
-   - 仅写「谢谢 / Thank you」的裸结尾自动补齐可执行行动副标题与下一步指引。
+4. **证据锚定 Action-Title 与结尾兜底（`SLOP-01 / 02 / 09 / 10`）**：
+   - 「财务数据 / 工作总结 / 核心指标 / 市场分析 / 性能提升 / Financials / Key Metrics」等空洞标签按各版式原生数据（KPI 数值、哑铃最大改善项、图表峰值/涨幅、表格领跑行）100% 依据原文提炼控宽 Action Title，绝不编造数字、绝不篡改 `{{metricId}}` 绑定；
+   - 自动补齐有意义的章节面包屑 `kicker` 与图表/哑铃页底部量化 `takeaway`；
+   - 仅写「谢谢 / Thank you」的裸结尾自动补齐 3 卡片行动封底 `closing[cta-cards]`。
+5. **标杆叙事弧线自动重排（`alignOrder: true` / CLI `--align-order`）**：
+   - 当草稿页序散乱（如把甘特排期塞在开篇、把核心 KPI 放到末尾）时，传 `alignOrder: true` 自动按标杆范本经典弧线（封面 → 核心判断 → 关键 KPI → 痛点对比 → 方案图谱 → 量化证明 → 排期路线 → 行动封底）确定性重排，完整保留显式 `section` 分章边界。
+6. **零模型落盘前自检修复闭环（`selfRepairDeck`）**：
+   - 渲染落盘前自动执行最多 2 轮 `checkManifest` + `SLOP-01..12` 复检与无损修复：自动拆分超长标题至 `subtitle`、无损分页 `kpi(>4)` / `cards(>6)` / `table(>9行)` 与长文本墙、把 >6 扇区碎块饼图转为聚光灯横向 `bar`、为单系列长柱图补聚光灯焦点、打破连续方框疲劳并净化高饱和/低对比画布，确保落盘即零告警成品（传 `--no-self-repair` 或 `autoUpgrade: false` 可关闭）。

@@ -101,6 +101,7 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         theme: typeof args.theme === 'string' && args.theme.trim() !== '' ? args.theme.trim() : ((args.taste || args.exemplar) ? undefined : (config.defaultTheme || (typeof engine.absorbPptx === 'function' ? 'auto' : undefined))),
         ...(args.taste ? { taste: args.taste } : {}),
         ...(typeof args.exemplar === 'string' && args.exemplar.trim() !== '' ? { exemplar: args.exemplar.trim() } : {}),
+        ...(typeof args.alignOrder === 'boolean' ? { alignOrder: args.alignOrder } : {}),
         ...(typeof args.autoUpgrade === 'boolean' ? { autoUpgrade: args.autoUpgrade } : {}),
         persona: typeof args.persona === 'string' && args.persona.trim() !== '' ? args.persona.trim() : undefined,
         referencePptx: typeof args.referencePptx === 'string' && args.referencePptx.trim() !== '' ? args.referencePptx.trim() : undefined,
