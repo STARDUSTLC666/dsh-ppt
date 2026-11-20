@@ -1,6 +1,6 @@
 {
   "name": "dsh-ppt",
-  "version": "0.32.0",
+  "version": "0.32.1",
   "description": "DeepSeek Harness 大师级演示文稿引擎与工作台：支持零资料调研核验与 SLOP-13 事实溯源、20 套标杆范本与弱模型零调用自检修复、24 主题 / 35+ 原生可编辑图谱（Mermaid/公式/代码/魔力象限/雷达/哑铃/热力图）、Office 直吞与双屏提词台，导出离线 HTML + 100% 可编辑 PPTX。欢迎 PR 与 Issues。",
   "type": "module",
   "main": "lib/index.js",
@@ -91,7 +91,7 @@
     "csv-parse": "6.1.0",
     "fflate": "0.8.3",
     "jsep": "1.4.0",
-    "@stardustlc/dsh-updates": "0.2.7"
+    "@stardustlc/dsh-updates": "0.2.10"
   },
   "peerDependencies": {
     "@deepseek-ai/libreoffice-kit": "0.1.5 || 0.2.3"

@@ -239,6 +239,10 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
         function editorHtml(html, nonce) {
             const bridge = `<style>#hud,#delivery-bar,#review-panel,#progress,#notes-panel,#help-panel,#toast,#blank{display:none!important}.slide-frame{pointer-events:none!important}.slide-frame .slide{pointer-events:auto!important}[data-dsh-editing="1"]{outline:2px solid #2563eb!important;outline-offset:3px;border-radius:4px;cursor:text!important}</style><script>(function(){const nonce=${JSON.stringify(nonce)};
       function tell(field){parent.postMessage({type:'dsh-ppt-select',nonce:nonce,field:field},'*')}
+      const editableSelector='h1,h2,.subtitle,.kicker,.slide-takeaway,.slide-source,.statement-title,.quote-text,.quote-attr';
+      let selectTimer=0;
+      function inlineState(editing){parent.postMessage({type:'dsh-ppt-inline-state',nonce:nonce,editing:editing},'*')}
+      window.addEventListener('pagehide',function(){clearTimeout(selectTimer)});
       function fieldOfEditable(n){if(!n)return '';if(n.matches('.subtitle,.quote-attr'))return 'subtitle';if(n.matches('.kicker'))return 'kicker';if(n.matches('.slide-takeaway'))return 'takeaway';if(n.matches('.slide-source'))return 'source';return 'title';}
       document.addEventListener('keydown',function(e){
         if(e.target.closest('#data-panel'))return;
@@ -257,8 +261,9 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
       document.addEventListener('touchend',function(e){e.stopImmediatePropagation()},true);
       document.addEventListener('wheel',function(e){e.stopImmediatePropagation()},{capture:true,passive:true});
       document.addEventListener('dblclick',function(e){
+        clearTimeout(selectTimer);
         if(e.target.closest('#data-panel,.data-number,.data-chart-trace'))return;
-        const n=e.target.closest('h1,h2,.subtitle,.kicker,.slide-takeaway,.slide-source,.statement-title,.quote-text,.quote-attr');
+        const n=e.target.closest(editableSelector);
         if(!n||n.isContentEditable)return;
         e.preventDefault();e.stopImmediatePropagation();
         const field=fieldOfEditable(n);
@@ -267,24 +272,28 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
         n.dataset.dshEditing='1';
         n.dataset.dshCancel='';
         n.contentEditable='true';
+        inlineState(true);
         n.focus();
         try{const r=document.createRange();r.selectNodeContents(n);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);}catch(_){}
         function finish(){
           n.removeEventListener('blur',finish);
           const cancelled=n.dataset.dshCancel==='1';
-          const next=String(n.innerText||'').replace(/\r?\n/g,' ').trim();
+          const next=String(n.innerText||'').replace(/\\r?\\n/g,' ').trim();
           n.contentEditable='false';
           delete n.dataset.dshEditing;
           delete n.dataset.dshOrig;
           delete n.dataset.dshCancel;
-          if(!cancelled && next && next!==String(orig||'').replace(/\r?\n/g,' ').trim()){
+          inlineState(false);
+          if(!cancelled && next && next!==String(orig||'').replace(/\\r?\\n/g,' ').trim()){
             parent.postMessage({type:'dsh-ppt-inline-edit',nonce:nonce,field:field,value:next},'*');
           }
         }
         n.addEventListener('blur',finish);
       },true);
       document.addEventListener('click',function(e){if(e.target.closest('#data-panel,.data-number,.data-chart-trace,[data-dsh-editing="1"]'))return;const n=e.target.closest('.code-window,.code-body,.mockup-browser,.mockup-phone,.quadrant-svg,.radar-svg,.dumbbell-svg,.hm-grid,.deck-mermaid-svg,.mermaid-canvas,.deck-math,.formula-plate,.callout-formula,h1,h2,.subtitle,.kicker,.statement-title,.quote-text,.quote-attr,.slide-takeaway,.slide-source,li,.mekko-col,.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col,table');if(!n)return;
-        e.preventDefault();e.stopImmediatePropagation();let field=n.matches('.code-window,.code-body')?'code':n.matches('.deck-mermaid-svg,.mermaid-canvas')?'mermaid':n.matches('.deck-math,.formula-plate,.callout-formula')?'formula':n.matches('li')?'bullets':n.matches('.subtitle,.quote-attr')?'subtitle':n.matches('.kicker')?'kicker':n.matches('.slide-takeaway')?'takeaway':n.matches('.slide-source')?'source':n.matches('table,.mekko-col,.hm-grid,.radar-svg')?'rows':n.matches('.mockup-browser,.mockup-phone,.quadrant-svg,.dumbbell-svg,.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col')?'items':'title';tell(field)},true);
+        e.preventDefault();e.stopImmediatePropagation();let field=n.matches('.code-window,.code-body')?'code':n.matches('.deck-mermaid-svg,.mermaid-canvas')?'mermaid':n.matches('.deck-math,.formula-plate,.callout-formula')?'formula':n.matches('li')?'bullets':n.matches('.subtitle,.quote-attr')?'subtitle':n.matches('.kicker')?'kicker':n.matches('.slide-takeaway')?'takeaway':n.matches('.slide-source')?'source':n.matches('table,.mekko-col,.hm-grid,.radar-svg')?'rows':n.matches('.mockup-browser,.mockup-phone,.quadrant-svg,.dumbbell-svg,.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col')?'items':'title';
+        clearTimeout(selectTimer);
+        if(n.matches(editableSelector)){if(e.detail>1)return;selectTimer=setTimeout(function(){if(!n.isContentEditable)tell(field)},500)}else tell(field)},true);
       window.addEventListener('message',function(e){if(e.source!==parent||e.data?.nonce!==nonce)return;if(e.data.type==='dsh-ppt-jump')window.__dshPpt?.jump(e.data.page);if(e.data.type==='dsh-ppt-data-set'&&window.__dshData){window.__dshData.setParameters(e.data.parameters);const state=window.__dshData.getState();parent.postMessage({type:'dsh-ppt-data',nonce,parameters:e.data.parameters,valid:state.valid,command:e.data.command},'*')}});
       if(window.__dshData)window.__dshData.onChange=function(parameters,dirty,valid){parent.postMessage({type:'dsh-ppt-data',nonce,parameters,dirty,valid},'*')};
     })();<\/script>`;
@@ -845,6 +854,7 @@ function requestNavigation(target){if(busy)return;if(dataDirty){setActiveTab('da
             const railSplit = W.useResizableSplit({ key: 'dsh-ppt:rail-width', initial: 204, min: 156, max: 320 });
             const inspectorSplit = W.useResizableSplit({ key: 'dsh-ppt:inspector-width', initial: 360, min: 270, max: 560, reverse: true });
             const frame = useRef(null), previewBox = useRef(null), fieldRefs = useRef({}), alive = useRef(true), operations = useRef(new Set());
+            const previewEditing = useRef(false);
             const imageLoader = useRef(null);
             if (!imageLoader.current)
                 imageLoader.current = createImageLoader();
@@ -860,6 +870,7 @@ __stardustUpdatesGuard(React, "dsh-ppt", { dirty: dirty || dataDirty, busy: busy
             function adopt(next, preferred) {
                 imageLoader.current.cancel();
                 nonce.current = crypto.randomUUID();
+                previewEditing.current = false;
                 setDataDirty(false);
                 setIncomingData(null);
                 setProject(next);
@@ -919,6 +930,10 @@ return result;
                 function receive(event) {
                     if (event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce.current || (mode !== 'html' && mode !== 'split'))
                         return;
+                    if (event.data.type === 'dsh-ppt-inline-state') {
+                        previewEditing.current = event.data.editing === true;
+                        return;
+                    }
                     if (event.data.type === 'dsh-ppt-data') {
                         if (typeof event.data.command === 'number' && event.data.command !== dataCommand.current)
                             return;
@@ -948,11 +963,14 @@ return result;
                     }
                     if (event.data.type !== 'dsh-ppt-select')
                         return;
+                    if (previewEditing.current)
+                        return;
                     const key = event.data.field;
                     if (key === 'items' || key === 'rows') {
                         if (dataDirty) { setActiveTab('data'); return; }
                         setActiveTab('content');
                         requestAnimationFrame(() => {
+                            if (previewEditing.current) return;
                             const targetEl = rootElement.current?.querySelector(key === 'rows' ? 'textarea[id$="-rows"], .ppt-item-editor input, .ppt-archetype-box select' : '.ppt-item-editor input, .ppt-archetype-box select');
                             targetEl?.focus?.();
                             targetEl?.scrollIntoView?.({ block: 'nearest' });
@@ -962,7 +980,7 @@ return result;
                     }
                     const field = fields.find(([field]) => field === key);
                     if (field) {
-                        if(dataDirty){setActiveTab('data');return;}setActiveTab('content');requestAnimationFrame(()=>fieldRefs.current[key]?.focus());
+                        if(dataDirty){setActiveTab('data');return;}setActiveTab('content');requestAnimationFrame(()=>{if(!previewEditing.current)fieldRefs.current[key]?.focus()});
                         fieldRefs.current[key]?.scrollIntoView({ block: 'nearest' });
                         setMessage(t("已定位到") + t(field[1]) + t("，在字段中修改后保存。"));
                     }

@@ -8,9 +8,10 @@
  * 把“自由设计 PPT”降维为“按标杆槽位精准填空”。
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { GITHUB_DISTILLED_EXEMPLARS, getExemplarFewShotSlides } from './deck-exemplars-corpus.mjs'
+import { writeWorkspaceJson } from './deck-store.mjs'
 
 export { GITHUB_DISTILLED_EXEMPLARS, getExemplarFewShotSlides }
 
@@ -252,11 +253,13 @@ export const CURATED_EXEMPLAR_IDS = Object.freeze(Object.keys(CURATED_EXEMPLARS)
 /**
  * 读取工作区 .dsh-ppt/exemplars.json 中通过真实优质 .pptx 吸收持久化的标杆范本。
  */
-export function loadWorkspaceExemplars(cwd = '.') {
+function readWorkspaceExemplars(cwd, strict = false) {
   const filePath = resolve(cwd, EXEMPLAR_STORE_REL)
   if (!existsSync(filePath)) return {}
   try {
     const raw = JSON.parse(readFileSync(filePath, 'utf8'))
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid exemplar store')
+    if (Object.hasOwn(raw, 'exemplars') && !Array.isArray(raw.exemplars)) throw new Error('Invalid exemplar entries')
     const list = Array.isArray(raw?.exemplars) ? raw.exemplars : (raw && typeof raw === 'object' ? Object.values(raw) : [])
     const map = {}
     for (const item of list) {
@@ -264,10 +267,13 @@ export function loadWorkspaceExemplars(cwd = '.') {
       map[String(item.id)] = item
     }
     return map
-  } catch {
+  } catch (error) {
+    if (strict) throw new Error('dsh-ppt：范本库格式无效或无法读取，已保留原文件，请备份并修复后重试', { cause: error })
     return {}
   }
 }
+
+export function loadWorkspaceExemplars(cwd = '.') { return readWorkspaceExemplars(cwd) }
 
 /**
  * 持久化单份吸收自外部优质 .pptx 的标杆范本至工作区 .dsh-ppt/exemplars.json。
@@ -309,12 +315,11 @@ export function saveWorkspaceExemplar(cwd = '.', exemplar) {
     savedAt: new Date().toISOString(),
   }
 
-  const existing = loadWorkspaceExemplars(cwd)
+  const existing = readWorkspaceExemplars(cwd, true)
   existing[id] = normalized
   const trimmed = Object.values(existing).slice(-MAX_WORKSPACE_EXEMPLARS)
   const outPath = resolve(cwd, EXEMPLAR_STORE_REL)
-  mkdirSync(resolve(cwd, '.dsh-ppt'), { recursive: true })
-  writeFileSync(outPath, JSON.stringify({ schemaVersion: 1, exemplars: trimmed }, null, 2) + '\n', 'utf8')
+  writeWorkspaceJson(outPath, { schemaVersion: 1, exemplars: trimmed })
   return { exemplar: normalized, path: outPath }
 }
 
@@ -435,6 +440,7 @@ export function extractExemplarFromAbsorbed(absorbed, options = {}) {
  * 批量扫描并吸收指定目录下的优质 .pptx 语料，统一写入 .dsh-ppt/exemplars.json 与 .dsh-ppt/taste-recipes.json。
  */
 export async function ingestExemplarDirectory({ dirPath, cwd = '.', limit = 20, absorbFn, saveTasteFn, signal }) {
+  signal?.throwIfAborted()
   if (!dirPath || typeof dirPath !== 'string') {
     throw new Error('dsh-ppt：请提供包含 .pptx 文件的目录路径 dirPath')
   }
@@ -451,9 +457,11 @@ export async function ingestExemplarDirectory({ dirPath, cwd = '.', limit = 20, 
   const absorbedList = []
   const failed = []
   for (const file of files) {
+    signal?.throwIfAborted()
     const fullPath = join(absDir, file)
     try {
       const absorbed = await absorbFn({ pptxPath: fullPath, cwd: absDir, extractLogo: true, signal })
+      signal?.throwIfAborted()
       const exemplar = extractExemplarFromAbsorbed(absorbed)
       const savedEx = saveWorkspaceExemplar(cwd, exemplar)
       let tastePath = ''
@@ -473,6 +481,7 @@ export async function ingestExemplarDirectory({ dirPath, cwd = '.', limit = 20, 
         tastePath,
       })
     } catch (err) {
+      signal?.throwIfAborted()
       failed.push({ file, error: err instanceof Error ? err.message : String(err) })
     }
   }

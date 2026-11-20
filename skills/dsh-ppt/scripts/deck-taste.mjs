@@ -8,8 +8,9 @@
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { writeWorkspaceJson } from './deck-store.mjs'
 
 export const CARD_MATERIALS = Object.freeze(['solid', 'frameless', 'glass', 'editorial-rule'])
 export const COVER_VARIANTS = Object.freeze([
@@ -282,11 +283,13 @@ export function sanitizeCustomTasteRecipe(raw) {
 /**
  * 读取工作区持久化的用户品味配方库（.dsh-ppt/taste-recipes.json）。
  */
-export function loadWorkspaceTasteRecipes(cwd = process.cwd()) {
+function readWorkspaceTasteRecipes(cwd, strict = false) {
   const storePath = resolve(cwd, '.dsh-ppt', 'taste-recipes.json')
   if (!existsSync(storePath)) return {}
   try {
     const parsed = JSON.parse(readFileSync(storePath, 'utf8'))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid taste store')
+    if (Object.hasOwn(parsed, 'recipes') && (!parsed.recipes || typeof parsed.recipes !== 'object' || Array.isArray(parsed.recipes))) throw new Error('Invalid taste recipes')
     const rawMap = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed.recipes && typeof parsed.recipes === 'object' ? parsed.recipes : parsed)
       : {}
@@ -296,10 +299,13 @@ export function loadWorkspaceTasteRecipes(cwd = process.cwd()) {
       if (clean) out[clean.id.toLowerCase()] = clean
     }
     return out
-  } catch {
+  } catch (error) {
+    if (strict) throw new Error('dsh-ppt：品味配方库格式无效或无法读取，已保留原文件，请备份并修复后重试', { cause: error })
     return {}
   }
 }
+
+export function loadWorkspaceTasteRecipes(cwd = process.cwd()) { return readWorkspaceTasteRecipes(cwd) }
 
 /**
  * 将从优质 .pptx 吸收提炼的品味配方持久化到工作区（.dsh-ppt/taste-recipes.json），供后续所有新稿一键复用。
@@ -308,13 +314,12 @@ export function saveWorkspaceTasteRecipe(recipe, cwd = process.cwd()) {
   const clean = sanitizeCustomTasteRecipe(recipe)
   if (!clean) throw new Error('dsh-ppt：无效的品味配方对象')
   const storePath = resolve(cwd, '.dsh-ppt', 'taste-recipes.json')
-  const existing = loadWorkspaceTasteRecipes(cwd)
+  const existing = readWorkspaceTasteRecipes(cwd, true)
   existing[clean.id.toLowerCase()] = {
     ...clean,
     absorbedAt: clean.absorbedAt || new Date().toISOString(),
   }
-  mkdirSync(dirname(storePath), { recursive: true })
-  writeFileSync(storePath, JSON.stringify({ version: 1, recipes: existing }, null, 2) + '\n', 'utf8')
+  writeWorkspaceJson(storePath, { version: 1, recipes: existing })
   return { path: storePath, recipe: existing[clean.id.toLowerCase()], totalSaved: Object.keys(existing).length }
 }
 

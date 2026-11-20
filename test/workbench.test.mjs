@@ -58,6 +58,16 @@ test('read-only listing does not create storage; known tools register persistent
   writeFileSync(join(dir, 'other.json'), '{}')
   await assert.rejects(again.action({ operation: 'open', id: '0'.repeat(64), path: join(dir, 'other.json') }), /索引/)
 }))
+
+test('an incomplete catalog tail does not swallow a newly registered project', () => fixture(async ({ created, wb }) => {
+  const broken = '{"interrupted-record":'
+  writeFileSync(wb.catalogPath, broken)
+  await wb.remember(created, {})
+  const listed = await wb.action({ operation: 'list' })
+  assert.equal(listed.projects.length, 1)
+  assert.equal(listed.projects[0].path, readDeckProject({ deckPath: created.jsonPath }).path)
+  assert.ok(readFileSync(wb.catalogPath, 'utf8').startsWith(broken + '\n'))
+}))
 test('authenticated carrier only; original Host used across HTTP bridge and origin checked', () => fixture(async ({ wb }) => {
   const registrations = []; installPptWorkbench({ inject(deps, fn) { assert.deepEqual(deps, ['connection']); fn({ connection: { fetch: { register(route) { registrations.push(route) } } } }); } }, wb)
   assert.equal(registrations.length, 2); assert.equal(registrations[0].path, PPT_WORKBENCH_ROUTE)

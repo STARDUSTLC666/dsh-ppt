@@ -18,8 +18,8 @@ importers:
         specifier: 0.21.0
         version: 0.21.0
       '@stardustlc/dsh-updates':
-        specifier: 0.2.7
-        version: 0.2.7
+        specifier: 0.2.10
+        version: 0.2.10
       csv-parse:
         specifier: 6.1.0
         version: 6.1.0
@@ -152,8 +152,8 @@ packages:
     resolution: {integrity: sha512-m3E+DUw4KmnK1IMh87huvm84DUISjS4nxRZsGq4mJvVoqHmkqloZcZcxbFncwC8eLfpyHyHGk5x8OjN0LXcmLA==}
     engines: {node: '>=22.18.0'}
 
-  '@stardustlc/dsh-updates@0.2.7':
-    resolution: {integrity: sha512-JYymKsQc66TkYamTnD30TGKpg/jm+BmlrGmgYc3aZT4DZekECsLcum6ljRSbFGyaugXcnZClJ6EX/oKlgGitIA==}
+  '@stardustlc/dsh-updates@0.2.10':
+    resolution: {integrity: sha512-QYawMZtyzggVo5D8/Bpl3tAj4wlJhlLdJPWR6SyD81PsRIXYRMhxbqcmUcF1fBf5J4mjmHYFjW982xxRkSZR0A==}
     engines: {node: ^22.19.0 || >=24.0.0}
 
   '@swc/helpers@0.5.23':
@@ -192,8 +192,8 @@ packages:
   fontkit@2.0.4:
     resolution: {integrity: sha512-syetQadaUEDNdxdugga9CpEYVaQIxOwk7GlwZWWZ19//qW4zE5bknOKeMBDYAASwnpaSHKJITRLMF9m1fp3s6g==}
 
-  graceful-fs@4.2.11:
-    resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+  graceful-fs@4.2.12:
+    resolution: {integrity: sha512-iuyGF2E4oafQfPsRrG2wtY2ILupMhvtdrhzrxB+0VcjsPpSPttpfYdjnGFGsTi5MaJFjI1jOKHPQ6UTbTj9TAw==}
 
   jsep@1.4.0:
     resolution: {integrity: sha512-B7qPcEVE3NVkmSJbaYxvv4cHkVW7DQsZz13pUMrfS8z8Q/BuShN+gcTXrUlPiGqM2/t/EEaI030bpxMqY8gMlw==}
@@ -329,7 +329,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@stardustlc/dsh-updates@0.2.7':
+  '@stardustlc/dsh-updates@0.2.10':
     dependencies:
       acorn: 8.15.0
       proper-lockfile: 4.1.2
@@ -373,7 +373,7 @@ snapshots:
       unicode-properties: 1.4.1
       unicode-trie: 2.0.0
 
-  graceful-fs@4.2.11: {}
+  graceful-fs@4.2.12: {}
 
   jsep@1.4.0: {}
 
@@ -399,7 +399,7 @@ snapshots:
 
   proper-lockfile@4.1.2:
     dependencies:
-      graceful-fs: 4.2.11
+      graceful-fs: 4.2.12
       retry: 0.12.0
       signal-exit: 3.0.7
 
