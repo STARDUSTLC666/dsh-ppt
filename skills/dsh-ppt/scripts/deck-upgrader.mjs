@@ -10,8 +10,8 @@ import { stripInlineMarkdown } from './deck-layouts.mjs'
 
 const WEAK_GENERIC_TITLE_RE = /^(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s-]*)?(?:项目背景|研究背景|背景介绍|现状分析|现状与问题|数据分析|核心指标|关键指标|性能提升|效能提升|技术实现|架构实现|核心功能|产品介绍|团队介绍|商业模式|未来规划|核心优势|工作进展|项目进展|阶段进展|竞品分析|竞品对比|解决方案|实施方案|行动计划|工作计划|总结|总结汇报|概述|目录页|关于我们|Overview|Introduction|Background|Status|Progress|Metrics|Performance|Implementation|Architecture|Product|Team|Data\s*Analysis|Analysis|Comparison|Solution|Plan|Summary|Results|Chart|Slide\s*\d+)$/i
 const BARE_CLOSING_RE = /^(?:谢谢|谢谢观看|谢谢聆听|感谢(?:聆听|观看|大家|指导)?|敬请指正|Thank\s*You|Thanks|Q\s*&\s*A)[!！.。?？\s]*$/i
-const LOWER_IS_BETTER_RE = /耗时|时延|延迟|周期|成本|返工|缺陷|故障|错误|流失|投诉|报错|开销|预算|latency|cost|time|cycle|rework|defect|error|churn|bug|delay|mttr/i
-const DUMBBELL_RE = /(?:从|由|from\s+)?(-?\d+(?:\.\d+)?)\s*(%|％|pp|ms|s|天|小时|分钟|h|m|x|倍|万|亿|k|M|B)?\s*(?:提升至|提升到|增长至|增长到|跃升至|上涨至|提高到|降至|降到|压缩至|压缩到|缩短至|缩短到|减少至|减少到|优化至|优化到|变为|→|->|to)\s*(-?\d+(?:\.\d+)?)\s*(%|％|pp|ms|s|天|小时|分钟|h|m|x|倍|万|亿|k|M|B)?/i
+const LOWER_IS_BETTER_RE = /耗时|时延|延迟|周期|成本|返工|缺陷|故障|错误|流失|投诉|报错|开销|预算|疼痛|障碍|并发症|复发|住院|latency|cost|time|cycle|rework|defect|error|churn|bug|delay|mttr|pain|disability|complication|mortality/i
+const DUMBBELL_RE = /(?:从|由|from\s+)?(-?\d+(?:\.\d+)?)\s*(%|％|pp|bp|ms|s|分|pts|天|小时|分钟|h|m|x|倍|万|亿|元|例|k|M|B)?\s*(?:提升至|提升到|增长至|增长到|跃升至|上涨至|提高到|升至|升到|降至|降到|压缩至|压缩到|缩短至|缩短到|减少至|减少到|优化至|优化到|变为|→|->|to)\s*(-?\d+(?:\.\d+)?)\s*(%|％|pp|bp|ms|s|分|pts|天|小时|分钟|h|m|x|倍|万|亿|元|例|k|M|B)?/i
 const RADAR_TITLE_RE = /雷达|多维|能力评估|能力对比|综合评测|基准评测|权衡|radar|spider|benchmark|capability|trade-?off|multi-?axis/i
 const HEATMAP_TITLE_RE = /热力|达成率|分布矩阵|覆盖率|完成度|矩阵|heatmap|heat\s*map|coverage|regional|fulfillment|sensitivity/i
 const QUADRANT_TITLE_RE = /魔力象限|象限|竞争格局|波士顿|定位矩阵|市场定位|quadrant|positioning|bcg|competitive\s+landscape|magic\s+quadrant/i

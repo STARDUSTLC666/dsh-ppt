@@ -509,6 +509,7 @@ export interface DeckEngine {
     };
     resolveExemplar?(idOrObj: unknown, workspaceExemplars?: Record<string, unknown>): PptExemplarSummary | null;
     renderExemplarPromptGuide?(exemplar: unknown, lang?: string): string;
+    getExemplarFewShotSlides?(exemplarId: string, lang?: string): Array<Record<string, unknown>>;
     extractExemplarFromAbsorbed?(absorbed: unknown, options?: Record<string, unknown>): Record<string, unknown>;
     importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>;
     importOfficeDeck?(options: Record<string, unknown>): Promise<PptCreateResult>;

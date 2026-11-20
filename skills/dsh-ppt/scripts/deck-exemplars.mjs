@@ -10,6 +10,9 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
+import { GITHUB_DISTILLED_EXEMPLARS, getExemplarFewShotSlides } from './deck-exemplars-corpus.mjs'
+
+export { GITHUB_DISTILLED_EXEMPLARS, getExemplarFewShotSlides }
 
 const EXEMPLAR_STORE_REL = '.dsh-ppt/exemplars.json'
 const MAX_WORKSPACE_EXEMPLARS = 48
@@ -241,6 +244,7 @@ export const CURATED_EXEMPLARS = Object.freeze({
       slot(8, 'closing-cta', 'closing', { variant: 'cta-cards', maxItems: 3, requiredFields: ['title', 'subtitle', 'items'], exampleTitleZh: '下一步重点抓落实事项与恳请协调支持清单', exampleTitleEn: 'Key Implementation Commitments & Requested Support', fillGuideZh: '3 项具体落实承诺与请示事项', fillGuideEn: '3 concrete execution commitments & support items' }),
     ]),
   }),
+  ...GITHUB_DISTILLED_EXEMPLARS,
 })
 
 export const CURATED_EXEMPLAR_IDS = Object.freeze(Object.keys(CURATED_EXEMPLARS))
@@ -329,7 +333,9 @@ export function listCuratedExemplars(workspaceExemplars = {}) {
     slideCount: ex.slots.length,
     description: ex.description,
     enDescription: ex.enDescription,
-    source: 'curated',
+    source: ex.provenance ? 'github-curated' : 'curated',
+    ...(ex.provenance ? { provenance: ex.provenance } : {}),
+    hasFewShot: true,
     layoutCadence: ex.slots.map((s) => (s.variant ? `${s.layout}[${s.variant}]` : s.layout)),
   }))
   const custom = Object.values(workspaceExemplars || {})
@@ -491,16 +497,20 @@ export function matchBestExemplar({ title = '', content = '', persona = '', temp
     keynote: 'stripe-product-launch',
     'product-prd': 'stripe-product-launch',
     defense: 'academic-defense',
-    'medical-case': 'academic-defense',
+    'medical-case': 'medical-clinical-course',
+    course: 'medical-clinical-course',
     consulting: 'mckinsey-strategy',
     'industry-research': 'mckinsey-strategy',
-    'quarterly-okr': 'quarterly-exec-review',
+    'quarterly-okr': 'okr-performance-review',
     weekly: 'quarterly-exec-review',
-    'financial-earnings': 'quarterly-exec-review',
+    'financial-earnings': 'daylight-earnings-research',
     'architecture-review': 'tech-arch-rfc',
     postmortem: 'tech-arch-rfc',
     'gov-report': 'gov-institutional',
     project: 'enterprise-proposal',
+    workshop: 'swiss-bauhaus-workshop',
+    'marketing-campaign': 'warm-brand-story',
+    'creative-lookbook': 'quiet-canvas-keynote',
   }
   if (template && tplMap[template]) return CURATED_EXEMPLARS[tplMap[template]]
 
@@ -522,18 +532,24 @@ export function matchBestExemplar({ title = '', content = '', persona = '', temp
   if (persona === 'academic') return CURATED_EXEMPLARS['academic-defense']
   if (persona === 'gov-exec') return CURATED_EXEMPLARS['gov-institutional']
   if (persona === 'tech-pitch') return CURATED_EXEMPLARS['stripe-product-launch']
+  if (persona === 'editorial') return CURATED_EXEMPLARS['warm-brand-story']
   return CURATED_EXEMPLARS['mckinsey-strategy']
 }
 
 /**
- * 为弱/中等模型生成极简、可直接照抄填空的「标杆范本槽位契约指南」（Slot-Filling Prompt Pack）。
+ * 为弱/中等模型生成极简、可直接照抄填空的「标杆范本槽位契约指南 + Few-Shot 满分 JSON 样板」（Slot-Filling Prompt Pack）。
  */
 export function renderExemplarPromptGuide(exemplar, lang = 'zh') {
   if (!exemplar) return ''
   const en = lang === 'en'
+  const provLine = exemplar.provenance
+    ? (en
+        ? `Distilled from OSS benchmark: ${exemplar.provenance.repo} (${exemplar.provenance.license})\n`
+        : `开源标杆溯源：${exemplar.provenance.repo}（${exemplar.provenance.license}）\n`)
+    : ''
   const header = en
-    ? `Exemplar: ${exemplar.enName || exemplar.name} (id: "${exemplar.id}")\nRecommended params: exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${exemplar.taste ? `, taste: "${exemplar.taste}"` : ''}\nRule: Fill each slot below with a crisp Action Title (complete claim with fact/number) and structured items/rows. Do NOT collapse slots back into long bullet walls.\n`
-    : `标杆范本：${exemplar.name}（id: "${exemplar.id}"）\n推荐参数：exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${exemplar.taste ? `, taste: "${exemplar.taste}"` : ''}\n填空铁律：严格按以下逐页槽位输出结构化 slides，每页标题必须为带结论/数字的 Action Title，严禁退化为连续 bullets 长文本墙。\n`
+    ? `Exemplar: ${exemplar.enName || exemplar.name} (id: "${exemplar.id}")\n${provLine}Recommended params: exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${exemplar.taste ? `, taste: "${exemplar.taste}"` : ''}\nRule: Fill each slot below with a crisp Action Title (complete claim with fact/number) and structured items/rows. Do NOT collapse slots back into long bullet walls.\n`
+    : `标杆范本：${exemplar.name}（id: "${exemplar.id}"）\n${provLine}推荐参数：exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${exemplar.taste ? `, taste: "${exemplar.taste}"` : ''}\n填空铁律：严格按以下逐页槽位输出结构化 slides，每页标题必须为带结论/数字的 Action Title，严禁退化为连续 bullets 长文本墙。\n`
 
   const rows = (exemplar.slots || []).map((s) => {
     const lay = s.variant ? `${s.layout}[${s.variant}]` : s.layout
@@ -544,5 +560,13 @@ export function renderExemplarPromptGuide(exemplar, lang = 'zh') {
       ? `  ${String(s.index).padStart(2, '0')}. [${lay}] role=${s.role} | fields: ${fields} | maxItems=${s.maxItems} | e.g. "${exTitle}"${guide ? ` — ${guide}` : ''}`
       : `  ${String(s.index).padStart(2, '0')}. [${lay}] 角色=${s.role} | 必填=${fields} | 项数≤${s.maxItems} | 标题示范：「${exTitle}」${guide ? `（${guide}）` : ''}`
   })
-  return header + rows.join('\n')
+
+  const fewShots = getExemplarFewShotSlides(exemplar.id, en ? 'en' : 'zh')
+  const fewShotBlock = fewShots.length > 0
+    ? (en
+        ? `\nFew-Shot Gold Slide JSON (mirror this exact schema & Action-Title quality with your real data):\n${JSON.stringify(fewShots, null, 2)}`
+        : `\n满分 JSON 填空样板（直接仿写结构与结论标题写法，替换为真实业务数据）：\n${JSON.stringify(fewShots, null, 2)}`)
+    : ''
+
+  return header + rows.join('\n') + fewShotBlock
 }

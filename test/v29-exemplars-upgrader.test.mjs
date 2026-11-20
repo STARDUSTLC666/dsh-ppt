@@ -48,7 +48,7 @@ function hasWireTypeArray(node) {
 }
 
 test('v0.29: 8 built-in Curated Gold Exemplars expose complete slot contracts, matching, and bilingual prompt guides', () => {
-  assert.equal(CURATED_EXEMPLAR_IDS.length, 8)
+  assert.equal(CURATED_EXEMPLAR_IDS.length, 20)
   const expectedIds = [
     'mckinsey-strategy',
     'sequoia-pitch',
@@ -78,8 +78,8 @@ test('v0.29: 8 built-in Curated Gold Exemplars expose complete slot contracts, m
   assert.equal(matchBestExemplar({ template: 'architecture-review' }).id, 'tech-arch-rfc')
 
   const list = listCuratedExemplars()
-  assert.equal(list.length, 8)
-  assert.ok(list.every((item) => item.source === 'curated' && item.layoutCadence.length >= 8))
+  assert.equal(list.length, 20)
+  assert.ok(list.every((item) => (item.source === 'curated' || item.source === 'github-curated') && item.layoutCadence.length >= 8))
 })
 
 test('v0.29: absorbPptx filters hidden slides (show="0" & "(hidden)"), saves exemplar, and ingestExemplarCorpus batch-absorbs a directory', () => inTempDir(async (dir) => {
@@ -145,7 +145,7 @@ test('v0.29: absorbPptx filters hidden slides (show="0" & "(hidden)"), saves exe
   assert.ok(singleEx && singleEx.slots.length === 7, '1-slide master falls back to balanced 7-slot cadence')
 
   const combined = listCuratedExemplars(loaded)
-  assert.equal(combined.length, 10)
+  assert.equal(combined.length, 22)
   assert.ok(resolveExemplar(singleEx.id, loaded))
 }))
 
@@ -340,7 +340,7 @@ test('v0.29: 13 Agent tools wire schema stays type-array-free; ppt_templates(exe
   // 1. ppt_templates list + exemplarId promptGuide
   const tplRes = await tplTool.execute({ lang: 'zh', exemplarId: 'mckinsey-strategy' }, execCtx)
   assert.equal(tplRes.ok, true)
-  assert.equal(tplRes.exemplars.length, 8)
+  assert.equal(tplRes.exemplars.length, 20)
   assert.equal(tplRes.exemplar.id, 'mckinsey-strategy')
   assert.ok(tplRes.promptGuide.includes('mckinsey-strategy'))
   const tplRendered = tplTool.output.render({}, tplRes)
@@ -373,7 +373,7 @@ test('v0.29: CLI flags (--list-exemplars, --ingest-exemplars, --exemplar, --no-a
   // 1. CLI --list-exemplars
   const listOut = execFileSync(process.execPath, [CLI_PATH, '--list-exemplars'], { cwd: dir, encoding: 'utf8' })
   const listJson = JSON.parse(listOut)
-  assert.ok(Array.isArray(listJson.exemplars) && listJson.exemplars.length === 8)
+  assert.ok(Array.isArray(listJson.exemplars) && listJson.exemplars.length === 20)
 
   // 2. CLI --exemplar + --no-auto-upgrade
   const mdPath = join(dir, 'notes.md')

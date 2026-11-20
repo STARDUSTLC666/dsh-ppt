@@ -540,10 +540,10 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
     let largeCardShapes = 0
     let numericKpiShapes = 0
     let harveyCells = tableMeta.hasHarvey
-    let harveyPieOrCircles = 0
+    const harveyDotCoords = []
     let waterfallBars = 0
     let chevronShapes = 0
-    let ellipseCircles = 0
+    const ellipseCircles = []
     let diamondShapes = 0
     let connectorShapes = 0
     let horizontalAxisLines = 0
@@ -579,8 +579,12 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
         if (name.startsWith('harvey ')) {
           harveyCells = true
         } else if (bounds && (preset === 'pie' || preset === 'ellipse') && (bounds.w / slideW) >= 0.01 && (bounds.w / slideW) <= 0.045 && Math.abs(bounds.w - bounds.h) <= bounds.w * 0.18) {
-          harveyPieOrCircles += 1
-          if (harveyPieOrCircles >= 4) harveyCells = true
+          const rx = bounds.x / slideW
+          const ry = bounds.y / slideH
+          // Ignore decorative vertical dot margins (left/right edges) — Harvey matrices sit inside the body grid
+          if (rx >= 0.18 && rx <= 0.92 && ry >= 0.20 && ry <= 0.88) {
+            harveyDotCoords.push({ x: rx, y: ry })
+          }
         }
         if (kind === 'connector' || preset.includes('connector') || preset === 'line') {
           const inBodyZone = bounds && (bounds.y / slideH) > 0.22 && (bounds.y / slideH) < 0.86 && !/rule|folio|divider|header|footer|takeaway/i.test(name)
@@ -647,7 +651,7 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
         if (preset === 'chevron' || preset === 'homeplate' || preset === 'pentagon') {
           chevronShapes += 1
         } else if (preset === 'ellipse' && relW >= 0.12 && relH >= 0.16 && Math.abs(bounds.w - bounds.h) <= Math.max(bounds.w, bounds.h) * 0.45) {
-          ellipseCircles += 1
+          ellipseCircles.push({ cx: relX + relW / 2, cy: relY + relH / 2, r: (relW + relH) / 4 })
         } else if (preset === 'diamond' && relW <= 0.08 && relH <= 0.12) {
           diamondShapes += 1
         }
@@ -697,6 +701,14 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
     const hasTopSummaryBanner = cardRects.some((r) => r.w >= 0.68 && r.h <= 0.26 && r.y <= 0.38)
     const lowerPillars = cardRects.filter((r) => r.w <= 0.42 && r.y >= 0.34)
 
+    if (!harveyCells && harveyDotCoords.length >= 4) {
+      const distinctCols = new Set(harveyDotCoords.map((p) => Math.round(p.x * 16))).size
+      const distinctRows = new Set(harveyDotCoords.map((p) => Math.round(p.y * 12))).size
+      if (distinctCols >= 2 && distinctRows >= 2) harveyCells = true
+    }
+    const hasConcentricCircles = ellipseCircles.length >= 2 && ellipseCircles.some((a, ai) =>
+      ellipseCircles.some((b, bi) => bi > ai && Math.hypot(a.cx - b.cx, a.cy - b.cy) <= 0.16 && Math.abs(a.r - b.r) >= 0.04))
+
     // Priority order: rich native charts/tables/diagrams -> media -> framing -> structured layouts
     if (waterfallBars >= 3 || isWaterfallChart) {
       result.inferredLayout = 'waterfall'
@@ -707,7 +719,7 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
     } else if (hasTable) {
       result.inferredLayout = 'table'
       if (tableMeta.styleHint) result.tableStyle = tableMeta.styleHint
-    } else if (ellipseCircles >= 2 && (ellipseCircles >= 3 || tamTextHits >= 2 || /市场规模|市场空间|\bTAM\b/i.test(combinedSignal))) {
+    } else if (ellipseCircles.length >= 2 && (tamTextHits >= 2 || /市场规模|市场空间|\bTAM\b|\bSAM\b|\bSOM\b/i.test(combinedSignal) || (ellipseCircles.length >= 3 && hasConcentricCircles))) {
       result.inferredLayout = 'tam'
       result.variant = 'concentric'
     } else if (chevronShapes >= 3) {
@@ -1225,9 +1237,11 @@ export async function absorbPptx(options = {}) {
   }
 
   let coreTitle = ''
+  const isGenericDeckTitle = (t) =>
+    /^(?:PowerPoint\s*(?:Presentation|演示文稿)|Microsoft\s+PowerPoint(?:\s+Presentation)?|Presentation\s*\d*|Slide\s*Deck|Untitled(?:\s+Presentation)?|Default\s+Presentation|演示文稿\s*\d*|幻灯片\s*\d*|新建\s*Microsoft\s*PowerPoint\s*演示文稿|WPS\s*演示)$/i.test(t)
   try {
     const props = lib.getCoreProperties(pres)
-    if (typeof props?.title === 'string' && props.title.trim() && !/^PowerPoint 演示文稿$|^Presentation\d*$/i.test(props.title.trim())) {
+    if (typeof props?.title === 'string' && props.title.trim() && !isGenericDeckTitle(props.title.trim())) {
       coreTitle = props.title.trim().slice(0, 100)
     }
   } catch { /* ignore */ }
@@ -1238,7 +1252,7 @@ export async function absorbPptx(options = {}) {
     ...(logoDataUri ? { logo: logoDataUri } : {}),
   }
   const isOfficeDefaultFont = (f) =>
-    /^(?:SimSun|NSimSun|宋体|新宋体|FangSong|仿宋|Impact|Comic Sans MS)$/i.test(f) ||
+    /^(?:SimSun|NSimSun|宋体|新宋体|FangSong|仿宋|Impact|Comic Sans MS|Songti SC|PingFang SC|Hiragino Sans GB|STSong|STHeiti|STFangsong|STKaiti|Arial Unicode MS|Apple SD Gothic Neo|Pretendard|Menlo|SF Pro(?: Display| Text)?|Helvetica Neue|Playfair Display)$/i.test(f) ||
     (/^(?:Calibri|Calibri Light|Aptos|Aptos Display)$/i.test(f) &&
       !extractedFonts.majorEastAsian &&
       !extractedFonts.minorEastAsian)

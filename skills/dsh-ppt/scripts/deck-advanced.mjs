@@ -26,6 +26,8 @@ import {
 import {
   CURATED_EXEMPLARS,
   CURATED_EXEMPLAR_IDS,
+  GITHUB_DISTILLED_EXEMPLARS,
+  getExemplarFewShotSlides,
   listCuratedExemplars,
   resolveExemplar,
   loadWorkspaceExemplars,
@@ -49,6 +51,8 @@ export { listAllTasteRecipes, listCuratedTasteRecipes, loadWorkspaceTasteRecipes
 export {
   CURATED_EXEMPLARS,
   CURATED_EXEMPLAR_IDS,
+  GITHUB_DISTILLED_EXEMPLARS,
+  getExemplarFewShotSlides,
   listCuratedExemplars,
   resolveExemplar,
   loadWorkspaceExemplars,
@@ -672,9 +676,17 @@ export async function buildDeckAsync(options = {}) {
   }
 
   const workspaceExemplars = loadWorkspaceExemplars(cwd)
-  const resolvedExemplar = options.exemplar !== undefined && options.exemplar !== null && options.exemplar !== ''
-    ? resolveExemplar(options.exemplar, workspaceExemplars)
-    : null
+  const rawExemplarStr = typeof options.exemplar === 'string' ? options.exemplar.trim() : ''
+  const resolvedExemplar = rawExemplarStr.toLowerCase() === 'auto'
+    ? matchBestExemplar({
+        title: options.title,
+        content: options.content || (Array.isArray(options.slides) ? options.slides.map((s) => `${s?.title || ''} ${(s?.bullets || []).join(' ')}`).join(' ') : ''),
+        persona: options.persona,
+        template: scenario?.id,
+      }, workspaceExemplars)
+    : (options.exemplar !== undefined && options.exemplar !== null && options.exemplar !== ''
+        ? resolveExemplar(options.exemplar, workspaceExemplars)
+        : null)
   if (options.exemplar !== undefined && options.exemplar !== null && options.exemplar !== '' && !resolvedExemplar) {
     fail('未知标杆范本 exemplar：' + String(options.exemplar))
   }

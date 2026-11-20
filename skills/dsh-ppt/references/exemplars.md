@@ -1,12 +1,16 @@
 # 标杆范本库与槽位填空契约（Curated Exemplar Corpus & Weak-LLM Compensator）
 
 本参考面向两类高频需求：
-1. **将自由规划降维为「槽位填空（Slot-Filling）」**：直接按内置 **8 套满分标杆范本**（或工作区批量吸收的优质 `.pptx` 范本）逐页填空，让任意能力层级的模型稳定产出麦肯锡 / 红杉 / Stripe / Nature 级排版。
+1. **将自由规划降维为「槽位填空（Slot-Filling）」**：直接按内置 **20 套满分标杆范本**（或工作区批量吸收的优质 `.pptx` 范本）逐页填空，让任意能力层级的模型稳定产出麦肯锡 / 红杉 / Stripe / 投行研报 / 临床医学级排版。
 2. **向工作区投喂外部优质 PPT 语料**：把本地或开源社区收集的高颜值 `.pptx` 目录批量吸收为持久化范本库（`.dsh-ppt/exemplars.json` + `.dsh-ppt/taste-recipes.json`），零额外运行时依赖、100% 离线提取且自动过滤隐藏说明页。
 
 ---
 
-## 1. 内置 8 套标杆范本速查表
+## 1. 内置 20 套标杆范本速查表（8 套核心场景 + 12 套 GitHub 开源优质 `.pptx` 蒸馏）
+
+> 支持传入 `exemplar: "auto"` 自动根据标题与正文字面语义路由到最佳标杆范本；调 `ppt_templates({ exemplarId })` 同步返回逐页槽位契约、满分标题示范与 **Few-Shot JSON 填空样板**。
+
+### A. 8 套核心场景标杆
 
 | Exemplar ID | 场景名称 | 继承主题 | 继承品味配方 | 骨架 | 页数与版式节奏 |
 | --- | --- | --- | --- | --- | --- |
@@ -18,6 +22,23 @@
 | `academic-defense` | Nature / 顶会学术答辩与实验报告 | `academic` | `nature-academic` | `academic-minimal` | 9 页：editorial-grid 封面 → 动机与贡献 → 原生公式定理框 → 方法流程图 → booktabs 三线表 → 消融哑铃图 → 泛化热力图 → 边界对比 → 总结致谢 |
 | `enterprise-proposal` | 政企大客户解决方案与竞标提案 | `bcg-emerald` | `mckinsey-partner` | `consulting-classic` | 9 页：architectural 封面 → 价值摘要 → 痛点对策 → 私有化部署架构 → 哈维球盲测 → ROI 指标 → 12 周甘特 → SLA 团队 → POC 行动卡 |
 | `gov-institutional` | 现代东方政务述职与年度工作报告 | `exec-jilan` | `oriental-zen` | `gov-ceremonial` | 8 页：inverted 封面 → spotlight KPI → 重点成果卡片 → 区域热力图 → 阶段推进时间轴 → 问题与整改 → 下阶段部署甘特 → 结语 |
+
+### B. 12 套 GitHub 开源优质 `.pptx` 实机甄选蒸馏标杆（Apache-2.0 / MIT / CC-BY-4.0）
+
+| Exemplar ID | 场景名称 | 视觉 DNA（实测提取） | 开源溯源 | 协议 |
+| --- | --- | --- | --- | --- |
+| `mckinsey-evolution` | 麦肯锡阶梯演进与宏观趋势诊断 | `#FFFFFF` 底 + `#062337` 深墨蓝 + `#C0504D` 批注红 · `editorial-rule` | `likaku/Mck-ppt-design-skill` | Apache-2.0 |
+| `luxury-budget-review` | 黑金高管财务预算与资金复盘 | `#080A0E` 曜石黑 + `#C9A84C` 香槟金 + `#5A9E48` 翡翠绿 · `glass` | `iOfficeAI/OfficeCLI` | Apache-2.0 |
+| `swiss-bauhaus-workshop` | 瑞士包豪斯设计评审与创新工作坊 | `#E63322` 包豪斯红 + `#E6B319` 明黄 · `editorial-folio` | `iOfficeAI/OfficeCLI` | Apache-2.0 |
+| `dark-stage-investor` | 暗夜舞台 Demo Day 高张力融资路演 | `#0A0A12` 深空蓝黑 + `#E94560` 珊瑚红 + `#3B82F6` 电光蓝 · `glass` | `iOfficeAI/OfficeCLI` | Apache-2.0 |
+| `blueprint-ai-factory` | 工程蓝图网格 AI 基础设施与智能体平台 | `#090E13` 工程深蓝 + `#4A90D9` 蓝图青 + `#E97E35` 警示橙 · `grid` | `iOfficeAI/OfficeCLI` | Apache-2.0 |
+| `warm-brand-story` | 暖宣纸撞色品牌焕新与市场增长提案 | `#F6F2EA` 暖宣纸 + `#101B3B` 藏青 + `#EC7442` 珊瑚橘 · `editorial-rule` | `iOfficeAI/OfficeCLI` | Apache-2.0 |
+| `ted-storytelling-keynote` | 暗夜极简主题演讲与观点叙事 | `#090C13` 剧场黑 + `#2BE4A8` 薄荷青 + `#E9A936` 琥珀金 · `glass` | `iOfficeAI/OfficeCLI` | Apache-2.0 |
+| `msft-enterprise-discovery` | 微软企业级 AI 场景发现与价值评估工作坊 | `#FFFFFF` 白底 + `#1376C0` Azure 蓝 + `#0E7490` · 哈维球 + 四象限 | `microsoft/dstoolkit-DiscoveryEnvisioning` | MIT |
+| `daylight-earnings-research` | 浅色投行研报与上市公司财报 | `#FAF9F6` 暖米纸 + `#1D6E6B` 机构深青 + `#9B4E23` 铜褐 · `editorial-rule` | `hustcer/pptx-nova` (`clear-value`) | Apache-2.0 |
+| `okr-performance-review` | 中文大厂述职与 OKR 季度复盘 | `#FFFFFF` 极净白 + `#1277BA` 航标蓝 + `#137B43` 达标绿 · 目标实际表 | `hustcer/pptx-nova` (`sky-compass`) | Apache-2.0 |
+| `quiet-canvas-keynote` | 极简静谧画布与浅色设计发布会 | `#EBE8E2` 暖宣麻 + `#AA6E53` 陶土红 + `#587F8A` 灰石蓝 · 54% 高留白 | `hustcer/pptx-nova` (`D1-Quiet-Canvas`) | Apache-2.0 |
+| `medical-clinical-course` | 医学临床汇报与循证科研课件 | `#F1F0EC` 暖临床石 + `#0B6A48` 医学深绿 + `#EA613E` 珊瑚标 · 队列三线表 | `grotyx/medical-ppt-design` & `hustcer/pptx-nova` | CC-BY-4.0 / Apache-2.0 |
 
 ---
 
