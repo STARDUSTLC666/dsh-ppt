@@ -2,7 +2,7 @@
 
 # PPT
 
-**Turn source material into publication-grade, deliverable presentations in DeepSeek Harness—HTML playback, editable PPTX, and project bundles—in a 5-theme light workbench.**
+**Publication-grade presentation engine & workbench for DeepSeek Harness: zero-material research & SLOP-13 fact-grounding, 20 Gold Exemplars & zero-LLM self-repair, 24 themes / 35+ native editable layouts & charts, direct Office ingestion, and offline HTML + 100% editable PPTX / PDF / PNG exports.**
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 

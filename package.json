@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
   "version": "0.32.0",
-  "description": "DeepSeek Harness 演示文稿生成与编辑工作台：输入材料即可导出离线 HTML 放映、可编辑 PPTX 与工程包，支持按页编辑、数据推演与预审演练，以及原生清透 / 米白纸感 / Claude 暖书卷 / 8-Bit 像素 / 晴空薄荷五套明亮工作台主题。欢迎提交 issues 和 PR。",
+  "description": "DeepSeek Harness 大师级演示文稿引擎与工作台：支持零资料调研核验与 SLOP-13 事实溯源、20 套标杆范本与弱模型零调用自检修复、24 主题 / 35+ 原生可编辑图谱（Mermaid/公式/代码/魔力象限/雷达/哑铃/热力图）、Office 直吞与双屏提词台，导出离线 HTML + 100% 可编辑 PPTX。欢迎 PR 与 Issues。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
