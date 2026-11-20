@@ -248,7 +248,28 @@ function renderRemotion(value: PptRemotionResult): TextBlock[] {
 
 const imageObjectProperties = {
   src: { type: 'string', description: 'Local PNG/JPEG path relative to the session cwd, or image data URI. Embedded into all output files.' },
-  alt: { type: 'string' }, fit: { type: 'string', enum: ['contain', 'cover'] }, caption: { type: 'string' },
+  alt: { type: 'string' },
+  fit: { type: 'string', enum: ['contain', 'cover'] },
+  focalPoint: { type: 'string', enum: ['center', 'top', 'bottom', 'left', 'right'], description: 'Smart crop focal anchor when fit is cover (e.g. "top" keeps portrait heads or top UI bars intact).' },
+  caption: { type: 'string' },
+}
+const imageBriefSchema = {
+  description: 'Optional Visual Brief collaboration slot (string prompt or structured { prompt, aspect, mood, safeZone }) for image/image-left/image-right slides awaiting a real generated/local photo.',
+  oneOf: [
+    { type: 'string' },
+    {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string' },
+        aspect: { type: 'string' },
+        mood: { type: 'string' },
+        safeZone: { type: 'string' },
+        style: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    { type: 'null' },
+  ],
 }
 const imageSchema = { type: ['object', 'string', 'null'], properties: imageObjectProperties, additionalProperties: false }
 const chartKinds = [
@@ -371,6 +392,7 @@ const slideLayouts = [
   'marimekko', 'sankey', 'swot',
   'mockup', 'code', 'quadrant', 'radar', 'dumbbell', 'heatmap',
   'device', 'browser', 'mobile', 'snippet', 'bubble-matrix', 'magic-quadrant', 'spider', 'slope', 'heat-matrix',
+  'map', 'world-map', 'china-map', 'geo-map', 'isometric', 'iso-stack', 'iso-layers', '3d-stack', 'iso-pillars',
   'table', 'closing', 'image', 'image-left', 'image-right',
   'chart', 'chart-split', 'gallery', 'waterfall', 'flywheel',
   'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel', 'chevron', 'value-chain',
@@ -403,7 +425,8 @@ const slideProperties = {
   language: { type: 'string', description: 'Programming language tag for code slides (e.g. typescript, python, sql, bash, go, rust, json, yaml).' },
   filename: { type: 'string', description: 'Optional file path or window title for code/mockup slides.' },
   url: { type: 'string', description: 'Optional browser URL displayed inside mockup[browser] address bar.' },
-  coverPattern: { type: 'string', enum: ['dots', 'grid', 'rings'], description: 'Optional subtle geometric vector backdrop pattern on cover slides.' },
+  coverPattern: { type: 'string', enum: ['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'], description: 'Optional subtle procedural editorial vector artwork pattern on cover slides.' },
+  imageBrief: imageBriefSchema,
   xLabel: { type: 'string', description: 'Horizontal axis label for quadrant/bubble-matrix slides.' },
   yLabel: { type: 'string', description: 'Vertical axis label for quadrant/bubble-matrix slides.' },
   notes: { type: 'string' },

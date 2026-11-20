@@ -61,6 +61,7 @@ import {
 import {
   CORE_LAYOUTS,
   LAYOUT_ALIASES,
+  normalizeImageBrief,
   EMU_W,
   EMU_H,
   escapeXml,
@@ -511,7 +512,7 @@ function specialSlidesFor(section, ui) {
   const out = []
   if (section.quote.length > 0) out.push(quoteSlideFrom(section, ui))
   const dirLayout = section.directive?.layout
-  const tableOwnedByDirective = dirLayout && ['marimekko', 'harvey', 'sankey'].includes(dirLayout)
+  const tableOwnedByDirective = dirLayout && ['marimekko', 'harvey', 'sankey', 'map', 'isometric'].includes(dirLayout)
   if (section.table !== null && !tableOwnedByDirective) out.push(...tableSlidesFrom(section, ui))
   if (out.length > 0 && section.notes.length > 0) out[0].notes = section.notes.join('\n')
   return out
@@ -526,7 +527,7 @@ function directiveSlideFrom(section, ui, pointIndexRef) {
     ...section.paragraphs.slice(spec.layout === 'callout' ? 1 : 0),
   ]
   const items = normalizeSlideItems(rawPoints, spec.layout)
-  const dirRows = section.table && ['marimekko', 'harvey', 'sankey'].includes(spec.layout)
+  const dirRows = section.table && ['marimekko', 'harvey', 'sankey', 'map', 'isometric'].includes(spec.layout)
     ? [section.table.header, ...section.table.rows]
     : undefined
   const effVariant = spec.variant || (spec.layout === 'mermaid' && section.mermaid ? detectMermaidMode(section.mermaid) : '')
@@ -1135,7 +1136,8 @@ function normalizeSlideContent(raw, index) {
   const filename = stripInlineMarkdown(source.filename ?? '')
   const url = stripInlineMarkdown(source.url ?? '')
   const rawCoverPattern = String(source.coverPattern ?? '').trim().toLowerCase()
-  const coverPattern = ['dots', 'grid', 'rings'].includes(rawCoverPattern) ? rawCoverPattern : ''
+  const coverPattern = ['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'].includes(rawCoverPattern) ? rawCoverPattern : ''
+  const imageBrief = normalizeImageBrief(source.imageBrief)
   const xLabel = stripInlineMarkdown(source.xLabel ?? '')
   const yLabel = stripInlineMarkdown(source.yLabel ?? '')
   const hasStringQuadrants = Array.isArray(source.quadrants) && source.quadrants.length === 4 && source.quadrants.every((q) => typeof q === 'string')
@@ -1166,6 +1168,7 @@ function normalizeSlideContent(raw, index) {
     ...(filename !== '' ? { filename } : {}),
     ...(url !== '' ? { url } : {}),
     ...(coverPattern !== '' ? { coverPattern } : {}),
+    ...(imageBrief ? { imageBrief } : {}),
     ...(xLabel !== '' ? { xLabel } : {}),
     ...(yLabel !== '' ? { yLabel } : {}),
     ...(quadrantLabels ? { quadrants: quadrantLabels } : {}),
@@ -1203,7 +1206,7 @@ function normalizeSlideContent(raw, index) {
     return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...commonExtras }
   }
 
-  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey' || layout === 'quadrant' || layout === 'radar' || layout === 'dumbbell' || layout === 'heatmap') {
+  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey' || layout === 'quadrant' || layout === 'radar' || layout === 'dumbbell' || layout === 'heatmap' || layout === 'map' || layout === 'isometric') {
     let rows = []
     if (Array.isArray(source.rows)) {
       rows = source.rows

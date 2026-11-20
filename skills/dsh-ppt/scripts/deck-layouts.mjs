@@ -124,6 +124,16 @@ import {
   renderProChartSlideBodyHtml,
   PRO_CHARTS_CSS,
 } from './deck-charts-pro.mjs'
+import {
+  INFOGRAPHIC_LAYOUTS,
+  computeMapModel,
+  computeIsometricModel,
+  generateVisualBrief,
+  normalizeImageBrief,
+  renderInfographicSlideBodyPptx,
+  renderInfographicSlideBodyHtml,
+  INFOGRAPHICS_CSS,
+} from './deck-infographics.mjs'
 
 export {
   CANVAS_IN,
@@ -190,6 +200,12 @@ export {
   computeHeatmapModel,
   SHOWCASE_CSS,
   PRO_CHARTS_CSS,
+  INFOGRAPHIC_LAYOUTS,
+  computeMapModel,
+  computeIsometricModel,
+  generateVisualBrief,
+  normalizeImageBrief,
+  INFOGRAPHICS_CSS,
 }
 
 export const CORE_LAYOUTS = new Set([
@@ -221,6 +237,8 @@ export const CORE_LAYOUTS = new Set([
   'radar',
   'dumbbell',
   'heatmap',
+  'map',
+  'isometric',
   'table',
   'closing',
 ])
@@ -235,6 +253,13 @@ export const LAYOUT_ALIASES = Object.freeze({
   spider: { layout: 'radar' },
   slope: { layout: 'dumbbell' },
   'heat-matrix': { layout: 'heatmap' },
+  'world-map': { layout: 'map', variant: 'world' },
+  'china-map': { layout: 'map', variant: 'china' },
+  'geo-map': { layout: 'map' },
+  'iso-stack': { layout: 'isometric', variant: 'stack' },
+  'iso-layers': { layout: 'isometric', variant: 'stack' },
+  '3d-stack': { layout: 'isometric', variant: 'stack' },
+  'iso-pillars': { layout: 'isometric', variant: 'pillars' },
   'kpi-grid': { layout: 'kpi', variant: 'grid' },
   scorecard: { layout: 'kpi', variant: 'grid' },
   bento: { layout: 'cards', variant: 'bento' },
@@ -906,6 +931,21 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
   })
   if (proChartShapes !== null) {
     shapes.push(proChartShapes)
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  const infographicShapes = renderInfographicSlideBodyPptx(slide, {
+    theme,
+    langAttr,
+    chromeCfg,
+    nextId,
+    bodyTopY,
+    bodyBottomY,
+    bodyH,
+  })
+  if (infographicShapes !== null) {
+    shapes.push(infographicShapes)
     shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
     return shapes.join('')
   }
@@ -2095,6 +2135,7 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
   let inner = ''
   const showcaseHtml = renderShowcaseSlideBodyHtml(slide, { theme, langId, manifest })
   const proChartHtml = renderProChartSlideBodyHtml(slide, { theme, langId, manifest })
+  const infographicHtml = renderInfographicSlideBodyHtml(slide, { theme, langId, manifest })
   const diagramHtml = renderDiagramSlideBodyHtml(slide, { theme, langId, chromeStyle })
 
   if (layout === 'cover') {
@@ -2181,6 +2222,8 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     inner = renderHeader() + showcaseHtml
   } else if (proChartHtml !== null) {
     inner = renderHeader() + proChartHtml
+  } else if (infographicHtml !== null) {
+    inner = renderHeader() + infographicHtml
   } else if (diagramHtml !== null) {
     inner = renderHeader(layout === 'harvey' ? ui.tableKicker : '') + diagramHtml
   } else if (layout === 'table' && (slide.tableStyle || slide.visual?.tableStyle) === 'harvey') {
@@ -2542,6 +2585,7 @@ math.deck-math.is-inline{font-size:1.06em;vertical-align:middle}
 ${AESTHETIC_STUDIO_CSS}
 ${SHOWCASE_CSS}
 ${PRO_CHARTS_CSS}
+${INFOGRAPHICS_CSS}
 ${DIAGRAMS_CSS}
 ${CHROME_CSS}
 ${MERMAID_CSS}

@@ -18,6 +18,7 @@ import {
   computeTextFit,
   ooxmlRichParagraph,
   ooxmlShape,
+  ooxmlCustGeomShape,
   ooxmlLine,
   computeBadgePillWidth,
   renderSlideChromePptx,
@@ -30,16 +31,17 @@ export const POSTER_COVER_VARIANTS = new Set([
   'split-bleed',
 ])
 
-export const COVER_PATTERNS = new Set(['dots', 'grid', 'rings'])
+export const COVER_PATTERNS = new Set(['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'])
 
 /**
- * 封面轻量矢量几何底纹（dots / grid / rings）—— 零外部依赖，低透明度克制点缀。
+ * 封面高定程序化矢量底纹（dots / grid / rings / waves / isometric-mesh / editorial-arcs）—— 零外部依赖，低透明度克制点缀。
  */
 export function renderCoverPatternPptx(pattern, theme, nextId) {
   const p = String(pattern || '').trim().toLowerCase()
   if (!COVER_PATTERNS.has(p)) return ''
   const tk = theme.tokens
   const col = theme.dark ? '#FFFFFF' : tk.accentPrimary
+  const col2 = theme.dark ? tk.accentPrimary : (tk.accentSecondary || tk.accentPrimary)
   const out = []
   if (p === 'grid') {
     for (let gx = 0.8; gx <= 12.6; gx += 1.18) {
@@ -68,8 +70,86 @@ export function renderCoverPatternPptx(pattern, theme, nextId) {
         }))
       }
     }
+  } else if (p === 'waves') {
+    // 4 flowing cubic-Bezier topographic waves across the lower-right horizon
+    for (let wi = 0; wi < 4; wi += 1) {
+      const yOff = 4.55 + wi * 0.52
+      const box = { x: 4.8, y: yOff, w: 8.55, h: 2.15 }
+      const pathXml =
+        `<a:moveTo><a:pt x="0" y="7400"/></a:moveTo>` +
+        `<a:cubicBezTo><a:pt x="2800" y="${2200 + wi * 450}"/><a:pt x="5600" y="${9600 - wi * 380}"/><a:pt x="10000" y="${1600 + wi * 520}"/></a:cubicBezTo>`
+      out.push(ooxmlCustGeomShape(nextId(), `Cover Wave ${wi + 1}`, box, pathXml, {
+        pathW: 10000,
+        pathH: 10000,
+        fill: '',
+        stroke: wi % 2 === 0 ? col : col2,
+        strokeAlpha: theme.dark ? (0.18 - wi * 0.025) : (0.20 - wi * 0.028),
+        strokePt: wi === 0 ? 1.4 : 0.9,
+      }))
+    }
+  } else if (p === 'isometric-mesh') {
+    // Architectural isometric diamond lattice cascading across the right margin
+    const rx = 0.62, ry = 0.34
+    const cells = [[0, 0], [1, 0], [2, 0], [0.5, 1], [1.5, 1], [1, 2], [2, 2], [1.5, 3]]
+    cells.forEach(([gx, gy], ci) => {
+      const bx = 9.2 + gx * (rx * 1.95) - rx
+      const by = 0.75 + gy * (ry * 2.05) - ry
+      const pathXml = '<a:moveTo><a:pt x="5000" y="0"/></a:moveTo><a:lnTo><a:pt x="10000" y="5000"/></a:lnTo><a:lnTo><a:pt x="5000" y="10000"/></a:lnTo><a:lnTo><a:pt x="0" y="5000"/></a:lnTo><a:close/>'
+      out.push(ooxmlCustGeomShape(nextId(), `Cover Iso Tile ${ci + 1}`, { x: bx, y: by, w: rx * 2, h: ry * 2 }, pathXml, {
+        pathW: 10000,
+        pathH: 10000,
+        fill: ci % 3 === 0 ? col : '',
+        fillAlpha: ci % 3 === 0 ? (theme.dark ? 0.08 : 0.09) : 0,
+        stroke: ci % 2 === 0 ? col : col2,
+        strokeAlpha: theme.dark ? 0.16 : 0.18,
+        strokePt: 0.75,
+      }))
+    })
+  } else if (p === 'editorial-arcs') {
+    // Swiss concentric quarter-arcs + golden-ratio crosshair rules on the right edge
+    ;[4.2, 6.2, 8.2].forEach((d, ri) => {
+      out.push(ooxmlShape(nextId(), `Cover Editorial Arc ${ri + 1}`, { x: 12.8 - d / 2, y: 6.9 - d / 2, w: d, h: d }, {
+        preset: 'ellipse',
+        fill: '',
+        stroke: ri === 0 ? col2 : col,
+        strokeAlpha: theme.dark ? (0.14 - ri * 0.025) : (0.16 - ri * 0.03),
+        strokePt: ri === 0 ? 1.1 : 0.65,
+      }))
+    })
+    out.push(ooxmlLine(nextId(), 'Editorial Crosshair V', { x: 9.75, y: 0.4 }, { x: 9.75, y: 7.1 }, { color: tk.hairline, widthPt: 0.5 }))
+    out.push(ooxmlLine(nextId(), 'Editorial Crosshair H', { x: 8.1, y: 4.85 }, { x: 13.0, y: 4.85 }, { color: tk.hairline, widthPt: 0.5 }))
   }
   return out.join('')
+}
+
+function renderCoverPatternSvgHtml(pattern, theme) {
+  const p = String(pattern || '').trim().toLowerCase()
+  if (!['waves', 'isometric-mesh', 'editorial-arcs'].includes(p)) return ''
+  const tk = theme?.tokens || {}
+  const col = theme?.dark ? '#FFFFFF' : (tk.accentPrimary || '#0057B8')
+  const col2 = theme?.dark ? (tk.accentPrimary || '#60A5FA') : (tk.accentSecondary || col)
+  if (p === 'waves') {
+    const paths = [0, 1, 2, 3].map((wi) => {
+      const y0 = 260 + wi * 38
+      return `<path d="M 380 ${y0 + 70} C 640 ${y0 - 30 + wi * 12}, 860 ${y0 + 110 - wi * 10}, 1280 ${y0 - 20 + wi * 16}" fill="none" stroke="${wi % 2 === 0 ? col : col2}" stroke-opacity="${(0.22 - wi * 0.03).toFixed(2)}" stroke-width="${wi === 0 ? 2 : 1.3}"/>`
+    }).join('')
+    return `<svg class="cover-pat-svg" viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true">${paths}</svg>`
+  }
+  if (p === 'isometric-mesh') {
+    const rx = 60, ry = 32
+    const cells = [[0, 0], [1, 0], [2, 0], [0.5, 1], [1.5, 1], [1, 2], [2, 2], [1.5, 3]]
+    const polys = cells.map(([gx, gy], ci) => {
+      const cx = 880 + gx * (rx * 1.95)
+      const cy = 74 + gy * (ry * 2.05)
+      const pts = `${cx},${cy - ry} ${cx + rx},${cy} ${cx},${cy + ry} ${cx - rx},${cy}`
+      return `<polygon points="${pts}" fill="${ci % 3 === 0 ? col : 'none'}" fill-opacity="0.08" stroke="${ci % 2 === 0 ? col : col2}" stroke-opacity="0.18" stroke-width="1.2"/>`
+    }).join('')
+    return `<svg class="cover-pat-svg" viewBox="0 0 1280 720" preserveAspectRatio="xMaxYMin slice" aria-hidden="true">${polys}</svg>`
+  }
+  const arcs = [210, 310, 410].map((r, ri) =>
+    `<circle cx="1220" cy="660" r="${r}" fill="none" stroke="${ri === 0 ? col2 : col}" stroke-opacity="${(0.16 - ri * 0.03).toFixed(2)}" stroke-width="${ri === 0 ? 1.6 : 1}"/>`
+  ).join('')
+  return `<svg class="cover-pat-svg" viewBox="0 0 1280 720" preserveAspectRatio="xMaxYMax slice" aria-hidden="true">${arcs}<line x1="940" y1="40" x2="940" y2="680" stroke="${tk.hairline || '#CBD5E1'}" stroke-opacity="0.45"/><line x1="780" y1="465" x2="1260" y2="465" stroke="${tk.hairline || '#CBD5E1'}" stroke-opacity="0.45"/></svg>`
 }
 
 export function renderPosterCoverPptx(slide, ctx) {
@@ -591,10 +671,12 @@ export function renderPosterCoverHtml(slide, ctx) {
   const patClass = COVER_PATTERNS.has(String(slide?.coverPattern || '').toLowerCase())
     ? ' cover-pat-' + String(slide.coverPattern).toLowerCase()
     : ''
+  const patSvg = renderCoverPatternSvgHtml(slide?.coverPattern, theme)
 
   if (coverVariant === 'keynote-glow') {
     return (
       '<div class="cover-shell is-keynote-glow' + patClass + '">' +
+      patSvg +
       '<div class="cover-glow-orb orb-a" aria-hidden="true"></div>' +
       '<div class="cover-glow-orb orb-b" aria-hidden="true"></div>' +
       '<div class="cover-center-stack">' +
@@ -612,7 +694,8 @@ export function renderPosterCoverHtml(slide, ctx) {
     const yearMark = /\b(20\d{2})\b/.exec([kicker, title, subtitle, meta].join(' '))?.[1] || '01'
     const rightTag = manifest.brand?.name || (langId === 'en' ? 'SPECIAL REPORT' : '专题深度报告')
     return (
-      '<div class="cover-shell is-editorial-grid">' +
+      '<div class="cover-shell is-editorial-grid' + patClass + '">' +
+      patSvg +
       '<div class="ed-top-bar"><span class="kicker">' + escapeHtml(kicker) + '</span><span class="ed-edition">' + escapeHtml(rightTag) + '</span></div>' +
       '<div class="ed-main-grid">' +
       '<div class="ed-copy"><div class="ed-accent-bar"></div><h1>' + renderInlineHtml(title) + '</h1>' +
@@ -955,4 +1038,7 @@ export const AESTHETIC_STUDIO_CSS = `
 .photo-cover-right img{width:100%;height:100%;object-fit:cover;display:block}
 .cover-pat-grid{background-image:linear-gradient(to right,color-mix(in srgb,var(--hairline) 42%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--hairline) 42%,transparent) 1px,transparent 1px);background-size:48px 48px}
 .cover-pat-dots{background-image:radial-gradient(color-mix(in srgb,var(--accent) 26%,transparent) 1.5px,transparent 1.5px);background-size:24px 24px}
+.cover-shell.is-editorial-grid,.cover-shell.is-architectural{position:relative}
+.cover-pat-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.cover-shell.is-editorial-grid > :not(.cover-pat-svg){position:relative;z-index:1}
 `

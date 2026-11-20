@@ -39,6 +39,7 @@ import {
 } from './deck-exemplars.mjs'
 import { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
 import { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
+import { computeMapModel, computeIsometricModel, generateVisualBrief, normalizeImageBrief } from './deck-infographics.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
@@ -65,6 +66,7 @@ export {
 } from './deck-exemplars.mjs'
 export { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
 export { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
+export { computeMapModel, computeIsometricModel, generateVisualBrief, normalizeImageBrief } from './deck-infographics.mjs'
 
 export async function ingestExemplarCorpus(options = {}) {
   return ingestExemplarDirectory({
@@ -362,6 +364,9 @@ export function checkManifest(manifest) {
         if (asset.width < box.w * 100 || asset.height < box.h * 100) issue(i, 'low-resolution', `图片为 ${asset.width}×${asset.height}，放大后可能模糊`, '换成更高分辨率图片；Logo 等小图可忽略此提示')
       }
       if (!slide.image.alt?.trim()) issue(i, 'missing-alt', '图片没有说明文字', '填写 image.alt，方便读屏及理解图片')
+    } else if (slide.imageBrief && ['image', 'image-left', 'image-right'].includes(slide.layout)) {
+      const briefMeta = generateVisualBrief(slide, theme, manifest.language || 'zh')
+      issue(i, 'image-brief-pending', `本页为智能配图协作槽位（建议画幅 ${slide.imageBrief.aspect || briefMeta.recommendedAspect}），尚未填入最终图片`, '请使用生图工具或本地图片后，通过 ppt_edit 填入 image.src 替换占位蓝图')
     }
     if (slide.chart) {
       try { normalizeChart(slide.chart, i + 1) } catch (error) { issue(i, 'invalid-chart', error.message, '修正图表类别和数值', 'error') }
@@ -452,14 +457,24 @@ async function exportPptx(manifest, theme, language, signal) {
   abort(signal)
   const presentation = await lib.loadPresentation(base), slides = lib.getSlides(presentation)
   const emu = box => Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v * 914400)]))
-  const putImage = (slide, id, box, fit, name, alt) => {
+  const putImage = (slide, id, box, fit, name, alt, focalPoint = 'center', sendToBack = false) => {
     const asset = manifest.assets[id], bytes = Buffer.from(asset.data.split(',')[1], 'base64')
     const shape = lib.addSlideImage(slide, bytes, { ...emu(box), name, fit: fit === 'contain' ? 'contain' : 'fill' })
     lib.setShapeDescription(shape, alt || name)
     if (fit === 'cover') {
       const natural = asset.width / asset.height, target = box.w / box.h
-      const fraction = natural > target ? (1 - target / natural) / 2 : (1 - natural / target) / 2
-      lib.setShapeImageCrop(shape, natural > target ? { left: fraction, right: fraction } : { top: fraction, bottom: fraction })
+      const excess = natural > target ? (1 - target / natural) : (1 - natural / target)
+      const fp = String(focalPoint || 'center').toLowerCase()
+      if (natural > target) {
+        const left = fp === 'left' ? 0 : fp === 'right' ? excess : excess / 2
+        lib.setShapeImageCrop(shape, { left, right: Math.max(0, excess - left) })
+      } else {
+        const top = fp === 'top' ? 0 : fp === 'bottom' ? excess : excess / 2
+        lib.setShapeImageCrop(shape, { top, bottom: Math.max(0, excess - top) })
+      }
+    }
+    if (sendToBack && typeof lib.sendShapeToBack === 'function') {
+      lib.sendShapeToBack(shape)
     }
   }
   manifest.slides.forEach((source, index) => {
@@ -469,11 +484,12 @@ async function exportPptx(manifest, theme, language, signal) {
     if (Array.isArray(boxes.gallery) && Array.isArray(source.images) && source.images.length > 1) {
       boxes.gallery.forEach((gBox, gIdx) => {
         const img = source.images[gIdx]
-        if (img?.assetId) putImage(slide, img.assetId, gBox, img.fit || 'cover', `Gallery image ${gIdx + 1}`, img.alt)
+        if (img?.assetId) putImage(slide, img.assetId, gBox, img.fit || 'cover', `Gallery image ${gIdx + 1}`, img.alt, img.focalPoint)
       })
     } else if (source.image) {
       let targetBox = boxes.image
       let targetFit = source.image.fit
+      const isFullBleed = source.layout === 'image' && String(source.variant || '').toLowerCase() === 'full-bleed'
       if (source.layout === 'cover') {
         targetBox = { x: 6.65, y: 0, w: 6.6833, h: 7.5 }
         targetFit = source.image.fit || 'cover'
@@ -485,7 +501,7 @@ async function exportPptx(manifest, theme, language, signal) {
         targetBox = computeMockupGeometry(source, chromeCfg.bodyTopY, bodyH).screenBox
         targetFit = source.image.fit || 'cover'
       }
-      putImage(slide, source.image.assetId, targetBox, targetFit, 'Slide image', source.image.alt)
+      putImage(slide, source.image.assetId, targetBox, targetFit, 'Slide image', source.image.alt, source.image.focalPoint, isFullBleed)
     }
     if (source.chart && source.layout !== 'radar') {
       if (source.chart.kind === 'waterfall') {
@@ -970,7 +986,7 @@ export async function editDeck(options = {}) {
   }
   const used = new Set()
   const allowed = new Set([
-    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'coverPattern', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
+    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'coverPattern', 'imageBrief', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
     'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'activeIndex', 'tableStyle',
     'bullets', 'items', 'cards', 'metrics', 'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])
@@ -997,6 +1013,7 @@ export async function editDeck(options = {}) {
         changed.layout = Array.isArray(edit.patch.images) && edit.patch.images.length > 1 ? 'image' : 'image-right'
       }
       if (['image', 'image-left', 'image-right', 'gallery', 'cover', 'mockup'].includes(changed.layout)) delete changed.chart
+      if (!edit.patch.imageBrief) delete changed.imageBrief
     }
     if (edit.patch.layout) {
       const eff = effectiveLayout(edit.patch.layout)

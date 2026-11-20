@@ -133,6 +133,15 @@ export type PptSlideLayout =
   | 'mermaid'
   | 'flowchart'
   | 'sequence'
+  | 'map'
+  | 'world-map'
+  | 'china-map'
+  | 'geo-map'
+  | 'isometric'
+  | 'iso-stack'
+  | 'iso-layers'
+  | '3d-stack'
+  | 'iso-pillars'
 
 export type PptTemplateId =
   | 'weekly'
@@ -156,7 +165,8 @@ export type PptTemplateId =
   | 'vc-daylight'
   | 'industry-research'
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey'
-export interface PptImageSpec { src?: string; assetId?: string; alt?: string; fit?: 'contain' | 'cover'; caption?: string }
+export interface PptImageSpec { src?: string; assetId?: string; alt?: string; fit?: 'contain' | 'cover'; focalPoint?: 'center' | 'top' | 'bottom' | 'left' | 'right'; caption?: string }
+export interface PptImageBrief { prompt?: string; aspect?: string; mood?: string; safeZone?: string; style?: string }
 export interface PptSlideItem {
   tag?: string
   badge?: string
@@ -292,6 +302,7 @@ export interface PptSlideSpec {
   notes?: string
   image?: PptImageSpec | string | null
   images?: Array<PptImageSpec | string>
+  imageBrief?: PptImageBrief | string | null
   chart?: PptChartSpec | null
   /** Optional bounded native font sizes (in points) and layout polish settings. */
   visual?: { titleSize?: number; bodySize?: number; chartLabelSize?: number; density?: 'compact' | 'balanced' | 'airy'; tableStyle?: PptTableStyle; chrome?: PptChromeStyle | string }

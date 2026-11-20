@@ -11,6 +11,7 @@ const VISUAL_DIAGRAM_LAYOUTS = new Set([
   'chart', 'chart-split', 'table', 'gantt', 'architecture', 'harvey',
   'tam', 'org', 'marimekko', 'sankey', 'value-chain', 'swot',
   'process', 'matrix', 'mermaid', 'flowchart', 'sequence',
+  'quadrant', 'radar', 'dumbbell', 'heatmap', 'map', 'isometric', 'mockup', 'code',
   'image', 'image-left', 'image-right', 'gallery',
 ])
 

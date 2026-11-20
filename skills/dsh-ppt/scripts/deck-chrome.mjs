@@ -768,6 +768,7 @@ export function ooxmlCustGeomShape(id, name, boxIn, pathCommandsXml, options = {
     gradientStops = null,
     gradientAngle = 0,
     stroke = '',
+    strokeAlpha = 1,
     strokePt = 0.75,
   } = options
   const b = boxToEmu(boxIn)
@@ -777,7 +778,7 @@ export function ooxmlCustGeomShape(id, name, boxIn, pathCommandsXml, options = {
       ? ooxmlSolidFill(fill, fillAlpha)
       : '<a:noFill/>'
   const lnXml = stroke
-    ? '<a:ln w="' + ptToEmu(strokePt) + '" cap="flat">' + ooxmlSolidFill(stroke) + '</a:ln>'
+    ? '<a:ln w="' + ptToEmu(strokePt) + '" cap="flat">' + ooxmlSolidFill(stroke, strokeAlpha) + '</a:ln>'
     : '<a:ln><a:noFill/></a:ln>'
 
   return (

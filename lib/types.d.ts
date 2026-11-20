@@ -35,7 +35,7 @@ export interface PptTasteRecipe {
 }
 export type PptPersonaId = 'auto' | 'consulting' | 'tech-pitch' | 'academic' | 'gov-exec' | 'education' | 'editorial';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team' | 'mermaid' | 'flowchart' | 'sequence';
+export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team' | 'mermaid' | 'flowchart' | 'sequence' | 'map' | 'world-map' | 'china-map' | 'geo-map' | 'isometric' | 'iso-stack' | 'iso-layers' | '3d-stack' | 'iso-pillars';
 export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'consulting' | 'keynote' | 'gov-report' | 'workshop' | 'architecture-review' | 'financial-earnings' | 'medical-case' | 'postmortem' | 'marketing-campaign' | 'promotion-review' | 'legal-compliance' | 'creative-lookbook' | 'quarterly-okr' | 'product-prd' | 'vc-daylight' | 'industry-research';
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey';
 export interface PptImageSpec {
@@ -43,7 +43,15 @@ export interface PptImageSpec {
     assetId?: string;
     alt?: string;
     fit?: 'contain' | 'cover';
+    focalPoint?: 'center' | 'top' | 'bottom' | 'left' | 'right';
     caption?: string;
+}
+export interface PptImageBrief {
+    prompt?: string;
+    aspect?: string;
+    mood?: string;
+    safeZone?: string;
+    style?: string;
 }
 export interface PptSlideItem {
     tag?: string;
@@ -262,6 +270,7 @@ export interface PptSlideSpec {
     notes?: string;
     image?: PptImageSpec | string | null;
     images?: Array<PptImageSpec | string>;
+    imageBrief?: PptImageBrief | string | null;
     chart?: PptChartSpec | null;
     /** Optional bounded native font sizes (in points) and layout polish settings. */
     visual?: {

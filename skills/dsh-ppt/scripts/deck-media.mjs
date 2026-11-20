@@ -2,6 +2,7 @@
 import { resolveChromeStyle } from './deck-themes.mjs'
 import { getChromeConfig, computeBadgePillWidth, roundRectAdj } from './deck-layouts.mjs'
 import { resolveActiveTaste } from './deck-taste.mjs'
+import { renderImageBriefPlaceholderPptx, renderImageBriefPlaceholderHtml } from './deck-infographics.mjs'
 
 export const MEDIA_LAYOUTS = new Set(['image', 'image-left', 'image-right', 'chart', 'chart-split'])
 export const CHART_KINDS = Object.freeze([
@@ -253,6 +254,8 @@ export function normalizeChart(input, page = 1) {
   }
 }
 
+const FOCAL_POINTS = new Set(['center', 'top', 'bottom', 'left', 'right'])
+
 function normalizeSingleImage(raw, fallbackAlt, page, defaultFit = 'contain') {
   const image = typeof raw === 'string' ? { src: raw } : raw
   if (!image || typeof image !== 'object' || (!image.src && !image.assetId)) {
@@ -262,11 +265,16 @@ function normalizeSingleImage(raw, fallbackAlt, page, defaultFit = 'contain') {
   if (!['contain', 'cover'].includes(fit)) {
     throw new Error(`dsh-ppt：第 ${page} 页 image.fit 仅支持 contain / cover`)
   }
+  const rawFocal = image.focalPoint !== undefined ? String(image.focalPoint).trim().toLowerCase() : ''
+  if (rawFocal && !FOCAL_POINTS.has(rawFocal)) {
+    throw new Error(`dsh-ppt：第 ${page} 页 image.focalPoint 仅支持 center / top / bottom / left / right`)
+  }
   return {
     ...(image.src ? { src: String(image.src) } : {}),
     ...(image.assetId ? { assetId: String(image.assetId) } : {}),
     alt: String(image.alt ?? fallbackAlt ?? ''),
     fit,
+    ...(rawFocal ? { focalPoint: rawFocal } : {}),
     ...(image.caption ? { caption: String(image.caption) } : {}),
   }
 }
@@ -320,6 +328,13 @@ export function normalizeMediaSlide(source, normalized, index) {
       variant: variant || (images.length > 1 ? 'gallery' : undefined),
       image: source.image ? normalizeSingleImage(source.image, normalized.title, page, defaultFit) : images[0],
       images,
+    }
+  }
+
+  if (!source.image && normalized.imageBrief) {
+    return {
+      ...normalized,
+      ...extras,
     }
   }
 
@@ -898,12 +913,19 @@ export function renderMediaHtml(slide, manifest, theme) {
       boxes.gallery.forEach((gBox, idx) => {
         const img = slide.images[idx]
         const asset = manifest.assets?.[img?.assetId]
-        body += `<figure class="media-image media-image--framed" style="${position(gBox)}"><img src="${esc(asset?.data ?? '')}" alt="${esc(img?.alt)}" style="object-fit:${img?.fit || 'cover'}"/>${img?.caption ? `<figcaption>${esc(img.caption)}</figcaption>` : ''}</figure>`
+        const posCss = img?.focalPoint && img.focalPoint !== 'center' ? `;object-position:${img.focalPoint === 'top' ? 'center top' : img.focalPoint === 'bottom' ? 'center bottom' : img.focalPoint === 'left' ? 'left center' : 'right center'}` : ''
+        body += `<figure class="media-image media-image--framed" style="${position(gBox)}"><img src="${esc(asset?.data ?? '')}" alt="${esc(img?.alt)}" style="object-fit:${img?.fit || 'cover'}${posCss}"/>${img?.caption ? `<figcaption>${esc(img.caption)}</figcaption>` : ''}</figure>`
       })
+    } else if (!slide.image && slide.imageBrief) {
+      body += `<div class="media-image media-image--brief" style="${position(boxes.image)}">${renderImageBriefPlaceholderHtml(slide, theme, langEn)}</div>`
     } else {
       const image = slide.image, asset = manifest.assets?.[image?.assetId]
       const frameClass = variant === 'split-bleed' || variant === 'full-bleed' ? 'media-image--bleed' : 'media-image--framed'
-      body += `<figure class="media-image ${frameClass}" style="${position(boxes.image)}"><img src="${esc(asset?.data ?? '')}" alt="${esc(image?.alt)}" style="object-fit:${image?.fit || 'contain'}"/></figure>`
+      const posCss = image?.focalPoint && image.focalPoint !== 'center' ? `;object-position:${image.focalPoint === 'top' ? 'center top' : image.focalPoint === 'bottom' ? 'center bottom' : image.focalPoint === 'left' ? 'left center' : 'right center'}` : ''
+      body += `<figure class="media-image ${frameClass}" style="${position(boxes.image)}"><img src="${esc(asset?.data ?? '')}" alt="${esc(image?.alt)}" style="object-fit:${image?.fit || 'contain'}${posCss}"/></figure>`
+      if (variant === 'full-bleed') {
+        body += `<div class="media-bleed-scrim" aria-hidden="true"></div>`
+      }
     }
     if (boxes.body) {
       const lead = slide.subtitle ? `<p class="media-lead">${formatInlineHtml(slide.subtitle)}</p>` : ''
@@ -1342,17 +1364,26 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
       shapes.push(spText('Kicker', boxes.kicker, [paraRich(slide.kicker.toUpperCase(), { size: 1100, color: accentText, bold: true, spc: 140 })], { ins: [0, 0, 0, 0] }))
     }
     if (variant === 'full-bleed') {
-      const scrim = boxEmu({ x: 0.45, y: 5.15, w: 11.2, h: 1.75 })
-      shapes.push(spRect('Title Scrim', scrim, theme.dark ? '#090B10' : '#FFFFFF', hairline, 9525, 3500))
+      const scrim = boxEmu({ x: 0, y: 3.9, w: CANVAS.w, h: 3.6 })
+      shapes.push(
+        `<p:sp><p:nvSpPr><p:cNvPr id="${allocId()}" name="Title Scrim"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="${scrim.x}" y="${scrim.y}"/><a:ext cx="${scrim.w}" cy="${scrim.h}"/></a:xfrm>` +
+        `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+        `<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="060B16"><a:alpha val="0"/></a:srgbClr></a:gs><a:gs pos="48000"><a:srgbClr val="060B16"><a:alpha val="62000"/></a:srgbClr></a:gs><a:gs pos="100000"><a:srgbClr val="060B16"><a:alpha val="88000"/></a:srgbClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="1"/></a:gradFill>` +
+        `<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`
+      )
     }
-    shapes.push(spText('Title', boxes.title, [paraRich(slide.title || '', { size: titlePt * 100, color: fg, bold: true, latin: headingFont, ea: headingEa, linePct: 118000 })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+    const titleColor = variant === 'full-bleed' ? '#F8FAFC' : fg
+    shapes.push(spText('Title', boxes.title, [paraRich(slide.title || '', { size: titlePt * 100, color: titleColor, bold: true, latin: headingFont, ea: headingEa, linePct: 118000 })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
     if (!isBleed) {
       shapes.push(spLine('Header rule', toEmu(0.65), toEmu(1.56), toEmu(12.68), toEmu(1.56), hairline, 9525, 'solid'))
     }
   }
 
-  // Framed matte container behind non-bleed images
-  if (['image', 'image-left', 'image-right'].includes(slide.layout) && !isBleed) {
+  // Framed matte container behind non-bleed images (or editorial Visual Brief slot when awaiting an image)
+  if (['image', 'image-left', 'image-right'].includes(slide.layout) && !slide.image && slide.imageBrief) {
+    shapes.push(renderImageBriefPlaceholderPptx(slide, boxes.image, theme, langId, allocId))
+  } else if (['image', 'image-left', 'image-right'].includes(slide.layout) && !isBleed) {
     if (Array.isArray(boxes.gallery) && Array.isArray(slide.images) && slide.images.length > 1) {
       boxes.gallery.forEach((gBox, gIdx) => {
         const pad = 0.06
@@ -1573,7 +1604,9 @@ export const MEDIA_CSS = `
 .media-kicker,.media-title,.media-image,.media-body,.media-chart,.media-caption,.media-takeaway{position:absolute;margin:0;max-width:none;box-sizing:border-box}
 .media-kicker{font-size:1.05cqw;line-height:1.2;margin:0}
 .media-title{font-size:2.95cqw;font-weight:750;line-height:1.18;letter-spacing:-.015em;display:flex;align-items:center;overflow-wrap:anywhere}
-.media-title--bleed{background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(10px);padding:1.1cqw 1.6cqw;border-radius:12px;border:1px solid color-mix(in srgb, var(--muted) 32%, transparent);z-index:2}
+.media-title--bleed{color:#F8FAFC;text-shadow:0 2px 14px rgba(0,0,0,.45);padding:.4cqw 0;z-index:3}
+.media-bleed-scrim{position:absolute;left:0;right:0;bottom:0;height:48%;background:linear-gradient(180deg,rgba(6,11,22,0) 0%,rgba(6,11,22,.62) 48%,rgba(6,11,22,.88) 100%);pointer-events:none;z-index:2}
+.media-image--brief{overflow:visible;padding:0;border:0;background:transparent}
 .media-image{overflow:hidden}
 .media-image--framed{border-radius:12px;background:var(--surface1,var(--panel));border:1px solid var(--hairline,color-mix(in srgb, var(--muted) 28%, transparent));padding:.45cqw}
 .media-image--framed img{border-radius:8px}

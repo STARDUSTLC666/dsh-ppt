@@ -12,6 +12,8 @@
  */
 
 import { stripInlineMarkdown } from './deck-layouts.mjs'
+import { resolveTheme } from './deck-themes.mjs'
+import { generateVisualBrief } from './deck-infographics.mjs'
 import { CURATED_EXEMPLARS, resolveExemplar, matchBestExemplar, getExemplarFewShotSlides } from './deck-exemplars.mjs'
 
 const MAX_EVIDENCE_ITEMS = 60
@@ -534,8 +536,10 @@ export function buildResearchPlan(options = {}) {
 
   let evCursor = 0
   const gaps = []
+  const resolvedThemeObj = resolveTheme(exemplar.theme || 'consulting')
+  const visualBriefs = []
   const storyboard = (exemplar.slots || []).map((slot) => {
-    const needsQuant = QUANT_LAYOUTS.has(slot.layout) || slot.layout === 'table' || slot.layout === 'sankey'
+    const needsQuant = QUANT_LAYOUTS.has(slot.layout) || slot.layout === 'table' || slot.layout === 'sankey' || slot.layout === 'map'
     const assigned = []
     if (needsQuant && evidence.length > 0 && evCursor < evidence.length) {
       assigned.push(evidence[evCursor].id)
@@ -552,6 +556,18 @@ export function buildResearchPlan(options = {}) {
       : ''
     if (gap) gaps.push({ slide: slot.index, role: slot.role, layout: slot.layout, gap })
 
+    const wantsVisual = slot.layout === 'cover' || ['image', 'image-left', 'image-right'].includes(slot.layout)
+    const visualBrief = wantsVisual
+      ? generateVisualBrief({
+          layout: slot.layout,
+          variant: slot.variant || '',
+          title: slot.layout === 'cover' ? topic : `${topic} — ${slot.role}`,
+        }, resolvedThemeObj, langEn ? 'en' : 'zh')
+      : undefined
+    if (visualBrief) {
+      visualBriefs.push({ slide: slot.index, role: slot.role, layout: slot.layout, ...visualBrief })
+    }
+
     return {
       slide: slot.index,
       role: slot.role,
@@ -560,6 +576,7 @@ export function buildResearchPlan(options = {}) {
       boundEvidenceIds: assigned,
       titleGuide: langEn ? (slot.exampleTitleEn || slot.fillGuideEn || slot.role) : (slot.exampleTitleZh || slot.fillGuideZh || slot.role),
       fillGuide: langEn ? (slot.fillGuideEn || '') : (slot.fillGuideZh || ''),
+      ...(visualBrief ? { visualBrief } : {}),
       ...(gap ? { gap } : {}),
     }
   })
@@ -622,6 +639,7 @@ export function buildResearchPlan(options = {}) {
     },
     researchRounds,
     storyboard,
+    visualBriefs,
     fewShotSlides: getExemplarFewShotSlides(exemplar.id, langEn ? 'en' : 'zh'),
     planMarkdown: lines.join('\n'),
   }

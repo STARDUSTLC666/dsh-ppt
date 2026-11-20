@@ -33,13 +33,15 @@
 | **`tam`** | `concentric` | `kicker, title, items[]`（3 项 TAM/SAM/SOM，含 `value, title, text`） | **同心圆市场空间测算图**：左侧 3 个底切原生同心椭圆 + 右侧 3 张规模与口径说明卡 |
 | **`org`** | `tree \| team` | `kicker, title, items[]`（`tree` 首项为根节点，2–5 项为子节点；`team` 2–4 人） | **组织架构树 / 核心管理团队介绍**：`tree` 带正交直角连接线；`team` 带圆标首字母头像与履历标签 |
 | **`mermaid`** | `flowchart \| sequence`（亦支持顶层别名） | `kicker, title, mermaid`（Mermaid 代码串）, `takeaway` | **原生可编辑 Mermaid 流程图与时序图**：Markdown 中 ```` ```mermaid ```` 自动识别，PPTX 编译为带附着连接点（`stCxn`/`endCxn`）的原生矢量图形与箭头 |
+| **`map`** | `world \| china`（别名 `world-map` / `china-map` / `geo-map`） | `kicker, title, items[]` 或 `rows[][]`（自动匹配全球/中国区域坐标）, `takeaway, source` | **零依赖战略矢量点阵地图**：左侧 Economist 风格全球/中国点阵轮廓 + 枢纽脉冲圈与互联虚线，右侧按数值排行的比例条卡片栏，随 24 主题自动配色 |
+| **`isometric`** | `stack \| pillars`（别名 `iso-stack` / `iso-pillars` / `3d-stack`） | `kicker, title, items[]` 或 `rows[][]`, `takeaway` | **2.5D 等轴测矢量信息图**：`stack` 为 3–5 层立体菱形平台架构堆叠 + 左侧非遮挡层号胶囊 + 右侧引线解析卡；`pillars` 为 3–4 根 3D 立体柱碑对比 + 顶部悬浮指标 |
 | `closing` | `standard \| cta-cards \| inverted` | `kicker, title, subtitle, items / bullets` | 结束与行动号召页（自动隐藏页码；支持下一步行动卡片，拒绝孤立「谢谢」） |
 
 ### B. 5 套媒体与出版级图表版式（`@office-kit/pptx` 增强）
 
 | `layout` | 可选 `variant` | 核心槽位 | 典型视觉形态与适用场景 |
 | --- | --- | --- | --- |
-| `image` | `framed \| full-bleed \| gallery` | `title, subtitle, image` 或 `images[]`（2–3 张） | 单图圆角精裱画框、全屏出血视觉页、2–3 图并排画册展示（亦兼容输入别名 `layout: "gallery"`） |
+| `image` | `framed \| full-bleed \| gallery` | `title, subtitle, image`（支持 `focalPoint: center\|top\|bottom\|left\|right`）或 `images[]` 或 `imageBrief` | 单图精裱画框、**全屏出血自动叠加底部暗色渐变护眼层（WCAG AAA 白字）**、多图画册，或暂缺真图时的 **Visual Brief 智能配图占位蓝图** |
 | `image-left` | `framed \| split-bleed` | `kicker, title, subtitle, image, items / bullets` | 左图右文（正文列垂直居中 + 导语分层；`split-bleed` 为左半屏无边距出血大图） |
 | `image-right` | `framed \| split-bleed` | `kicker, title, subtitle, image, items / bullets` | 左文右图（同上） |
 | `chart` | — | `kicker, title, subtitle, chart, takeaway, source` | 全幅出版级图表（13 种图表含矢量 `waterfall` 瀑布桥；亦兼容别名 `layout: "waterfall"`） |
