@@ -479,7 +479,7 @@ function parseBulletToItem(rawBullet, index, layout) {
   }
 }
 
-const EXTENDED_ITEM_LAYOUTS = new Set(['sankey', 'value-chain', 'marimekko', 'swot'])
+const EXTENDED_ITEM_LAYOUTS = new Set(['sankey', 'value-chain', 'marimekko', 'swot', 'quadrant', 'radar', 'dumbbell', 'heatmap'])
 
 export function normalizeSlideItems(rawItems, layout) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) return undefined
@@ -505,10 +505,21 @@ export function normalizeSlideItems(rawItems, layout) {
       const role = stripInlineMarkdown(entry.role ?? '')
       const conversion = stripInlineMarkdown(entry.conversion ?? '')
       const icon = stripInlineMarkdown(entry.icon ?? '')
+      const avatar = stripInlineMarkdown(entry.avatar ?? '')
+      const xNum = entry.x !== undefined && entry.x !== null && entry.x !== '' ? Number(entry.x) : NaN
+      const x = Number.isFinite(xNum) ? xNum : undefined
+      const yNum = entry.y !== undefined && entry.y !== null && entry.y !== '' ? Number(entry.y) : NaN
+      const y = Number.isFinite(yNum) ? yNum : undefined
+      const sizeNum = entry.size !== undefined && entry.size !== null && entry.size !== '' ? Number(entry.size) : NaN
+      const size = Number.isFinite(sizeNum) ? Math.max(1, sizeNum) : undefined
+      const beforeNum = entry.before !== undefined && entry.before !== null && entry.before !== '' ? Number(entry.before) : NaN
+      const before = Number.isFinite(beforeNum) ? beforeNum : undefined
+      const afterNum = entry.after !== undefined && entry.after !== null && entry.after !== '' ? Number(entry.after) : NaN
+      const after = Number.isFinite(afterNum) ? afterNum : undefined
       const bullets = Array.isArray(entry.bullets ?? entry.items)
         ? (entry.bullets ?? entry.items).map((b) => cleanRichText(String(b))).filter(Boolean).slice(0, 8)
         : undefined
-      if (!title && !text && !value && (!bullets || bullets.length === 0)) return null
+      if (!title && !text && !value && x === undefined && before === undefined && (!bullets || bullets.length === 0)) return null
       return {
         ...(tag ? { tag } : {}),
         ...(title ? { title } : {}),
@@ -522,6 +533,12 @@ export function normalizeSlideItems(rawItems, layout) {
         ...(role ? { role } : {}),
         ...(conversion ? { conversion } : {}),
         ...(icon ? { icon } : {}),
+        ...(avatar ? { avatar } : {}),
+        ...(x !== undefined ? { x } : {}),
+        ...(y !== undefined ? { y } : {}),
+        ...(size !== undefined ? { size } : {}),
+        ...(before !== undefined ? { before } : {}),
+        ...(after !== undefined ? { after } : {}),
         ...(status ? { status } : {}),
         ...(bullets?.length ? { bullets } : {}),
       }
@@ -695,6 +712,8 @@ export function ooxmlShape(id, name, boxIn, options = {}) {
     marginsIn = { l: 0.08, r: 0.08, t: 0.05, b: 0.05 },
     fontScale = 100000,
     autofit = true,
+    rot = 0,
+    vert = '',
     paragraphs = [],
   } = options
 
@@ -731,10 +750,10 @@ export function ooxmlShape(id, name, boxIn, options = {}) {
     '<p:sp>' +
     '<p:nvSpPr><p:cNvPr id="' + id + '" name="' + escapeXml(name) + '"/>' +
     '<p:cNvSpPr' + (txBox ? ' txBox="1"' : '') + '/><p:nvPr/></p:nvSpPr>' +
-    '<p:spPr><a:xfrm><a:off x="' + b.x + '" y="' + b.y + '"/><a:ext cx="' + b.w + '" cy="' + b.h + '"/></a:xfrm>' +
+    '<p:spPr><a:xfrm' + (rot ? ' rot="' + Math.round(rot) + '"' : '') + '><a:off x="' + b.x + '" y="' + b.y + '"/><a:ext cx="' + b.w + '" cy="' + b.h + '"/></a:xfrm>' +
     '<a:prstGeom prst="' + preset + '">' + avLst + '</a:prstGeom>' +
     fillXml + lnXml + effectXml + '</p:spPr>' +
-    '<p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="' + lIns + '" tIns="' + tIns + '" rIns="' + rIns + '" bIns="' + bIns + '" anchor="' + anchor + '">' +
+    '<p:txBody><a:bodyPr wrap="' + (vert ? 'none' : 'square') + '" rtlCol="0"' + (vert ? ' vert="' + escapeXml(vert) + '"' : '') + ' lIns="' + lIns + '" tIns="' + tIns + '" rIns="' + rIns + '" bIns="' + bIns + '" anchor="' + anchor + '">' +
     fitXml + '</a:bodyPr><a:lstStyle/>' + bodyContent + '</p:txBody>' +
     '</p:sp>'
   )
@@ -1172,8 +1191,10 @@ export function renderSurfaceCardPptx(name, box, opts, nextIdFn, chromeCfg, them
     }),
   ]
   if (chromeCfg.cardTopBar) {
-    out.push(ooxmlShape(nextIdFn(), name + ' top bar', { x: box.x, y: box.y, w: box.w, h: 0.05 }, {
-      preset: 'rect',
+    const barInset = radius > 0 ? Math.min(0.12, (radius / 96) * 0.85) : 0
+    out.push(ooxmlShape(nextIdFn(), name + ' top bar', { x: box.x + barInset, y: box.y, w: Math.max(0.2, box.w - barInset * 2), h: 0.045 }, {
+      preset: radius > 0 ? 'roundRect' : 'rect',
+      adj: radius > 0 ? 50000 : undefined,
       fill: focal ? accentBarColor : tk.hairline,
     }))
   }

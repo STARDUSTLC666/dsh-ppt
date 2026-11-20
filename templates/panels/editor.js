@@ -332,15 +332,23 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
         h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel'))))));
 }
 
-function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide, onDuplicate, onAppend, dirty, dataDirty }) {
+function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide, onReorderSlide, onDuplicate, onAppend, dirty, dataDirty }) {
   const railId = React.useId();
   const [newOpen, setNewOpen] = React.useState(false);
   const [archetype, setArchetype] = React.useState('cards');
+  const [dragIdx, setDragIdx] = React.useState(-1);
+  const [overIdx, setOverIdx] = React.useState(-1);
   const blocked = busy || dirty || imagePending || dataDirty || project.slides.length >= 120;
   const issues = project.quality?.issues || [];
   const newOptions = [
     ['cards', pptText('Bento / 支柱卡片页', 'Bento / pillar cards')],
     ['kpi', pptText('大数字指标 KPI 页', 'KPI metrics')],
+    ['mockup', pptText('设备原型 / 产品界面页', 'Device mockup showcase')],
+    ['code', pptText('语法高亮代码展示页', 'Syntax-highlighted code')],
+    ['quadrant', pptText('魔力象限 / 战略气泡图', 'Magic Quadrant matrix')],
+    ['radar', pptText('多维能力雷达图', 'Multi-series radar chart')],
+    ['dumbbell', pptText('哑铃 / 前后跃迁对比图', 'Dumbbell slope chart')],
+    ['heatmap', pptText('矩阵热力图', 'Matrix heatmap')],
     ['comparison', pptText('双栏 / 痛点对比页', 'Two-column comparison')],
     ['process', pptText('流程 / 时间轴页', 'Process / timeline')],
     ['chevron', pptText('价值链五边形箭头页', 'Value-chain chevrons')],
@@ -369,12 +377,45 @@ function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide
       const slideIssues = issues.filter(item => item.slide === index + 1 || (item.slideId && item.slideId === row.id));
       const severity = slideIssues.some(item => item.severity === 'error') ? 'error' : slideIssues.length ? 'warning' : '';
       const active = row.id === selected;
+      const canDrag = !blocked && Boolean(onReorderSlide) && project.slides.length > 1;
       return h('div', {
         key: row.id,
         className: 'ppt-slide-row dsh-row',
         'data-dsh-row': '',
         'data-active': active ? 'true' : 'false',
         'data-selected': active ? 'true' : 'false',
+        draggable: canDrag,
+        'data-dragging': dragIdx === index ? 'true' : undefined,
+        'data-drag-over': overIdx === index && dragIdx >= 0 && dragIdx !== index ? 'true' : undefined,
+        title: canDrag ? pptText('拖拽可调整页面顺序', 'Drag to reorder slides') : undefined,
+        onDragStart: e => {
+          if (!canDrag) { e.preventDefault(); return; }
+          setDragIdx(index);
+          try {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(index));
+          } catch {}
+        },
+        onDragOver: e => {
+          if (!canDrag || dragIdx < 0) return;
+          e.preventDefault();
+          try { e.dataTransfer.dropEffect = 'move'; } catch {}
+          if (overIdx !== index) setOverIdx(index);
+        },
+        onDragLeave: () => {
+          if (overIdx === index) setOverIdx(-1);
+        },
+        onDrop: e => {
+          e.preventDefault();
+          const from = dragIdx;
+          setDragIdx(-1);
+          setOverIdx(-1);
+          if (from >= 0 && from !== index && !blocked) onReorderSlide?.(from, index);
+        },
+        onDragEnd: () => {
+          setDragIdx(-1);
+          setOverIdx(-1);
+        },
       },
         h('button', {
           type: 'button',
@@ -427,6 +468,9 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench .ppt-page-rail h3{margin:0;font-size:14px;color:var(--w-muted);font-weight:600}
 .ppt-workbench .ppt-page-buttons{display:flex;flex-direction:column;gap:6px;max-height:calc(100dvh - 280px);overflow:auto;overscroll-behavior:contain;min-width:0;padding:2px}
 .ppt-workbench .ppt-slide-row{display:flex;align-items:stretch;gap:4px;border-block-end:0;border-inline-start:0;padding:0;min-width:0;position:relative}
+.ppt-workbench .ppt-slide-row[draggable=true]{cursor:grab}
+.ppt-workbench .ppt-slide-row[data-dragging=true]{opacity:.45}
+.ppt-workbench .ppt-slide-row[data-drag-over=true]{box-shadow:0 -2px 0 0 var(--w-accent);border-radius:var(--dsw-radius-sm,8px)}
 .ppt-workbench .ppt-slide-card{flex:1 1 auto;border:var(--dsh-control-border-width,1px) solid transparent;border-inline-start:3px solid transparent;border-radius:var(--dsw-radius-sm,8px);padding:9px 10px;display:flex;align-items:flex-start;gap:8px;background:var(--dsw-alias-settings-card-fill,var(--w-canvas));min-width:0;font-size:13px;line-height:1.45;text-align:start;overflow-wrap:anywhere;cursor:pointer}
 .ppt-workbench .ppt-slide-card:hover:not(:disabled){background:var(--dsh-surface-spotlight,var(--w-bg));border-color:var(--w-border)}
 .ppt-workbench .ppt-slide-card[aria-current=true]{border-color:var(--w-border);border-inline-start-color:var(--w-accent);background:var(--w-selected);color:var(--w-text);font-weight:550}

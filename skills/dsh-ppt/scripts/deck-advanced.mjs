@@ -3,8 +3,8 @@ import { resolve, dirname, extname, basename, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, buildDeck } from './deck-core.mjs'
-import { listThemes, listMasterPresets, resolveTheme, buildThemePreview as buildThemePreviewFromThemes, deriveBrandedTheme, pptxEastAsianFont } from './deck-themes.mjs'
-import { CORE_LAYOUTS, LAYOUT_ALIASES, stripInlineMarkdown } from './deck-layouts.mjs'
+import { listThemes, listMasterPresets, resolveTheme, resolveChromeStyle, buildThemePreview as buildThemePreviewFromThemes, deriveBrandedTheme, pptxEastAsianFont } from './deck-themes.mjs'
+import { CORE_LAYOUTS, LAYOUT_ALIASES, stripInlineMarkdown, computeMockupGeometry, getChromeConfig } from './deck-layouts.mjs'
 import { MEDIA_LAYOUTS, mediaBoxes, LOGO_BOX, FOOTER_BOX, normalizeChart, buildOfficeKitChartSpec, computeWaterfallGeometry } from './deck-media.mjs'
 import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDataChange, dataNotes, dataReport } from './deck-data.mjs'
 import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
@@ -222,8 +222,8 @@ function validateRawSlides(slides) {
     const eff = effectiveLayout(s.layout)
     const hasImg = Boolean(s.image || (Array.isArray(s.images) && s.images.length > 0))
     if (s.chart && hasImg) fail(`第 ${i + 1} 页不能同时放入 image 和 chart`)
-    if (hasImg && eff && !['image', 'image-left', 'image-right'].includes(eff)) fail(`第 ${i + 1} 页图片需使用 image / image-left / image-right / gallery 布局`)
-    if (s.chart && eff && !['chart', 'chart-split'].includes(eff)) fail(`第 ${i + 1} 页图表需使用 chart / chart-split / waterfall 布局`)
+    if (hasImg && eff && !['image', 'image-left', 'image-right', 'cover', 'mockup'].includes(eff)) fail(`第 ${i + 1} 页图片需使用 image / image-left / image-right / gallery / cover / mockup 布局`)
+    if (s.chart && eff && !['chart', 'chart-split', 'radar'].includes(eff)) fail(`第 ${i + 1} 页图表需使用 chart / chart-split / waterfall / radar 布局`)
   })
 }
 
@@ -425,9 +425,22 @@ async function exportPptx(manifest, theme, language, signal) {
         if (img?.assetId) putImage(slide, img.assetId, gBox, img.fit || 'cover', `Gallery image ${gIdx + 1}`, img.alt)
       })
     } else if (source.image) {
-      putImage(slide, source.image.assetId, boxes.image, source.image.fit, 'Slide image', source.image.alt)
+      let targetBox = boxes.image
+      let targetFit = source.image.fit
+      if (source.layout === 'cover') {
+        targetBox = { x: 6.65, y: 0, w: 6.6833, h: 7.5 }
+        targetFit = source.image.fit || 'cover'
+      } else if (source.layout === 'mockup') {
+        const chromeStyle = resolveChromeStyle(theme, source, manifest.brand)
+        const chromeCfg = getChromeConfig(chromeStyle, theme)
+        const hasTakeaway = typeof source.takeaway === 'string' && source.takeaway.trim() !== ''
+        const bodyH = (hasTakeaway ? 6.08 : 6.72) - chromeCfg.bodyTopY
+        targetBox = computeMockupGeometry(source, chromeCfg.bodyTopY, bodyH).screenBox
+        targetFit = source.image.fit || 'cover'
+      }
+      putImage(slide, source.image.assetId, targetBox, targetFit, 'Slide image', source.image.alt)
     }
-    if (source.chart) {
+    if (source.chart && source.layout !== 'radar') {
       if (source.chart.kind === 'waterfall') {
         if (!lib.findShapeByName(slide, 'Waterfall Bar 1')) {
           drawNativeWaterfallWithKit(lib, slide, source.chart, boxes.chart, theme)
@@ -831,9 +844,9 @@ export async function editDeck(options = {}) {
   }
   const used = new Set()
   const allowed = new Set([
-    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
-    'text', 'formula', 'mermaid', 'activeIndex', 'tableStyle', 'bullets', 'items', 'cards', 'metrics',
-    'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
+    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'coverPattern', 'title', 'subtitle', 'kicker', 'takeaway', 'source',
+    'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'activeIndex', 'tableStyle',
+    'bullets', 'items', 'cards', 'metrics', 'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])
   for (const edit of options.edits ?? []) {
     const index = typeof edit.slide === 'number' && Number.isInteger(edit.slide) ? edit.slide - 1 : next.slides.findIndex(s => s.id === edit.slide)
@@ -850,18 +863,21 @@ export async function editDeck(options = {}) {
       delete changed.items
     }
     if (edit.patch.chart) {
-      if (!edit.patch.layout && !['chart', 'chart-split', 'waterfall'].includes(changed.layout)) changed.layout = 'chart'
-      if (['chart', 'chart-split', 'waterfall'].includes(changed.layout)) { delete changed.image; delete changed.images }
+      if (!edit.patch.layout && !['chart', 'chart-split', 'waterfall', 'radar'].includes(changed.layout)) changed.layout = 'chart'
+      if (['chart', 'chart-split', 'waterfall', 'radar'].includes(changed.layout)) { delete changed.image; delete changed.images }
     }
     if (edit.patch.image || edit.patch.images) {
-      if (!edit.patch.layout && !['image', 'image-left', 'image-right', 'gallery'].includes(changed.layout)) {
+      if (!edit.patch.layout && !['image', 'image-left', 'image-right', 'gallery', 'cover', 'mockup'].includes(changed.layout)) {
         changed.layout = Array.isArray(edit.patch.images) && edit.patch.images.length > 1 ? 'image' : 'image-right'
       }
-      if (['image', 'image-left', 'image-right', 'gallery'].includes(changed.layout)) delete changed.chart
+      if (['image', 'image-left', 'image-right', 'gallery', 'cover', 'mockup'].includes(changed.layout)) delete changed.chart
     }
     if (edit.patch.layout) {
       const eff = effectiveLayout(edit.patch.layout)
-      if (!MEDIA_LAYOUTS.has(eff)) { delete changed.image; delete changed.images; delete changed.chart }
+      if (!MEDIA_LAYOUTS.has(eff)) {
+        if (eff !== 'cover' && eff !== 'mockup') { delete changed.image; delete changed.images }
+        if (eff !== 'radar') { delete changed.chart }
+      }
     }
     validateRawSlides([changed])
     let slides

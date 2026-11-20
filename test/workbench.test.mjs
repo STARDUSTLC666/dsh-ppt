@@ -630,8 +630,8 @@ test('editorHtml click-to-focus maps Phase-4 layout and math targets (.deck-math
     assert.ok(source.includes(selector), selector + ' click-to-focus selector missing')
   }
   assert.match(source, /n\.matches\('\.deck-math,\.formula-plate,\.callout-formula'\)\?'formula'/)
-  assert.match(source, /n\.matches\('table,\.mekko-col'\)\?'rows'/)
-  assert.match(source, /n\.matches\('\.sankey-node,\.sankey-svg,\.swot-quad,\.porter-beam,/)
+  assert.match(source, /n\.matches\('table,\.mekko-col[^']*'\)\?'rows'/)
+  assert.match(source, /n\.matches\('[^']*\.sankey-node,\.sankey-svg,\.swot-quad,\.porter-beam,/)
 })
 
 test('workbench GET fetchDownload kind=handout returns speaker handout headers and rejects stale revisions', () => fixture(async ({ created, wb }) => {

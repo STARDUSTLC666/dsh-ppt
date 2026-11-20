@@ -412,6 +412,8 @@ function createSection(heading = '', level = 0, coverOnly = false) {
     directive: null,
     formula: '',
     mermaid: '',
+    code: '',
+    codeLang: '',
     takeaway: '',
     source: '',
   }
@@ -569,6 +571,10 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
   let inMermaidFence = false
   let mermaidFenceMarker = ''
   let mermaidFenceLines = []
+  let inCodeFence = false
+  let codeFenceMarker = ''
+  let codeFenceLang = ''
+  let codeFenceLines = []
 
   const flush = () => {
     if (inMermaidFence && mermaidFenceLines.length > 0) {
@@ -578,6 +584,14 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
         current.mermaid = current.mermaid ? current.mermaid + '\n' + pendingMermaid : pendingMermaid
       }
     }
+    if (inCodeFence && codeFenceLines.length > 0) {
+      if (current === null) current = createSection()
+      const pendingCode = codeFenceLines.join('\n').trimEnd()
+      if (pendingCode.trim() !== '') {
+        current.code = current.code ? current.code + '\n\n' + pendingCode : pendingCode
+        if (!current.codeLang && codeFenceLang) current.codeLang = codeFenceLang
+      }
+    }
     if (
       current !== null &&
       (current.heading !== '' ||
@@ -585,6 +599,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
         current.paragraphs.length > 0 ||
         current.formula !== '' ||
         current.mermaid !== '' ||
+        current.code !== '' ||
         current.table !== null ||
         current.quote.length > 0 ||
         current.directive !== null)
@@ -599,6 +614,10 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     inMermaidFence = false
     mermaidFenceMarker = ''
     mermaidFenceLines = []
+    inCodeFence = false
+    codeFenceMarker = ''
+    codeFenceLang = ''
+    codeFenceLines = []
   }
 
   for (const rawLine of body.split('\n')) {
@@ -619,12 +638,40 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
+    if (inCodeFence) {
+      if (line.startsWith(codeFenceMarker) && new RegExp('^' + codeFenceMarker + '\\s*$').test(line)) {
+        if (current === null) current = createSection()
+        const joinedCode = codeFenceLines.join('\n').trimEnd()
+        if (joinedCode.trim() !== '') {
+          current.code = current.code ? current.code + '\n\n' + joinedCode : joinedCode
+          if (!current.codeLang && codeFenceLang) current.codeLang = codeFenceLang
+        }
+        inCodeFence = false
+        codeFenceMarker = ''
+        codeFenceLang = ''
+        codeFenceLines = []
+      } else {
+        codeFenceLines.push(rawLine)
+      }
+      continue
+    }
+
     const mermaidOpen = /^(`{3,}|~{3,})\s*mermaid\b.*$/i.exec(line)
     if (mermaidOpen !== null) {
       if (current === null) current = createSection()
       inMermaidFence = true
       mermaidFenceMarker = mermaidOpen[1]
       mermaidFenceLines = []
+      continue
+    }
+
+    const codeOpen = /^(`{3,}|~{3,})\s*([a-zA-Z][\w.+-]*)\s*$/.exec(line)
+    if (codeOpen !== null) {
+      if (current === null) current = createSection()
+      inCodeFence = true
+      codeFenceMarker = codeOpen[1]
+      codeFenceLang = codeOpen[2]
+      codeFenceLines = []
       continue
     }
 
@@ -911,6 +958,24 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       continue
     }
 
+    if (section.code !== '') {
+      const label = section.heading || (ui.pointKicker + ' ' + (++pointRef.count))
+      const rawPoints = [...section.bullets, ...section.paragraphs]
+      const slide = {
+        layout: 'code',
+        kicker: label,
+        title: label,
+        code: section.code,
+        ...(section.codeLang ? { language: section.codeLang } : {}),
+        ...(rawPoints.length > 0 ? { bullets: rawPoints } : {}),
+        ...(section.takeaway ? { takeaway: section.takeaway } : {}),
+        ...(section.source ? { source: section.source } : {}),
+      }
+      if (specials.length === 0 && notes !== '') slide.notes = notes
+      slides.push(slide)
+      continue
+    }
+
     if (section.formula !== '') {
       const label = section.heading || (ui.pointKicker + ' ' + (++pointRef.count))
       const rawPoints = [...section.bullets, ...section.paragraphs]
@@ -1060,12 +1125,25 @@ function normalizeSlideContent(raw, index) {
     ? source.columns.map((c) => stripInlineMarkdown(c)).filter(Boolean)
     : undefined
 
+  const rawCode = typeof source.code === 'string'
+    ? source.code.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trimEnd()
+    : ''
+  const codeLanguage = stripInlineMarkdown(source.language ?? '')
+  const filename = stripInlineMarkdown(source.filename ?? '')
+  const url = stripInlineMarkdown(source.url ?? '')
+  const rawCoverPattern = String(source.coverPattern ?? '').trim().toLowerCase()
+  const coverPattern = ['dots', 'grid', 'rings'].includes(rawCoverPattern) ? rawCoverPattern : ''
+  const xLabel = stripInlineMarkdown(source.xLabel ?? '')
+  const yLabel = stripInlineMarkdown(source.yLabel ?? '')
+  const hasStringQuadrants = Array.isArray(source.quadrants) && source.quadrants.length === 4 && source.quadrants.every((q) => typeof q === 'string')
+  const quadrantLabels = hasStringQuadrants ? source.quadrants.map((q) => stripInlineMarkdown(q)) : undefined
+
   const rawItemsInput = source.items
     ?? source.cards
     ?? source.metrics
     ?? (!hasStringColumns ? source.columns : undefined)
     ?? source.steps
-    ?? source.quadrants
+    ?? (!hasStringQuadrants && layout !== 'quadrant' ? source.quadrants : undefined)
     ?? (layout === 'sankey' && bullets.length > 0 ? bullets : undefined)
   const items = normalizeSlideItems(rawItemsInput, layout)
 
@@ -1076,6 +1154,14 @@ function normalizeSlideContent(raw, index) {
     ...(iconMode ? { iconMode } : {}),
     ...(formula !== '' ? { formula } : {}),
     ...(mermaid !== '' ? { mermaid } : {}),
+    ...(rawCode !== '' ? { code: rawCode } : {}),
+    ...(codeLanguage !== '' ? { language: codeLanguage } : {}),
+    ...(filename !== '' ? { filename } : {}),
+    ...(url !== '' ? { url } : {}),
+    ...(coverPattern !== '' ? { coverPattern } : {}),
+    ...(xLabel !== '' ? { xLabel } : {}),
+    ...(yLabel !== '' ? { yLabel } : {}),
+    ...(quadrantLabels ? { quadrants: quadrantLabels } : {}),
     ...(takeaway !== '' ? { takeaway } : {}),
     ...(slideSource !== '' ? { source: slideSource } : {}),
     ...(activeIndex !== undefined ? { activeIndex } : {}),
@@ -1109,7 +1195,7 @@ function normalizeSlideContent(raw, index) {
     return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...commonExtras }
   }
 
-  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey') {
+  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey' || layout === 'quadrant' || layout === 'radar' || layout === 'dumbbell' || layout === 'heatmap') {
     let rows = []
     if (Array.isArray(source.rows)) {
       rows = source.rows
@@ -1125,6 +1211,7 @@ function normalizeSlideContent(raw, index) {
       bullets,
       ...(rows.length ? { rows } : {}),
       ...(tableStyle ? { tableStyle } : {}),
+      ...(layout === 'radar' && source.chart ? { chart: deckMedia.normalizeChart(source.chart, index + 1) } : {}),
       ...commonExtras,
     }
   }
@@ -1149,7 +1236,10 @@ function normalizeSlideContent(raw, index) {
     }
   }
 
-  return { layout, kicker, title, subtitle, text, bullets, ...commonExtras }
+  const preservedImage = (layout === 'cover' || layout === 'mockup') && source.image && typeof source.image === 'object'
+    ? { image: source.image }
+    : {}
+  return { layout, kicker, title, subtitle, text, bullets, ...preservedImage, ...commonExtras }
 }
 
 function checkSlideLimit(slides, limit) {

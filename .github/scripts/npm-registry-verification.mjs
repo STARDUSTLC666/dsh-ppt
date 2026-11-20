@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 export async function waitForPublishedMetadata(readMetadata, expectedIntegrity, options = {}) {
   const now = options.now ?? Date.now
   const pause = options.pause ?? (ms => new Promise(resolve => setTimeout(resolve, ms)))
-  const deadline = now() + (options.timeoutMs ?? 5 * 60 * 1000)
+  const deadline = now() + (options.timeoutMs ?? 10 * 60 * 1000)
   const interval = options.intervalMs ?? 10000
   for (;;) {
     const published = await readMetadata()

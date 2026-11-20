@@ -1,5 +1,20 @@
 # 更新记录
 
+## 0.28.0 (2026-11-20)
+
+- **科技与产品发布会专属展示模块（`deck-showcase.mjs` + 封面主图分屏与几何肌理）**：新增零外部依赖 `deck-showcase.mjs`，支持原生矢量设备样机 **`layout: 'mockup'`**（`browser` 浏览器窗口 / `mobile` 移动端灵动岛真机 / `split` 双端协同，支持原生截图注入或内置 SaaS/移动 UI 卡片，100% 原生可编辑 OOXML + HTML 同构）与原生语法高亮代码展示 **`layout: 'code'`**（内置零依赖多语言词法高亮引擎，覆盖 TS/JS、Python、SQL、Bash、JSON、YAML、Go、Rust 等 9 大语言，自动识别 Markdown 非 Mermaid 代码围栏 ```` ```lang ```` 晋升为 macOS 暗色终端窗口 + 行号 + 多色 Consolas 可编辑 `<a:r>` 文本流 + 右侧批注卡片）；升级 `deck-covers.mjs` 支持封面主图分屏（**Hero Photo Split**：`cover` 传 `slide.image` 自动左深渐变 WCAG AAA 排印 + 右全出血贴边主图）及程序化几何肌理（`coverPattern: 'dots' | 'grid' | 'rings'`）。
+- **四大顶级商业分析与咨询矢量图表（`deck-charts-pro.mjs`）**：新增零外部依赖 `deck-charts-pro.mjs`，全部输出 100% 原生可编辑 OOXML 矢量图形（`<p:sp>` / `<a:custGeom>` / `<p:cxnSp>`）+ HTML SVG 双端同构，内置：
+  - **`quadrant`**（魔力象限 / 波士顿 BCG 战略气泡矩阵，内置安全边距防撞、四象限角标与 `vert270` 单行竖排 Y 轴标题）；
+  - **`radar`**（多维能力雷达图，4 层同心正多边形蛛网、半透明多系列叠加多边形、刻度标注与白环顶点）；
+  - **`dumbbell`**（麦肯锡 Before→After 哑铃跃迁对比图，1-2-5 规整刻度、方向连接桥与右侧增减徽章）；
+  - **`heatmap`**（顺序/发散色阶矩阵热力图，基于相对亮度自动切换 WCAG 反白/深墨字色并附色阶图例）。
+- **工作台直接操纵体验与一键高精 PDF / PNG 图包导出**：升级工作台（`templates/client.js`、`templates/panels/editor.js`、`templates/panels/style-studio.js`、`src/workbench.ts`）：左侧页面目录支持 **HTML5 拖拽调序（Drag-and-Drop Reorder）**，预览画布支持 **双击文字原地编辑（Inline Direct Edit）并原子同步 HTML 与 PPTX**，导出面板新增 **「导出高精 PDF (.pdf)」**（`kind=pdf`）与 **「导出逐页 PNG 图包 (.zip)」**（`kind=png-zip`），并在版式切换器与新增页菜单完整开放全部 6 套新版式与 `coverPattern` 控件。
+- **README 旗舰视觉画廊刷新与发布链路加固**：使用真实 LibreOffice 零缺字渲染的 `v0.27`/`v0.28` 双语高精画廊全面刷新 `README.md` / `README.en.md` 风格预览；同时将 `.github/scripts/npm-registry-verification.mjs` 元数据传播等待阈值由 5 分钟提升至 10 分钟（`publish.yml` 同步放宽至 15 分钟），彻底消除 npm CDN 同步延迟导致的假超时。
+- **Tech & Product Showcase (`deck-showcase.mjs`) + Cover Hero Photo Split & Patterns**: Add zero-dependency native vector device mockups (`layout: 'mockup'`, variants `browser` | `mobile` | `split` with viewport screenshot embedding or built-in SaaS/mobile cards) and native syntax-highlighted code slides (`layout: 'code'`, 9-language zero-dep lexer, automatic Markdown ```` ```lang ```` fence promotion, macOS dark window + multi-color editable Consolas OOXML runs + split annotations); upgrade `deck-covers.mjs` with full-bleed right-half Hero Photo Split (`slide.image` on `cover`) and procedural `coverPattern: 'dots' | 'grid' | 'rings'`.
+- **4 Pinnacle Analyst & Consulting Vector Charts (`deck-charts-pro.mjs`)**: Ship 100% native editable OOXML + HTML SVG implementations for `quadrant` (Magic Quadrant / BCG bubble matrix with safe inset padding and `vert270` vertical Y-axis), `radar` (multi-series polygonal spider web with concentric rings & scale ticks), `dumbbell` (McKinsey Before→After slope comparison with 1-2-5 nice ticks and delta pills), and `heatmap` (sequential/diverging color-ramp matrix with automatic WCAG text contrast).
+- **Direct-Manipulation Workbench & Direct PDF / PNG-ZIP Exports**: Add HTML5 drag-and-drop slide reordering in the left rail, canvas double-click inline text editing synced directly to HTML + PPTX, 1-click **Export High-DPI PDF (`.pdf`)** (`kind=pdf`) and **Export Slide PNG Pack (`.zip`)** (`kind=png-zip`), and full editor/archetype support for all 6 new layouts and `coverPattern` (all 13 Agent tools retain 0 JSON Schema wire `type` arrays).
+- **README Gallery Refresh & CI Publish Hardening**: Refresh `README.md` / `README.en.md` Style Previews with LibreOffice-rendered bilingual `v28-*.webp` showcases and bump npm propagation verification deadline from 5 min to 10 min (`release` job timeout 15 min) to prevent npm CDN latency false timeouts.
+
 ## 0.27.2 (2026-11-20)
 
 - 升级共享更新组件至 `@stardustlc/dsh-updates@0.2.6`：端到端验收修复浮卡与日历按钮重叠、详情页/工作台挂载时瞬时让位及 `package-moved` / 包管理器报错诊断文案，继续保持过期检查自动刷新与 `bundle-in-use` 指导。

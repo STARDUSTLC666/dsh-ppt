@@ -105,6 +105,25 @@ import {
   renderMermaidHtml,
   MERMAID_CSS,
 } from './deck-mermaid.mjs'
+import {
+  SHOWCASE_LAYOUTS,
+  tokenizeCodeLine,
+  extractCodeSource,
+  computeMockupGeometry,
+  renderShowcaseSlideBodyPptx,
+  renderShowcaseSlideBodyHtml,
+  SHOWCASE_CSS,
+} from './deck-showcase.mjs'
+import {
+  PRO_CHART_LAYOUTS,
+  computeQuadrantModel,
+  computeRadarModel,
+  computeDumbbellModel,
+  computeHeatmapModel,
+  renderProChartSlideBodyPptx,
+  renderProChartSlideBodyHtml,
+  PRO_CHARTS_CSS,
+} from './deck-charts-pro.mjs'
 
 export {
   CANVAS_IN,
@@ -160,6 +179,17 @@ export {
   POSTER_COVER_VARIANTS,
   resolveSectionAgendaChapters,
   AESTHETIC_STUDIO_CSS,
+  SHOWCASE_LAYOUTS,
+  tokenizeCodeLine,
+  extractCodeSource,
+  computeMockupGeometry,
+  PRO_CHART_LAYOUTS,
+  computeQuadrantModel,
+  computeRadarModel,
+  computeDumbbellModel,
+  computeHeatmapModel,
+  SHOWCASE_CSS,
+  PRO_CHARTS_CSS,
 }
 
 export const CORE_LAYOUTS = new Set([
@@ -185,11 +215,26 @@ export const CORE_LAYOUTS = new Set([
   'harvey',
   'tam',
   'org',
+  'mockup',
+  'code',
+  'quadrant',
+  'radar',
+  'dumbbell',
+  'heatmap',
   'table',
   'closing',
 ])
 
 export const LAYOUT_ALIASES = Object.freeze({
+  device: { layout: 'mockup', variant: 'browser' },
+  browser: { layout: 'mockup', variant: 'browser' },
+  mobile: { layout: 'mockup', variant: 'mobile' },
+  snippet: { layout: 'code', variant: 'editor' },
+  'bubble-matrix': { layout: 'quadrant' },
+  'magic-quadrant': { layout: 'quadrant' },
+  spider: { layout: 'radar' },
+  slope: { layout: 'dumbbell' },
+  'heat-matrix': { layout: 'heatmap' },
   'kpi-grid': { layout: 'kpi', variant: 'grid' },
   scorecard: { layout: 'kpi', variant: 'grid' },
   bento: { layout: 'cards', variant: 'bento' },
@@ -830,6 +875,37 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   if (layout === 'mermaid') {
     shapes.push(renderMermaidPptx(slide, { x: 0.62, y: bodyTopY + 0.04, w: 12.09, h: bodyH - 0.10 }, nextId, chromeCfg, theme, langAttr))
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  const showcaseShapes = renderShowcaseSlideBodyPptx(slide, {
+    theme,
+    langAttr,
+    chromeCfg,
+    nextId,
+    bodyTopY,
+    bodyBottomY,
+    bodyH,
+    manifest,
+  })
+  if (showcaseShapes !== null) {
+    shapes.push(showcaseShapes)
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  const proChartShapes = renderProChartSlideBodyPptx(slide, {
+    theme,
+    langAttr,
+    chromeCfg,
+    nextId,
+    bodyTopY,
+    bodyBottomY,
+    bodyH,
+  })
+  if (proChartShapes !== null) {
+    shapes.push(proChartShapes)
     shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
     return shapes.join('')
   }
@@ -2013,6 +2089,8 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     renderSlideHeaderHtml({ ...slide, kicker }, chromeStyle, folioText, isFraming, fallbackKicker)
 
   let inner = ''
+  const showcaseHtml = renderShowcaseSlideBodyHtml(slide, { theme, langId, manifest })
+  const proChartHtml = renderProChartSlideBodyHtml(slide, { theme, langId, manifest })
   const diagramHtml = renderDiagramSlideBodyHtml(slide, { theme, langId, chromeStyle })
 
   if (layout === 'cover') {
@@ -2095,6 +2173,10 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
       '</div>'
   } else if (layout === 'mermaid') {
     inner = renderHeader() + renderMermaidHtml(slide, index)
+  } else if (showcaseHtml !== null) {
+    inner = renderHeader() + showcaseHtml
+  } else if (proChartHtml !== null) {
+    inner = renderHeader() + proChartHtml
   } else if (diagramHtml !== null) {
     inner = renderHeader(layout === 'harvey' ? ui.tableKicker : '') + diagramHtml
   } else if (layout === 'table' && (slide.tableStyle || slide.visual?.tableStyle) === 'harvey') {
@@ -2454,6 +2536,8 @@ math.deck-math.is-inline{font-size:1.06em;vertical-align:middle}
 .callout-hero.is-omath{padding:22px 30px;display:flex;align-items:center;justify-content:center}
 .formula-caption{text-align:center;color:var(--ink-secondary);font-size:clamp(14px,1.35vw,18px);margin-top:-6px}
 ${AESTHETIC_STUDIO_CSS}
+${SHOWCASE_CSS}
+${PRO_CHARTS_CSS}
 ${DIAGRAMS_CSS}
 ${CHROME_CSS}
 ${MERMAID_CSS}

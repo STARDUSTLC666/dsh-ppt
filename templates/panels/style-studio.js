@@ -37,6 +37,12 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'swot', zh: 'SWOT 十字矩阵', en: 'SWOT matrix', group: 'structured', quick: true, variants: [] },
   { id: 'value-chain', zh: '波特价值链', en: 'Porter value chain', group: 'structured', quick: true, variants: [] },
   { id: 'mermaid', zh: 'Mermaid 流程图/时序图', en: 'Mermaid Diagram', group: 'data', quick: true, variants: [['flowchart', '流程图', 'Flowchart'], ['sequence', '时序图', 'Sequence']] },
+  { id: 'mockup', zh: '设备原型 / 界面展示', en: 'Device mockup', group: 'media', quick: true, variants: [['browser', '浏览器窗口', 'Browser window'], ['mobile', '移动端真机', 'Mobile device'], ['split', '双端协同对比', 'Desktop + mobile']] },
+  { id: 'code', zh: '语法高亮代码展示', en: 'Code showcase', group: 'structured', quick: true, variants: [['full', '全宽终端窗口', 'Full terminal'], ['split', '左代码右批注', 'Split annotations']] },
+  { id: 'quadrant', zh: '魔力象限 / 战略气泡', en: 'Magic Quadrant', group: 'data', quick: true, variants: [] },
+  { id: 'radar', zh: '多维雷达图', en: 'Radar chart', group: 'data', quick: true, variants: [] },
+  { id: 'dumbbell', zh: '哑铃 / 前后跃迁图', en: 'Dumbbell slope', group: 'data', quick: true, variants: [] },
+  { id: 'heatmap', zh: '矩阵热力图', en: 'Heatmap matrix', group: 'data', quick: true, variants: [] },
   { id: 'table', zh: '表格 / 学术三线表', en: 'Table', group: 'data', quick: true, variants: [] },
   { id: 'chart', zh: '原生数据图表', en: 'Chart', group: 'data', variants: [] },
   { id: 'chart-split', zh: '图表 + 洞察分栏', en: 'Chart + insights', group: 'data', variants: [['chart-left', '左图右洞察', 'Chart left'], ['chart-right', '左洞察右图', 'Chart right']] },
@@ -48,7 +54,7 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'closing', zh: '结束与行动号召', en: 'Closing & CTA', group: 'framing', variants: [['standard', '标准致谢', 'Standard'], ['cta-cards', '行动卡片', 'CTA cards'], ['inverted', '深色封底', 'Inverted']] },
 ]);
 
-const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain']);
+const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain', 'mockup', 'quadrant', 'dumbbell']);
 
 function pptLayoutMeta(layout) {
   return PPT_LAYOUT_CATALOG.find(item => item.id === layout) || { id: layout || 'bullets', zh: layout || '要点', en: layout || 'Bullets', group: 'structured', variants: [] };
@@ -61,7 +67,7 @@ function pptLayoutLabel(layout) {
 
 function normalizeSlideItems(slide) {
   const raw = Array.isArray(slide?.items) ? slide.items : Array.isArray(slide?.cards) ? slide.cards : [];
-  return raw.slice(0, 8).map(entry => ({
+  return raw.slice(0, 12).map(entry => ({
     tag: String(entry?.tag ?? entry?.badge ?? ''),
     title: String(entry?.title ?? ''),
     text: String(entry?.text ?? entry?.body ?? ''),
@@ -69,11 +75,18 @@ function normalizeSlideItems(slide) {
     unit: String(entry?.unit ?? ''),
     delta: String(entry?.delta ?? ''),
     status: String(entry?.status ?? entry?.tone ?? ''),
+    icon: String(entry?.icon ?? ''),
+    avatar: String(entry?.avatar ?? ''),
     start: typeof entry?.start === 'number' && Number.isFinite(entry.start) ? String(entry.start) : '',
     span: typeof entry?.span === 'number' && Number.isFinite(entry.span) ? String(entry.span) : '',
     milestone: entry?.milestone === true,
     role: String(entry?.role ?? ''),
     conversion: String(entry?.conversion ?? ''),
+    x: typeof entry?.x === 'number' && Number.isFinite(entry.x) ? String(entry.x) : '',
+    y: typeof entry?.y === 'number' && Number.isFinite(entry.y) ? String(entry.y) : '',
+    size: typeof entry?.size === 'number' && Number.isFinite(entry.size) ? String(entry.size) : '',
+    before: typeof entry?.before === 'number' && Number.isFinite(entry.before) ? String(entry.before) : '',
+    after: typeof entry?.after === 'number' && Number.isFinite(entry.after) ? String(entry.after) : '',
     bullets: Array.isArray(entry?.bullets) ? entry.bullets.map(b => String(b)) : [],
   }));
 }
@@ -247,6 +260,67 @@ function projectDraftToLayout(draft, nextLayout) {
           ? 'flowchart LR\n  A([Inputs]) --> B{Auto-Director}\n  B -->|Data| C[Sankey & KPI]\n  B -->|Docs| D[24+ Layouts]\n  C --> E[(HTML & PPTX)]\n  D --> E'
           : 'flowchart LR\n  A([多源输入]) --> B{智能导演}\n  B -->|数据表| C[桑基与指标]\n  B -->|文稿| D[24+ 版式]\n  C --> E[(同源交付)]\n  D --> E');
   }
+  if (nextLayout === 'code' && !next.code?.trim()) {
+    next.language = next.language || 'typescript';
+    next.filename = next.filename || 'src/pipeline.ts';
+    next.code = 'export async function buildDeck(spec: DeckSpec) {\n  const plan = choreograph(spec);\n  const [html, pptx] = await Promise.all([\n    renderHtml(plan),\n    renderOoxml(plan),\n  ]);\n  return { html, pptx, quality: verify(plan) };\n}';
+  }
+  if (nextLayout === 'mockup') {
+    if (!next.url?.trim()) next.url = 'https://studio.dsh-ppt.dev/workspace';
+    if (!Array.isArray(next.items) || !next.items.length) {
+      const en = languageOf() === 'en';
+      next.items = en
+        ? [
+            { tag: 'LIVE', title: 'Monthly ARR', text: 'Enterprise tier', value: '$18.5M', unit: '', delta: '+42%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+            { tag: 'SLA', title: 'P99 Latency', text: 'Edge inference', value: '38ms', unit: '', delta: '-46%', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+            { tag: 'QA', title: 'Auto-Audit', text: 'Zero overlap gate', value: '100%', unit: '', delta: 'Pass', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          ]
+        : [
+            { tag: '实时', title: '月度经常性收入', text: '企业版主力', value: '¥1.85亿', unit: '', delta: '+42%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+            { tag: 'SLA', title: 'P99 推理时延', text: '边缘节点加速', value: '38ms', unit: '', delta: '-46%', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+            { tag: '门禁', title: '视觉巡检通过率', text: '零溢出零遮挡', value: '100%', unit: '', delta: '达标', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          ];
+    }
+  }
+  if (nextLayout === 'quadrant') {
+    const en = languageOf() === 'en';
+    if (!next.xLabel?.trim()) next.xLabel = en ? 'Completeness of Vision →' : '战略前瞻与产品完备度 →';
+    if (!next.yLabel?.trim()) next.yLabel = en ? 'Ability to Execute →' : '工程执行与落地能力 →';
+    if (!Array.isArray(next.items) || !next.items.length) {
+      next.items = [
+        { tag: en ? 'Leader' : '领航者', title: en ? 'Our Platform' : '本平台方案', text: '', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '84', y: '86', size: '34', before: '', after: '', bullets: [] },
+        { tag: en ? 'Challenger' : '挑战者', title: en ? 'Vendor A' : '竞品 A', text: '', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '44', y: '74', size: '24', before: '', after: '', bullets: [] },
+        { tag: en ? 'Visionary' : '远见者', title: en ? 'Vendor B' : '竞品 B', text: '', value: '', unit: '', delta: '', status: 'warning', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '76', y: '38', size: '20', before: '', after: '', bullets: [] },
+        { tag: en ? 'Niche' : '特定领域', title: en ? 'Legacy Tool' : '传统工具', text: '', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '26', y: '32', size: '18', before: '', after: '', bullets: [] },
+      ];
+    }
+  }
+  if (nextLayout === 'radar' && !next.rowsText?.trim()) {
+    const en = languageOf() === 'en';
+    next.rowsText = serializeSlideRows(en
+      ? [['Dimension', 'Our Platform', 'Industry Avg'], ['Editability', 96, 62], ['Visual Polish', 94, 68], ['Data Charts', 92, 58], ['Speed', 90, 74], ['Governance', 88, 65]]
+      : [['评估维度', '本方案', '行业均值'], ['原生可编辑', 96, 62], ['视觉质感', 94, 68], ['咨询图表', 92, 58], ['生成效率', 90, 74], ['品牌合规', 88, 65]]);
+  }
+  if (nextLayout === 'dumbbell' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'Latency', title: 'Deck Build Time (s)', text: '', value: '', unit: 's', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '180', after: '24', bullets: [] },
+          { tag: 'Quality', title: 'First-Pass QA Rate (%)', text: '', value: '', unit: '%', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '58', after: '96', bullets: [] },
+          { tag: 'Adoption', title: 'Weekly Active Teams (%)', text: '', value: '', unit: '%', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '34', after: '82', bullets: [] },
+        ]
+      : [
+          { tag: '提速', title: '单份成稿耗时 (分钟)', text: '', value: '', unit: 'm', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '180', after: '24', bullets: [] },
+          { tag: '质量', title: '视觉巡检一次通过率 (%)', text: '', value: '', unit: '%', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '58', after: '96', bullets: [] },
+          { tag: '渗透', title: '核心业务周活使用率 (%)', text: '', value: '', unit: '%', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '34', after: '82', bullets: [] },
+        ];
+  }
+  if (nextLayout === 'heatmap' && !next.rowsText?.trim()) {
+    const en = languageOf() === 'en';
+    next.rowsText = serializeSlideRows(en
+      ? [['Region / Qtr', 'Q1', 'Q2', 'Q3', 'Q4'], ['North America', 68, 76, 84, 94], ['Europe', 54, 62, 71, 82], ['APAC', 72, 81, 89, 97], ['LATAM', 38, 45, 58, 69]]
+      : [['大区 / 季度', 'Q1', 'Q2', 'Q3', 'Q4'], ['华东区', 68, 76, 84, 94], ['华北区', 54, 62, 71, 82], ['华南区', 72, 81, 89, 97], ['西南区', 38, 45, 58, 69]]);
+  }
   return next;
 }
 
@@ -256,15 +330,15 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
   const meta = pptLayoutMeta(currentLayout);
   const canQuickSwitch = !['chart', 'image', 'image-left', 'image-right'].includes(slide?.layout) || currentLayout === slide?.layout;
   const items = Array.isArray(draft.items) ? draft.items : [];
-  const showItemsEditor = PPT_ITEM_LAYOUTS.has(currentLayout) || items.length > 0;
-  const showTableEditor = currentLayout === 'table' || currentLayout === 'harvey' || currentLayout === 'marimekko' || Boolean(draft.rowsText?.trim());
+  const showItemsEditor = PPT_ITEM_LAYOUTS.has(currentLayout) || (currentLayout === 'code' && draft.variant === 'split') || items.length > 0;
+  const showTableEditor = currentLayout === 'table' || currentLayout === 'harvey' || currentLayout === 'marimekko' || currentLayout === 'heatmap' || currentLayout === 'radar' || Boolean(draft.rowsText?.trim());
 
   function updateItem(idx, key, val) {
     const nextItems = items.map((entry, i) => i === idx ? { ...entry, [key]: val } : entry);
     onChange({ ...draft, items: nextItems });
   }
   function addItem() {
-    if (items.length >= 8) return;
+    if (items.length >= 12) return;
     onChange({
       ...draft,
       items: [...items, {
@@ -275,11 +349,18 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
         unit: '',
         delta: '',
         status: currentLayout === 'kpi' ? 'accent' : '',
+        icon: '',
+        avatar: '',
         start: currentLayout === 'gantt' ? String(Math.min(items.length, 3)) : '',
         span: currentLayout === 'gantt' ? '1' : '',
         milestone: false,
         role: currentLayout === 'org' ? L('负责人', 'Lead') : '',
         conversion: '',
+        x: currentLayout === 'quadrant' ? '60' : '',
+        y: currentLayout === 'quadrant' ? '65' : '',
+        size: currentLayout === 'quadrant' ? '22' : '',
+        before: currentLayout === 'dumbbell' ? '40' : '',
+        after: currentLayout === 'dumbbell' ? '80' : '',
         bullets: [],
       }],
     });
@@ -337,7 +418,19 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
           onChange: e => onChange({ ...draft, chrome: e.target.value }),
         },
           h('option', { value: '' }, L('跟随整稿母版', 'Deck default')),
-          PPT_CHROME_SKELETONS.map(sk => h('option', { key: sk.id, value: sk.id }, L(sk.zh, sk.en)))))),
+          PPT_CHROME_SKELETONS.map(sk => h('option', { key: sk.id, value: sk.id }, L(sk.zh, sk.en))))),
+      currentLayout === 'cover' ? h('div', null,
+        h('label', { htmlFor: controlId + '-cover-pattern' }, L('封面几何肌理', 'Cover geometric pattern')),
+        h('select', {
+          id: controlId + '-cover-pattern',
+          value: draft.coverPattern || '',
+          disabled,
+          onChange: e => onChange({ ...draft, coverPattern: e.target.value }),
+        },
+          h('option', { value: '' }, L('默认纯净底纹', 'Default clean')),
+          h('option', { value: 'dots' }, L('建筑点阵 (Dots)', 'Architectural dots')),
+          h('option', { value: 'grid' }, L('细线坐标网 (Grid)', 'Micro blueprint grid')),
+          h('option', { value: 'rings' }, L('同心圆环 (Rings)', 'Concentric rings')))) : null),
     currentLayout === 'gantt' ? h('div', { className: 'ppt-structured-section' },
       h('label', { htmlFor: controlId + '-columns' }, L('时间轴列头（逗号分隔，如 Q1, Q2, Q3, Q4）', 'Timeline columns (comma-separated, e.g. Q1, Q2, Q3, Q4)')),
       h('input', {
@@ -387,7 +480,7 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
     showItemsEditor ? h('details', { className: 'ppt-structured-section', open: PPT_ITEM_LAYOUTS.has(currentLayout) },
       h('summary', null, L('结构化卡片 / 指标项（', 'Structured cards / metrics (') + items.length + L(' 项）', ')')),
       h('div', { className: 'tools' },
-        h('button', { type: 'button', disabled: disabled || items.length >= 8, onClick: addItem }, L('+ 添加卡片项', '+ Add card item')),
+        h('button', { type: 'button', disabled: disabled || items.length >= 12, onClick: addItem }, L('+ 添加卡片项', '+ Add card item')),
         draft.bullets?.trim() ? h('button', { type: 'button', disabled, onClick: () => onChange({ ...draft, items: itemsFromBulletsText(draft.bullets, currentLayout) }) }, L('从要点文本自动生成卡片', 'Convert bullets to cards')) : null),
       items.map((entry, idx) => h('div', { key: idx, className: 'ppt-item-editor' },
         h('div', { className: 'ppt-item-head' },
@@ -426,6 +519,26 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
         currentLayout === 'process' ? h('div', null,
           h('label', null, L('阶段转化率 / 指标', 'Stage conversion / metric')),
           h('input', { value: entry.conversion || '', disabled, maxLength: 120, placeholder: '42%', onChange: e => updateItem(idx, 'conversion', e.target.value) })) : null,
+        currentLayout === 'quadrant' ? h('div', { className: 'ppt-archetype-subgrid' },
+          h('div', null,
+            h('label', null, L('横坐标 X (0-100)', 'X position (0-100)')),
+            h('input', { type: 'number', min: 0, max: 100, step: 1, value: entry.x ?? '', disabled, placeholder: '75', onChange: e => updateItem(idx, 'x', e.target.value) })),
+          h('div', null,
+            h('label', null, L('纵坐标 Y (0-100)', 'Y position (0-100)')),
+            h('input', { type: 'number', min: 0, max: 100, step: 1, value: entry.y ?? '', disabled, placeholder: '80', onChange: e => updateItem(idx, 'y', e.target.value) })),
+          h('div', null,
+            h('label', null, L('气泡大小', 'Bubble size')),
+            h('input', { type: 'number', min: 4, max: 100, step: 1, value: entry.size ?? '', disabled, placeholder: '24', onChange: e => updateItem(idx, 'size', e.target.value) }))) : null,
+        currentLayout === 'dumbbell' ? h('div', { className: 'ppt-archetype-subgrid' },
+          h('div', null,
+            h('label', null, L('优化前 (Before)', 'Before value')),
+            h('input', { type: 'number', step: 'any', value: entry.before ?? '', disabled, placeholder: '45', onChange: e => updateItem(idx, 'before', e.target.value) })),
+          h('div', null,
+            h('label', null, L('优化后 (After)', 'After value')),
+            h('input', { type: 'number', step: 'any', value: entry.after ?? '', disabled, placeholder: '88', onChange: e => updateItem(idx, 'after', e.target.value) })),
+          h('div', null,
+            h('label', null, L('单位', 'Unit')),
+            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: '%', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
         h('label', null, L('卡片标题', 'Card title')),
         h('input', { value: entry.title, disabled, maxLength: 300, onChange: e => updateItem(idx, 'title', e.target.value) }),
         h('label', null, L('说明正文', 'Card description')),

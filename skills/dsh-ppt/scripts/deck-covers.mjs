@@ -30,11 +30,127 @@ export const POSTER_COVER_VARIANTS = new Set([
   'split-bleed',
 ])
 
+export const COVER_PATTERNS = new Set(['dots', 'grid', 'rings'])
+
+/**
+ * 封面轻量矢量几何底纹（dots / grid / rings）—— 零外部依赖，低透明度克制点缀。
+ */
+export function renderCoverPatternPptx(pattern, theme, nextId) {
+  const p = String(pattern || '').trim().toLowerCase()
+  if (!COVER_PATTERNS.has(p)) return ''
+  const tk = theme.tokens
+  const col = theme.dark ? '#FFFFFF' : tk.accentPrimary
+  const out = []
+  if (p === 'grid') {
+    for (let gx = 0.8; gx <= 12.6; gx += 1.18) {
+      out.push(ooxmlLine(nextId(), 'Cover Pattern V', { x: gx, y: 0 }, { x: gx, y: CANVAS_IN.h }, { color: tk.hairline, widthPt: 0.4 }))
+    }
+    for (let gy = 0.75; gy <= 6.8; gy += 1.15) {
+      out.push(ooxmlLine(nextId(), 'Cover Pattern H', { x: 0, y: gy }, { x: CANVAS_IN.w, y: gy }, { color: tk.hairline, widthPt: 0.4 }))
+    }
+  } else if (p === 'rings') {
+    ;[3.6, 5.4, 7.2].forEach((d, ri) => {
+      out.push(ooxmlShape(nextId(), `Cover Pattern Ring ${ri + 1}`, { x: 10.6 - d / 2, y: 3.75 - d / 2, w: d, h: d }, {
+        preset: 'ellipse',
+        fill: '',
+        stroke: col,
+        strokeAlpha: theme.dark ? 0.10 : 0.12,
+        strokePt: 0.75,
+      }))
+    })
+  } else if (p === 'dots') {
+    for (let r = 0; r < 5; r += 1) {
+      for (let c = 0; c < 6; c += 1) {
+        out.push(ooxmlShape(nextId(), `Cover Dot ${r}-${c}`, { x: 9.8 + c * 0.54, y: 0.9 + r * 0.54, w: 0.06, h: 0.06 }, {
+          preset: 'ellipse',
+          fill: col,
+          fillAlpha: theme.dark ? 0.16 : 0.18,
+        }))
+      }
+    }
+  }
+  return out.join('')
+}
+
 export function renderPosterCoverPptx(slide, ctx) {
   const { coverVariant, title, subtitle, kicker, metaText, total, theme, langAttr, manifest, idBase, nextId } = ctx
-  if (!POSTER_COVER_VARIANTS.has(coverVariant)) return null
   const tk = theme.tokens
+  const hasHeroPhoto = Boolean(slide?.image?.assetId || slide?.image?.src)
+
+  // Poster Cover 0：封面真图混排（左侧深邃渐变排版区 + 右侧全出血高清视觉图，0 遮挡 + WCAG AAA 对比）
+  if (hasHeroPhoto) {
+    const shapes = []
+    const panelW = 6.65
+    const darkBase = tk.coverBg && relativeLuminance(tk.coverBg) < 0.25
+      ? tk.coverBg
+      : mixHex(tk.accentPrimary, '#070B14', 0.62)
+    const darkEnd = mixHex(darkBase, tk.accentSecondary, 0.22)
+    shapes.push(ooxmlShape(nextId(), 'Photo Cover Left Panel', { x: 0, y: 0, w: panelW, h: CANVAS_IN.h }, {
+      preset: 'rect',
+      gradientStops: [
+        { offset: 0, color: darkBase },
+        { offset: 1, color: darkEnd },
+      ],
+      gradientAngle: 145,
+    }))
+    shapes.push(ooxmlShape(nextId(), 'Photo Cover Top Accent', { x: 0, y: 0, w: panelW, h: 0.08 }, {
+      preset: 'rect',
+      fill: tk.accentPrimary,
+    }))
+    if (kicker !== '') {
+      shapes.push(ooxmlShape(idBase + 4, 'Kicker', { x: 0.76, y: 1.38, w: panelW - 1.32, h: 0.36 }, {
+        txBox: true,
+        anchor: 'ctr',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        paragraphs: [
+          ooxmlRichParagraph(kicker.toUpperCase(), { sizePt: 11, color: '#FDE68A', bold: true, lang: langAttr, font: theme.fonts.body, spc: 180 }),
+        ],
+      }))
+    }
+    const titleBox = { x: 0.76, y: 1.88, w: panelW - 1.32, h: 2.38 }
+    const titleFit = computeTextFit(title, titleBox, 'coverTitle', { maxPt: 38, minPt: 24, padXPt: 2, padYPt: 4 })
+    shapes.push(ooxmlShape(idBase + 2, 'Title', titleBox, {
+      txBox: true,
+      anchor: 'ctr',
+      marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+      fontScale: titleFit.fontScale,
+      paragraphs: [
+        ooxmlRichParagraph(title, { sizePt: titleFit.fontPt, color: '#F8FAFC', bold: true, lang: langAttr, font: theme.fonts.heading, lineHeight: titleFit.lineHeight }),
+      ],
+    }))
+    shapes.push(ooxmlShape(nextId(), 'Photo Cover Rule', { x: 0.76, y: 4.38, w: 1.10, h: 0.055 }, {
+      preset: 'rect',
+      fill: tk.accentPrimary,
+    }))
+    if (subtitle !== '') {
+      const subBox = { x: 0.76, y: 4.62, w: panelW - 1.32, h: 1.35 }
+      const subFit = computeTextFit(subtitle, subBox, 'body', { maxPt: 16.5, minPt: 13, padXPt: 2, padYPt: 2 })
+      shapes.push(ooxmlShape(idBase + 3, 'Subtitle', subBox, {
+        txBox: true,
+        anchor: 't',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        fontScale: subFit.fontScale,
+        paragraphs: [
+          ooxmlRichParagraph(subtitle, { sizePt: subFit.fontPt, color: '#CBD5E1', lang: langAttr, font: theme.fonts.body, lineHeight: 1.44 }),
+        ],
+      }))
+    }
+    if (metaText) {
+      shapes.push(ooxmlShape(nextId(), 'Cover meta', { x: 0.76, y: 6.46, w: panelW - 1.32, h: 0.42 }, {
+        txBox: true,
+        anchor: 'ctr',
+        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+        paragraphs: [
+          ooxmlRichParagraph(metaText, { sizePt: 10.5, color: '#94A3B8', lang: langAttr, font: theme.fonts.body }),
+        ],
+      }))
+    }
+    return shapes.join('')
+  }
+
+  if (!POSTER_COVER_VARIANTS.has(coverVariant)) return null
   const shapes = []
+  const patXml = renderCoverPatternPptx(slide?.coverPattern, theme, nextId)
 
   // Poster Cover 1：Apple / Linear Keynote 光晕剧场封面
   if (coverVariant === 'keynote-glow') {
@@ -55,6 +171,7 @@ export function renderPosterCoverPptx(slide, ctx) {
       gradientStops: gradStops,
       gradientAngle: 135,
     }))
+    if (patXml) shapes.push(patXml)
     // 右上主氛围径向光斑 + 左下辅氛围径向光斑（4段柔滑过渡避免 LibreOffice 椭圆边界断层）
     shapes.push(ooxmlShape(nextId(), 'Ambient Glow Primary', { x: 6.7, y: -2.2, w: 8.8, h: 8.8 }, {
       preset: 'ellipse',
@@ -169,6 +286,7 @@ export function renderPosterCoverPptx(slide, ctx) {
 
   // Poster Cover 2：瑞士杂志网格封面（Monocle / FT / Nature）
   if (coverVariant === 'editorial-grid') {
+    if (patXml) shapes.push(patXml)
     shapes.push(ooxmlShape(nextId(), 'Editorial Top Rule', { x: 0.62, y: 0.42, w: 12.09, h: 0.04 }, {
       preset: 'rect',
       fill: tk.inkPrimary,
@@ -305,6 +423,7 @@ export function renderPosterCoverPptx(slide, ctx) {
   }
 
   // Poster Cover 3 & 4：建筑感非对称封面（architectural / split-bleed —— 麦肯锡/东方极简）
+  if (patXml) shapes.push(patXml)
   const isSplitBleed = coverVariant === 'split-bleed'
   const wingW = isSplitBleed ? 5.25 : 4.25
   const wingX = CANVAS_IN.w - wingW
@@ -443,11 +562,39 @@ export function renderPosterCoverPptx(slide, ctx) {
 
 export function renderPosterCoverHtml(slide, ctx) {
   const { coverVariant, title, subtitle, kicker, meta, total, langId, manifest, theme } = ctx
+  const rawAsset = slide?.image?.assetId && manifest?.assets?.[slide.image.assetId]
+  const photoData = rawAsset
+    ? (String(rawAsset.data || '').startsWith('data:') ? rawAsset.data : `data:${rawAsset.mime};base64,${rawAsset.data}`)
+    : (typeof slide?.image?.src === 'string' && slide.image.src.startsWith('data:image/') ? slide.image.src : '')
+
+  if (photoData) {
+    const tk = theme?.tokens
+    const darkBase = tk?.coverBg && relativeLuminance(tk.coverBg) < 0.25
+      ? tk.coverBg
+      : mixHex(tk?.accentPrimary || '#0057B8', '#070B14', 0.62)
+    const darkEnd = mixHex(darkBase, tk?.accentSecondary || '#0E7490', 0.22)
+    return (
+      '<div class="cover-shell is-photo-split">' +
+      `<div class="photo-cover-left" style="background:linear-gradient(145deg,${darkBase},${darkEnd})">` +
+      (kicker !== '' ? '<div class="kicker">' + escapeHtml(kicker) + '</div>' : '') +
+      '<h1>' + renderInlineHtml(title) + '</h1>' +
+      '<div class="arch-rule"></div>' +
+      (subtitle !== '' ? '<div class="subtitle">' + renderInlineHtml(subtitle) + '</div>' : '') +
+      (meta !== '' ? '<div class="meta">' + escapeHtml(meta) + '</div>' : '') +
+      '</div>' +
+      `<div class="photo-cover-right"><img src="${photoData}" alt="${escapeHtml(slide.image?.alt || title)}"/></div>` +
+      '</div>'
+    )
+  }
+
   if (!POSTER_COVER_VARIANTS.has(coverVariant)) return null
+  const patClass = COVER_PATTERNS.has(String(slide?.coverPattern || '').toLowerCase())
+    ? ' cover-pat-' + String(slide.coverPattern).toLowerCase()
+    : ''
 
   if (coverVariant === 'keynote-glow') {
     return (
-      '<div class="cover-shell is-keynote-glow">' +
+      '<div class="cover-shell is-keynote-glow' + patClass + '">' +
       '<div class="cover-glow-orb orb-a" aria-hidden="true"></div>' +
       '<div class="cover-glow-orb orb-b" aria-hidden="true"></div>' +
       '<div class="cover-center-stack">' +
@@ -801,4 +948,11 @@ export const AESTHETIC_STUDIO_CSS = `
 .deck-icon-badge--ring{border:1.25px solid var(--accent);background:transparent}
 .deck-icon-badge--solid{background:var(--accent);color:var(--ink-on-accent)}
 .deck-icon-badge--bare{width:auto;height:auto;padding:2px;background:transparent}
+.cover-shell.is-photo-split{display:grid;grid-template-columns:1fr 1fr;height:100%;border-radius:calc(var(--radius) * 1.2);overflow:hidden}
+.photo-cover-left{padding:clamp(32px,4.2vw,58px);display:flex;flex-direction:column;justify-content:center;gap:16px;color:#F8FAFC;border-top:5px solid var(--accent)}
+.photo-cover-left .kicker{color:#FDE68A}.photo-cover-left h1{color:#F8FAFC}.photo-cover-left .subtitle{color:#CBD5E1}.photo-cover-left .meta{color:#94A3B8;margin-top:auto;border-top:1px solid rgba(255,255,255,.15);padding-top:12px}
+.photo-cover-right{position:relative;overflow:hidden;background:#0F172A}
+.photo-cover-right img{width:100%;height:100%;object-fit:cover;display:block}
+.cover-pat-grid{background-image:linear-gradient(to right,color-mix(in srgb,var(--hairline) 42%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--hairline) 42%,transparent) 1px,transparent 1px);background-size:48px 48px}
+.cover-pat-dots{background-image:radial-gradient(color-mix(in srgb,var(--accent) 26%,transparent) 1.5px,transparent 1.5px);background-size:24px 24px}
 `

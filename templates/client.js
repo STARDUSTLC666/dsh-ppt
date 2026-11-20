@@ -115,7 +115,16 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
             "查看此页": "Jump to slide",
             "已切换全稿主题，HTML、PPTX 和工程文件已同步更新，可撤销。": "Theme updated across HTML, PPTX and project files. You can undo this change.",
             "品牌与母版设置已更新，可撤销。": "Brand and master settings updated. You can undo this change.",
-            "已新增一页，可继续编辑或撤销。": "New slide added. You can edit it or undo this change."
+            "已新增一页，可继续编辑或撤销。": "New slide added. You can edit it or undo this change.",
+            "代码片段": "Code snippet",
+            "编程语言": "Language",
+            "文件名 / 地址": "Filename",
+            "页面地址 (URL)": "Page URL",
+            "横轴标签": "X-axis label",
+            "纵轴标签": "Y-axis label",
+            "导出高精 PDF (.pdf)": "Export High-DPI PDF (.pdf)",
+            "导出逐页 PNG 图包 (.zip)": "Export Slide PNG Pack (.zip)",
+            "已直接编辑文字并同步更新 HTML 与 PPTX。": "Inline text updated across HTML and PPTX."
         });
         function languageOf(locale = localeService) {
             try {
@@ -140,7 +149,7 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
             useEffect(() => { const update = () => rerender(n => n + 1); update(); return locale?.subscribe?.(update); }, [locale]);
         }
         const ROUTE = 'api/dsh-ppt/workbench';
-        const fields = [['title', '标题'], ['subtitle', '副标题'], ['kicker', '眉题'], ['takeaway', '底栏结论条'], ['source', '数据来源'], ['formula', '数学公式 (LaTeX)'], ['mermaid', 'Mermaid 流程图 / 时序图'], ['text', '正文'], ['bullets', '要点（每行一条）'], ['notes', '演讲备注']];
+        const fields = [['title', '标题'], ['subtitle', '副标题'], ['kicker', '眉题'], ['takeaway', '底栏结论条'], ['source', '数据来源'], ['formula', '数学公式 (LaTeX)'], ['mermaid', 'Mermaid 流程图 / 时序图'], ['code', '代码片段'], ['language', '编程语言'], ['filename', '文件名 / 地址'], ['url', '页面地址 (URL)'], ['xLabel', '横轴标签'], ['yLabel', '纵轴标签'], ['text', '正文'], ['bullets', '要点（每行一条）'], ['notes', '演讲备注']];
         const css = `
   .pptw {--fg:var(--dsw-alias-label-primary,var(--w-text,#1e293b));--fg-muted:var(--dsw-alias-label-secondary,var(--w-muted,#64748b));--bg:var(--dsw-alias-bg-base,var(--w-canvas,#fff));--bg-surface:var(--dsw-alias-bg-layer-1,var(--w-bg,#f8fafc));--border:var(--dsw-alias-border-l2,var(--w-border,#e2e8f0));color:var(--fg);min-width:0}
   .pptw *{box-sizing:border-box}.pptw h2{font-size:20px;margin:0}.pptw h3{font-size:15.5px;margin:10px 0 6px}
@@ -203,6 +212,7 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
                 layout: source.layout || 'bullets',
                 variant: source.variant || '',
                 chrome: source.chrome || '',
+                coverPattern: source.coverPattern || '',
                 tableStyle: source.tableStyle || source.visual?.tableStyle || '',
                 density: source.visual?.density || '',
                 columnsText: Array.isArray(source.columns) ? source.columns.filter(c => typeof c === 'string').join(', ') : '',
@@ -213,6 +223,12 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
                 source: source.source || '',
                 formula: source.formula || '',
                 mermaid: source.mermaid || '',
+                code: source.code || '',
+                language: source.language || '',
+                filename: source.filename || '',
+                url: source.url || '',
+                xLabel: source.xLabel || '',
+                yLabel: source.yLabel || '',
                 text: source.text || '',
                 bullets: (source.bullets || []).join('\n'),
                 notes: source.notes || '',
@@ -221,10 +237,16 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
             };
         }
         function editorHtml(html, nonce) {
-            const bridge = `<style>#hud,#delivery-bar,#review-panel,#progress,#notes-panel,#help-panel,#toast,#blank{display:none!important}.slide-frame{pointer-events:none!important}.slide-frame .slide{pointer-events:auto!important}</style><script>(function(){const nonce=${JSON.stringify(nonce)};
+            const bridge = `<style>#hud,#delivery-bar,#review-panel,#progress,#notes-panel,#help-panel,#toast,#blank{display:none!important}.slide-frame{pointer-events:none!important}.slide-frame .slide{pointer-events:auto!important}[data-dsh-editing="1"]{outline:2px solid #2563eb!important;outline-offset:3px;border-radius:4px;cursor:text!important}</style><script>(function(){const nonce=${JSON.stringify(nonce)};
       function tell(field){parent.postMessage({type:'dsh-ppt-select',nonce:nonce,field:field},'*')}
+      function fieldOfEditable(n){if(!n)return '';if(n.matches('.subtitle,.quote-attr'))return 'subtitle';if(n.matches('.kicker'))return 'kicker';if(n.matches('.slide-takeaway'))return 'takeaway';if(n.matches('.slide-source'))return 'source';return 'title';}
       document.addEventListener('keydown',function(e){
         if(e.target.closest('#data-panel'))return;
+        if(e.target && e.target.isContentEditable){
+          if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();e.target.dataset.dshCancel='1';e.target.innerText=e.target.dataset.dshOrig||'';e.target.blur();return}
+          if(e.key==='Enter' && !e.shiftKey){e.preventDefault();e.stopImmediatePropagation();e.target.blur();return}
+          e.stopImmediatePropagation();return;
+        }
         var mod=e.ctrlKey||e.metaKey;
         if(mod&&(e.key==='s'||e.key==='S')){e.preventDefault();e.stopImmediatePropagation();parent.postMessage({type:'dsh-ppt-shortcut',nonce:nonce,key:'save'},'*');return}
         if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();parent.postMessage({type:'dsh-ppt-shortcut',nonce:nonce,key:'escape'},'*');return}
@@ -234,8 +256,35 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
       document.addEventListener('touchstart',function(e){e.stopImmediatePropagation()},true);
       document.addEventListener('touchend',function(e){e.stopImmediatePropagation()},true);
       document.addEventListener('wheel',function(e){e.stopImmediatePropagation()},{capture:true,passive:true});
-      document.addEventListener('click',function(e){if(e.target.closest('#data-panel,.data-number,.data-chart-trace'))return;const n=e.target.closest('.deck-mermaid-svg,.mermaid-canvas,.deck-math,.formula-plate,.callout-formula,h1,h2,.subtitle,.kicker,.statement-title,.quote-text,.quote-attr,.slide-takeaway,.slide-source,li,.mekko-col,.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col,table');if(!n)return;
-        e.preventDefault();e.stopImmediatePropagation();let field=n.matches('.deck-mermaid-svg,.mermaid-canvas')?'mermaid':n.matches('.deck-math,.formula-plate,.callout-formula')?'formula':n.matches('li')?'bullets':n.matches('.subtitle,.quote-attr')?'subtitle':n.matches('.kicker')?'kicker':n.matches('.slide-takeaway')?'takeaway':n.matches('.slide-source')?'source':n.matches('table,.mekko-col')?'rows':n.matches('.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col')?'items':'title';tell(field)},true);
+      document.addEventListener('dblclick',function(e){
+        if(e.target.closest('#data-panel,.data-number,.data-chart-trace'))return;
+        const n=e.target.closest('h1,h2,.subtitle,.kicker,.slide-takeaway,.slide-source,.statement-title,.quote-text,.quote-attr');
+        if(!n||n.isContentEditable)return;
+        e.preventDefault();e.stopImmediatePropagation();
+        const field=fieldOfEditable(n);
+        const orig=n.innerText;
+        n.dataset.dshOrig=orig;
+        n.dataset.dshEditing='1';
+        n.dataset.dshCancel='';
+        n.contentEditable='true';
+        n.focus();
+        try{const r=document.createRange();r.selectNodeContents(n);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);}catch(_){}
+        function finish(){
+          n.removeEventListener('blur',finish);
+          const cancelled=n.dataset.dshCancel==='1';
+          const next=String(n.innerText||'').replace(/\r?\n/g,' ').trim();
+          n.contentEditable='false';
+          delete n.dataset.dshEditing;
+          delete n.dataset.dshOrig;
+          delete n.dataset.dshCancel;
+          if(!cancelled && next && next!==String(orig||'').replace(/\r?\n/g,' ').trim()){
+            parent.postMessage({type:'dsh-ppt-inline-edit',nonce:nonce,field:field,value:next},'*');
+          }
+        }
+        n.addEventListener('blur',finish);
+      },true);
+      document.addEventListener('click',function(e){if(e.target.closest('#data-panel,.data-number,.data-chart-trace,[data-dsh-editing="1"]'))return;const n=e.target.closest('.code-window,.code-body,.mockup-browser,.mockup-phone,.quadrant-svg,.radar-svg,.dumbbell-svg,.hm-grid,.deck-mermaid-svg,.mermaid-canvas,.deck-math,.formula-plate,.callout-formula,h1,h2,.subtitle,.kicker,.statement-title,.quote-text,.quote-attr,.slide-takeaway,.slide-source,li,.mekko-col,.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col,table');if(!n)return;
+        e.preventDefault();e.stopImmediatePropagation();let field=n.matches('.code-window,.code-body')?'code':n.matches('.deck-mermaid-svg,.mermaid-canvas')?'mermaid':n.matches('.deck-math,.formula-plate,.callout-formula')?'formula':n.matches('li')?'bullets':n.matches('.subtitle,.quote-attr')?'subtitle':n.matches('.kicker')?'kicker':n.matches('.slide-takeaway')?'takeaway':n.matches('.slide-source')?'source':n.matches('table,.mekko-col,.hm-grid,.radar-svg')?'rows':n.matches('.mockup-browser,.mockup-phone,.quadrant-svg,.dumbbell-svg,.sankey-node,.sankey-svg,.swot-quad,.porter-beam,.surface-card,.kpi-card,.gantt-row,.arch-tier,.tam-card,.org-child,.chevron-col')?'items':'title';tell(field)},true);
       window.addEventListener('message',function(e){if(e.source!==parent||e.data?.nonce!==nonce)return;if(e.data.type==='dsh-ppt-jump')window.__dshPpt?.jump(e.data.page);if(e.data.type==='dsh-ppt-data-set'&&window.__dshData){window.__dshData.setParameters(e.data.parameters);const state=window.__dshData.getState();parent.postMessage({type:'dsh-ppt-data',nonce,parameters:e.data.parameters,valid:state.valid,command:e.data.command},'*')}});
       if(window.__dshData)window.__dshData.onChange=function(parameters,dirty,valid){parent.postMessage({type:'dsh-ppt-data',nonce,parameters,dirty,valid},'*')};
     })();<\/script>`;
@@ -880,6 +929,23 @@ return result;
                         handleShortcut(event.data.key);
                         return;
                     }
+                    if (event.data.type === 'dsh-ppt-inline-edit') {
+                        const field = event.data.field;
+                        const val = typeof event.data.value === 'string' ? event.data.value.trim() : '';
+                        if (!['title', 'subtitle', 'kicker', 'takeaway', 'source'].includes(field) || !val || !project || !slide || busy || dataDirty || imagePending)
+                            return;
+                        if (dirty) {
+                            setDraft(prev => ({ ...prev, [field]: val }));
+                            setActiveTab('content');
+                            setMessage(pptText('已更新草稿内容，按 Ctrl/⌘+S 保存到 HTML 与 PPTX。', 'Draft updated inline. Press Ctrl/⌘+S to save HTML and PPTX.'));
+                        } else {
+                            void perform(signal => action({ operation: 'edit', id: project.id, expectedRevision: project.revision, slide: slide.id, patch: { [field]: val } }, signal), value => {
+                                adopt(value.project, slide.id);
+                                setMessage(t("已直接编辑文字并同步更新 HTML 与 PPTX。"));
+                            });
+                        }
+                        return;
+                    }
                     if (event.data.type !== 'dsh-ppt-select')
                         return;
                     const key = event.data.field;
@@ -1018,6 +1084,8 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
                     patch.variant = draft.variant || '';
                 if ((draft.chrome || '') !== (original.chrome || ''))
                     patch.chrome = draft.chrome || '';
+                if ((draft.coverPattern || '') !== (original.coverPattern || ''))
+                    patch.coverPattern = draft.coverPattern || '';
                 if ((draft.tableStyle || '') !== (original.tableStyle || ''))
                     patch.tableStyle = draft.tableStyle || '';
                 if ((draft.columnsText || '') !== (original.columnsText || '')) {
@@ -1040,15 +1108,16 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
                             ...(entry.unit ? { unit: entry.unit } : {}),
                             ...(entry.delta ? { delta: entry.delta } : {}),
                             ...(entry.status ? { status: entry.status } : {}),
+                            ...(entry.icon ? { icon: entry.icon } : {}),
+                            ...(entry.avatar ? { avatar: entry.avatar } : {}),
                             ...(entry.role ? { role: entry.role } : {}),
                             ...(entry.conversion ? { conversion: entry.conversion } : {}),
                             ...(entry.milestone === true ? { milestone: true } : {}),
                         };
-                        if (entry.start !== undefined && String(entry.start).trim() !== '' && Number.isFinite(Number(entry.start))) {
-                            clean.start = Number(entry.start);
-                        }
-                        if (entry.span !== undefined && String(entry.span).trim() !== '' && Number.isFinite(Number(entry.span))) {
-                            clean.span = Number(entry.span);
+                        for (const numKey of ['start', 'span', 'x', 'y', 'size', 'before', 'after']) {
+                            if (entry[numKey] !== undefined && String(entry[numKey]).trim() !== '' && Number.isFinite(Number(entry[numKey]))) {
+                                clean[numKey] = Number(entry[numKey]);
+                            }
                         }
                         if (Array.isArray(entry.bullets)) {
                             const lines = entry.bullets.map(b => String(b).trim()).filter(Boolean);
@@ -1094,6 +1163,16 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
                 const order = project.slides.map(s => s.id);
                 [order[fromIndex], order[toIndex]] = [order[toIndex], order[fromIndex]];
                 return perform(signal => action({ operation: 'edit', id: project.id, expectedRevision: project.revision, order }, signal), value => { adopt(value.project, project.slides[fromIndex].id); setMessage(t("页面顺序已更新，可撤销。")); });
+            }
+            function reorderSlide(fromIndex, toIndex) {
+                if (dataDirty || dirty)
+                    return;
+                if (fromIndex < 0 || toIndex < 0 || fromIndex >= project.slides.length || toIndex >= project.slides.length || fromIndex === toIndex)
+                    return;
+                const order = project.slides.map(s => s.id);
+                const [moved] = order.splice(fromIndex, 1);
+                order.splice(toIndex, 0, moved);
+                return perform(signal => action({ operation: 'edit', id: project.id, expectedRevision: project.revision, order }, signal), value => { adopt(value.project, moved); setMessage(t("页面顺序已更新，可撤销。")); });
             }
             function move(delta) {
                 return moveSlideAt(index, delta);
@@ -1261,7 +1340,7 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
  dataDirty ? h(W.Status,null,h('div',{className:'ppt-data-warning'},pptText('数据推演或材料尚未保存，成品仍是已保存版本。','Scenario or source changes are unsaved. Output still uses saved values.'),h(W.Button,{variant:'ghost',icon:'right',onClick:()=>setActiveTab('data')},pptText('前往数据与推演','Open data and what-if')))) : null,
  !project ? listLoading && !projects.length && !error ? h('div',{className:'ppt-loading-skeleton'},h(W.Skeleton,{variant:'card',label:pptText('正在读取演示文稿列表…','Loading presentation projects…')}),h(W.Skeleton,{variant:'row'}),h(W.Skeleton,{variant:'row'}),h(W.Skeleton,{variant:'row'})) : projects.length ? h('div',{className:'ppt-library','data-tour':'ppt-library'},h(ProjectLibrary,{items:projects,language:languageOf(),t:pptText,searchHint:pptText('搜索标题或工程路径','Search titles or project paths'),searchText:row=>row.title+' '+row.path+' '+(row.theme||''),updatedAt:row=>row.updatedAt,renderItem:row=>h(W.Row,{key:row.id,title:row.title,meta:[row.theme,row.slideCount!==undefined?row.slideCount+t(' 页 · 修订 ')+(row.revision??0):null].filter(Boolean).join(' · ') || undefined,description:row.path,disabled:busy,actions:h(React.Fragment,null,h(W.Button,{size:'sm',icon:'edit',disabled:busy,onClick:()=>{setActiveTab('content');open(row.id);}},pptText('编辑','Open')),h(W.Button,{size:'sm',variant:'ghost',icon:'download',disabled:busy,onClick:()=>download('pptx',row)},'PPTX')),onClick:()=>{setActiveTab('content');open(row.id);}})})) : h(W.Empty,{icon:'slides',title:t("还没有可以编辑的项目"),action:h(React.Fragment,null,[h(W.Button,{key:'demo',variant:'primary',icon:'sparkles',disabled:busy,onClick:createDemo},pptText('一键体验旗舰示例','Load Flagship Demo')),h(W.Button,{key:'create',icon:'plus',disabled:busy,onClick:()=>{setCreateMode('create');setCreateOpen(true);}},pptText('新建演示文稿','New presentation')),h(W.Button,{key:'office',icon:'file',disabled:busy,onClick:()=>{setCreateMode('office');setCreateOpen(true);}},pptText('导入 Excel / Word','Import Excel / Word')),h(W.Button,{key:'import',icon:'upload',disabled:busy,onClick:()=>{setCreateMode('import');setCreateOpen(true);}},pptText('导入 PPTX 翻新','Import & Modernize .pptx')),h(W.Button,{key:'copy',icon:'copy',onClick:copyExample},t("复制示例")),h(W.Button,{key:'refresh',icon:'refresh','aria-busy':busy?'true':undefined,disabled:busy,onClick:refreshList},t("刷新项目"))])},[h('p',{key:'how'},t("先在对话中让助手生成演示文稿。已有项目可以让助手调用 ppt_check 检查一次，它会出现在这里。")),h('p',{key:'example'},t("示例：请把这份材料制作成可直接交付的演示文稿，生成 HTML、PPTX 和工程文件。"))]) :
  h('div',{className:'ppt-editor','data-view':activeTab,style:{'--ppt-rail-width':railSplit.size+'px','--ppt-inspector':inspectorSplit.size+'px'}},
- h(PptPages,{project,selected,busy,imagePending,dirty,dataDirty,onChoose:choose,onMoveSlide:moveSlideAt,onDuplicate:()=>structure('duplicate'),onAppend:appendSlide}),
+ h(PptPages,{project,selected,busy,imagePending,dirty,dataDirty,onChoose:choose,onMoveSlide:moveSlideAt,onReorderSlide:reorderSlide,onDuplicate:()=>structure('duplicate'),onAppend:appendSlide}),
  h(W.SplitResizer,{...railSplit.resizerProps,className:'ppt-split-resizer ppt-split-resizer-left',label:pptText('调整幻灯片目录宽度','Resize slide rail')}),
  h('section',{className:'ppt-canvas-region','aria-label':pptText('成品预览','Presentation preview')},
  h('div',{className:'ppt-preview-tools'},h(W.Button,{icon:'slides','aria-pressed':mode==='html',disabled:busy || dataDirty,onClick:()=>setMode('html')},t('HTML 预览')),h(W.Button,{icon:'image','aria-pressed':mode==='pptx',disabled:busy || dataDirty || !project.render,onClick:()=>setMode('pptx')},t('最终 PPTX 预览')),h(W.Button,{icon:'layers','aria-pressed':mode==='split',disabled:busy || dataDirty || !project.render,onClick:()=>setMode('split')},t('HTML + PPTX 并排对比')),h(W.Button,{icon:'play',disabled:busy || dirty || imagePending || dataDirty,onClick:render},t('渲染当前 PPTX')),h(W.IconButton,{icon:'external',label:pptText('查看全屏','View fullscreen'),onClick:async()=>{try{await previewBox.current?.requestFullscreen();previewBox.current?.querySelector('.ppt-fullscreen-exit')?.focus();}catch{setError(pptText('当前宿主无法进入全屏，可以继续使用页面预览。','Fullscreen is unavailable in this host. The page preview remains usable.'));}}})),
@@ -1283,7 +1362,7 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
            visualDiff.pictures[slot] ? h('div',{className:'preview'},h('img',{className:'render-page',src:visualDiff.pictures[slot],alt:label}),
              (round?.findings||[]).filter(f=>f.slideId===visualDiff.compare).map((f,i)=>h('span',{key:i,title:f.issue,style:{position:'absolute',pointerEvents:'none',border:'2px solid var(--dsw-alias-state-warn-primary,#f97316)',boxSizing:'border-box',left:f.box[0]*100+'%',top:f.box[1]*100+'%',width:f.box[2]*100+'%',height:f.box[3]*100+'%'}})))
            : h('p',{className:'muted'},pptText('此页由拆分新增或尚未载入。','Created by split or not loaded yet.')))))) : null,
- h('div',{className:'ppt-preview-help'},h('p', { className: 'muted' }, mode === 'html' ? pptText('这是 HTML 放映预览。最终 PPTX 的字体和排版请用上方渲染检查。点击文字可定位编辑字段；独立打开 HTML 时按 P 开启双屏演讲者提词台（含 L 键虚拟激光笔）。', 'This is the HTML playback preview. Use the render controls above to check fonts and layout in the final PPTX. Click text to focus its editing field; press P in standalone HTML playback to open Dual-Screen Presenter View (with L-key laser pointer).') : t("这是当前 PPTX 文件的实际渲染图片，仍需检查每页画面；PowerPoint / WPS 可能因字体环境而不同。"))),project.render?.missingFonts?.length ? h('div', { role: 'alert', className: 'notice error' }, t("渲染引擎报告缺失字体：") + project.render.missingFonts.join('、') + t("。请替换为目标电脑可用字体后重新渲染。")) : null,h('details', { className: 'card', 'data-dsh-card': '' }, h('summary', null, t("质量提醒（") + (project.quality.warningCount + project.quality.errorCount) + (languageOf() === 'en' ? ')' : '）')), h('div',{className:'ppt-issue-list'},(project.quality.issues || []).map((issue, i) => h('div', { key: i, className: 'ppt-issue-row' }, h('p', null, (issue.slide > 0 ? t("第 ") + issue.slide + t(" 页：") : "") + (languageOf() === 'en' ? issue.messageEn : issue.message) + (languageOf() === 'en' ? ' ' : '；') + (languageOf() === 'en' ? issue.suggestionEn : issue.suggestion)), issue.slide > 0 && project.slides[issue.slide - 1] ? h(W.Button, { className: 'ppt-issue-jump', icon: 'right', disabled: busy || imagePending, onClick: () => choose(project.slides[issue.slide - 1]) }, t("查看此页")) : null)))),h('p',{className:'w-muted'},pptText('快捷键：Ctrl/⌘+S 保存 · Esc 取消或返回 · Alt+←/→ 切换页面 · 独立放映按 P 开提词台 / L 激光笔','Shortcuts: Ctrl/⌘+S save · Esc cancel or go back · Alt+←/→ switch slides · Standalone HTML: P Presenter View / L Laser'))),
+ h('div',{className:'ppt-preview-help'},h('p', { className: 'muted' }, mode === 'html' ? pptText('这是 HTML 放映预览。单击文字定位编辑框，双击文字直接原地改写并同步 PPTX；左侧目录支持拖拽调序；独立打开 HTML 按 P 开启双屏演讲者提词台（含 L 键虚拟激光笔）。', 'This is the HTML playback preview. Click text to focus its field, or double-click text to edit inline and sync to PPTX. Drag slides in the left rail to reorder; press P in standalone HTML for Dual-Screen Presenter View.') : t("这是当前 PPTX 文件的实际渲染图片，仍需检查每页画面；PowerPoint / WPS 可能因字体环境而不同。"))),project.render?.missingFonts?.length ? h('div', { role: 'alert', className: 'notice error' }, t("渲染引擎报告缺失字体：") + project.render.missingFonts.join('、') + t("。请替换为目标电脑可用字体后重新渲染。")) : null,h('details', { className: 'card', 'data-dsh-card': '' }, h('summary', null, t("质量提醒（") + (project.quality.warningCount + project.quality.errorCount) + (languageOf() === 'en' ? ')' : '）')), h('div',{className:'ppt-issue-list'},(project.quality.issues || []).map((issue, i) => h('div', { key: i, className: 'ppt-issue-row' }, h('p', null, (issue.slide > 0 ? t("第 ") + issue.slide + t(" 页：") : "") + (languageOf() === 'en' ? issue.messageEn : issue.message) + (languageOf() === 'en' ? ' ' : '；') + (languageOf() === 'en' ? issue.suggestionEn : issue.suggestion)), issue.slide > 0 && project.slides[issue.slide - 1] ? h(W.Button, { className: 'ppt-issue-jump', icon: 'right', disabled: busy || imagePending, onClick: () => choose(project.slides[issue.slide - 1]) }, t("查看此页")) : null)))),h('p',{className:'w-muted'},pptText('快捷键：Ctrl/⌘+S 保存 · Esc 取消或返回 · Alt+←/→ 切换页面 · 独立放映按 P 开提词台 / L 激光笔','Shortcuts: Ctrl/⌘+S save · Esc cancel or go back · Alt+←/→ switch slides · Standalone HTML: P Presenter View / L Laser'))),
  h(W.SplitResizer,{...inspectorSplit.resizerProps,className:'ppt-split-resizer ppt-split-resizer-right',label:pptText('调整属性检查器宽度','Resize inspector')}),
  h('aside',{className:'ppt-inspector','aria-label':pptText('页面与辅助工具','Slide properties and tools')},
  h('section',{className:'ppt-inspector-panel',hidden:activeTab!=='content'},
@@ -1307,13 +1386,16 @@ fields.filter(([key]) => {
   if (key === 'title' || key === 'notes') return true;
   if (key === 'bullets') return ['bullets', 'callout', 'agenda', 'image-left', 'image-right', 'chart-split'].includes(activeLayout) || (slide.bullets?.length > 0) || Boolean(draft.bullets);
   if (key === 'takeaway') return !['cover', 'section', 'closing'].includes(activeLayout) || Boolean(slide.takeaway || draft.takeaway);
-  if (key === 'source') return ['chart', 'chart-split', 'table', 'harvey', 'kpi', 'cards', 'comparison', 'matrix', 'gantt', 'architecture', 'tam', 'org', 'marimekko', 'sankey', 'swot', 'value-chain', 'mermaid', 'flowchart', 'sequence'].includes(activeLayout) || Boolean(slide.source || draft.source);
+  if (key === 'source') return ['chart', 'chart-split', 'table', 'harvey', 'kpi', 'cards', 'comparison', 'matrix', 'gantt', 'architecture', 'tam', 'org', 'marimekko', 'sankey', 'swot', 'value-chain', 'mermaid', 'flowchart', 'sequence', 'quadrant', 'radar', 'dumbbell', 'heatmap', 'code', 'mockup'].includes(activeLayout) || Boolean(slide.source || draft.source);
   if (key === 'formula') return (activeLayout === 'callout' && (draft.variant === 'formula' || slide.variant === 'formula')) || Boolean(slide.formula || draft.formula);
   if (key === 'mermaid') return ['mermaid', 'flowchart', 'sequence'].includes(activeLayout) || Boolean(slide.mermaid || draft.mermaid);
+  if (key === 'code' || key === 'language' || key === 'filename') return activeLayout === 'code' || Boolean(slide[key] || draft[key]);
+  if (key === 'url') return activeLayout === 'mockup' || Boolean(slide.url || draft.url);
+  if (key === 'xLabel' || key === 'yLabel') return activeLayout === 'quadrant' || Boolean(slide[key] || draft[key]);
   if (key === 'subtitle') return ['cover', 'section', 'closing', 'quote', 'statement', 'image-left', 'image-right'].includes(activeLayout) || Boolean(slide.subtitle || draft.subtitle);
-  if (key === 'kicker') return ['cover', 'section', 'closing', 'cards', 'kpi', 'bullets', 'chart'].includes(activeLayout) || Boolean(slide.kicker || draft.kicker);
+  if (key === 'kicker') return ['cover', 'section', 'closing', 'cards', 'kpi', 'bullets', 'chart', 'mockup', 'code', 'quadrant', 'radar', 'dumbbell', 'heatmap'].includes(activeLayout) || Boolean(slide.kicker || draft.kicker);
   return Boolean(slide[key] || draft[key] || ['statement', 'callout'].includes(activeLayout));
-}).map(([key, label]) => h('div', { key }, h('label', { htmlFor: controlId+'-'+key }, t(label)), ['title', 'kicker', 'takeaway', 'source'].includes(key) ? h(W.Input, { id: controlId+'-'+key, inputRef: el => { fieldRefs.current[key] = el; }, disabled: busy || dataDirty, value: draft[key] || '', maxLength: 8000, onChange: e => { setDraft({ ...draft, [key]: e.target.value }); setDirty(true); } }) : h('textarea', { id: controlId+'-'+key, ref: el => { fieldRefs.current[key] = el; }, disabled: busy || dataDirty, value: draft[key] || '', rows: key === 'mermaid' ? 5 : key === 'bullets' ? 4 : 2, maxLength: key === 'mermaid' ? 16000 : 8000, placeholder: key === 'formula' ? '\\frac{1}{n}\\sum_{i=1}^{n}(y_i - \\hat{y}_i)^2' : key === 'mermaid' ? 'flowchart LR\n  A([Start]) --> B{Decision}\n  B -->|Yes| C[Result]' : undefined, onChange: e => { setDraft({ ...draft, [key]: e.target.value }); setDirty(true); } }))),h('details',{className:'ppt-image-section',open:!!image},h('summary',null,pptText('图片','Image')),h('label', { htmlFor: controlId+'-image' }, slide.image ? t("替换图片（PNG / JPEG）") : t("添加图片（会改为图文布局）")),
+}).map(([key, label]) => h('div', { key }, h('label', { htmlFor: controlId+'-'+key }, t(label)), ['title', 'kicker', 'takeaway', 'source', 'language', 'filename', 'url', 'xLabel', 'yLabel'].includes(key) ? h(W.Input, { id: controlId+'-'+key, inputRef: el => { fieldRefs.current[key] = el; }, disabled: busy || dataDirty, value: draft[key] || '', maxLength: 8000, onChange: e => { setDraft({ ...draft, [key]: e.target.value }); setDirty(true); } }) : h('textarea', { id: controlId+'-'+key, ref: el => { fieldRefs.current[key] = el; }, disabled: busy || dataDirty, value: draft[key] || '', rows: key === 'code' ? 8 : key === 'mermaid' ? 5 : key === 'bullets' ? 4 : 2, style: key === 'code' ? { fontFamily: 'ui-monospace, Consolas, monospace', fontSize: '12.5px' } : undefined, maxLength: (key === 'mermaid' || key === 'code') ? 16000 : 8000, placeholder: key === 'formula' ? '\\frac{1}{n}\\sum_{i=1}^{n}(y_i - \\hat{y}_i)^2' : key === 'mermaid' ? 'flowchart LR\n  A([Start]) --> B{Decision}\n  B -->|Yes| C[Result]' : key === 'code' ? 'export function run() {\n  return "ok";\n}' : undefined, onChange: e => { setDraft({ ...draft, [key]: e.target.value }); setDirty(true); } }))),h('details',{className:'ppt-image-section',open:!!image},h('summary',null,pptText('图片','Image')),h('label', { htmlFor: controlId+'-image' }, slide.image ? t("替换图片（PNG / JPEG）") : t("添加图片（会改为图文布局）")),
 h('input', { id: controlId+'-image', type: 'file', accept: 'image/png,image/jpeg', disabled: busy || dataDirty, onChange: upload }),
 currentImage && h('img', { className: 'image-preview', src: currentImage, alt: image?.alt || slide.image?.alt || t("当前图片") }),
 image && h(React.Fragment, null, h('p', { className: 'muted' }, t("已选择：") + image.name), h('label', { htmlFor: controlId+'-alt' }, t("图片说明")), h(W.Input, { id: controlId+'-alt', value: image.alt, disabled: busy || dataDirty, onChange: e => setImage({ ...image, alt: e.target.value }) }), h('label', { htmlFor: controlId+'-fit' }, t("图片适应方式")), h('select', { id: controlId+'-fit', value: image.fit, disabled: busy || dataDirty, onChange: e => setImage({ ...image, fit: e.target.value }) }, h('option', { value: 'contain' }, t("完整显示")), h('option', { value: 'cover' }, t("填满并裁切"))))),h('div',{className:'tools'},h(W.Button, { variant: 'primary', icon: 'check', 'aria-keyshortcuts': 'Control+S Meta+S', disabled: busy || dataDirty || imagePending || !dirty, onClick: () => save(false) }, t("保存此页")),h(W.Button, { icon: 'copy', 'aria-keyshortcuts': 'Control+Shift+S Meta+Shift+S', disabled: busy || dataDirty || imagePending, onClick: () => save(true) }, t("另存副本")),
@@ -1338,7 +1420,7 @@ h(W.Button, { icon: 'reply', disabled: busy || dirty || imagePending || dataDirt
  downloadOpen && project ? h(W.Dialog,{className:'pptw ppt-dialog',title:pptText('下载成品','Download output'),closeLabel:pptText('关闭','Close'),onClose:()=>setDownloadOpen(false)},h('div',{className:'ppt-downloads'},
  h('p',{className:'muted'},pptText('分享包包含 PPTX、HTML 和讲稿，不含工程 JSON；工程包保留完整编辑资料。请先保存修改，再下载最新版本。','The share bundle contains PPTX, HTML and speaker notes, without the project JSON. The project bundle keeps full editing data. Save edits before downloading.')),
  h('p',{className:'muted'},pptText('HTML、PPTX 备注和讲稿保留已绑定的来源摘录与用户填写内容。','HTML, PPTX notes and speaker notes retain bound source excerpts and authored content.')),
- h('div', { className: 'tools' }, h(W.Button, { variant: 'primary', icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('share') }, pptText('下载分享成品包 ZIP','Download share bundle ZIP')),h(W.Button,{icon:'download',disabled:busy || dirty || imagePending || dataDirty,onClick:()=>download('bundle')},pptText('下载完整工程包 ZIP','Download project bundle ZIP')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('pptx') }, t("下载最新 PPTX")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('html') }, t("下载 HTML")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('onepager') }, pptText('下载高管一页纸 (.html)', 'Download Executive One-Pager (.html)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('remotion') }, pptText('导出 Remotion 视频分镜包 (.zip)', 'Export Remotion Video Bundle (.zip)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('handout') }, pptText('下载演讲讲义 (.md)', 'Download Handout')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('notes') }, t("下载讲稿 Markdown")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('json') }, t("备份工程"))))) : null,
+ h('div', { className: 'tools' }, h(W.Button, { variant: 'primary', icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('share') }, pptText('下载分享成品包 ZIP','Download share bundle ZIP')),h(W.Button,{icon:'download',disabled:busy || dirty || imagePending || dataDirty,onClick:()=>download('bundle')},pptText('下载完整工程包 ZIP','Download project bundle ZIP')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('pptx') }, t("下载最新 PPTX")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('pdf') }, t("导出高精 PDF (.pdf)")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('png-zip') }, t("导出逐页 PNG 图包 (.zip)")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('html') }, t("下载 HTML")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('onepager') }, pptText('下载高管一页纸 (.html)', 'Download Executive One-Pager (.html)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('remotion') }, pptText('导出 Remotion 视频分镜包 (.zip)', 'Export Remotion Video Bundle (.zip)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('handout') }, pptText('下载演讲讲义 (.md)', 'Download Handout')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('notes') }, t("下载讲稿 Markdown")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('json') }, t("备份工程"))))) : null,
  pendingNav ? h(W.Dialog,{className:'pptw ppt-dialog',title:pptText('有未保存的修改','Unsaved changes'),closeLabel:pptText('继续编辑','Keep editing'),busy,onClose:()=>setPendingNav(null)},h('p',null,pptText('请选择如何处理当前页的修改。','Choose what to do with the current slide edits.')),h(W.Status,{tone:'error'},error),h('div',{className:'w-toolbar'},h(W.Button,{variant:'primary',icon:'check',disabled:busy || imagePending || dataDirty,onClick:async()=>{const target=pendingNav;const result=await save();if(result?.project && alive.current)finishNavigation(target,result.project);}},pptText('保存后继续','Save and continue')),h(W.Button,{icon:'close',disabled:busy,onClick:()=>finishNavigation(pendingNav)},pptText('放弃修改并继续','Discard and continue')),h(W.Button,{variant:'ghost',disabled:busy,onClick:()=>setPendingNav(null)},pptText('继续编辑','Keep editing')))) : null,
  deleteOpen && project ? h(W.Dialog,{className:'pptw ppt-dialog',title:t('删除本页'),closeLabel:pptText('取消','Cancel'),busy,onClose:()=>setDeleteOpen(false)},h('p',null,pptText('将删除当前页面，之后可以撤销。','Remove the current slide. You can undo this change.')),h(W.Status,{tone:'error'},error),h('div',{className:'w-toolbar'},h(W.Button,{variant:'danger',icon:'trash',disabled:busy,onClick:async()=>{const result=await structure('remove');if(result)setDeleteOpen(false);}},pptText('确认删除本页','Confirm remove slide')),h(W.Button,{disabled:busy,onClick:()=>setDeleteOpen(false)},pptText('取消','Cancel')))) : null,
  typeof PptCreateDialog === 'function' ? h(PptCreateDialog, { open: createOpen, initialMode: createMode, busy, onClose: () => setCreateOpen(false), onCreate: createDeck, onCreateDemo: createDemo, onImport: importDeck, onImportOffice: importOfficeDeck, onError: setError }) : null);
