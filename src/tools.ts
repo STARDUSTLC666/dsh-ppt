@@ -329,6 +329,7 @@ const brandProperties = {
   coverMode: { type: 'string', enum: ['standard', 'inverted-accent'], description: 'Optional cover polarity override.' },
   coverBg: { type: 'string', description: 'Optional #RRGGBB cover background color when coverMode is inverted-accent.' },
   logo: { type: ['string', 'null'], description: 'Local PNG/JPEG logo path or data URI; null clears logo during edit.' }, footer: { type: 'string' },
+  watermark: { type: 'string', description: 'Optional subtle corporate classification stamp rendered on content slides (e.g. "CONFIDENTIAL · 内部资料", max 48 chars).' },
   chromeStyle: {
     description: 'Master chrome skeleton override: ' + ALLOWED_CHROME_STYLES.join(' | ') + ' (or null to clear during edit).',
     oneOf: [
@@ -522,6 +523,10 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         tasteName: { type: 'string', description: 'Optional display name when saving the absorbed StyleRecipe.' },
         saveExemplarAs: { type: 'string', description: 'Optional ID to save the absorbed slide skeleton & brand DNA as a reusable Slot-Filling Exemplar in workspace .dsh-ppt/exemplars.json (reusable via exemplar).' },
         exemplarName: { type: 'string', description: 'Optional display name when saving the absorbed Exemplar.' },
+        saveBrandKit: { type: 'boolean', description: 'Persist the absorbed corporate palette, fonts, logo & chrome as workspace locked .dsh-ppt/brand-kit.json (SLOP-14 compliance lock).' },
+        brandKitName: { type: 'string', description: 'Optional corporate brand kit display name when saveBrandKit is true.' },
+        watermark: { type: 'string', description: 'Optional subtle content-slide classification watermark locked into the brand kit (e.g. "CONFIDENTIAL · 内部资料").' },
+        forbiddenTerms: { type: 'array', items: { type: 'string' }, description: 'Optional corporate compliance forbidden terms scanned automatically by SLOP-14.' },
       }),
       output: {
         schema: { type: 'object', additionalProperties: true },
@@ -553,6 +558,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         dataModel: {type:'object',properties:{schemaVersion:{type:'integer',enum:[1]},sources:{type:'array',items:{type:'object',properties:sourceProperties,required:['id']}},metrics:{type:'array',items:{type:'object',properties:metricProperties,required:['id','kind']}}},additionalProperties:false,description:'Optional explicit lineage and what-if model. Use with structured slides containing {{metricId}} in text/items/takeaway/tables or an exact token as chart values. Source facts reference a real cell or text line; assumptions require value/min/max/step. Formulas compute derived metrics. HTML offers live sliders; PPTX includes confirmed static values, formulas and assumptions in speaker notes. Leave absent for ordinary finished decks.'},
         evidence: { type: 'array', items: evidenceEntrySchema, description: 'Structured verified Evidence Ledger collected via external search & fact-checking. Automatically binds [E#] / evidenceIds to clean slide source footers, detailed speaker-notes provenance blocks, handout ledger table, and SLOP-13 fact-hygiene auditing.' },
         evidenceAppendix: { type: 'boolean', description: 'When evidence[] is provided, automatically insert a clean booktabs "Sources & Fact-Verification Ledger" appendix slide before the closing slide (default false).' },
+        useBrandKit: { type: 'boolean', description: 'Automatically apply workspace .dsh-ppt/brand-kit.json corporate brand lock & SLOP-14 compliance gate when present (default true; pass false to opt out).' },
         outputDir: { type: 'string', description: 'Directory to write the files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: sanitized deck title.' },
         overwrite: { type: 'boolean', description: 'Replace an existing same-name HTML/PPTX/JSON trio. Default false: choose a unique numeric suffix instead.' },
@@ -606,6 +612,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         referencePptx: { type: 'string', description: 'Optional local reference .pptx path to absorb sanitized palette/fonts/logo and chrome skeleton onto this project (undoable).' },
         brand: { type: ['object', 'null'], properties: brandProperties, additionalProperties: false, description: 'Merge shared branding. null clears all branding. Empty footer clears footer; logo:null clears logo.' },
         targetMinutes: { type: ['number', 'null'], description: 'Optional target speaking duration in minutes for pace budgeting (null clears).' },
+        remixPreset: { type: 'string', enum: ['exec-5min', 'board-brief', 'sales-pitch'], description: 'Multi-audience compression remix preset (exec-5min: 6 slides / board-brief: 8 slides / sales-pitch: 7 slides). Preserves omitted takeaways in speaker notes and defaults saveAs to true.' },
       }),
       output: { schema: createResultSchema, render: (_args, value) => renderCreate(value as PptCreateResult) },
       execute: executors.edit,
@@ -673,9 +680,10 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
     },
     {
       name: 'ppt_from_office',
-      description: 'Import an Excel workbook (.xlsx), CSV/TSV dataset, or Word document (.docx) directly into a polished, multi-slide dsh-ppt presentation (HTML, editable PPTX, and JSON project) using deterministic data-to-visual profiling (Sankey, Gantt, Marimekko, Waterfall, combo charts, tables, and structured narrative slides). 中文：直吞本地 .xlsx / .csv / .tsv / .docx 文档并智能拆分为高颜值多页演示文稿三件套。',
+      description: 'Import an Excel workbook (.xlsx), CSV/TSV dataset, Word document (.docx), local PDF (.pdf), OR a whole multi-source pack (local directory path or filePaths[] combining docs + tables + PDFs + images) directly into a polished, multi-slide dsh-ppt presentation (HTML, editable PPTX, JSON project, and auto-generated [E1..En] Evidence Ledger for multi-source packs). 中文：直吞本地 .xlsx / .csv / .tsv / .docx / .pdf 单文件或整个混合素材目录，自动完成数据视觉画像、多源融合与 [E1..En] 证据溯源台账绑定。',
       parameters: compileParameters({
-        filePath: { type: 'string', required: true, description: 'Local .xlsx, .csv, .tsv, or .docx file path, relative to session cwd or absolute.' },
+        filePath: { type: 'string', required: true, description: 'Local .xlsx, .csv, .tsv, .docx, .pdf file path OR a local directory containing mixed source files (relative to session cwd or absolute).' },
+        filePaths: { type: 'array', items: { type: 'string' }, description: 'Optional additional local file paths (.xlsx/.csv/.tsv/.docx/.pdf/.png/.jpg/.webp) to fuse together with filePath into one deck with automatic [E1..En] source provenance.' },
         outputDir: { type: 'string', description: 'Directory to write the generated files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: derived from source file or title.' },
         theme: { type: 'string', description: 'Target built-in theme id (or "auto", default "auto").' },

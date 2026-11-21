@@ -43,6 +43,8 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'radar', zh: '多维雷达图', en: 'Radar chart', group: 'data', quick: true, variants: [] },
   { id: 'dumbbell', zh: '哑铃 / 前后跃迁图', en: 'Dumbbell slope', group: 'data', quick: true, variants: [] },
   { id: 'heatmap', zh: '矩阵热力图', en: 'Heatmap matrix', group: 'data', quick: true, variants: [] },
+  { id: 'map', zh: '全球 / 中国点阵地图', en: 'World / China Map', group: 'data', quick: true, variants: [['world', '全球地图', 'World map'], ['china', '中国版图', 'China map']] },
+  { id: 'isometric', zh: '2.5D 等轴测立体图', en: '2.5D Isometric', group: 'structured', quick: true, variants: [['stack', '立体分层堆叠', '3D layer stack'], ['pillars', '立体柱碑阶梯', '3D pillars']] },
   { id: 'table', zh: '表格 / 学术三线表', en: 'Table', group: 'data', quick: true, variants: [] },
   { id: 'chart', zh: '原生数据图表', en: 'Chart', group: 'data', variants: [] },
   { id: 'chart-split', zh: '图表 + 洞察分栏', en: 'Chart + insights', group: 'data', variants: [['chart-left', '左图右洞察', 'Chart left'], ['chart-right', '左洞察右图', 'Chart right']] },
@@ -54,7 +56,7 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'closing', zh: '结束与行动号召', en: 'Closing & CTA', group: 'framing', variants: [['standard', '标准致谢', 'Standard'], ['cta-cards', '行动卡片', 'CTA cards'], ['inverted', '深色封底', 'Inverted']] },
 ]);
 
-const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain', 'mockup', 'quadrant', 'dumbbell']);
+const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain', 'mockup', 'quadrant', 'dumbbell', 'map', 'isometric']);
 
 function pptLayoutMeta(layout) {
   return PPT_LAYOUT_CATALOG.find(item => item.id === layout) || { id: layout || 'bullets', zh: layout || '要点', en: layout || 'Bullets', group: 'structured', variants: [] };
@@ -321,6 +323,36 @@ function projectDraftToLayout(draft, nextLayout) {
       ? [['Region / Qtr', 'Q1', 'Q2', 'Q3', 'Q4'], ['North America', 68, 76, 84, 94], ['Europe', 54, 62, 71, 82], ['APAC', 72, 81, 89, 97], ['LATAM', 38, 45, 58, 69]]
       : [['大区 / 季度', 'Q1', 'Q2', 'Q3', 'Q4'], ['华东区', 68, 76, 84, 94], ['华北区', 54, 62, 71, 82], ['华南区', 72, 81, 89, 97], ['西南区', 38, 45, 58, 69]]);
   }
+  if (nextLayout === 'map' && next.items.length === 0) {
+    const en = languageOf() === 'en';
+    next.variant = next.variant || (en ? 'world' : 'china');
+    next.items = en
+      ? [
+          { tag: 'NA', title: 'North America', text: '', value: '$42M', unit: '', delta: '+28%', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'EU', title: 'Europe', text: '', value: '$29M', unit: '', delta: '+22%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'APAC', title: 'Asia-Pacific', text: '', value: '$36M', unit: '', delta: '+41%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+        ]
+      : [
+          { tag: '华东', title: '华东大区', text: '', value: '¥4.2亿', unit: '', delta: '+34%', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: '华南', title: '华南大区', text: '', value: '¥3.1亿', unit: '', delta: '+29%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: '华北', title: '华北大区', text: '', value: '¥2.4亿', unit: '', delta: '+18%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+        ];
+  }
+  if (nextLayout === 'isometric' && next.items.length === 0) {
+    const en = languageOf() === 'en';
+    next.variant = next.variant || 'stack';
+    next.items = en
+      ? [
+          { tag: 'L4', title: 'Agent Applications', text: 'Executive studio & interactive delivery', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'L3', title: 'Orchestration Engine', text: 'Layout compiler & SLOP compliance gates', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'L2', title: 'Evidence & Brand Lock', text: 'Verified provenance ledger & brand kit', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+        ]
+      : [
+          { tag: 'L4', title: '业务应用与交互层', text: '工作台预览、双屏提词与社媒长图交付', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'L3', title: '智能编排与合规层', text: '版式编译器、审美升维与 SLOP-14 门禁', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'L2', title: '证据账本与品牌锁', text: '多源融合溯源与企业品牌宪章锁', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+        ];
+  }
   return next;
 }
 
@@ -430,7 +462,20 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
           h('option', { value: '' }, L('默认纯净底纹', 'Default clean')),
           h('option', { value: 'dots' }, L('建筑点阵 (Dots)', 'Architectural dots')),
           h('option', { value: 'grid' }, L('细线坐标网 (Grid)', 'Micro blueprint grid')),
-          h('option', { value: 'rings' }, L('同心圆环 (Rings)', 'Concentric rings')))) : null),
+          h('option', { value: 'rings' }, L('同心圆环 (Rings)', 'Concentric rings')),
+          h('option', { value: 'waves' }, L('流体拓扑波纹 (Waves)', 'Topographic waves')),
+          h('option', { value: 'isometric-mesh' }, L('2.5D 菱形网格 (Iso Mesh)', 'Isometric mesh')),
+          h('option', { value: 'editorial-arcs' }, L('极简社论弧线 (Editorial Arcs)', 'Editorial arcs')))) : null),
+    meta.variants.length > 1 ? h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('一键形态变形 (Layout Morph)', 'Layout Morph quick variants') },
+      h('span', { className: 'w-muted', style: { fontSize: '11.5px', alignSelf: 'center', marginInlineEnd: '4px' } }, L('一键变形：', 'Morph:')),
+      meta.variants.map(([v, zh, en]) => h('button', {
+        type: 'button',
+        key: v,
+        className: 'ppt-pill',
+        'aria-pressed': (draft.variant || '') === v ? 'true' : 'false',
+        disabled,
+        onClick: () => onChange({ ...draft, variant: v }),
+      }, L(zh, en)))) : null,
     currentLayout === 'gantt' ? h('div', { className: 'ppt-structured-section' },
       h('label', { htmlFor: controlId + '-columns' }, L('时间轴列头（逗号分隔，如 Q1, Q2, Q3, Q4）', 'Timeline columns (comma-separated, e.g. Q1, Q2, Q3, Q4)')),
       h('input', {
@@ -609,6 +654,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     fontFamily: savedBrand.fontFamily || '',
     headingFont: savedBrand.headingFont || '',
     footer: savedBrand.footer || '',
+    watermark: savedBrand.watermark || '',
     logo: savedBrand.logo || '',
     chromeStyle: savedBrand.chromeStyle || '',
   }));
@@ -628,6 +674,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
       fontFamily: next.fontFamily || '',
       headingFont: next.headingFont || '',
       footer: next.footer || '',
+      watermark: next.watermark || '',
       logo: next.logo || '',
       chromeStyle: next.chromeStyle || '',
     });
@@ -762,6 +809,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     const payload = {
       name: brandDraft.name.trim(),
       footer: brandDraft.footer.trim(),
+      watermark: brandDraft.watermark.trim(),
       ...(brandDraft.primaryColor.trim() ? { primaryColor: brandDraft.primaryColor.trim() } : {}),
       ...(brandDraft.secondaryColor.trim() ? { secondaryColor: brandDraft.secondaryColor.trim() } : {}),
       ...(brandDraft.backgroundColor.trim() ? { backgroundColor: brandDraft.backgroundColor.trim() } : {}),
@@ -1032,6 +1080,8 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
         PPT_CHROME_SKELETONS.map(sk => h('option', { key: sk.id, value: sk.id }, L(sk.zh, sk.en)))),
       h('label', { htmlFor: controlId + '-brand-footer' }, L('统一页脚文字', 'Shared footer')),
       h('input', { id: controlId + '-brand-footer', value: brandDraft.footer, disabled, maxLength: 200, placeholder: L('例如：战略发展部 · 2026 Q4', 'e.g. Strategy Team · 2026'), onChange: e => setBrandDraft({ ...brandDraft, footer: e.target.value }) }),
+      h('label', { htmlFor: controlId + '-brand-watermark' }, L('企业保密水印（内容页右上角）', 'Confidential watermark (content slides)')),
+      h('input', { id: controlId + '-brand-watermark', value: brandDraft.watermark, disabled, maxLength: 48, placeholder: L('例如：CONFIDENTIAL · 内部资料', 'e.g. CONFIDENTIAL · INTERNAL'), onChange: e => setBrandDraft({ ...brandDraft, watermark: e.target.value }) }),
       h('label', { htmlFor: controlId + '-brand-logo' }, L('上传品牌 Logo（PNG / JPEG）', 'Upload brand logo (PNG / JPEG)')),
       h('input', { id: controlId + '-brand-logo', type: 'file', accept: 'image/png,image/jpeg', disabled, onChange: handleLogoUpload }),
       brandDraft.logo ? h('div', { className: 'tools' },

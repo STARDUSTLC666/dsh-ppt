@@ -17,7 +17,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listThemes, THEME_IDS, DEFAULT_THEME } from './deck-themes.mjs'
 import { CHROME_STYLE_IDS } from './deck-absorb.mjs'
-import { buildDeckAsync, listTemplates, editDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus, buildResearchPlan } from './deck-advanced.mjs'
+import { buildDeckAsync, listTemplates, editDeck, remixDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus, buildResearchPlan, saveWorkspaceBrandKit, loadWorkspaceBrandKit } from './deck-advanced.mjs'
 
 const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
@@ -46,13 +46,19 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --list-tastes           列出内置 8 套大师审美配方及当前工作区已吸收的标杆配方
   --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架、深度审美配方 styleRecipe 与逐页分布 JSON
   --import-pptx <path>    导入外部 .pptx 全量内容（标题/要点/表格/图表/图片/备注）并一键翻新为 dsh-ppt 工程
-  --from-office <path>    直吞 .xlsx / .csv / .tsv / .docx 数据表或 Word 报告，自动画像并生成全套文稿
+  --from-office <path>    直吞 .xlsx / .csv / .tsv / .docx / .pdf 或本地混合素材目录，自动画像并生成全套文稿（多文件自动生成证据溯源账本）
   --sync-pptx <path>      将 Office 修改后的 .pptx 内容回导同步至已有工程（自动写入 .history/ 支持撤销）
   --target-project <dir>  配合 --sync-pptx 指定目标工程目录（或传 --edit <deck.json>）
   --preserve-theme        配合 --import-pptx 使用，保留原 .pptx 净化后的品牌配色与 Logo
   --no-modernize          配合 --import-pptx/--sync-pptx 关闭自动版式升维
+  --save-brand-kit <json|@path> 将企业品牌宪章锁持久化至 .dsh-ppt/brand-kit.json（支持配合 --absorb 直接传 true）
+  --no-brand-kit          本次建稿忽略工作区已锁定的 .dsh-ppt/brand-kit.json
+  --remix <deck.json>     多受众智能压缩改编（默认另存副本，被折叠页要点无损归档至备注）
+  --preset <id>           配合 --remix 指定目标受众预设：exec-5min / board-brief / sales-pitch
   --handout               同时生成 <file>.handout.md 演讲者讲义与逐字稿文件
   --one-pager             同时生成 <file>.onepager.html 高管一页纸战报（默认不额外写盘，可在检查面板离线导出）
+  --social-carousel [4:5|1:1] 同时导出 <file>.carousel.html 社媒竖版/方形长图卡片（小红书/LinkedIn/微信）
+  --subtitles [srt|vtt]   同时导出 <file>.srt 或 <file>.vtt 配音时间轴字幕文件
   --target-minutes <n>    指定演讲目标总时长（分钟），计算逐页配速预算并标记超预算页
   --smart-layout          显式开启多版式叙事节奏自动升维（配合 --no-smart-layout 可关闭）
   --brand <json|@path>    品牌主辅颜色、标题/正文字体、封面反白、Logo、页脚、chromeStyle
@@ -133,8 +139,26 @@ export function parseArgv(argv) {
     else if (key === '--target-project') args.targetProject = nextValue()
     else if (key === '--preserve-theme') args.preserveTheme = true
     else if (key === '--no-modernize') args.modernize = false
+    else if (key === '--save-brand-kit') {
+      const peek = inline !== null ? inline : argv[i + 1]
+      if (peek !== undefined && !String(peek).startsWith('--')) args.saveBrandKit = nextValue()
+      else args.saveBrandKit = true
+    }
+    else if (key === '--no-brand-kit') args.useBrandKit = false
+    else if (key === '--remix') args.remix = nextValue()
+    else if (key === '--preset') args.preset = nextValue()
     else if (key === '--handout') args.handout = true
     else if (key === '--one-pager') args.onePager = true
+    else if (key === '--social-carousel') {
+      const peek = inline !== null ? inline : argv[i + 1]
+      if (peek === '4:5' || peek === '1:1') args.socialCarousel = nextValue()
+      else args.socialCarousel = '4:5'
+    }
+    else if (key === '--subtitles') {
+      const peek = inline !== null ? inline : argv[i + 1]
+      if (peek === 'srt' || peek === 'vtt') args.subtitles = nextValue()
+      else args.subtitles = 'srt'
+    }
     else if (key === '--target-minutes') args.targetMinutes = Number(nextValue())
     else if (key === '--brand') args.brand = readJson(nextValue())
     else if (key === '--data-model') args.dataModel = readJson(nextValue())
@@ -202,6 +226,21 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     log(JSON.stringify(report, null, 2))
     return 0
   }
+  if (args.saveBrandKit && !args.absorb) {
+    const rawKit = typeof args.saveBrandKit === 'string' ? readJson(args.saveBrandKit) : {}
+    const saved = saveWorkspaceBrandKit(process.cwd(), rawKit)
+    log(JSON.stringify(saved, null, 2))
+    return 0
+  }
+  if (args.remix) {
+    const remixed = await remixDeck({
+      deckPath: args.remix,
+      preset: args.preset || 'exec-5min',
+      expectedRevision: args.revision,
+    })
+    log(JSON.stringify(remixed, null, 2))
+    return 0
+  }
   if ([args.edit && !args.syncPptx ? args.edit : null, args.undo, args.check, args.render, args.absorb, args.importPptx, args.syncPptx, args.fromOffice].filter(Boolean).length > 1) {
     throw new Error('dsh-ppt CLI：--edit / --undo / --check / --render / --absorb / --import-pptx / --sync-pptx / --from-office 只能选择一项')
   }
@@ -252,10 +291,14 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return 0
   }
   if (args.absorb) {
+    const saveBk = args.saveBrandKit === true
+      ? true
+      : (typeof args.saveBrandKit === 'string' && args.saveBrandKit !== 'true' ? readJson(args.saveBrandKit) : (args.saveBrandKit === 'true' ? true : undefined))
     const absorbed = await absorbPptx({
       pptxPath: args.absorb,
       ...(args.saveTaste ? { saveTasteAs: args.saveTaste } : {}),
       ...(args.saveExemplar ? { saveExemplarAs: args.saveExemplar } : {}),
+      ...(saveBk !== undefined ? { saveBrandKit: saveBk } : {}),
     })
     log(JSON.stringify(absorbed, null, 2))
     return 0
@@ -325,8 +368,11 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     dataModel: args.dataModel,
     ...(args.evidence !== undefined ? { evidence: args.evidence } : {}),
     ...(args.evidenceAppendix ? { evidenceAppendix: true } : {}),
+    ...(args.useBrandKit === false ? { useBrandKit: false } : {}),
     ...(args.handout ? { handout: true } : {}),
     ...(args.onePager ? { onePager: true } : {}),
+    ...(args.socialCarousel ? { socialCarousel: args.socialCarousel } : {}),
+    ...(args.subtitles ? { subtitles: args.subtitles } : {}),
     ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
   }
   const result = await buildDeckAsync(options)
@@ -336,6 +382,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   log('  Manifest ：' + result.jsonPath)
   if (result.handoutPath) log('  讲义 Handout：' + result.handoutPath)
   if (result.onePagerPath) log('  高管一页纸：' + result.onePagerPath)
+  if (result.carouselPath) log('  社媒长图卡片：' + result.carouselPath)
+  if (result.subtitlesPath) log('  配音字幕：' + result.subtitlesPath)
   if (result.deliveryStatus === 'draft') log('  草稿：还有待填写内容，不可作为成品交付。')
   log('  质量检查：' + result.quality.errorCount + ' 个错误 / ' + result.quality.warningCount + ' 个提醒；修订号 ' + result.revision)
   return 0

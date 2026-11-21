@@ -17,10 +17,10 @@
  *      经智能导演 + smartLayout 生成 5–20 页高品味演示文稿。
  */
 
-import { lstatSync, readFileSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { basename, extname, posix, resolve } from 'node:path'
-import { inflateRawSync } from 'node:zlib'
+import { basename, extname, join, posix, resolve } from 'node:path'
+import { inflateRawSync, inflateSync } from 'node:zlib'
 import { promoteMarkdownSlides, inferThemeFromContent } from './deck-director.mjs'
 
 const MAX_OFFICE_BYTES = 32 * 1024 * 1024
@@ -208,8 +208,8 @@ function readOfficeInput(options = {}) {
     extname(sourceName).slice(1) ||
     extname(resolvedPath).slice(1)
   ).toLowerCase().trim()
-  if (!['xlsx', 'csv', 'tsv', 'docx'].includes(rawExt)) {
-    fail('仅支持导入 .xlsx、.csv、.tsv 或 .docx 文件，当前格式：' + (rawExt || '未知'))
+  if (!['xlsx', 'csv', 'tsv', 'docx', 'pdf'].includes(rawExt)) {
+    fail('仅支持导入 .xlsx、.csv、.tsv、.docx 或 .pdf 文件，当前格式：' + (rawExt || '未知'))
   }
 
   return {
@@ -1444,14 +1444,618 @@ function parseDocxArchive(bytes, fileName) {
 }
 
 // ---------------------------------------------------------------------------
-// Public API: extractOfficeSource & importOfficeDeck
+// Zero-dep Pure-Node .pdf Text & Section Extractor (FlateDecode + BT/ET + UTF-16BE)
 // ---------------------------------------------------------------------------
 
-/**
- * Extract structured slides & metadata from `.xlsx`, `.csv`, `.tsv`, or `.docx`.
- * Zero external new dependencies (uses Node zlib inflateRawSync + lazy csv-parse).
- */
-export async function extractOfficeSource(options = {}) {
+function decodeUtf16BeBytes(bytes) {
+  let out = ''
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    out += String.fromCharCode((bytes[i] << 8) | bytes[i + 1])
+  }
+  return out
+}
+
+function decodePdfLiteralString(raw) {
+  const bytes = []
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i]
+    if (ch === '\\' && i + 1 < raw.length) {
+      const next = raw[i + 1]
+      if (next === 'n') { bytes.push(0x0a); i += 1 }
+      else if (next === 'r') { bytes.push(0x0d); i += 1 }
+      else if (next === 't') { bytes.push(0x09); i += 1 }
+      else if (next === 'b') { bytes.push(0x08); i += 1 }
+      else if (next === 'f') { bytes.push(0x0c); i += 1 }
+      else if (next === '\r' || next === '\n') {
+        i += 1
+        if (next === '\r' && raw[i + 1] === '\n') i += 1
+      } else if (next >= '0' && next <= '7') {
+        let oct = next
+        if (raw[i + 2] >= '0' && raw[i + 2] <= '7') {
+          oct += raw[i + 2]
+          if (raw[i + 3] >= '0' && raw[i + 3] <= '7') oct += raw[i + 3]
+        }
+        bytes.push(Number.parseInt(oct, 8) & 0xff)
+        i += oct.length
+      } else {
+        bytes.push(next.charCodeAt(0) & 0xff)
+        i += 1
+      }
+    } else {
+      bytes.push(ch.charCodeAt(0) & 0xff)
+    }
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return decodeUtf16BeBytes(bytes.slice(2))
+  }
+  const buf = Buffer.from(bytes)
+  const utf8 = buf.toString('utf8')
+  return utf8.includes('\uFFFD') ? buf.toString('latin1') : utf8
+}
+
+function decodePdfHexString(hexRaw, cmap) {
+  const cleanHex = String(hexRaw ?? '').replace(/[^0-9A-Fa-f]/g, '')
+  if (!cleanHex) return ''
+  const padded = cleanHex.length % 2 === 1 ? cleanHex + '0' : cleanHex
+  const bytes = []
+  for (let i = 0; i < padded.length; i += 2) {
+    bytes.push(Number.parseInt(padded.slice(i, i + 2), 16))
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return decodeUtf16BeBytes(bytes.slice(2))
+  }
+  if (cmap && cmap.size > 0) {
+    let mapped = ''
+    let hits = 0
+    if (padded.length % 4 === 0) {
+      for (let i = 0; i < padded.length; i += 4) {
+        const key = padded.slice(i, i + 4).toUpperCase()
+        if (cmap.has(key)) { mapped += cmap.get(key); hits += 1 }
+      }
+      if (hits > 0) return mapped
+    }
+    for (let i = 0; i < padded.length; i += 2) {
+      const key = padded.slice(i, i + 2).toUpperCase()
+      if (cmap.has(key)) { mapped += cmap.get(key); hits += 1 }
+    }
+    if (hits > 0) return mapped
+  }
+  if (bytes.length >= 2 && bytes.length % 2 === 0 && bytes.some((b, idx) => idx % 2 === 0 && b >= 0x4e && b <= 0x9f)) {
+    return decodeUtf16BeBytes(bytes)
+  }
+  const buf = Buffer.from(bytes)
+  const utf8 = buf.toString('utf8')
+  return utf8.includes('\uFFFD') ? buf.toString('latin1') : utf8
+}
+
+function parseToUnicodeCmap(text, cmap) {
+  for (const m of text.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+    for (const pair of m[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+      const src = pair[1].toUpperCase()
+      const dst = decodePdfHexString('FEFF' + pair[2], null)
+      if (dst) cmap.set(src, dst)
+    }
+  }
+  for (const m of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
+    for (const rng of m[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+      const start = Number.parseInt(rng[1], 16)
+      const end = Number.parseInt(rng[2], 16)
+      const dstStart = Number.parseInt(rng[3], 16)
+      const width = rng[1].length
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start <= 256) {
+        for (let code = start; code <= end; code += 1) {
+          const key = code.toString(16).toUpperCase().padStart(width, '0')
+          cmap.set(key, String.fromCodePoint(dstStart + (code - start)))
+        }
+      }
+    }
+  }
+}
+
+function extractLinesFromPdfContent(contentStr, cmap) {
+  const lines = []
+  let current = ''
+  const flush = () => {
+    const cleaned = current.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim()
+    if (cleaned.length >= 2) lines.push(cleaned)
+    current = ''
+  }
+
+  const btBlocks = [...contentStr.matchAll(/BT\b([\s\S]*?)\bET\b/g)].map(m => m[1])
+  const targets = btBlocks.length > 0 ? btBlocks : [contentStr]
+
+  for (const block of targets) {
+    let i = 0
+    while (i < block.length) {
+      const ch = block[i]
+      if (ch === '(') {
+        // Parse balanced literal string
+        let depth = 1
+        let start = i + 1
+        i += 1
+        while (i < block.length && depth > 0) {
+          if (block[i] === '\\') { i += 2; continue }
+          if (block[i] === '(') depth += 1
+          else if (block[i] === ')') depth -= 1
+          i += 1
+        }
+        const literal = block.slice(start, i - 1)
+        const after = block.slice(i, i + 12)
+        if (/^\s*(?:Tj|'|")/.test(after)) {
+          current += decodePdfLiteralString(literal)
+          if (/^\s*(?:'|")/.test(after)) flush()
+        }
+      } else if (ch === '<' && block[i + 1] !== '<') {
+        const end = block.indexOf('>', i + 1)
+        if (end > i) {
+          const hex = block.slice(i + 1, end)
+          const after = block.slice(end + 1, end + 12)
+          if (/^\s*(?:Tj|'|")/.test(after)) {
+            current += decodePdfHexString(hex, cmap)
+          }
+          i = end + 1
+          continue
+        }
+        i += 1
+      } else if (ch === '[') {
+        // Parse TJ array
+        let j = i + 1
+        let chunk = ''
+        while (j < block.length && block[j] !== ']') {
+          if (block[j] === '(') {
+            let depth = 1
+            const sStart = j + 1
+            j += 1
+            while (j < block.length && depth > 0) {
+              if (block[j] === '\\') { j += 2; continue }
+              if (block[j] === '(') depth += 1
+              else if (block[j] === ')') depth -= 1
+              j += 1
+            }
+            chunk += decodePdfLiteralString(block.slice(sStart, j - 1))
+          } else if (block[j] === '<' && block[j + 1] !== '<') {
+            const hEnd = block.indexOf('>', j + 1)
+            if (hEnd > j) {
+              chunk += decodePdfHexString(block.slice(j + 1, hEnd), cmap)
+              j = hEnd + 1
+            } else j += 1
+          } else if (block[j] === '-' || (block[j] >= '0' && block[j] <= '9')) {
+            const numMatch = /^-?\d+(?:\.\d+)?/.exec(block.slice(j))
+            if (numMatch) {
+              if (Number(numMatch[0]) <= -180 && chunk && !chunk.endsWith(' ')) chunk += ' '
+              j += numMatch[0].length
+            } else j += 1
+          } else {
+            j += 1
+          }
+        }
+        const after = block.slice(j + 1, j + 10)
+        if (/^\s*TJ\b/.test(after)) {
+          current += chunk
+        }
+        i = j + 1
+      } else {
+        // Detect line-break operators T*, Td, TD, Tm
+        if ((ch === 'T' && (block[i + 1] === '*' || block[i + 1] === 'd' || block[i + 1] === 'D' || block[i + 1] === 'm'))
+            && (i === 0 || /\s/.test(block[i - 1]))
+            && (i + 2 >= block.length || /\s/.test(block[i + 2]))) {
+          if (current.trim()) flush()
+          i += 2
+          continue
+        }
+        i += 1
+      }
+    }
+    flush()
+  }
+  return lines
+}
+
+export function extractPdfText(bytes) {
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
+  const head = buf.subarray(0, Math.min(1024, buf.length)).toString('latin1')
+  if (!head.includes('%PDF-')) {
+    fail('无效的 PDF 文件头（缺少 %PDF- 标识）', 'Invalid PDF header')
+  }
+  const latin = buf.toString('latin1')
+  if (/\/Encrypt\b/.test(latin)) {
+    fail('当前 PDF 已加密，暂不支持直接解析加密 PDF，请先解除密码保护后重试', 'Encrypted PDF is not supported')
+  }
+
+  let docTitle = ''
+  const titleLit = /\/Title\s*\(([^()]{1,240})\)/.exec(latin)
+  const titleHex = /\/Title\s*<([0-9A-Fa-f]{4,480})>/.exec(latin)
+  if (titleLit) docTitle = cleanLine(decodePdfLiteralString(titleLit[1]))
+  else if (titleHex) docTitle = cleanLine(decodePdfHexString(titleHex[1], null))
+
+  const decodedStreams = []
+  const cmap = new Map()
+  const streamToken = Buffer.from('stream')
+  const endstreamToken = Buffer.from('endstream')
+
+  let pos = 0
+  while (pos < buf.length) {
+    const sIdx = buf.indexOf(streamToken, pos)
+    if (sIdx < 0) break
+    // Ensure "stream" is followed by \r\n or \n (not "endstream")
+    const prevByte = sIdx > 0 ? buf[sIdx - 1] : 0x20
+    if (prevByte === 0x64 /* 'd' in endstream */) {
+      pos = sIdx + 6
+      continue
+    }
+    let dataStart = sIdx + 6
+    if (buf[dataStart] === 0x0d && buf[dataStart + 1] === 0x0a) dataStart += 2
+    else if (buf[dataStart] === 0x0a) dataStart += 1
+    else { pos = sIdx + 6; continue }
+
+    const eIdx = buf.indexOf(endstreamToken, dataStart)
+    if (eIdx < 0) break
+    let dataEnd = eIdx
+    while (dataEnd > dataStart && (buf[dataEnd - 1] === 0x0a || buf[dataEnd - 1] === 0x0d)) dataEnd -= 1
+
+    const dictWindow = buf.subarray(Math.max(0, sIdx - 420), sIdx).toString('latin1')
+    const isImage = /\/Subtype\s*\/Image\b/.test(dictWindow)
+    const isFlate = /\/FlateDecode\b/.test(dictWindow)
+    if (!isImage && dataEnd > dataStart && dataEnd - dataStart <= MAX_ENTRY_BYTES) {
+      const rawSlice = buf.subarray(dataStart, dataEnd)
+      let outBuf = rawSlice
+      if (isFlate) {
+        try {
+          outBuf = inflateSync(rawSlice, { maxOutputLength: MAX_ENTRY_BYTES })
+        } catch {
+          try {
+            outBuf = inflateRawSync(rawSlice, { maxOutputLength: MAX_ENTRY_BYTES })
+          } catch {
+            outBuf = null
+          }
+        }
+      }
+      if (outBuf && outBuf.length > 0) {
+        const textStr = outBuf.toString('latin1')
+        if (textStr.includes('beginbfchar') || textStr.includes('beginbfrange')) {
+          parseToUnicodeCmap(textStr, cmap)
+        } else if (textStr.includes('BT') || textStr.includes('Tj') || textStr.includes('TJ')) {
+          decodedStreams.push(textStr)
+        }
+      }
+    }
+    pos = eIdx + 9
+  }
+
+  const allLines = []
+  for (const s of decodedStreams) {
+    allLines.push(...extractLinesFromPdfContent(s, cmap))
+  }
+  // Deduplicate adjacent identical lines while preserving reading order
+  const deduped = []
+  for (const line of allLines) {
+    if (!line || (deduped.length > 0 && deduped[deduped.length - 1] === line)) continue
+    deduped.push(line)
+  }
+
+  return {
+    title: docTitle,
+    lines: deduped,
+    streamCount: decodedStreams.length,
+  }
+}
+
+function isLikelyPdfHeading(line, prevBlankOrStart) {
+  const s = cleanLine(line)
+  if (s.length < 3 || s.length > 52) return false
+  if (/[。！？.!?；;]$/.test(s)) return false
+  if (/^(?:[一二三四五六七八九十]+[、.．]|第[一二三四五六七八九十\d]+[章节部分]|\d+(?:\.\d+)?[\s、.．]|Chapter\s+\d+|Section\s+\d+|Part\s+\d+)/i.test(s)) {
+    return true
+  }
+  if (prevBlankOrStart && s.length <= 32 && !/[,，:：]/.test(s)) return true
+  return false
+}
+
+function parsePdfDocument(bytes, fileName, langHint) {
+  const { title: metaTitle, lines } = extractPdfText(bytes)
+  if (lines.length === 0) {
+    fail('未在 PDF 中检测到可提取文本（可能为纯扫描图片 PDF，请先 OCR 转换为文本或 Word/Markdown 后再导入）', 'No extractable text found in PDF (likely scanned image PDF)')
+  }
+
+  const sample = [metaTitle, ...lines.slice(0, 30)].join(' ')
+  const en = langHint ? langHint === 'en' : (sample.match(/[\u3400-\u9fff]/g) || []).length < 4
+  const fallbackTitle = cleanLine(fileName.replace(/\.[^.]+$/, '')) || (en ? 'PDF Presentation' : 'PDF 报告汇报')
+  const firstLine = lines[0] || ''
+  const title = (metaTitle && metaTitle.length >= 2 && metaTitle.length <= 80)
+    ? metaTitle
+    : (firstLine.length >= 4 && firstLine.length <= 56 && !/[。！？.!?]$/.test(firstLine) ? firstLine : fallbackTitle)
+
+  const bodyLines = title === firstLine ? lines.slice(1) : lines
+  const sections = []
+  let current = null
+
+  for (let i = 0; i < bodyLines.length; i += 1) {
+    const line = bodyLines[i]
+    if (isLikelyPdfHeading(line, i === 0 || (current && current.bullets.length >= 4))) {
+      if (current && current.bullets.length > 0) sections.push(current)
+      current = { title: line, bullets: [] }
+    } else {
+      if (!current) {
+        current = { title: en ? 'Executive Highlights' : '核心要点提炼', bullets: [] }
+      }
+      current.bullets.push(line)
+      if (current.bullets.length >= 6 && i + 1 < bodyLines.length) {
+        sections.push(current)
+        current = null
+      }
+    }
+  }
+  if (current && current.bullets.length > 0) sections.push(current)
+
+  const slides = []
+  slides.push({
+    layout: 'cover',
+    kicker: en ? 'PDF BRIEFING' : 'PDF 报告拆解',
+    title,
+    subtitle: en
+      ? `Synthesized from ${fileName} (${sections.length} key sections)`
+      : `自动提取自 ${fileName}（共提炼 ${sections.length} 组核心章节）`,
+  })
+
+  if (sections.length >= 3) {
+    slides.push({
+      layout: 'agenda',
+      kicker: en ? 'AGENDA' : '内容结构',
+      title: en ? 'Report Structure & Key Findings' : '文档核心章节与脉络总览',
+      items: sections.slice(0, 6).map((sec, idx) => ({
+        tag: String(idx + 1).padStart(2, '0'),
+        title: sec.title.slice(0, 40),
+        text: sec.bullets[0] ? sec.bullets[0].slice(0, 56) : '',
+      })),
+    })
+  }
+
+  for (let idx = 0; idx < sections.length && slides.length < 18; idx += 1) {
+    const sec = sections[idx]
+    slides.push({
+      layout: 'bullets',
+      kicker: String(idx + 1).padStart(2, '0'),
+      title: sec.title,
+      bullets: sec.bullets.slice(0, 5),
+      source: fileName,
+    })
+  }
+
+  slides.push({
+    layout: 'closing',
+    variant: 'cta-cards',
+    kicker: en ? 'SUMMARY' : '核心结论与行动',
+    title: en ? 'Key conclusions and recommended next actions' : '核心结论复盘与下一步推进计划',
+    subtitle: en ? `Source PDF: ${fileName}` : `原始 PDF 文档：${fileName}`,
+    items: sections.slice(0, 3).map((s, idx) => ({
+      tag: `0${idx + 1}`,
+      title: s.title.slice(0, 36),
+      text: s.bullets[0] ? s.bullets[0].slice(0, 56) : '',
+    })),
+  })
+
+  const promoted = promoteMarkdownSlides(slides, { explicitSmartLayout: true })
+  return {
+    title,
+    language: en ? 'en' : 'zh',
+    slides: promoted,
+    stats: {
+      sourceFormat: 'pdf',
+      lineCount: lines.length,
+      sectionCount: sections.length,
+      slideCount: promoted.length,
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-Source Pack Ingestion (Directory or Mixed filePaths[] -> 1 Deck + Evidence Ledger)
+// ---------------------------------------------------------------------------
+
+const PACK_DOC_EXTS = new Set(['.docx', '.pdf'])
+const PACK_DATA_EXTS = new Set(['.xlsx', '.csv', '.tsv'])
+const PACK_IMG_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
+const MAX_PACK_FILES = 12
+
+function packFilePriority(filePath) {
+  const ext = extname(filePath).toLowerCase()
+  if (PACK_DOC_EXTS.has(ext)) return 0
+  if (PACK_DATA_EXTS.has(ext)) return 1
+  if (PACK_IMG_EXTS.has(ext)) return 2
+  return 9
+}
+
+function readImageAsDataUri(resolvedFile) {
+  const stat = lstatSync(resolvedFile)
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_IMAGE_BYTES) return null
+  const ext = extname(resolvedFile).toLowerCase()
+  const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
+  const buf = readFileSync(resolvedFile)
+  return `data:${mime};base64,${buf.toString('base64')}`
+}
+
+async function extractMultiSourcePack(rawFilePaths, options = {}) {
+  const cwd = resolve(String(options.cwd ?? '.'))
+  const resolvedFiles = []
+  for (const fp of rawFilePaths) {
+    abort(options.signal)
+    const full = resolve(cwd, String(fp ?? '').trim())
+    let st
+    try { st = lstatSync(full) } catch { fail('找不到素材路径：' + full, 'Source path not found: ' + full) }
+    if (st.isSymbolicLink()) continue
+    if (st.isDirectory()) {
+      const names = readdirSync(full).filter(n => !n.startsWith('.')).sort((a, b) => a.localeCompare(b))
+      for (const n of names) {
+        const child = join(full, n)
+        try {
+          const cst = lstatSync(child)
+          if (!cst.isFile() || cst.isSymbolicLink()) continue
+          const ext = extname(child).toLowerCase()
+          if (PACK_DOC_EXTS.has(ext) || PACK_DATA_EXTS.has(ext) || PACK_IMG_EXTS.has(ext)) {
+            resolvedFiles.push(child)
+          }
+        } catch { /* ignore unreadable child */ }
+      }
+    } else if (st.isFile()) {
+      const ext = extname(full).toLowerCase()
+      if (PACK_DOC_EXTS.has(ext) || PACK_DATA_EXTS.has(ext) || PACK_IMG_EXTS.has(ext)) {
+        resolvedFiles.push(full)
+      } else {
+        fail('多源融合暂不支持该文件格式：' + basename(full))
+      }
+    }
+  }
+
+  const uniqueFiles = [...new Set(resolvedFiles)]
+    .sort((a, b) => packFilePriority(a) - packFilePriority(b) || basename(a).localeCompare(basename(b)))
+    .slice(0, MAX_PACK_FILES)
+
+  if (uniqueFiles.length === 0) {
+    fail('目录中未找到可导入的素材文件（支持 .xlsx / .csv / .tsv / .docx / .pdf / .png / .jpg / .webp）', 'No supported source files found')
+  }
+
+  const todayYm = new Date().toISOString().slice(0, 7)
+  const evidence = []
+  const bodySlides = []
+  const sourceSummaries = []
+  const formatCounts = { docs: 0, tables: 0, images: 0 }
+  let detectedEn = options.lang === 'en'
+  let cjkHits = 0
+
+  for (let idx = 0; idx < uniqueFiles.length; idx += 1) {
+    abort(options.signal)
+    const file = uniqueFiles[idx]
+    const fname = basename(file)
+    const ext = extname(file).toLowerCase()
+    const evId = `E${idx + 1}`
+
+    if (PACK_IMG_EXTS.has(ext)) {
+      const dataUri = readImageAsDataUri(file)
+      if (!dataUri) continue
+      formatCounts.images += 1
+      const label = cleanLine(fname.replace(/\.[^.]+$/, '')) || fname
+      cjkHits += (label.match(/[\u3400-\u9fff]/g) || []).length
+      evidence.push({
+        id: evId,
+        claim: `视觉素材「${label}」来自本地图片文件`,
+        source: fname,
+        date: todayYm,
+        confidence: 'verified',
+      })
+      bodySlides.push({
+        layout: 'image',
+        variant: 'framed',
+        kicker: `VISUAL · ${evId}`,
+        title: label,
+        image: { src: dataUri, alt: label, fit: 'contain', caption: fname },
+        source: fname,
+        evidenceIds: [evId],
+      })
+      sourceSummaries.push({ file: fname, title: label, evId })
+      continue
+    }
+
+    const single = await extractSingleOfficeFile({ ...options, filePath: file, filePaths: undefined })
+    if (PACK_DOC_EXTS.has(ext)) formatCounts.docs += 1
+    else formatCounts.tables += 1
+
+    const innerBody = (single.slides || []).filter(s => !['cover', 'closing', 'agenda'].includes(s.layout))
+    const sampleText = [single.title, ...innerBody.slice(0, 3).map(s => s.title || '')].join(' ')
+    cjkHits += (sampleText.match(/[\u3400-\u9fff]/g) || []).length
+
+    const summaryClaim = cleanLine(
+      `${single.title}${innerBody[0]?.title && innerBody[0].title !== single.title ? '：' + innerBody[0].title : ''}`
+    ).slice(0, 96)
+    evidence.push({
+      id: evId,
+      claim: summaryClaim || `来自 ${fname} 的业务资料`,
+      source: fname,
+      date: todayYm,
+      confidence: 'verified',
+    })
+    sourceSummaries.push({ file: fname, title: single.title || fname, evId })
+
+    for (const s of innerBody) {
+      if (bodySlides.length >= 26) break
+      bodySlides.push({
+        ...s,
+        source: s.source || fname,
+        evidenceIds: [...new Set([...(Array.isArray(s.evidenceIds) ? s.evidenceIds : []), evId])],
+      })
+    }
+  }
+
+  if (!options.lang) detectedEn = cjkHits < 4
+  const en = detectedEn
+  const defaultPackTitle = cleanLine(options.title || '')
+    || (options.filePath && lstatSync(resolve(cwd, String(options.filePath))).isDirectory()
+      ? basename(resolve(cwd, String(options.filePath)))
+      : (sourceSummaries[0]?.title || (en ? 'Multi-Source Executive Briefing' : '多源资料融合汇报')))
+
+  const partsDesc = []
+  if (formatCounts.docs > 0) partsDesc.push(en ? `${formatCounts.docs} doc(s)` : `${formatCounts.docs} 份文档/PDF`)
+  if (formatCounts.tables > 0) partsDesc.push(en ? `${formatCounts.tables} table(s)` : `${formatCounts.tables} 份数据表`)
+  if (formatCounts.images > 0) partsDesc.push(en ? `${formatCounts.images} visual(s)` : `${formatCounts.images} 张视觉素材`)
+
+  const mergedSlides = [
+    {
+      layout: 'cover',
+      kicker: en ? 'MULTI-SOURCE BRIEFING' : '多源素材融合汇报',
+      title: defaultPackTitle,
+      subtitle: en
+        ? `Synthesized from ${uniqueFiles.length} local files (${partsDesc.join(' · ')}) with [E1–E${evidence.length}] provenance`
+        : `融合 ${uniqueFiles.length} 份本地资料（${partsDesc.join(' · ')}），全篇自动绑定 [E1–E${evidence.length}] 溯源台账`,
+    },
+  ]
+
+  if (sourceSummaries.length >= 2) {
+    mergedSlides.push({
+      layout: 'agenda',
+      kicker: en ? 'SOURCE PACK' : '资料目录',
+      title: en ? 'Integrated Source Pack & Evidence Index' : '融合资料脉络与证据编号总览',
+      items: sourceSummaries.slice(0, 6).map((item) => ({
+        tag: item.evId,
+        title: item.title.slice(0, 38),
+        text: item.file,
+      })),
+    })
+  }
+
+  mergedSlides.push(...bodySlides)
+  mergedSlides.push({
+    layout: 'closing',
+    variant: 'cta-cards',
+    kicker: en ? 'NEXT STEPS' : '结论与后续推进',
+    title: en ? 'Consolidated Findings & Action Plan' : '跨资料结论汇总与下一步推进计划',
+    subtitle: en ? `${uniqueFiles.length} verified local sources indexed` : `共溯源 ${uniqueFiles.length} 份本地原始资料`,
+    items: sourceSummaries.slice(0, 3).map((s) => ({
+      tag: s.evId,
+      title: s.title.slice(0, 36),
+      text: s.file,
+    })),
+  })
+
+  return {
+    ok: true,
+    importedFrom: uniqueFiles.join(', '),
+    importedFiles: uniqueFiles,
+    title: defaultPackTitle,
+    language: en ? 'en' : 'zh',
+    slides: mergedSlides,
+    evidence,
+    stats: {
+      sourceFormat: 'multi-source-pack',
+      fileCount: uniqueFiles.length,
+      docCount: formatCounts.docs,
+      tableCount: formatCounts.tables,
+      imageCount: formatCounts.images,
+      evidenceCount: evidence.length,
+      slideCount: mergedSlides.length,
+    },
+  }
+}
+
+async function extractSingleOfficeFile(options = {}) {
   abort(options.signal)
   const input = readOfficeInput(options)
   const enHint = options.lang === 'en'
@@ -1481,6 +2085,15 @@ export async function extractOfficeSource(options = {}) {
     }
   }
 
+  if (input.format === 'pdf') {
+    const parsedPdf = parsePdfDocument(input.bytes, input.fileName, options.lang)
+    return {
+      ok: true,
+      importedFrom: input.resolvedPath,
+      ...parsedPdf,
+    }
+  }
+
   const parsedDocx = parseDocxArchive(input.bytes, input.fileName)
   return {
     ok: true,
@@ -1489,9 +2102,36 @@ export async function extractOfficeSource(options = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Public API: extractOfficeSource & importOfficeDeck
+// ---------------------------------------------------------------------------
+
 /**
- * Import an Office document (.xlsx / .csv / .tsv / .docx) directly into a full dsh-ppt deck
- * (HTML slideshow + 100% native editable PPTX + JSON project + optional handout/one-pager).
+ * Extract structured slides & metadata from `.xlsx`, `.csv`, `.tsv`, `.docx`, `.pdf`,
+ * OR a multi-source pack (directory path or `filePaths[]` combining docs + tables + PDF + images).
+ * Zero external new dependencies (uses Node zlib inflateSync/inflateRawSync + lazy csv-parse).
+ */
+export async function extractOfficeSource(options = {}) {
+  abort(options.signal)
+  if (Array.isArray(options.filePaths) && options.filePaths.length > 0) {
+    return extractMultiSourcePack(options.filePaths, options)
+  }
+  const rawPath = String(options.filePath ?? options.path ?? '').trim()
+  if (rawPath && options.bytes === undefined) {
+    const resolved = resolve(String(options.cwd ?? '.'), rawPath)
+    try {
+      const st = lstatSync(resolved)
+      if (st.isDirectory()) {
+        return extractMultiSourcePack([resolved], options)
+      }
+    } catch { /* fall through to readOfficeInput error */ }
+  }
+  return extractSingleOfficeFile(options)
+}
+
+/**
+ * Import an Office/PDF document or multi-source folder pack directly into a full dsh-ppt deck
+ * (HTML slideshow + 100% native editable PPTX + JSON project + optional evidence ledger & handout/one-pager).
  */
 export async function importOfficeDeck(options = {}) {
   abort(options.signal)
@@ -1507,7 +2147,9 @@ export async function importOfficeDeck(options = {}) {
     : requestedTheme
 
   const baseFileName = options.fileName ||
-    cleanLine(basename(extracted.importedFrom || title).replace(/\.[^.]+$/, '')) ||
+    (extracted.stats?.sourceFormat === 'multi-source-pack'
+      ? title
+      : cleanLine(basename(extracted.importedFrom || title).replace(/\.[^.]+$/, ''))) ||
     title
 
   const brand = options.chromeStyle
@@ -1522,6 +2164,9 @@ export async function importOfficeDeck(options = {}) {
     lang,
     motion: options.motion,
     brand,
+    ...(Array.isArray(extracted.evidence) && extracted.evidence.length > 0
+      ? { evidence: extracted.evidence, evidenceAppendix: options.evidenceAppendix !== false }
+      : {}),
     outputDir: options.outputDir || options.outDir || '.',
     fileName: baseFileName,
     overwrite: options.overwrite === true,
@@ -1536,6 +2181,7 @@ export async function importOfficeDeck(options = {}) {
   return {
     ...built,
     importedFrom: extracted.importedFrom,
+    ...(extracted.importedFiles ? { importedFiles: extracted.importedFiles } : {}),
     officeStats: extracted.stats,
   }
 }

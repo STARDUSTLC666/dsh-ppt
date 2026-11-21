@@ -113,6 +113,7 @@ export interface PptBrand {
     coverBg?: string;
     logo?: string | null;
     footer?: string;
+    watermark?: string;
     chromeStyle?: PptChromeStyle | string | null;
     cardMaterial?: PptCardMaterial | null;
     iconMode?: PptIconMode | null;
@@ -183,6 +184,7 @@ export interface PptEditArgs {
     referencePptx?: string;
     brand?: PptBrand | null;
     targetMinutes?: number | null;
+    remixPreset?: 'exec-5min' | 'board-brief' | 'sales-pitch';
     expectedRevision?: number;
     saveAs?: boolean;
 }
@@ -327,6 +329,8 @@ export interface PptCreateArgs {
     evidence?: PptEvidenceEntry[];
     /** When evidence[] is supplied, automatically insert a booktabs Sources & Fact-Verification Ledger appendix slide before closing. */
     evidenceAppendix?: boolean;
+    /** Whether to apply workspace locked .dsh-ppt/brand-kit.json automatically (default true). */
+    useBrandKit?: boolean;
 }
 export interface PptThemeInfo {
     id: string;
@@ -369,6 +373,10 @@ export interface PptAbsorbArgs {
     tasteName?: string;
     saveExemplarAs?: string;
     exemplarName?: string;
+    saveBrandKit?: boolean;
+    brandKitName?: string;
+    watermark?: string;
+    forbiddenTerms?: string[];
     signal?: AbortSignal;
 }
 export interface PptExemplarSummary {
@@ -432,6 +440,8 @@ export interface PptAbsorbResult {
     styleRecipe?: PptTasteRecipe;
     savedTastePath?: string;
     savedExemplarPath?: string;
+    savedBrandKitPath?: string;
+    brandKit?: Record<string, unknown>;
     exemplar?: PptExemplarSummary;
     slideSkeleton?: PptAbsorbSlideSkeleton[];
     layoutSummary?: Record<string, unknown>;
@@ -448,6 +458,7 @@ export interface PptImportArgs {
 }
 export interface PptFromOfficeArgs {
     filePath: string;
+    filePaths?: string[];
     outputDir?: string;
     fileName?: string;
     theme?: string;
@@ -549,6 +560,16 @@ export interface DeckEngine {
     dataNotes(manifest: any, slide: any): string;
     renderHandoutMarkdown?(manifest: any, lang?: string): string;
     renderOnePagerHtml?(manifest: any, lang?: string): string;
+    renderSocialCarouselHtml?(manifest: any, options?: Record<string, unknown>): string;
+    renderSubtitlesSrt?(manifest: any, lang?: string): string;
+    renderSubtitlesVtt?(manifest: any, lang?: string): string;
+    remixDeck?(options: Record<string, unknown>): Promise<PptCreateResult>;
+    loadWorkspaceBrandKit?(cwd?: string): Record<string, unknown> | null;
+    saveWorkspaceBrandKit?(cwd: string, rawKit: Record<string, unknown>): {
+        ok: boolean;
+        path: string;
+        brandKit: Record<string, unknown>;
+    };
     computePaceBudget?(manifest: any, targetMinutes?: number): Record<string, any>;
     buildDeckAsync?(options: Record<string, unknown>): Promise<PptCreateResult>;
     listTemplates(lang?: string): unknown[];

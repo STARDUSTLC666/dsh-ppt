@@ -1409,6 +1409,39 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
         ],
       }))
     }
+
+    const watermarkText = typeof manifest?.brand?.watermark === 'string' ? manifest.brand.watermark.trim() : ''
+    if (watermarkText) {
+      const hasLogo = Boolean(manifest?.brand?.logoAssetId)
+      const wmW = computeBadgePillWidth(watermarkText.toUpperCase(), 8.5, 4.1, 1.3)
+      const wmRight = chromeCfg.folioPos === 'top-right'
+        ? (hasLogo ? 9.85 : 10.45)
+        : (hasLogo ? 11.35 : 12.71)
+      const wmY = chromeCfg.folioPos === 'top-right'
+        ? 0.24
+        : (chromeCfg.folioPos === 'beamer-bar' ? 0.14 : 0.10)
+      shapes.push(ooxmlShape(nextIdFn(), 'Brand watermark', { x: +(wmRight - wmW).toFixed(3), y: wmY, w: wmW, h: 0.23 }, {
+        preset: 'roundRect',
+        adj: 22000,
+        fill: tk.surface1,
+        stroke: tk.hairline,
+        strokePt: 0.5,
+        anchor: 'ctr',
+        marginsIn: { l: 0.06, r: 0.06, t: 0.01, b: 0.01 },
+        paragraphs: [
+          ooxmlRichParagraph(watermarkText.toUpperCase(), {
+            sizePt: 8.5,
+            color: tk.inkMuted,
+            bold: true,
+            lang: langAttr,
+            align: 'ctr',
+            font: theme.fonts.body,
+            lineHeight: 1.05,
+            spc: 110,
+          }),
+        ],
+      }))
+    }
   }
 
   return shapes.join('')
@@ -1833,4 +1866,8 @@ export const CHROME_CSS = `
 .slide[data-chrome="academic-minimal"] .slide-takeaway{background:transparent;border:0;border-top:1px solid var(--accent);border-bottom:1px solid var(--hairline);border-radius:0;padding:8px 0}
 .slide[data-chrome="gov-ceremonial"] .gov-header{border-bottom:2px solid var(--accent);box-shadow:0 4px 0 0 var(--bg),0 5.5px 0 0 var(--accent2);padding-bottom:12px;margin-bottom:4px}
 .slide[data-chrome="gov-ceremonial"] .gov-ribbon{letter-spacing:.08em}
+.brand-watermark{position:absolute;top:1.35%;right:4.65%;z-index:4;padding:2px 9px;border-radius:4px;border:1px solid var(--hairline);background:var(--surface1);color:var(--muted);font-size:clamp(9px,.82vw,11px);font-weight:700;letter-spacing:.11em;text-transform:uppercase;line-height:1.25;pointer-events:none;white-space:nowrap;opacity:.88}
+.slide.has-brand-logo .brand-watermark{right:14.2%}
+.slide[data-chrome="editorial-folio"] .brand-watermark{top:3.1%;right:14.8%}
+.slide[data-chrome="editorial-folio"].has-brand-logo .brand-watermark{right:21.5%}
 `

@@ -2126,11 +2126,17 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
     : ''
   const chromeAttr = ' data-chrome="' + escapeHtml(chromeStyle) + '"'
   const visualStyle = visualHtmlStyle(slide.visual)
-  const slideClasses = 'slide slide--' + escapeHtml(layout) + (layout === 'bullets' ? ' bullets' : '')
+  const hasLogo = Boolean(manifest.brand?.logoAssetId)
+  const isFramingSlide = layout === 'cover' || layout === 'closing' || layout === 'section'
+  const slideClasses = 'slide slide--' + escapeHtml(layout) + (layout === 'bullets' ? ' bullets' : '') + (hasLogo ? ' has-brand-logo' : '')
+  const watermarkHtml = (!isFramingSlide && typeof manifest.brand?.watermark === 'string' && manifest.brand.watermark.trim())
+    ? '<div class="brand-watermark" aria-label="Watermark">' + escapeHtml(manifest.brand.watermark.trim()) + '</div>'
+    : ''
 
   return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
     '<div class="slide-inner">' + inner + '</div>' +
-    (manifest.brand?.logoAssetId ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
+    watermarkHtml +
+    (hasLogo ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
     (manifest.brand?.footer ? '<div class="brand-footer">' + escapeHtml(manifest.brand.footer) + '</div>' : '') + '</section>'
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
-  "version": "0.33.0",
-  "description": "DeepSeek Harness 大师级演示文稿引擎与工作台：支持零资料调研核验与 SLOP-13 事实溯源、20 套标杆范本与弱模型零调用自检修复、24 主题 / 37+ 原生可编辑图谱（全球/中国点阵地图、2.5D 等轴测架构/柱碑、Mermaid/公式/代码/魔力象限/雷达/哑铃/热力图）、智能配图协作槽位与双屏提词台，导出离线 HTML + 100% 可编辑 PPTX。欢迎 PR 与 Issues。",
+  "version": "0.34.0",
+  "description": "DeepSeek Harness 大师级演示文稿引擎与工作台：支持企业品牌宪章锁与 SLOP-14 合规门禁、多源资料包融合直吞（.pdf/.docx/.xlsx/.png + 证据溯源）、多受众一键压缩改编与 4:5/1:1 社媒长图、HTML 现场演示增强包（⌘K 速搜/白板画笔/Q&A 倒计时/字幕导览）、20 套标杆范本、24 主题 / 37+ 原生可编辑图谱（点阵地图/2.5D 等轴测/Mermaid/公式/代码），导出离线 HTML + 100% 可编辑 PPTX。欢迎 PR 与 Issues。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

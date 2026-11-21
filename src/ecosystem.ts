@@ -1392,6 +1392,14 @@ export async function exportRemotionBundle(
     themeTokens: palette,
     paceBudget,
   })
+  const srtText = typeof options.engine.renderSubtitlesSrt === 'function'
+    ? options.engine.renderSubtitlesSrt(manifest, manifest.language)
+    : undefined
+  const vttText = typeof options.engine.renderSubtitlesVtt === 'function'
+    ? options.engine.renderSubtitlesVtt(manifest, manifest.language)
+    : undefined
+  if (srtText) bundle.files['captions.srt'] = srtText
+  if (vttText) bundle.files['captions.vtt'] = vttText
 
   const baseName = basename(deckPath, '.json') + '-remotion'
   let outDir = options.outputDir?.trim()

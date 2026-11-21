@@ -19,6 +19,7 @@ import { inflateSync } from 'node:zlib'
 import { sanitizeAbsorbedTheme, normalizeHex, hexToHsl, relativeLuminance } from './deck-themes.mjs'
 import { sanitizeCustomTasteRecipe, saveWorkspaceTasteRecipe } from './deck-taste.mjs'
 import { extractExemplarFromAbsorbed, saveWorkspaceExemplar } from './deck-exemplars.mjs'
+import { buildBrandKitFromAbsorbed, saveWorkspaceBrandKit } from './deck-brand-kit.mjs'
 
 const MAX_PPTX_BYTES = 64 * 1024 * 1024
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -1482,8 +1483,26 @@ export async function absorbPptx(options = {}) {
     exemplar = savedEx.exemplar
   }
 
+  let savedBrandKitPath
+  let brandKit
+  if (options.saveBrandKit === true || (options.saveBrandKit && typeof options.saveBrandKit === 'object')) {
+    const bkOpts = typeof options.saveBrandKit === 'object' ? options.saveBrandKit : {}
+    const builtKit = buildBrandKitFromAbsorbed(baseResult, {
+      name: options.brandKitName || bkOpts.name || options.tasteName,
+      enforce: bkOpts.enforce !== false,
+      watermark: options.watermark || bkOpts.watermark,
+      footer: options.footer || bkOpts.footer,
+      forbiddenTerms: Array.isArray(options.forbiddenTerms) ? options.forbiddenTerms : bkOpts.forbiddenTerms,
+      mandatoryClosing: options.mandatoryClosing || bkOpts.mandatoryClosing,
+    })
+    const savedBk = saveWorkspaceBrandKit(cwd, builtKit)
+    savedBrandKitPath = savedBk.path
+    brandKit = savedBk.brandKit
+  }
+
   return {
     ...baseResult,
     ...(savedExemplarPath ? { savedExemplarPath, exemplar } : {}),
+    ...(savedBrandKitPath ? { savedBrandKitPath, brandKit } : {}),
   }
 }

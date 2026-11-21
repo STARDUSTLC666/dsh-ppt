@@ -137,8 +137,8 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
 
   function handleOfficeSelect(file) {
     if (!file) { setOfficeFile(null); return; }
-    if (!/\.(xlsx|csv|tsv|docx)$/i.test(file.name) || file.size > 24 * 1024 * 1024) {
-      onError?.(pptText('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件。', 'Choose an .xlsx, .csv, .tsv, or .docx file up to 24 MiB.'));
+    if (!/\.(xlsx|csv|tsv|docx|pdf)$/i.test(file.name) || file.size > 24 * 1024 * 1024) {
+      onError?.(pptText('请选择 24 MiB 以内的 .xlsx、.csv、.tsv、.docx 或 .pdf 文件。', 'Choose an .xlsx, .csv, .tsv, .docx, or .pdf file up to 24 MiB.'));
       return;
     }
     const reader = new FileReader();
@@ -205,7 +205,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
     title: dialogMode === 'import'
       ? pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')
       : dialogMode === 'office'
-        ? pptText('导入 Excel / Word 文档', 'Import Excel / CSV / Word')
+        ? pptText('导入 Excel / Word / PDF 文档', 'Import Excel / CSV / Word / PDF')
         : pptText('新建演示文稿', 'New presentation'),
     closeLabel: pptText('关闭', 'Close'),
     busy: disabled,
@@ -214,20 +214,20 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
     h('div', { className: 'ppt-create-wizard' },
       h('div', { className: 'ppt-archetype-pills', role: 'tablist', 'aria-label': pptText('创建方式', 'Creation mode') },
         h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'create' ? 'true' : 'false', 'aria-pressed': dialogMode === 'create' ? 'true' : 'false', disabled, onClick: () => setDialogMode('create') }, pptText('从蓝图 / 大纲新建', 'New from blueprint / notes')),
-        onImportOffice ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'office' ? 'true' : 'false', 'aria-pressed': dialogMode === 'office' ? 'true' : 'false', disabled, onClick: () => setDialogMode('office') }, pptText('导入 Excel / Word', 'Import Excel / Word')) : null,
+        onImportOffice ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'office' ? 'true' : 'false', 'aria-pressed': dialogMode === 'office' ? 'true' : 'false', disabled, onClick: () => setDialogMode('office') }, pptText('导入 Excel / Word / PDF', 'Import Excel / Word / PDF')) : null,
         onImport ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'import' ? 'true' : 'false', 'aria-pressed': dialogMode === 'import' ? 'true' : 'false', disabled, onClick: () => setDialogMode('import') }, pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')) : null),
       dialogMode === 'office' ? h(React.Fragment, null,
-        h('p', { className: 'muted' }, pptText('拖拽或上传 .xlsx / .csv / .tsv 数据表或 .docx 文档（≤24 MiB），自动识别流向、进度、市场份额与章节结构并生成多页演示文稿。', 'Drop or upload an .xlsx / .csv / .tsv workbook or .docx report (≤24 MiB) to auto-profile charts, Sankey, Gantt, tables, and narrative slides.')),
+        h('p', { className: 'muted' }, pptText('拖拽或上传 .xlsx / .csv / .tsv 数据表、.docx 报告或 .pdf 文档（≤24 MiB），自动识别流向、进度、市场份额与章节结构并生成多页演示文稿。', 'Drop or upload an .xlsx / .csv / .tsv workbook, .docx report, or .pdf document (≤24 MiB) to auto-profile charts, Sankey, Gantt, tables, and narrative slides.')),
         h('div', {
           className: 'ppt-create-refbox',
           onDragOver: e => { e.preventDefault(); },
           onDrop: e => { e.preventDefault(); if (!disabled) handleOfficeSelect(e.dataTransfer?.files?.[0]); },
         },
-          h('label', { htmlFor: fieldId + '-office-file' }, pptText('拖拽或选择 .xlsx / .csv / .tsv / .docx 文件（≤24 MiB）', 'Drop or choose .xlsx / .csv / .tsv / .docx (≤24 MiB)')),
+          h('label', { htmlFor: fieldId + '-office-file' }, pptText('拖拽或选择 .xlsx / .csv / .tsv / .docx / .pdf 文件（≤24 MiB）', 'Drop or choose .xlsx / .csv / .tsv / .docx / .pdf (≤24 MiB)')),
           h('input', {
             id: fieldId + '-office-file',
             type: 'file',
-            accept: '.xlsx,.csv,.tsv,.docx',
+            accept: '.xlsx,.csv,.tsv,.docx,.pdf',
             disabled,
             onChange: e => { const f = e.target.files?.[0]; e.target.value = ''; handleOfficeSelect(f); },
           }),
@@ -366,6 +366,8 @@ function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide
     ['radar', pptText('多维能力雷达图', 'Multi-series radar chart')],
     ['dumbbell', pptText('哑铃 / 前后跃迁对比图', 'Dumbbell slope chart')],
     ['heatmap', pptText('矩阵热力图', 'Matrix heatmap')],
+    ['map', pptText('全球 / 中国点阵地图', 'World / China vector map')],
+    ['isometric', pptText('2.5D 等轴测立体架构/柱碑', '2.5D Isometric stack / pillars')],
     ['comparison', pptText('双栏 / 痛点对比页', 'Two-column comparison')],
     ['process', pptText('流程 / 时间轴页', 'Process / timeline')],
     ['chevron', pptText('价值链五边形箭头页', 'Value-chain chevrons')],

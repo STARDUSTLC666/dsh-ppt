@@ -1,5 +1,24 @@
 # 更新记录
 
+## 0.34.0 (2026-11-21)
+
+- **企业级品牌宪章锁（`deck-brand-kit.mjs` + `SLOP-14`）与多源素材包直吞（含纯 Node `.pdf` 解析）**：
+  - **品牌宪章锁（`.dsh-ppt/brand-kit.json`）**：通过 `ppt_absorb({ saveBrandKit: true, watermark, forbiddenTerms })` 或 CLI `--save-brand-kit` 原子持久化企业锁定配色、双字体、Logo、统一页脚、内容页右上角保密水印（如 `CONFIDENTIAL · 内部资料`，双端 HTML + PPTX 同构渲染且自动避让 Logo/页码/章节标）与官方固定封底（`mandatoryClosing`）；后续工作区建稿自动继承（传 `useBrandKit: false` / `--no-brand-kit` 可跳过），并由 **`SLOP-14`** 静态门禁自动拦截企业禁用词（`forbidden-brand-term`）与锁定主色漂移（`brand-palette-drift`）；同步修复核心版式存在 `slide.source` 时左下角 `Brand footer` 缺席问题，实现左下企业页脚 + 中部出处 + 右下页码三区精准共存。
+  - **纯 Node 零依赖 `.pdf` 抽取与多源素材包一键融合（`deck-office.mjs`）**：新增零新增依赖 `extractPdfText`（原生 `node:zlib` `FlateDecode` 流解压 + `BT/ET`/`Tj`/`TJ` + UTF-16BE 中英文及 `/ToUnicode` CMap 解析）；`ppt_from_office`（支持目录路径或 `filePaths[]`）与工作台上传新增 `.pdf` 与多源融合能力——将同一目录下的 `.docx` + `.xlsx`/`.csv`/`.tsv` + `.pdf` + `.png`/`.jpg`/`.webp` 一键融合为单套演示文稿，并自动生成绑定每页出处的已核验 **`[E1..En]` Evidence Ledger** 溯源台账与附录页。
+- **多受众智能压缩改编（`deck-remix.mjs`）与 4:5 / 1:1 社媒长图卡片导出**：
+  - **一键受众改编（`remixDeck` / `ppt_edit({ remixPreset })` / CLI `--remix --preset` / 工作台一键改编）**：内置 **`exec-5min`（高管 5 分钟 6 页）**、**`board-brief`（董事会 8 页）**、**`sales-pitch`（客户路演 7 页）**三大预设，按数据密度、视觉图示与证据信号确定性筛选高价值页面并保持原叙事顺序，默认另存副本保护原稿，且将被折叠页的核心结论与要点无损归档至邻近保留页的演讲者备注（`[压缩归档]`，Zero-Data-Loss）。
+  - **自包含社媒长图卡片（`renderSocialCarouselHtml` / CLI `--social-carousel` / HTML 检查面板 / 工作台导出）**：将任意 16:9 演示文稿重排为适配小红书 / LinkedIn / 微信的 **4:5 竖版**与 **1:1 方形**可实时切换画幅、可打印导出 PDF 的自包含社媒轮播卡片 HTML。
+- **HTML 现场演示增强套件与多格式时间轴字幕（`deck-delivery.mjs` + `dsh-remotion`）**：
+  - 独立离线 HTML 放映内置 **`Ctrl/Cmd+K` 全局速搜跳页**（同时检索页面标题/正文/备注与 `[E#]` 证据账本，方向键 + Enter 直达）、**`D` 键实时白板画笔/荧光笔**（红/黄荧光/青三色、逐页持久化笔迹、`Z` 撤销、`C` 清屏）、**`T` 键 Q&A 现场倒计时器**（1/3/5/10 分钟预设，最后 30 秒琥珀色提醒）以及 **`A` 键自动字幕导览模式**（按 `computePaceBudget` 节奏自动翻页并展示底部实时字幕条，支持 `1×/2×` 调速与暂停）；检查面板同步提供零体积膨胀的离线 **社媒长图卡片（`.carousel.html`）**与 **配音字幕（`.srt`）**下载；修复 `initDelivery` 内联脚本中局部 HTML `escape` 遮蔽浏览器原生 `window.escape` 的隐患。
+  - 新增 `renderSubtitlesSrt` / `renderSubtitlesVtt`（CLI `--subtitles [srt|vtt]`、工作台 `kind=subtitles`），并在 **`dsh-remotion`** 导出包（工具 + 工作台 ZIP）中自动随附 `captions.srt` 与 `captions.vtt`。
+- **工作台全量功能对齐（`src/workbench.ts` + `templates/client.js` + `templates/panels/`，零触碰 `templates/workbench-ui.js`）**：
+  - 全面同步 `map`（世界/中国地图）与 `isometric`（2.5D 堆叠/柱碑）新增页与编辑器、`coverPattern` 新增 `waves` / `isometric-mesh` / `editorial-arcs`、**一键形态变形（Layout Morph）**快捷变体按钮、企业保密水印 `brand.watermark`、**`image.focalPoint`** 焦距裁切选择器、待替换 **`imageBrief`** 智能配图槽位高亮提示、**证据溯源账本抽屉**（高亮冲突/待核验条目并一键跳页）、**修订差异对照面板（`revisionDiff`）**、**多受众一键改编**、`.pdf` 上传导入，以及 **社媒长图卡片** 与 **`.srt` 字幕** 下载。
+- **Enterprise Brand Kit Lock (`SLOP-14`), Pure-Node `.pdf` & Multi-Source Pack Ingestion, Multi-Audience Deck Remix & Social Carousel, HTML Live Presenter Power Pack, Subtitles & Workbench Power-User Sync (Zero New Runtime Dependencies, Strictly 13 Registered Tools)**:
+  - **Brand Kit Lock & Watermark (`deck-brand-kit.mjs`)**: Persist corporate palette, fonts, logo, footer, subtle content-slide classification watermark (`CONFIDENTIAL · 内部资料` rendered across both HTML & PPTX), `mandatoryClosing`, and `SLOP-14` compliance gates (`forbidden-brand-term` + `brand-palette-drift`) to `.dsh-ppt/brand-kit.json` via `ppt_absorb({ saveBrandKit: true })` or `--save-brand-kit`.
+  - **Zero-Dep `.pdf` & Multi-Source Pack (`deck-office.mjs`)**: Native `FlateDecode` + `BT/ET` + UTF-16BE `.pdf` text extractor; pass a folder or `filePaths[]` to `ppt_from_office` to fuse `.docx` + `.xlsx`/`.csv`/`.tsv` + `.pdf` + `.png`/`.jpg`/`.webp` into one unified deck with auto-generated `[E1..En]` Evidence Ledger provenance.
+  - **Deck Remix & Social Carousel (`deck-remix.mjs`)**: Deterministically compress decks into `exec-5min` (6p), `board-brief` (8p), or `sales-pitch` (7p) undoable copies while archiving omitted takeaways into speaker notes; export self-contained `4:5` / `1:1` printable Social Carousel HTML.
+  - **Live Presenter Power Pack & Subtitles (`deck-delivery.mjs` + `src/ecosystem.ts`)**: Adds `Ctrl/Cmd+K` slide & `[E#]` evidence jump search, `D` whiteboard pen/highlighter canvas (`Z` undo / `C` clear), `T` Q&A countdown timer pill, `A` narrated Auto-Tour with live captions, `.srt`/`.vtt` timed subtitle export (also bundled into `dsh-remotion`), and full Workbench UI sync (`map`, `isometric`, `waves`/`isometric-mesh`/`editorial-arcs`, Layout Morph pills, `focalPoint`, `imageBrief`, Evidence Ledger & Revision Diff drawers, Remix buttons, PDF upload, and Carousel/Subtitle downloads).
+
 ## 0.33.0 (2026-11-20)
 
 - **视觉与信息图智能引擎（`deck-infographics.mjs` — 零新增依赖、100% 原生可编辑 OOXML + SVG 双端同构）**：全面补齐战略地理分布、3D 架构概念展示与智能配图协作的「视觉最后一公里」，原生版式扩展至 **37+**：

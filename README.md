@@ -2,7 +2,7 @@
 
 # PPT
 
-**DeepSeek Harness 大师级演示文稿引擎与工作台：支持零资料调研核验与 SLOP-13 事实溯源、20 套标杆范本与弱模型零调用自检修复、24 主题 / 35+ 原生可编辑图谱与 Office 直吞，一键导出离线 HTML 放映、100% 可编辑 PPTX、PDF/PNG 与讲义包。**
+**DeepSeek Harness 大师级演示文稿引擎与工作台：支持企业品牌宪章锁与 SLOP-14 合规、零资料调研与 SLOP-13 事实溯源、多源资料包融合（.pdf/.docx/.xlsx/.png）、多受众一键改编与社媒长图、20 套标杆范本、24 主题 / 37+ 原生可编辑图谱与现场演示增强包，一键导出离线 HTML 放映、100% 可编辑 PPTX、PDF/PNG、字幕与讲义包。**
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
@@ -17,6 +17,7 @@
 
 ## 功能
 
+- **企业品牌宪章锁（`SLOP-14`）、多源资料包直吞（含 `.pdf`）、多受众一键改编与现场演示增强包**：支持将企业色板、字体、Logo、统一页脚、内容页保密水印（如 `CONFIDENTIAL · 内部资料`，HTML/PPTX 同构）与固定封底锁存至 `.dsh-ppt/brand-kit.json` 并由 **`SLOP-14`** 自动扫描禁用词与主色漂移；`ppt_from_office` 新增零依赖纯 Node `.pdf` 解析及混合素材文件夹融合（`.pdf` + `.docx` + `.xlsx`/`.csv` + `.png`/`.jpg` 一次出稿并自动绑定 `[E1..En]` 证据溯源账本）；`ppt_edit({ remixPreset })` / `--remix` / 工作台一键压缩改编为 **高管 5 分钟（6 页）** / **董事会（8 页）** / **客户路演（7 页）**副本（被折叠要点无损归档至备注）并导出 **4:5 / 1:1 社媒长图卡片（`.carousel.html`）**；独立 HTML 放映升级 **`Ctrl/Cmd+K` 全局速搜（含 `[E#]` 证据）**、**`D` 键白板画笔**、**`T` 键 Q&A 倒计时**、**`A` 键自动字幕导览** 与 **`.srt`/`.vtt` 配音字幕导出**（同步内置于 `dsh-remotion` 分镜包）；工作台同步对齐地图/等轴测、Layout Morph 一键变形、`focalPoint`、`imageBrief`、证据账本抽屉与修订差异对照。
 - **视觉与信息图智能（全球/中国点阵地图、2.5D 等轴测架构/柱碑、封面矢量底纹与智能配图协作）**：零外部依赖新增 **37+ 原生可编辑图谱**——主题自适应 **全球/中国战略矢量点阵地图 `map`**（`world` / `china`，脉冲枢纽、互联虚线、防碰撞标注与右侧排行比例栏）、**2.5D 等轴测立体信息图 `isometric`**（`stack` 立体平台架构堆叠与 `pillars` 3D 柱碑对比，100% 原生 `<a:custGeom>` 可编辑）、**高定封面程序化矢量底纹**（`coverPattern` 新增 `waves` / `isometric-mesh` / `editorial-arcs`），以及 **智能配图协作槽位（`imageBrief` / `visualBriefs`）**、`image.focalPoint` 焦距安全裁切与 `image[full-bleed]` 自动暗色渐变护眼层（WCAG AAA）。
 - **零资料深度调研、事实核验与策划出稿协议（Evidence Ledger + `SLOP-13` 门禁）**：针对「用户无现成文档/数据，仅给主题要求 Agent 自主检索、查准数据、先出方案再做 PPT」的场景，`ppt_templates({ topic })` / CLI `--plan` 一键输出匹配标杆、3 轮定向检索清单、量化槽位缺口诊断与逐页分镜策划表；确认后经 `ppt_create({ evidence, evidenceAppendix: true })` / CLI `--evidence --evidence-appendix` 将交叉核验后的 `E1..En` 证据账本自动绑定为清爽单行 `source` 脚注、演讲备注完整 URL/口径溯源卡、封底前零溢出 4 列 `booktabs` 核验附录页及讲义总表，并由 **`SLOP-13` 事实出处门禁**自动拦截悬空引用、未注明口径差异的冲突数据、「网络整理」等空洞假出处及无出处量化页。
 - **20 套标杆范本槽位契约（含 12 套 GitHub 开源实机蒸馏）、Few-Shot JSON 样板、标杆弧线重排与零模型自检修复闭环**：内置 **20 套满分标杆范本**（8 套核心场景 + 12 套源自 Apache-2.0/MIT/CC-BY-4.0 开源 GitHub `.pptx` 实机筛查蒸馏的 `mckinsey-evolution` / `luxury-budget-review` / `swiss-bauhaus-workshop` / `dark-stage-investor` / `blueprint-ai-factory` / `warm-brand-story` / `ted-storytelling-keynote` / `msft-enterprise-discovery` / `daylight-earnings-research` / `okr-performance-review` / `quiet-canvas-keynote` / `medical-clinical-course`），支持 `exemplar: "auto"` 智能匹配、`alignOrder: true` 按标杆叙事弧线重排乱序草稿，以及通过 `ppt_templates({ exemplarId })` 返回逐页槽位契约与 **Few-Shot 满分 JSON 样板**；支持 `ppt_absorb` / `--ingest-exemplars <dir>` 离线批量吸收本地或开源 `.pptx` 目录沉淀至 `.dsh-ppt/exemplars.json`；内置 **确定性弱模型补偿器 + 零模型自检修复闭环（`autoUpgrade` / `selfRepairDeck`）**，落盘前自动执行 `checkManifest` + `SLOP-01..12` 复检修复，0 额外模型调用、100% 无损解决标题溢出、超长文字墙、卡片/表格过载、碎块饼图、图表缺结论/聚光灯及低对比刺眼配色，直出零告警成品。

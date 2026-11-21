@@ -75,6 +75,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 - [ ] **SLOP-10 真实性与跨平台完备**：无未填占位草稿（除非用户明确要求空模板并标注 `draft`），全部产物为工作区绝对路径；若已运行渲染，确认 `missingFonts: []` 且收据匹配最新 PPTX。
 - [ ] **SLOP-11/12 卡片材质节奏与图表聚光灯**：长篇文稿避免连续 ≥ 4 页等宽方框卡片；单系列 ≥ 5 项柱状/条形图须通过 `highlight` / `spotlight` / `referenceLine` 聚焦核心主角。
 - [ ] **SLOP-13 事实出处与证据账本卫生**：严禁「数据来源：网络整理 / 公开资料 / 综合整理」等空洞假出处；零资料调研模式下所有量化数据页均须绑定已核验 `evidenceIds`（或一手 `source`），无悬空 `[E#]` 引用，`unverified` / `conflicting` 证据必须在画面可见文案中如实注明口径差异或区间。
+- [ ] **SLOP-14 企业品牌宪章与合规门禁**：工作区存在 `.dsh-ppt/brand-kit.json` 时默认自动锁定企业主色、字体、页脚、内容页保密水印（`brand.watermark`）与官方封底；全篇无企业禁用词（`forbidden-brand-term`）与主色漂移（`brand-palette-drift`）；需为高管/董事会/客户压缩精简版本时直接用 `ppt_edit({ remixPreset })` / `--remix` 另存无损归档副本。
 
 ## 跨 harness 安装
 

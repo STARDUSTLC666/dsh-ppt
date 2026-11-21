@@ -10,7 +10,8 @@ import { normalizeDataModel, prepareDataSlides, validateDataSnapshot, previewDat
 import { normalizeVisual, applyVisualActions } from './deck-visual.mjs'
 import { absorbPptx, CHROME_STYLE_IDS } from './deck-absorb.mjs'
 import { extractPptxSlides } from './deck-import.mjs'
-import { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './deck-delivery.mjs'
+import { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml, renderSubtitlesSrt, renderSubtitlesVtt } from './deck-delivery.mjs'
+import { REMIX_PRESETS, REMIX_PRESET_IDS, remixSlides, renderSocialCarouselHtml } from './deck-remix.mjs'
 import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, optimizeVisualRhythm, auditSlideAesthetics } from './deck-director.mjs'
 import {
   CARD_MATERIALS,
@@ -40,13 +41,23 @@ import {
 import { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
 import { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
 import { computeMapModel, computeIsometricModel, generateVisualBrief, normalizeImageBrief } from './deck-infographics.mjs'
+import {
+  normalizeBrandKit,
+  brandKitPathFor,
+  loadWorkspaceBrandKit,
+  saveWorkspaceBrandKit,
+  buildBrandKitFromAbsorbed,
+  applyBrandKitToSlidesAndBrand,
+  auditBrandCompliance,
+} from './deck-brand-kit.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
 export { listThemes, listMasterPresets, resolveTheme } from './deck-themes.mjs'
 export { absorbPptx } from './deck-absorb.mjs'
 export { extractPptxSlides } from './deck-import.mjs'
-export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml } from './deck-delivery.mjs'
+export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml, renderSubtitlesSrt, renderSubtitlesVtt } from './deck-delivery.mjs'
+export { REMIX_PRESETS, REMIX_PRESET_IDS, remixSlides, renderSocialCarouselHtml } from './deck-remix.mjs'
 export { extractOfficeSource, importOfficeDeck } from './deck-office.mjs'
 export { inferThemeFromContent, optimizeVisualRhythm } from './deck-director.mjs'
 export { listAllTasteRecipes, listCuratedTasteRecipes, loadWorkspaceTasteRecipes, saveWorkspaceTasteRecipe, resolveTasteRecipe } from './deck-taste.mjs'
@@ -67,6 +78,15 @@ export {
 export { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
 export { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
 export { computeMapModel, computeIsometricModel, generateVisualBrief, normalizeImageBrief } from './deck-infographics.mjs'
+export {
+  normalizeBrandKit,
+  brandKitPathFor,
+  loadWorkspaceBrandKit,
+  saveWorkspaceBrandKit,
+  buildBrandKitFromAbsorbed,
+  applyBrandKitToSlidesAndBrand,
+  auditBrandCompliance,
+} from './deck-brand-kit.mjs'
 
 export async function ingestExemplarCorpus(options = {}) {
   return ingestExemplarDirectory({
@@ -193,6 +213,11 @@ function normalizeBrand(input, assets, cwd) {
     if (String(input.footer).length > 100) fail('brand.footer 最多 100 字符')
     brand.footer = String(input.footer)
   }
+  if (input.watermark !== undefined && input.watermark !== null && String(input.watermark).trim() !== '') {
+    const wm = String(input.watermark).replace(/\s+/g, ' ').trim()
+    if (wm.length > 48) fail('brand.watermark 最多 48 字符')
+    brand.watermark = wm
+  }
   if (input.chromeStyle !== undefined && input.chromeStyle !== null && input.chromeStyle !== '') {
     const cs = String(input.chromeStyle).trim().toLowerCase()
     if (!CHROME_STYLE_SET.has(cs)) fail('brand.chromeStyle 需为 ' + CHROME_STYLE_IDS.join(' / '))
@@ -273,7 +298,7 @@ function validateRawSlides(slides) {
 }
 
 function snapshot(manifest) {
-  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'template', 'dataModel', 'evidence', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
+  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'brandKit', 'template', 'dataModel', 'evidence', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
 
 function collectAssets(manifest) {
@@ -387,6 +412,10 @@ export function checkManifest(manifest) {
   // 追加 SLOP-13 事实出处与证据账本静态门禁
   for (const evidenceIssue of auditEvidenceAndSourcing(manifest)) {
     issues.push(evidenceIssue)
+  }
+  // 追加 SLOP-14 企业品牌宪章与合规禁用词静态门禁
+  for (const brandIssue of auditBrandCompliance(manifest)) {
+    issues.push(brandIssue)
   }
 
   return { ok: !issues.some(i => i.severity === 'error'), slideCount: manifest.slides.length,
@@ -519,9 +548,11 @@ async function exportPptx(manifest, theme, language, signal) {
       }
     }
     if (manifest.brand?.logoAssetId) putImage(slide, manifest.brand.logoAssetId, LOGO_BOX, 'contain', 'Brand logo', manifest.brand.name)
-    if (manifest.brand?.footer && source.layout !== 'cover' && source.layout !== 'closing' && !lib.findShapeByName(slide, 'Footer source')) {
-      const footer = lib.addSlideTextBox(slide, { ...emu(FOOTER_BOX), text: manifest.brand.footer, name: 'Brand footer' })
-      lib.setShapeTextFormat(footer, { size: 10, font: pptxEastAsianFont(theme.fonts.body), color: theme.palette.muted })
+    if (manifest.brand?.footer && source.layout !== 'cover' && source.layout !== 'closing' && source.layout !== 'section' && !lib.findShapeByName(slide, 'Beamer footer band')) {
+      const hasSourceShape = Boolean(lib.findShapeByName(slide, 'Footer source') || lib.findShapeByName(slide, 'Source'))
+      const footerBox = hasSourceShape ? { x: FOOTER_BOX.x, y: 6.95, w: 4.55, h: 0.32 } : FOOTER_BOX
+      const footer = lib.addSlideTextBox(slide, { ...emu(footerBox), text: manifest.brand.footer, name: 'Brand footer' })
+      lib.setShapeTextFormat(footer, { size: 9.5, font: pptxEastAsianFont(theme.fonts.body), color: theme.palette.muted })
     }
   })
   const invalid = lib.validatePresentation(presentation).filter(i => i.severity === 'error')
@@ -536,9 +567,13 @@ function documentBytes(manifest) {
   if (Buffer.byteLength(text) > MAX_DOCUMENT) fail('JSON 工程含历史超过 64 MiB，请缩减图片或清理历史后另存工程')
   return text
 }
-function result(manifest, paths, writeHandout = false, writeOnePager = false) {
-  const handoutPath = paths.json.slice(0, -5) + '.handout.md'
-  const onePagerPath = paths.json.slice(0, -5) + '.onepager.html'
+function result(manifest, paths, writeHandout = false, writeOnePager = false, extra = {}) {
+  const base = paths.json.slice(0, -5)
+  const handoutPath = base + '.handout.md'
+  const onePagerPath = base + '.onepager.html'
+  const carouselPath = base + '.carousel.html'
+  const subtitlesExt = extra.subtitlesFormat === 'vtt' ? '.vtt' : '.srt'
+  const subtitlesPath = base + subtitlesExt
   const paceBudget = computePaceBudget(manifest)
   return { ok: true, title: manifest.title, theme: manifest.theme, language: manifest.language,
     slideCount: manifest.slides.length, deckId: manifest.deckId, revision: manifest.revision,
@@ -547,9 +582,12 @@ function result(manifest, paths, writeHandout = false, writeOnePager = false) {
     quality: manifest.quality, paceBudget, verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' }, outputDir: dirname(paths.json),
     files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json,
     ...(manifest.exemplar ? { exemplar: manifest.exemplar } : {}),
+    ...(manifest.brandKit?.name ? { brandKit: manifest.brandKit.name } : {}),
     ...(Array.isArray(manifest.evidence) && manifest.evidence.length > 0 ? { evidenceCount: manifest.evidence.length } : {}),
     ...(writeHandout ? { handoutPath } : {}),
-    ...(writeOnePager ? { onePagerPath } : {}) }
+    ...(writeOnePager ? { onePagerPath } : {}),
+    ...(extra.writeCarousel ? { carouselPath } : {}),
+    ...(extra.writeSubtitles ? { subtitlesPath } : {}) }
 }
 function pathsFor(jsonPath) {
   const base = jsonPath.slice(0, -5)
@@ -574,13 +612,19 @@ async function generate(manifest, signal) {
   abort(signal)
   return { json, pptx, manifest, theme, language }
 }
-function commit(paths, data, writeHandout = false, writeOnePager = false) {
-  const handoutPath = paths.json.slice(0, -5) + '.handout.md'
-  const onePagerPath = paths.json.slice(0, -5) + '.onepager.html'
+function commit(paths, data, writeHandout = false, writeOnePager = false, extra = {}) {
+  const base = paths.json.slice(0, -5)
+  const handoutPath = base + '.handout.md'
+  const onePagerPath = base + '.onepager.html'
+  const carouselPath = base + '.carousel.html'
+  const subtitlesExt = extra.subtitlesFormat === 'vtt' ? '.vtt' : '.srt'
+  const subtitlesPath = base + subtitlesExt
   const html = renderHtml(data.manifest, data.theme, data.language, {
     ...paths,
     ...(writeHandout ? { handout: handoutPath } : {}),
     ...(writeOnePager ? { onepager: onePagerPath } : {}),
+    ...(extra.writeCarousel ? { carousel: carouselPath } : {}),
+    ...(extra.writeSubtitles ? { subtitles: subtitlesPath } : {}),
   })
   data.manifest.artifacts = { html: hash(html), pptx: hash(data.pptx) }
   const artifacts = [
@@ -593,6 +637,19 @@ function commit(paths, data, writeHandout = false, writeOnePager = false) {
   }
   if (writeOnePager) {
     artifacts.push({ path: onePagerPath, data: renderOnePagerHtml(data.manifest, data.language.id), encoding: 'utf8' })
+  }
+  if (extra.writeCarousel) {
+    artifacts.push({
+      path: carouselPath,
+      data: renderSocialCarouselHtml(data.manifest, { ratio: extra.carouselRatio || '4:5', lang: data.language.id }),
+      encoding: 'utf8',
+    })
+  }
+  if (extra.writeSubtitles) {
+    const subData = extra.subtitlesFormat === 'vtt'
+      ? renderSubtitlesVtt(data.manifest, data.language.id)
+      : renderSubtitlesSrt(data.manifest, data.language.id)
+    artifacts.push({ path: subtitlesPath, data: subData, encoding: 'utf8' })
   }
   commitDeckArtifacts(artifacts)
 }
@@ -614,7 +671,7 @@ function validateSnapshot(value, assets) {
   if (value.evidence !== undefined) normalizeEvidenceLedger(value.evidence)
   if (value.brand != null) {
     if (Object.hasOwn(value.brand, 'logo')) fail('工程品牌仅支持嵌入的 logoAssetId，不读取本地 logo 路径')
-    for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'name', 'footer', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste']) {
+    for (const key of ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'name', 'footer', 'watermark', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste']) {
       if (value.brand[key] !== undefined && typeof value.brand[key] !== 'string') fail('工程 brand.' + key + ' 必须为字符串')
     }
     normalizeBrand(value.brand, assets, '.')
@@ -726,16 +783,24 @@ export async function buildDeckAsync(options = {}) {
     fail('未知品味配方 taste：' + String(options.taste))
   }
 
+  const activeBrandKit = options.brandKit && typeof options.brandKit === 'object'
+    ? normalizeBrandKit(options.brandKit)
+    : (options.useBrandKit !== false ? loadWorkspaceBrandKit(cwd) : null)
+
   const rawThemeOpt = typeof options.theme === 'string' && options.theme.trim() ? options.theme.trim() : undefined
   let chosenThemeId = rawThemeOpt
   let directorHint = null
-  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario || resolvedTaste || resolvedExemplar))) {
-    if (resolvedExemplar?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
+  if (chosenThemeId === 'auto' || (!chosenThemeId && (options.persona || absorbed || scenario || resolvedTaste || resolvedExemplar || activeBrandKit?.theme))) {
+    if (activeBrandKit?.enforce && activeBrandKit?.theme && (!rawThemeOpt || rawThemeOpt === 'auto')) {
+      chosenThemeId = activeBrandKit.theme
+    } else if (resolvedExemplar?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
       chosenThemeId = resolvedExemplar.theme
     } else if (resolvedTaste?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona) {
       chosenThemeId = resolvedTaste.theme
     } else if (absorbed && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona && !scenario) {
       chosenThemeId = absorbed.recommendedTheme
+    } else if (activeBrandKit?.theme && (!rawThemeOpt || rawThemeOpt === 'auto') && !options.persona && !scenario) {
+      chosenThemeId = activeBrandKit.theme
     } else {
       directorHint = inferThemeFromContent({
         title: options.title,
@@ -834,7 +899,25 @@ export async function buildDeckAsync(options = {}) {
     }
     brandInput = options.brand === null ? null : { ...baseAbsorbedBrand, ...(brandInput || {}) }
   }
+  if (activeBrandKit) {
+    const appliedKit = applyBrandKitToSlidesAndBrand(normalized.deck.slides, brandInput, activeBrandKit)
+    if (appliedKit.slides !== normalized.deck.slides) {
+      const last = appliedKit.slides[appliedKit.slides.length - 1]
+      const normalizedLast = normalizeSlides([last], 120, langId)[0]
+      normalized.deck.slides = [...appliedKit.slides.slice(0, -1), normalizedLast]
+    }
+    brandInput = appliedKit.brandInput
+  }
   const brand = normalizeBrand(brandInput, assets, cwd)
+  const manifestBrandKit = activeBrandKit
+    ? {
+        name: activeBrandKit.name,
+        enforce: activeBrandKit.enforce,
+        ...(activeBrandKit.watermark ? { watermark: activeBrandKit.watermark } : {}),
+        ...(activeBrandKit.brand?.primaryColor ? { brand: { primaryColor: activeBrandKit.brand.primaryColor } } : {}),
+        ...(Array.isArray(activeBrandKit.forbiddenTerms) && activeBrandKit.forbiddenTerms.length > 0 ? { forbiddenTerms: activeBrandKit.forbiddenTerms } : {}),
+      }
+    : undefined
 
   const targetMinutesRaw = options.targetMinutes !== undefined && options.targetMinutes !== null
     ? Number(options.targetMinutes)
@@ -857,6 +940,7 @@ export async function buildDeckAsync(options = {}) {
     ...(targetMinutesRaw !== undefined ? { targetMinutes: targetMinutesRaw } : {}),
     ...(scenario ? { template: scenario.id } : {}),
     ...(brand ? { brand } : {}),
+    ...(manifestBrandKit ? { brandKit: manifestBrandKit } : {}),
     ...(dataModel ? { dataModel } : {}),
     ...(evidence.length > 0 ? { evidence } : {}),
     assets,
@@ -898,8 +982,14 @@ export async function buildDeckAsync(options = {}) {
   const paths = pathsFor(resolve(normalized.outputDir, file + '.json'))
   const writeHandout = options.handout === true
   const writeOnePager = options.onePager === true
-  withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout, writeOnePager) })
-  const builtResult = result(activeManifest, paths, writeHandout, writeOnePager)
+  const extraOpts = {
+    writeCarousel: Boolean(options.socialCarousel),
+    carouselRatio: options.socialCarousel === '1:1' ? '1:1' : '4:5',
+    writeSubtitles: Boolean(options.subtitles),
+    subtitlesFormat: options.subtitles === 'vtt' ? 'vtt' : 'srt',
+  }
+  withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout, writeOnePager, extraOpts) })
+  const builtResult = result(activeManifest, paths, writeHandout, writeOnePager, extraOpts)
   return upgradeReport ? { ...builtResult, upgradeReport } : builtResult
 }
 
@@ -942,7 +1032,7 @@ export function readDeckProject(options = {}) {
 function expected(manifest, revision) {
   if (revision !== undefined && (!Number.isInteger(revision) || revision !== manifest.revision)) fail(`修订号冲突：当前 revision=${manifest.revision}，请重新读取工程后修改`)
 }
-async function saveRevision(state, next, signal, saveAs = false, preserveUndo = false) {
+async function saveRevision(state, next, signal, saveAs = false, preserveUndo = false, saveAsSuffix = '-dsh') {
   if (!saveAs) { const problem = artifactProblem(state.manifest, pathsFor(state.path)); if (problem) fail(problem) }
   next.version = DECK_VERSION; next.schemaVersion = 1; next.revision = state.manifest.revision + 1
   if (saveAs) { next.deckId = randomUUID(); next.revision = 0; next.history = preserveUndo ? [snapshot(state.manifest)] : [] }
@@ -952,7 +1042,7 @@ async function saveRevision(state, next, signal, saveAs = false, preserveUndo = 
     abort(signal)
     if (hash(readFileSync(state.path)) !== state.fingerprint) fail('工程已被其他操作修改，请重新读取后重试')
     if (saveAs) {
-      const file = resolveDeckFileName(dirname(state.path), basename(state.path, '.json') + '-dsh', false)
+      const file = resolveDeckFileName(dirname(state.path), basename(state.path, '.json') + saveAsSuffix, false)
       paths = pathsFor(resolve(dirname(state.path), file + '.json'))
     } else {
       const problem = artifactProblem(state.manifest, paths); if (problem) fail(problem)
@@ -960,6 +1050,25 @@ async function saveRevision(state, next, signal, saveAs = false, preserveUndo = 
     commit(paths, data)
   })
   return result(next, paths)
+}
+
+export async function remixDeck(options = {}) {
+  abort(options.signal)
+  const state = readDocument(options.deckPath, options.cwd)
+  expected(state.manifest, options.expectedRevision)
+  const presetId = String(options.preset ?? options.remixPreset ?? 'exec-5min').trim().toLowerCase()
+  const remixed = remixSlides(state.manifest, presetId, options.lang || state.manifest.language)
+  const next = clone(state.manifest)
+  next.slides = remixed.slides.map((s) => ({ ...s, id: s.id || randomUUID() }))
+  next.targetMinutes = remixed.targetMinutes
+  next.history = [...next.history, snapshot(state.manifest)].slice(-MAX_HISTORY)
+  const saveAs = options.saveAs !== false
+  const saved = await saveRevision(state, next, options.signal, saveAs, true, '-' + remixed.preset.id)
+  return {
+    ...saved,
+    changed: true,
+    remixReport: remixed.report,
+  }
 }
 
 export async function editDeck(options = {}) {
@@ -979,9 +1088,10 @@ export async function editDeck(options = {}) {
       options.remove === undefined &&
       options.append === undefined &&
       options.targetMinutes === undefined &&
+      options.remixPreset === undefined &&
       options.saveAs !== true
     ) {
-      fail('请提供 edits、theme、taste、referencePptx、order、duplicate、remove、append、targetMinutes 或 brand')
+      fail('请提供 edits、theme、taste、referencePptx、order、duplicate、remove、append、targetMinutes、remixPreset 或 brand')
     }
   }
   const used = new Set()
@@ -1132,9 +1242,23 @@ export async function editDeck(options = {}) {
       ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, cwd)
     if (next.brand && Object.keys(next.brand).length === 0) delete next.brand
   }
-  if (options.saveAs !== true && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
+  let remixReport
+  let saveAsFlag = options.saveAs === true
+  let saveAsSuffix = '-dsh'
+  if (options.remixPreset !== undefined && options.remixPreset !== null && String(options.remixPreset).trim() !== '') {
+    const remixed = remixSlides(next, String(options.remixPreset).trim().toLowerCase(), next.language)
+    next.slides = remixed.slides.map((s) => ({ ...s, id: s.id || randomUUID() }))
+    if (options.targetMinutes === undefined) next.targetMinutes = remixed.targetMinutes
+    remixReport = remixed.report
+    if (options.saveAs !== false) {
+      saveAsFlag = true
+      saveAsSuffix = '-' + remixed.preset.id
+    }
+  }
+  if (!saveAsFlag && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
   next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
-  return { ...await saveRevision(state, next, options.signal, options.saveAs === true, options.preserveUndo === true), changed: true }
+  const saved = await saveRevision(state, next, options.signal, saveAsFlag, options.preserveUndo === true || Boolean(remixReport), saveAsSuffix)
+  return { ...saved, changed: true, ...(remixReport ? { remixReport } : {}) }
 }
 
 /** An AI-selected, bounded formatting vocabulary; always an undoable new copy. */
@@ -1157,7 +1281,7 @@ export async function undoDeck(options = {}) {
   expected(state.manifest, options.expectedRevision)
   if (!state.manifest.history.length) fail('该工程没有可撤销的修改')
   const next = clone(state.manifest), prior = next.history.pop()
-  for (const key of ['brand', 'template', 'dataModel', 'targetMinutes', 'taste']) delete next[key]
+  for (const key of ['brand', 'brandKit', 'template', 'dataModel', 'targetMinutes', 'taste']) delete next[key]
   Object.assign(next, prior)
   return saveRevision(state, next, options.signal)
 }

@@ -26,6 +26,7 @@ const ALLOWED_LAYOUTS = new Set([
   'gantt', 'architecture', 'harvey', 'tam', 'org',
   'marimekko', 'sankey', 'swot',
   'mockup', 'code', 'quadrant', 'radar', 'dumbbell', 'heatmap',
+  'map', 'isometric',
   'table', 'closing', 'image', 'image-left', 'image-right', 'chart', 'chart-split',
   'waterfall', 'gallery', 'flywheel', 'chevron', 'value-chain',
   'mermaid', 'flowchart', 'sequence',
@@ -36,9 +37,11 @@ const ALLOWED_ITEM_STATUS = new Set(['neutral', 'accent', 'positive', 'negative'
 const ALLOWED_CHROME_STYLES = new Set(['consulting-classic', 'keynote-spatial', 'editorial-folio', 'saas-bento', 'academic-minimal', 'gov-ceremonial'])
 const ALLOWED_CARD_MATERIALS = new Set(['solid', 'frameless', 'glass', 'editorial-rule'])
 const ALLOWED_ICON_MODES = new Set(['off', 'explicit', 'auto'])
-const ALLOWED_COVER_PATTERNS = new Set(['dots', 'grid', 'rings'])
+const ALLOWED_COVER_PATTERNS = new Set(['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'])
+const ALLOWED_FOCAL_POINTS = new Set(['center', 'top', 'bottom', 'left', 'right'])
+const ALLOWED_REMIX_PRESETS = new Set(['exec-5min', 'board-brief', 'sales-pitch'])
 const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'icon', 'avatar', 'x', 'y', 'size', 'before', 'after', 'status', 'tone', 'bullets'])
-const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste'])
+const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'watermark', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste'])
 const VISUAL_KEYS = new Set(['titleSize', 'bodySize', 'chartLabelSize', 'density', 'tableStyle', 'chrome'])
 
 /** Sharing keeps the offline deck, but omits the control for a project not in the ZIP. */
@@ -400,6 +403,48 @@ function starterSlide(archetype: unknown, language: unknown): Record<string, unk
         : [['区域 \\ 季度', 'Q1', 'Q2', 'Q3', 'Q4'], ['华东大区', 78, 84, 91, 97], ['华南大区', 68, 75, 83, 90], ['华北大区', 62, 69, 77, 85], ['海外新兴', 44, 56, 71, 88]],
     }
   }
+  if (kind === 'map') {
+    return {
+      layout: 'map',
+      variant: en ? 'world' : 'china',
+      kicker: en ? 'REGIONAL FOOTPRINT' : '区域业务版图',
+      title: en ? 'Global regional hubs drive balanced revenue expansion' : '核心区域集群协同发力，华东与华南贡献主要增长',
+      items: en
+        ? [
+            { tag: 'NA', title: 'North America', value: '$42M', delta: '+28%', status: 'accent' },
+            { tag: 'EU', title: 'Europe', value: '$29M', delta: '+22%', status: 'positive' },
+            { tag: 'APAC', title: 'Asia-Pacific', value: '$36M', delta: '+41%', status: 'positive' },
+            { tag: 'MEA', title: 'Middle East', value: '$12M', delta: '+54%', status: 'warning' },
+          ]
+        : [
+            { tag: '华东', title: '华东大区', value: '¥4.2亿', delta: '+34%', status: 'accent' },
+            { tag: '华南', title: '华南大区', value: '¥3.1亿', delta: '+29%', status: 'positive' },
+            { tag: '华北', title: '华北大区', value: '¥2.4亿', delta: '+18%', status: 'positive' },
+            { tag: '西南', title: '西南大区', value: '¥1.5亿', delta: '+46%', status: 'warning' },
+          ],
+    }
+  }
+  if (kind === 'isometric') {
+    return {
+      layout: 'isometric',
+      variant: 'stack',
+      kicker: en ? 'PLATFORM STACK' : '立体技术栈',
+      title: en ? 'Four-layer 2.5D platform architecture unifies data to delivery' : '四层 2.5D 立体架构打通从底层算力到智能应用的完整闭环',
+      items: en
+        ? [
+            { tag: 'L4', title: 'Agent Applications', text: 'Executive studio, automation & interactive delivery', status: 'accent' },
+            { tag: 'L3', title: 'Orchestration Engine', text: 'Deterministic layout compiler & compliance gates', status: 'positive' },
+            { tag: 'L2', title: 'Evidence & Knowledge Graph', text: 'Verified provenance ledger & brand charter lock', status: 'neutral' },
+            { tag: 'L1', title: 'Zero-Dep Core Runtime', text: 'Native OOXML, SVG & offline HTML bundler', status: 'neutral' },
+          ]
+        : [
+            { tag: 'L4', title: '业务应用与交互层', text: '多端工作台、演讲提词台与社媒长图交付', status: 'accent' },
+            { tag: 'L3', title: '智能编排与治理层', text: '确定性版式编译器、审美升维与 SLOP 合规门禁', status: 'positive' },
+            { tag: 'L2', title: '证据账本与知识层', text: '多源资料融合溯源与企业品牌宪章锁', status: 'neutral' },
+            { tag: 'L1', title: '零依赖核心引擎层', text: '原生可编辑 OOXML、矢量图示与离线 HTML', status: 'neutral' },
+          ],
+    }
+  }
   return {
     layout: 'bullets',
     title: en ? 'New slide key takeaway' : '请填写本页核心结论句',
@@ -418,6 +463,68 @@ function originVerdict(request: Request): Response | undefined {
   if (site && !['same-origin', 'none'].includes(site)) return fail(403, '拒绝跨站操作')
   if (origin && /^https?:/i.test(origin)) {
     try { if (new URL(origin).host !== (request.headers.get('host') || new URL(request.url).host)) return fail(403, '拒绝跨源操作') } catch { return fail(403, '无效来源') }
+  }
+}
+
+function computeRevisionDiff(manifest: any): Record<string, unknown> | null {
+  const history = Array.isArray(manifest?.history) ? manifest.history : []
+  if (history.length === 0) return null
+  const prev = history[history.length - 1]
+  const prevSlides: any[] = Array.isArray(prev?.slides) ? prev.slides : []
+  const currSlides: any[] = Array.isArray(manifest?.slides) ? manifest.slides : []
+  const prevById = new Map<string, { idx: number; slide: any }>()
+  prevSlides.forEach((s, idx) => { if (s?.id) prevById.set(s.id, { idx, slide: s }) })
+  const currById = new Map<string, { idx: number; slide: any }>()
+  currSlides.forEach((s, idx) => { if (s?.id) currById.set(s.id, { idx, slide: s }) })
+
+  const added: Array<{ slide: number; id: string; title: string; layout: string }> = []
+  const removed: Array<{ prevSlide: number; id: string; title: string; layout: string }> = []
+  const modified: Array<{ slide: number; id: string; title: string; prevTitle: string; layout: string; prevLayout: string; fields: string[] }> = []
+
+  currSlides.forEach((s, idx) => {
+    const prior = s?.id ? prevById.get(s.id) : undefined
+    if (!prior) {
+      added.push({ slide: idx + 1, id: String(s?.id || ''), title: String(s?.title || ''), layout: String(s?.layout || '') })
+      return
+    }
+    const fields: string[] = []
+    for (const key of ['layout', 'variant', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'notes', 'bullets', 'items', 'rows', 'chart', 'image', 'coverPattern', 'chrome']) {
+      if (JSON.stringify(prior.slide?.[key]) !== JSON.stringify(s?.[key])) fields.push(key)
+    }
+    if (fields.length > 0) {
+      modified.push({
+        slide: idx + 1,
+        id: String(s.id),
+        title: String(s.title || ''),
+        prevTitle: String(prior.slide?.title || ''),
+        layout: String(s.layout || ''),
+        prevLayout: String(prior.slide?.layout || ''),
+        fields,
+      })
+    }
+  })
+
+  prevSlides.forEach((s, idx) => {
+    if (s?.id && !currById.has(s.id)) {
+      removed.push({ prevSlide: idx + 1, id: String(s.id), title: String(s.title || ''), layout: String(s.layout || '') })
+    }
+  })
+
+  const commonPrevOrder = prevSlides.filter(s => s?.id && currById.has(s.id)).map(s => s.id)
+  const commonCurrOrder = currSlides.filter(s => s?.id && prevById.has(s.id)).map(s => s.id)
+  const reordered = JSON.stringify(commonPrevOrder) !== JSON.stringify(commonCurrOrder)
+  const themeChanged = prev?.theme !== manifest?.theme ? { from: prev?.theme || '', to: manifest?.theme || '' } : null
+
+  return {
+    fromRevision: Math.max(0, (manifest?.revision ?? 1) - 1),
+    toRevision: manifest?.revision ?? 0,
+    prevSlideCount: prevSlides.length,
+    currSlideCount: currSlides.length,
+    added,
+    removed,
+    modified,
+    reordered,
+    themeChanged,
   }
 }
 
@@ -540,7 +647,9 @@ export class PptWorkbench {
     }
     return { ok: true, project: { ...entry, deckId: manifest.deckId, revision: manifest.revision, theme: manifest.theme ?? 'data',
       taste: manifest.taste ?? null,
-      brand: manifest.brand ?? null, targetMinutes: manifest.targetMinutes ?? null, paceBudget, themes, presets, tasteRecipes, slides: manifest.slides,
+      brand: manifest.brand ?? null, brandKit: manifest.brandKit ?? null, evidence: Array.isArray(manifest.evidence) ? manifest.evidence : [],
+      revisionDiff: computeRevisionDiff(manifest),
+      targetMinutes: manifest.targetMinutes ?? null, paceBudget, themes, presets, tasteRecipes, slides: manifest.slides,
       undoAvailable: manifest.history.length, quality: check, html, dataModel: manifest.dataModel ?? null,
       assets: Object.fromEntries(Object.entries(manifest.assets ?? {}).map(([key, value]: [string, any]) => [key, { data: value.data, mime: value.mime }])),
       render: currentRender ? { pageCount: currentRender.pngPaths.length, missingFonts: currentRender.missingFonts ?? [] } : null } }
@@ -574,6 +683,10 @@ export class PptWorkbench {
       } else if (key === 'name' || key === 'footer') {
         if (typeof item !== 'string' || item.length > 200 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(item)) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item
+      } else if (key === 'watermark') {
+        if (item === null || item === '') { out.watermark = ''; continue }
+        if (typeof item !== 'string' || item.trim().length > 48 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(item)) throw new Error('保密水印最多 48 字符且不能包含控制字符')
+        out.watermark = item.trim()
       } else if (key === 'logo') {
         if (item === null) out.logo = null
         else if (typeof item === 'string' && item.length <= 7_000_000 && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(item)) out.logo = item
@@ -741,11 +854,30 @@ export class PptWorkbench {
         if (item === null) { result.columns = undefined; continue }
         if (!Array.isArray(item) || item.length < 1 || item.length > 52 || item.some(c => typeof c !== 'string' || c.length > 120)) throw new Error('甘特图列头无效')
         result.columns = item
+      } else if (key === 'evidenceIds') {
+        if (item === null) { result.evidenceIds = undefined; continue }
+        if (!Array.isArray(item) || item.length > 16 || item.some(id => typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,24}$/.test(id.trim()))) throw new Error('证据编号 evidenceIds 格式无效')
+        result.evidenceIds = item.map(id => String(id).trim().toUpperCase())
+      } else if (key === 'imageBrief') {
+        if (item === null || item === '') { result.imageBrief = null; continue }
+        if (typeof item === 'string' && item.length <= 1000) {
+          result.imageBrief = item.trim()
+        } else if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const b = item as Record<string, unknown>
+          if (Object.keys(b).some(k => !['prompt', 'aspect', 'mood', 'safeZone', 'style'].includes(k))) throw new Error('智能配图需求字段无效')
+          result.imageBrief = b
+        } else {
+          throw new Error('智能配图需求格式无效')
+        }
       } else if (key === 'image') {
         if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('请选择 PNG 或 JPEG 图片')
         const image = item as Record<string, unknown>
-        if (Object.keys(image).some(k => !['src', 'alt', 'fit', 'caption'].includes(k)) || typeof image.src !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(image.src)) throw new Error('图片必须从面板上传，不能读取其他本地文件')
+        if (Object.keys(image).some(k => !['src', 'assetId', 'alt', 'fit', 'focalPoint', 'caption'].includes(k))) throw new Error('图片必须从面板上传，不能读取其他本地文件')
+        const hasValidSrc = typeof image.src === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image.src)
+        const hasValidAsset = image.src === undefined && typeof image.assetId === 'string' && /^img-[0-9a-f]{64}$/.test(image.assetId)
+        if (!hasValidSrc && !hasValidAsset) throw new Error('图片必须从面板上传，不能读取其他本地文件')
         if (['alt', 'caption'].some(k => image[k] !== undefined && (typeof image[k] !== 'string' || (image[k] as string).length > 2000)) || (image.fit !== undefined && !['contain', 'cover'].includes(String(image.fit)))) throw new Error('图片说明或适应方式无效')
+        if (image.focalPoint !== undefined && !ALLOWED_FOCAL_POINTS.has(String(image.focalPoint))) throw new Error('图片裁切焦点仅支持 center / top / bottom / left / right')
         result.image = item
       } else throw new Error('面板不支持修改此字段：' + key)
     }
@@ -765,21 +897,24 @@ export class PptWorkbench {
   }
   private officeBytes(raw: unknown, fileName: unknown): { bytes: Uint8Array; ext: string } {
     const name = typeof fileName === 'string' ? fileName.trim() : ''
-    const match = /\.(xlsx|csv|tsv|docx)$/i.exec(name)
+    const match = /\.(xlsx|csv|tsv|docx|pdf)$/i.exec(name)
     if (!match || typeof raw !== 'string' || raw.length < 4) {
-      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv、.docx 或 .pdf 文件')
     }
     const ext = '.' + match[1].toLowerCase()
     const clean = raw.replace(/^data:[^;,]+(?:;[^;,]+)*;base64,/, '').replace(/\s+/g, '')
     if (!clean || clean.length > 34_000_000 || clean.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) {
-      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv、.docx 或 .pdf 文件')
     }
     const bytes = Buffer.from(clean, 'base64')
     if (bytes.byteLength === 0 || bytes.byteLength > ABSORB_PPTX_LIMIT) {
-      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv、.docx 或 .pdf 文件')
     }
     if ((ext === '.xlsx' || ext === '.docx') && (bytes.byteLength < 100 || bytes[0] !== 0x50 || bytes[1] !== 0x4b)) {
-      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv 或 .docx 文件')
+      throw new Error('请选择 24 MiB 以内的 .xlsx、.csv、.tsv、.docx 或 .pdf 文件')
+    }
+    if (ext === '.pdf' && !bytes.subarray(0, Math.min(1024, bytes.byteLength)).toString('latin1').includes('%PDF-')) {
+      throw new Error('请选择有效的 PDF 文件')
     }
     return { bytes: new Uint8Array(bytes), ext }
   }
@@ -1205,7 +1340,7 @@ export class PptWorkbench {
       }
     }
     if (body.operation === 'download') {
-      if (!['html', 'pptx', 'json', 'handout', 'onepager', 'remotion'].includes(String(body.kind))) throw new Error('不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'handout', 'onepager', 'social-carousel', 'subtitles', 'remotion'].includes(String(body.kind))) throw new Error('不支持此文件类型')
       if (body.kind === 'handout') {
         const handoutPath = files.json.slice(0, -5) + '.handout.md'
         if (existsSync(handoutPath)) return { ok: true, name: basename(handoutPath), data: ordinaryFile(handoutPath).toString('base64') }
@@ -1218,6 +1353,20 @@ export class PptWorkbench {
           : renderOnePagerHtmlFallback(manifest, manifest.language)
         return { ok: true, name: basename(entry.path, '.json') + '-onepager.html', data: Buffer.from(html, 'utf8').toString('base64') }
       }
+      if (body.kind === 'social-carousel') {
+        if (typeof engine.renderSocialCarouselHtml !== 'function') throw new Error('当前引擎版本暂不支持社媒长图卡片导出')
+        const ratio = body.ratio === '1:1' ? '1:1' : '4:5'
+        const html = engine.renderSocialCarouselHtml(manifest, { ratio, lang: manifest.language })
+        return { ok: true, name: basename(entry.path, '.json') + '-carousel.html', data: Buffer.from(html, 'utf8').toString('base64') }
+      }
+      if (body.kind === 'subtitles') {
+        const fmt = body.format === 'vtt' ? 'vtt' : 'srt'
+        const text = fmt === 'vtt'
+          ? (typeof engine.renderSubtitlesVtt === 'function' ? engine.renderSubtitlesVtt(manifest, manifest.language) : '')
+          : (typeof engine.renderSubtitlesSrt === 'function' ? engine.renderSubtitlesSrt(manifest, manifest.language) : '')
+        if (!text) throw new Error('当前引擎版本暂不支持配音字幕导出')
+        return { ok: true, name: basename(entry.path, '.json') + '.' + fmt, data: Buffer.from(text, 'utf8').toString('base64') }
+      }
       if (body.kind === 'remotion') {
         const themeObj = typeof engine.resolveTheme === 'function' ? engine.resolveTheme(manifest.theme) : undefined
         const pace = typeof engine.computePaceBudget === 'function'
@@ -1229,6 +1378,8 @@ export class PptWorkbench {
           themeTokens: (themeObj?.palette ?? {}) as Record<string, string>,
           paceBudget: pace as any,
         })
+        if (typeof engine.renderSubtitlesSrt === 'function') bundle.files['captions.srt'] = engine.renderSubtitlesSrt(manifest, manifest.language)
+        if (typeof engine.renderSubtitlesVtt === 'function') bundle.files['captions.vtt'] = engine.renderSubtitlesVtt(manifest, manifest.language)
         const zipEntries = Object.fromEntries(Object.entries(bundle.files).map(([k, v]) => [k, strToU8(v)]))
         const zipped = zipSync(zipEntries, { level: 0 })
         return { ok: true, name: basename(entry.path, '.json') + '-remotion.zip', data: Buffer.from(zipped).toString('base64') }
@@ -1345,6 +1496,15 @@ export class PptWorkbench {
       const selected = view.project.slides[Math.min(originalIndex + (body.operation === 'duplicate' ? 1 : 0), view.project.slides.length - 1)].id
       return { ...view, selected }
     }
+    if (body.operation === 'remix') {
+      const preset = typeof body.preset === 'string' ? body.preset.trim().toLowerCase() : 'exec-5min'
+      if (!ALLOWED_REMIX_PRESETS.has(preset)) throw new Error('改编预设仅支持 exec-5min / board-brief / sales-pitch')
+      const result = typeof engine.remixDeck === 'function'
+        ? await engine.remixDeck({ deckPath: entry.path, preset, expectedRevision: body.expectedRevision, saveAs: body.saveAs !== false, signal })
+        : await engine.editDeck({ deckPath: entry.path, remixPreset: preset, expectedRevision: body.expectedRevision, saveAs: body.saveAs !== false, signal })
+      await this.remember(result, { remixPreset: preset })
+      return { ...await this.view(digest(result.jsonPath)), originalId: entry.id, remixReport: (result as any).remixReport ?? null }
+    }
     if (body.operation === 'undo') {
       const result = await engine.undoDeck({ deckPath: entry.path, expectedRevision: body.expectedRevision, signal })
       await this.remember(result, {})
@@ -1358,7 +1518,7 @@ export class PptWorkbench {
     if (denied) return denied
     try {
       const params = new URL(request.url).searchParams, kind = params.get('kind')
-      if (!['html', 'pptx', 'json', 'bundle', 'share', 'notes', 'handout', 'onepager', 'remotion', 'pdf', 'png-zip', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'bundle', 'share', 'notes', 'handout', 'onepager', 'social-carousel', 'subtitles', 'remotion', 'pdf', 'png-zip', 'coaching', 'data', 'visual'].includes(String(kind))) return fail(400, '不支持此文件类型')
       const { entry, manifest, files, engine } = await this.project(params.get('id'))
       if (String(manifest.revision) !== params.get('revision')) return fail(409, '项目已被修改，请重新打开后下载')
       request.signal.throwIfAborted()
@@ -1389,6 +1549,20 @@ export class PptWorkbench {
           : renderOnePagerHtmlFallback(manifest, manifest.language)
         bytes = strToU8(html)
         name = basename(entry.path, '.json') + '-onepager.html'
+      } else if (kind === 'social-carousel') {
+        if (typeof engine.renderSocialCarouselHtml !== 'function') return fail(400, '当前引擎版本暂不支持社媒长图卡片导出')
+        const ratio = params.get('ratio') === '1:1' ? '1:1' : '4:5'
+        const html = engine.renderSocialCarouselHtml(manifest, { ratio, lang: manifest.language })
+        bytes = strToU8(html)
+        name = basename(entry.path, '.json') + '-carousel.html'
+      } else if (kind === 'subtitles') {
+        const fmt = params.get('format') === 'vtt' ? 'vtt' : 'srt'
+        const text = fmt === 'vtt'
+          ? (typeof engine.renderSubtitlesVtt === 'function' ? engine.renderSubtitlesVtt(manifest, manifest.language) : '')
+          : (typeof engine.renderSubtitlesSrt === 'function' ? engine.renderSubtitlesSrt(manifest, manifest.language) : '')
+        if (!text) return fail(400, '当前引擎版本暂不支持配音字幕导出')
+        bytes = strToU8(text)
+        name = basename(entry.path, '.json') + '.' + fmt
       } else if (kind === 'remotion') {
         const themeObj = typeof engine.resolveTheme === 'function' ? engine.resolveTheme(manifest.theme) : undefined
         const pace = typeof engine.computePaceBudget === 'function'
@@ -1400,6 +1574,8 @@ export class PptWorkbench {
           themeTokens: (themeObj?.palette ?? {}) as Record<string, string>,
           paceBudget: pace as any,
         })
+        if (typeof engine.renderSubtitlesSrt === 'function') bundle.files['captions.srt'] = engine.renderSubtitlesSrt(manifest, manifest.language)
+        if (typeof engine.renderSubtitlesVtt === 'function') bundle.files['captions.vtt'] = engine.renderSubtitlesVtt(manifest, manifest.language)
         const zipEntries = Object.fromEntries(Object.entries(bundle.files).map(([k, v]) => [k, strToU8(v)]))
         bytes = zipSync(zipEntries, { level: 0 })
         name = basename(entry.path, '.json') + '-remotion.zip'
@@ -1468,10 +1644,31 @@ export class PptWorkbench {
       request.signal.throwIfAborted()
       if ((await this.project(entry.id)).manifest.revision !== manifest.revision) return fail(409, '项目已被修改，请重新打开后下载')
       const archive = kind === 'bundle' || kind === 'share' || kind === 'remotion' || kind === 'png-zip'
-      const type = ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind)) ? 'text/markdown; charset=utf-8' : archive ? 'application/zip' : kind === 'pdf' ? 'application/pdf' : kind === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : (kind === 'html' || kind === 'onepager') ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
+      const type = ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind))
+        ? 'text/markdown; charset=utf-8'
+        : kind === 'subtitles'
+          ? 'text/plain; charset=utf-8'
+          : archive
+            ? 'application/zip'
+            : kind === 'pdf'
+              ? 'application/pdf'
+              : kind === 'pptx'
+                ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                : (kind === 'html' || kind === 'onepager' || kind === 'social-carousel')
+                  ? 'text/html; charset=utf-8'
+                  : 'application/json; charset=utf-8'
+      const fallbackExt = archive
+        ? 'zip'
+        : ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind))
+          ? 'md'
+          : (kind === 'onepager' || kind === 'social-carousel')
+            ? 'html'
+            : kind === 'subtitles'
+              ? (params.get('format') === 'vtt' ? 'vtt' : 'srt')
+              : kind
       return new Response(new Uint8Array(bytes), { headers: {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="presentation.${archive ? 'zip' : ['notes', 'handout', 'coaching', 'data', 'visual'].includes(String(kind)) ? 'md' : kind === 'onepager' ? 'html' : kind}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+        'content-disposition': `attachment; filename="presentation.${fallbackExt}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
     } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
   }

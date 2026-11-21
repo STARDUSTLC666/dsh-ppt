@@ -729,6 +729,103 @@ ${MERMAID_CSS}
 </html>`
 }
 
+// ---------------------------------------------------------------------------
+// Subtitles (.srt / .vtt) Generator (powered by computePaceBudget)
+// ---------------------------------------------------------------------------
+
+function formatSubtitleTime(totalSeconds, separator = ',') {
+  const safe = Math.max(0, Number(totalSeconds) || 0)
+  const hrs = Math.floor(safe / 3600)
+  const mins = Math.floor((safe % 3600) / 60)
+  const secs = Math.floor(safe % 60)
+  const ms = Math.round((safe - Math.floor(safe)) * 1000) % 1000
+  return (
+    String(hrs).padStart(2, '0') + ':' +
+    String(mins).padStart(2, '0') + ':' +
+    String(secs).padStart(2, '0') + separator +
+    String(ms).padStart(3, '0')
+  )
+}
+
+function splitCaptionPhrases(text, maxChars = 48) {
+  const raw = String(text ?? '').replace(/\r/g, '').trim()
+  if (!raw) return []
+  const chunks = []
+  for (const para of raw.split(/\n+/)) {
+    const clean = stripMd(para).replace(/^[-•▸*]\s*/, '').trim()
+    if (!clean || /^\[(?:证据溯源|压缩归档|Condensed Backup|Evidence)/i.test(clean)) continue
+    const sentences = clean.split(/(?<=[。！？.!?;；])\s*/).map(s => s.trim()).filter(Boolean)
+    for (const sent of sentences) {
+      if (sent.length <= maxChars) {
+        chunks.push(sent)
+      } else {
+        for (let i = 0; i < sent.length; i += maxChars) {
+          chunks.push(sent.slice(i, i + maxChars).trim())
+        }
+      }
+    }
+  }
+  return chunks.filter(Boolean).slice(0, 6)
+}
+
+function buildSubtitleCues(manifest, language = 'zh') {
+  const pace = computePaceBudget(manifest)
+  const slides = Array.isArray(manifest?.slides) ? manifest.slides : []
+  const isEn = (language || manifest?.language) === 'en'
+  const cues = []
+  let cursorSec = 0
+
+  slides.forEach((slide, idx) => {
+    const duration = Math.max(6, Number(pace.slides?.[idx]?.seconds) || 20)
+    const rawNotes = typeof slide?.notes === 'string' && slide.notes.trim()
+      ? slide.notes.split(/\n\[(?:证据溯源|压缩归档|Condensed Backup|Evidence)/i)[0].trim()
+      : ''
+    const fallbackText = [
+      stripMd(slide?.title || (isEn ? `Slide ${idx + 1}` : `第 ${idx + 1} 页`)),
+      slide?.takeaway ? stripMd(slide.takeaway) : '',
+      !slide?.takeaway ? slideCueLines(slide) : '',
+    ].filter(Boolean).join('\n')
+
+    const lines = splitCaptionPhrases(rawNotes || fallbackText, isEn ? 68 : 42)
+    const safeLines = lines.length > 0 ? lines : [stripMd(slide?.title || (isEn ? `Slide ${idx + 1}` : `第 ${idx + 1} 页`))]
+    const totalWeight = safeLines.reduce((sum, l) => sum + Math.max(4, l.length), 0)
+    let localStart = cursorSec
+    safeLines.forEach((line, lIdx) => {
+      const share = lIdx === safeLines.length - 1
+        ? (cursorSec + duration) - localStart
+        : Math.max(2, Number(((Math.max(4, line.length) / totalWeight) * duration).toFixed(2)))
+      const localEnd = Math.min(cursorSec + duration, localStart + share)
+      cues.push({
+        index: cues.length + 1,
+        slide: idx + 1,
+        start: localStart,
+        end: Math.max(localStart + 1.5, localEnd),
+        text: line,
+      })
+      localStart = localEnd
+    })
+    cursorSec += duration
+  })
+
+  return cues
+}
+
+/** Generate standard SubRip (.srt) timed narration captions synced with computePaceBudget. */
+export function renderSubtitlesSrt(manifest, language) {
+  const cues = buildSubtitleCues(manifest, language)
+  return cues.map(c =>
+    `${c.index}\n${formatSubtitleTime(c.start, ',')} --> ${formatSubtitleTime(c.end, ',')}\n${c.text}\n`
+  ).join('\n')
+}
+
+/** Generate standard WebVTT (.vtt) timed narration captions synced with computePaceBudget. */
+export function renderSubtitlesVtt(manifest, language) {
+  const cues = buildSubtitleCues(manifest, language)
+  return 'WEBVTT\n\n' + cues.map(c =>
+    `${formatSubtitleTime(c.start, '.')} --> ${formatSubtitleTime(c.end, '.')}\n${c.text}\n`
+  ).join('\n')
+}
+
 /** Offline, sibling-file links only. No credentials or application server needed. */
 export function renderDelivery(manifest, files = {}, language) {
   const label = (zh, en) => language === 'en' ? en : language === 'bilingual' ? zh + ' · ' + en : zh
@@ -739,6 +836,8 @@ export function renderDelivery(manifest, files = {}, language) {
   const pptxLabel = label('下载 PPTX', 'Download PPTX')
   const handoutLabel = label('下载讲义 (.md)', 'Download handout (.md)')
   const onePagerLabel = label('下载一页纸战报 (.html)', 'Download One-Pager (.html)')
+  const carouselLabel = label('下载社媒长图卡片 (.html)', 'Download Social Carousel (.html)')
+  const subtitlesLabel = label('下载配音字幕 (.srt)', 'Download Subtitles (.srt)')
   const reviewLabel = label('检查与导出', 'Review and export')
   const outline = manifest.slides.map((slide, i) => `<li><button type="button" data-review-slide="${i + 1}"><span>${i + 1}</span>${escape(slide.title || label('无标题', 'Untitled'))}</button></li>`).join('')
   const rows = issues.map(issue => `<li><button type="button" data-review-slide="${issue.slide}"><strong>${escape(label('第 ' + issue.slide + ' 页', 'Slide ' + issue.slide))} · ${escape(issue.message)}</strong><span>${escape(issue.suggestion)}</span></button></li>`).join('')
@@ -762,6 +861,17 @@ export function renderDelivery(manifest, files = {}, language) {
     ? `<a id="download-onepager" href="${escape(href(files.onepager))}" download>${escape(onePagerLabel)}</a>`
     : `<a id="download-onepager" href="#onepager" download="${escape(onePagerFileName)}">${escape(onePagerLabel)}</a>`
 
+  const carouselFileName = files.carousel ? basename(files.carousel) : slugBase + '.carousel.html'
+  const carouselLink = files.carousel
+    ? `<a id="download-carousel" href="${escape(href(files.carousel))}" download>${escape(carouselLabel)}</a>`
+    : `<a id="download-carousel" href="#carousel" download="${escape(carouselFileName)}">${escape(carouselLabel)}</a>`
+
+  const subtitlesSrt = renderSubtitlesSrt(manifest, language)
+  const subtitlesFileName = files.subtitles ? basename(files.subtitles) : slugBase + '.srt'
+  const subtitlesLink = files.subtitles
+    ? `<a id="download-subtitles" href="${escape(href(files.subtitles))}" download>${escape(subtitlesLabel)}</a>`
+    : `<a id="download-subtitles" href="#subtitles" download="${escape(subtitlesFileName)}">${escape(subtitlesLabel)}</a>`
+
   const paceBudget = computePaceBudget(manifest)
   const paceSummaryText = label(
     `预计演讲时长 ${paceBudget.estimatedMinutes} 分钟（目标 ${paceBudget.targetMinutes} 分钟）${paceBudget.overBudgetSlides.length ? ` · 超预算页：${paceBudget.overBudgetSlides.join(', ')}` : ''}`,
@@ -769,12 +879,45 @@ export function renderDelivery(manifest, files = {}, language) {
   )
 
   const slideCues = (manifest.slides || []).map((s) => slideCueLines(s))
+  const searchIndex = (manifest.slides || []).map((s, idx) => ({
+    slide: idx + 1,
+    title: stripMd(s.title || label('无标题', 'Untitled')),
+    kicker: stripMd(s.kicker || ''),
+    layout: s.layout || 'bullets',
+    evidenceIds: Array.isArray(s.evidenceIds) ? s.evidenceIds : [],
+  }))
+  const evidenceIndex = Array.isArray(manifest.evidence)
+    ? manifest.evidence.map((ev) => {
+        const citingSlides = []
+        ;(manifest.slides || []).forEach((s, idx) => {
+          if (Array.isArray(s.evidenceIds) && s.evidenceIds.includes(ev.id)) citingSlides.push(idx + 1)
+        })
+        return {
+          id: ev.id,
+          claim: stripMd(ev.claim || ''),
+          source: stripMd(ev.source || ''),
+          confidence: ev.confidence || 'verified',
+          slides: citingSlides,
+        }
+      })
+    : []
+  const slideSubtitles = (manifest.slides || []).map((s, idx) => {
+    const rawNotes = typeof s.notes === 'string' && s.notes.trim()
+      ? s.notes.split(/\n\[(?:证据溯源|压缩归档|Condensed Backup|Evidence)/i)[0].trim()
+      : ''
+    const first = splitCaptionPhrases(rawNotes || [stripMd(s.title || ''), stripMd(s.takeaway || ''), slideCues[idx] || ''].filter(Boolean).join('\n'), language === 'en' ? 96 : 64)[0]
+    return first || stripMd(s.title || '')
+  })
+
   const targetMinutes = paceBudget.targetMinutes
   const deliveryConfig = {
     lang: language || 'zh',
     title: String(manifest.title || 'Presentation'),
     channelId: String(manifest.deckId || manifest.title || 'dsh-ppt').slice(0, 64),
     slideCues,
+    slideSubtitles,
+    searchIndex,
+    evidenceIndex,
     targetMinutes,
     slideBudgets: paceBudget.slides.map(s => ({ seconds: s.seconds, status: s.status })),
     handoutMarkdown,
@@ -783,6 +926,11 @@ export function renderDelivery(manifest, files = {}, language) {
     onePagerHtml,
     onePagerFileName,
     hasSiblingOnePager: Boolean(files.onepager),
+    carouselFileName,
+    hasSiblingCarousel: Boolean(files.carousel),
+    subtitlesSrt,
+    subtitlesFileName,
+    hasSiblingSubtitles: Boolean(files.subtitles),
     labels: {
       presenterTitle: label('演讲者提词台', 'Presenter Console'),
       currentSlide: label('当前画面', 'CURRENT SLIDE'),
@@ -807,23 +955,67 @@ export function renderDelivery(manifest, files = {}, language) {
       popupBlocked: label('浏览器拦截了演讲者窗口，请允许弹窗后按 P 重试。', 'Presenter popup was blocked. Allow popups and press P to retry.'),
       laserOn: label('虚拟激光笔已开启（移动鼠标指示，按 L 关闭）', 'Laser pointer ON (move pointer, press L to off)'),
       laserOff: label('虚拟激光笔已关闭', 'Laser pointer OFF'),
+      drawOn: label('实时白板画笔已开启（按 Z 撤销，C 清屏，D/Esc 退出）', 'Whiteboard pen ON (Z undo, C clear, D/Esc exit)'),
+      drawOff: label('实时白板画笔已关闭', 'Whiteboard pen OFF'),
+      jumpEmpty: label('未找到匹配的页面或证据编号', 'No matching slides or evidence entries'),
+      autoTourStart: label('自动导览', 'Auto-Tour'),
+      autoTourStop: label('停止导览', 'Stop Tour'),
+      qaFinished: label('Q&A 倒计时结束', 'Q&A time is up'),
       hint: label('← → 翻页 · P/空格 暂停 · T 重置 · A+/A- 字号 · L 激光笔 · B/W 黑白屏 · Esc 结束', '← → Navigate · T Reset · A+/A- Zoom · L Laser · B/W Blank · Esc End'),
     },
   }
 
   return {
     body: `<div id="delivery-bar">
-  <span id="delivery-status">${escape(draft ? label('待补全草稿', 'Draft: content needed') : label('演示文稿 · 请检查后交付', 'Presentation · review before delivery'))}</span>
+  <span id="delivery-status">${escape(draft ? label('待补全草稿', 'Draft: content needed') : label('演示文稿 · Ctrl+K 速搜 · D 标注 · T 计时 · A 导览', 'Presentation · Ctrl+K Jump · D Draw · T Timer · A Tour'))}</span>
+  <button id="dsh-jump-open" type="button" title="Ctrl/Cmd+K">${escape(label('速搜 (⌘K)', 'Search (⌘K)'))}</button>
+  <button id="dsh-autotour-btn" type="button" aria-pressed="false" title="A">${escape(label('自动导览', 'Auto-Tour'))}</button>
   ${download('pptx', pptxLabel, 'download-pptx')}
   <button id="review-toggle" type="button" aria-haspopup="dialog">${escape(reviewLabel)}</button>
 </div>
 <div id="dsh-laser-dot" aria-hidden="true"></div>
+<canvas id="dsh-draw-canvas" aria-label="${escape(label('实时白板标注画布', 'Live annotation canvas'))}"></canvas>
+<div id="dsh-draw-bar" hidden role="toolbar" aria-label="${escape(label('白板标注工具条', 'Whiteboard pen toolbar'))}">
+  <button type="button" class="dsh-pen-color is-active" data-pen="#EF4444" data-width="4" title="${escape(label('红笔', 'Red pen'))}" style="--swatch:#EF4444"></button>
+  <button type="button" class="dsh-pen-color" data-pen="rgba(245,158,11,0.45)" data-width="14" title="${escape(label('荧光笔', 'Highlighter'))}" style="--swatch:#F59E0B"></button>
+  <button type="button" class="dsh-pen-color" data-pen="#06B6D4" data-width="4" title="${escape(label('青笔', 'Cyan pen'))}" style="--swatch:#06B6D4"></button>
+  <button type="button" id="dsh-draw-undo">${escape(label('撤销 (Z)', 'Undo (Z)'))}</button>
+  <button type="button" id="dsh-draw-clear">${escape(label('清屏 (C)', 'Clear (C)'))}</button>
+  <button type="button" id="dsh-draw-exit">${escape(label('退出 (D)', 'Exit (D)'))}</button>
+</div>
+<div id="dsh-qa-timer" hidden role="region" aria-label="${escape(label('Q&A 倒计时器', 'Q&A countdown timer'))}">
+  <span class="dsh-qa-lbl">Q&amp;A</span>
+  <strong id="dsh-qa-readout">03:00</strong>
+  <button type="button" class="dsh-qa-preset" data-mins="1">1m</button>
+  <button type="button" class="dsh-qa-preset is-active" data-mins="3">3m</button>
+  <button type="button" class="dsh-qa-preset" data-mins="5">5m</button>
+  <button type="button" class="dsh-qa-preset" data-mins="10">10m</button>
+  <button type="button" id="dsh-qa-toggle">${escape(label('开始', 'Start'))}</button>
+  <button type="button" id="dsh-qa-reset">${escape(label('重置', 'Reset'))}</button>
+  <button type="button" id="dsh-qa-close" aria-label="${escape(label('关闭', 'Close'))}">✕</button>
+</div>
+<div id="dsh-sub-bar" hidden role="status" aria-live="polite">
+  <span id="dsh-sub-text"></span>
+  <div class="dsh-sub-ctrl">
+    <button type="button" id="dsh-sub-speed">1×</button>
+    <button type="button" id="dsh-sub-pause">${escape(label('暂停', 'Pause'))}</button>
+    <button type="button" id="dsh-sub-stop">✕</button>
+  </div>
+</div>
+<dialog id="dsh-jump-dialog" aria-labelledby="dsh-jump-title">
+  <div class="dsh-jump-head">
+    <span id="dsh-jump-title">${escape(label('快速跳转页面 / 搜索 [E#] 证据', 'Jump to slide or search [E#] evidence'))}</span>
+    <button type="button" id="dsh-jump-close">Esc</button>
+  </div>
+  <input id="dsh-jump-input" type="search" autocomplete="off" placeholder="${escape(label('输入标题关键词、正文、或 E1 / E2 证据编号…', 'Type slide title, keyword, or E1 / E2 evidence ID…'))}"/>
+  <ul id="dsh-jump-results" role="listbox"></ul>
+</dialog>
 <dialog id="review-panel" aria-labelledby="review-title">
   <div class="review-head"><h2 id="review-title">${escape(reviewLabel)}</h2><button id="review-close" type="button">${escape(label('关闭', 'Close'))}</button></div>
   <p id="review-summary">${escape(summary)}</p>
   <p id="review-pace" class="review-pace">${escape(paceSummaryText)}</p>
-  <div class="review-exports">${download('pptx', pptxLabel, 'review-download-pptx')}${download('json', label('保存可编辑项目', 'Save project'), 'download-project')}${handoutLink}${onePagerLink}</div>
-  <p>${escape(label('用 PowerPoint / WPS 打开 PPTX 可直接修改文字、图片和图表。让 Agent 继续修改时，使用保存的项目文件；按 P 打开双屏演讲者提词台，按 L 开启虚拟激光笔。', 'Open the PPTX in PowerPoint / WPS to edit text, images and charts. Use the saved project when asking your Agent to revise it; press P for Dual-Screen Presenter Console and L for Virtual Laser Pointer.'))}</p>
+  <div class="review-exports">${download('pptx', pptxLabel, 'review-download-pptx')}${download('json', label('保存可编辑项目', 'Save project'), 'download-project')}${handoutLink}${onePagerLink}${carouselLink}${subtitlesLink}</div>
+  <p>${escape(label('用 PowerPoint / WPS 打开 PPTX 可直接修改文字、图片和图表。快捷键：P 双屏提词台 · L 激光笔 · Ctrl/Cmd+K 速搜跳页 · D 实时白板标注 · T 现场 Q&A 倒计时 · A 自动字幕导览。', 'Open the PPTX in PowerPoint / WPS to edit text, images and charts. Shortcuts: P Presenter Console · L Laser · Ctrl/Cmd+K Search · D Draw Pen · T Q&A Timer · A Auto-Tour.'))}</p>
   <h3>${escape(label('检查提示 · 点击定位页面', 'Review items · click to open slide'))}</h3>
   ${issues.length ? `<ul id="review-issues">${rows}</ul>` : `<p>${escape(manifest.quality ? label('静态检查未发现问题；仍需核对实际排版和事实。', 'No static issues found; check the actual layout and facts.') : label('暂无报告。', 'No report available.'))}</p>`}
   <p>${escape(label('文字尺寸是静态估算；这里不能证明 PowerPoint / WPS 排版已通过验收。', 'Text fit is estimated; this does not verify the rendered PowerPoint / WPS layout.'))}</p>
@@ -837,6 +1029,7 @@ export function renderDelivery(manifest, files = {}, language) {
 
 /** This function is embedded in the standalone HTML, with no module dependencies. */
 function initDelivery(go, setOverview, current, total, cfg) {
+  const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
   const previous = document.getElementById('previous-slide')
   const next = document.getElementById('next-slide')
   const number = document.getElementById('page-number')
@@ -844,7 +1037,27 @@ function initDelivery(go, setOverview, current, total, cfg) {
   const toggle = document.getElementById('review-toggle')
   const handoutBtn = document.getElementById('download-handout')
   const onePagerBtn = document.getElementById('download-onepager')
+  const carouselBtn = document.getElementById('download-carousel')
+  const subtitlesBtn = document.getElementById('download-subtitles')
   const laserDot = document.getElementById('dsh-laser-dot')
+  const jumpOpenBtn = document.getElementById('dsh-jump-open')
+  const jumpDialog = document.getElementById('dsh-jump-dialog')
+  const jumpInput = document.getElementById('dsh-jump-input')
+  const jumpResults = document.getElementById('dsh-jump-results')
+  const jumpCloseBtn = document.getElementById('dsh-jump-close')
+  const drawCanvas = document.getElementById('dsh-draw-canvas')
+  const drawBar = document.getElementById('dsh-draw-bar')
+  const qaTimer = document.getElementById('dsh-qa-timer')
+  const qaReadout = document.getElementById('dsh-qa-readout')
+  const qaToggleBtn = document.getElementById('dsh-qa-toggle')
+  const qaResetBtn = document.getElementById('dsh-qa-reset')
+  const qaCloseBtn = document.getElementById('dsh-qa-close')
+  const tourBtn = document.getElementById('dsh-autotour-btn')
+  const subBar = document.getElementById('dsh-sub-bar')
+  const subText = document.getElementById('dsh-sub-text')
+  const subSpeedBtn = document.getElementById('dsh-sub-speed')
+  const subPauseBtn = document.getElementById('dsh-sub-pause')
+  const subStopBtn = document.getElementById('dsh-sub-stop')
 
   previous.addEventListener('click', () => go(Math.max(0, current() - 1)))
   next.addEventListener('click', () => go(Math.min(total - 1, current() + 1)))
@@ -888,6 +1101,328 @@ function initDelivery(go, setOverview, current, total, cfg) {
       triggerBlobDownload(cfg.onePagerHtml || '', 'text/html;charset=utf-8', cfg.onePagerFileName || 'onepager.html')
     })
   }
+  if (carouselBtn && cfg && !cfg.hasSiblingCarousel) {
+    carouselBtn.addEventListener('click', (event) => {
+      event.preventDefault()
+      const cs = getComputedStyle(document.documentElement)
+      const tv = (k, fb) => cs.getPropertyValue(k).trim() || fb
+      const domSlides = Array.from(document.querySelectorAll('.slide'))
+      const cards = domSlides.map((el, idx) => {
+        const heading = (el.querySelector('h1,h2,.statement-title,.quote-text')?.textContent || '').trim()
+        const kicker = (el.querySelector('.kicker')?.textContent || `PART ${String(idx + 1).padStart(2, '0')}`).trim()
+        const takeaway = (el.querySelector('.slide-takeaway,.media-takeaway')?.textContent || '').trim()
+        const points = Array.from(el.querySelectorAll('li,.card-text,.kpi-label,.kpi-val')).map(n => n.textContent.trim()).filter(Boolean).slice(0, 6)
+        const img = el.querySelector('img:not(.brand-logo)')
+        const imgTag = img ? `<img class="sc-img" src="${escape(img.getAttribute('src') || '')}" alt=""/>` : ''
+        const isHero = el.classList.contains('slide--cover') || el.classList.contains('slide--closing') || el.classList.contains('slide--section')
+        return `<article class="sc-card${isHero ? ' is-hero' : ''}"><header><span>${escape(kicker)}</span><span>${String(idx + 1).padStart(2, '0')} / ${String(domSlides.length).padStart(2, '0')}</span></header><h2>${escape(heading)}</h2>${imgTag}${points.length ? `<ul>${points.map(p => `<li>${escape(p)}</li>`).join('')}</ul>` : ''}${takeaway ? `<div class="sc-tk">${escape(takeaway)}</div>` : ''}</article>`
+      }).join('\n')
+      const doc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(cfg.title || 'Social Carousel')}</title><style>:root{--bg:${tv('--bg', '#FFF')};--fg:${tv('--fg', '#0F172A')};--accent:${tv('--accent', '#2563EB')};--surface:${tv('--panel', '#F8FAFC')};--muted:${tv('--muted', '#64748B')}}*{box-sizing:border-box}body{margin:0;background:#0F172A;color:#FFF;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center}nav{position:sticky;top:0;padding:12px;display:flex;gap:8px;z-index:9}nav button{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#FFF;border-radius:8px;padding:6px 12px;cursor:pointer}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,420px));gap:20px;padding:16px;width:100%;max-width:960px;justify-content:center}.sc-card{aspect-ratio:4/5;background:var(--bg);color:var(--fg);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:12px;overflow:hidden}body[data-ratio="1:1"] .sc-card{aspect-ratio:1/1}.sc-card.is-hero{background:var(--accent);color:#FFF;justify-content:center}.sc-card header{display:flex;justify-content:space-between;font-size:11px;font-weight:700;opacity:.75}.sc-card h2{margin:0;font-size:22px;line-height:1.25}.sc-card ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.5;display:flex;flex-direction:column;gap:6px}.sc-img{width:100%;max-height:46%;object-fit:cover;border-radius:10px}.sc-tk{margin-top:auto;padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface);font-size:12px;font-weight:700}@media print{nav{display:none}.sc-card{page-break-after:always;margin:0 auto}}</style></head><body data-ratio="4:5"><nav><button onclick="document.body.dataset.ratio='4:5'">4:5</button><button onclick="document.body.dataset.ratio='1:1'">1:1</button><button onclick="window.print()">Print / PDF</button></nav><main>${cards}</main></body></html>`
+      triggerBlobDownload(doc, 'text/html;charset=utf-8', cfg.carouselFileName || 'carousel.html')
+    })
+  }
+  if (subtitlesBtn && cfg && !cfg.hasSiblingSubtitles) {
+    subtitlesBtn.addEventListener('click', (event) => {
+      event.preventDefault()
+      triggerBlobDownload(cfg.subtitlesSrt || '', 'application/x-subrip;charset=utf-8', cfg.subtitlesFileName || 'subtitles.srt')
+    })
+  }
+
+  function showToast(msg, ms = 2200) {
+    const toastEl = document.getElementById('toast')
+    if (!toastEl || !msg) return
+    toastEl.textContent = msg
+    toastEl.hidden = false
+    setTimeout(() => { toastEl.hidden = true }, ms)
+  }
+
+  // --- Wave 3A: Ctrl/Cmd+K Instant Jump Search (Slides + [E#] Evidence) ---
+  let jumpMatches = []
+  let jumpSelected = 0
+  function renderJumpResults(queryRaw) {
+    if (!jumpResults) return
+    const q = String(queryRaw || '').trim().toLowerCase()
+    const items = []
+    for (const ev of (cfg?.evidenceIndex || [])) {
+      const hay = `${ev.id} ${ev.claim} ${ev.source}`.toLowerCase()
+      if (q && !hay.includes(q)) continue
+      if (q || (cfg?.evidenceIndex?.length && q.startsWith('e'))) {
+        items.push({
+          kind: 'evidence',
+          slide: ev.slides?.[0] || 1,
+          badge: `[${ev.id}]`,
+          title: ev.claim || ev.source,
+          meta: `${ev.source}${ev.slides?.length ? ` · P${ev.slides.join(', P')}` : ''}`,
+        })
+      }
+    }
+    const liveSlides = Array.from(document.querySelectorAll('.slide'))
+    for (const s of (cfg?.searchIndex || [])) {
+      const domEl = liveSlides[s.slide - 1]
+      const domText = domEl ? `${domEl.textContent || ''} ${domEl.dataset?.notes || ''}` : ''
+      const hay = `${s.slide} ${s.title} ${s.kicker} ${s.layout} ${(s.evidenceIds || []).join(' ')} ${domText}`.toLowerCase()
+      if (q && !hay.includes(q)) continue
+      items.push({
+        kind: 'slide',
+        slide: s.slide,
+        badge: `P${String(s.slide).padStart(2, '0')}`,
+        title: s.title,
+        meta: [s.kicker, s.layout, (s.evidenceIds || []).map(id => `[${id}]`).join(' ')].filter(Boolean).join(' · '),
+      })
+    }
+    jumpMatches = items.slice(0, 14)
+    jumpSelected = 0
+    if (jumpMatches.length === 0) {
+      jumpResults.innerHTML = `<li class="dsh-jump-empty">${escape(cfg?.labels?.jumpEmpty || 'No matches')}</li>`
+      return
+    }
+    jumpResults.innerHTML = jumpMatches.map((m, idx) =>
+      `<li role="option" class="${idx === 0 ? 'is-selected' : ''}" data-jump-idx="${idx}"><span class="dsh-jump-badge${m.kind === 'evidence' ? ' is-ev' : ''}">${escape(m.badge)}</span><span class="dsh-jump-main"><strong>${escape(m.title)}</strong>${m.meta ? `<small>${escape(m.meta)}</small>` : ''}</span></li>`
+    ).join('')
+    jumpResults.querySelectorAll('[data-jump-idx]').forEach((li) => {
+      li.addEventListener('click', () => {
+        const hit = jumpMatches[Number(li.dataset.jumpIdx)]
+        if (hit) { go(Math.max(0, Math.min(total - 1, hit.slide - 1))); setOverview(false); jumpDialog.close() }
+      })
+    })
+  }
+  function openJumpModal() {
+    if (!jumpDialog) return
+    if (jumpDialog.open) { jumpDialog.close(); return }
+    if (jumpInput) jumpInput.value = ''
+    renderJumpResults('')
+    jumpDialog.showModal()
+    if (jumpInput) setTimeout(() => jumpInput.focus(), 20)
+  }
+  if (jumpOpenBtn) jumpOpenBtn.addEventListener('click', openJumpModal)
+  if (jumpCloseBtn && jumpDialog) jumpCloseBtn.addEventListener('click', () => jumpDialog.close())
+  if (jumpInput) {
+    jumpInput.addEventListener('input', () => renderJumpResults(jumpInput.value))
+    jumpInput.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' && jumpMatches.length > 0) {
+        e.preventDefault()
+        jumpSelected = (jumpSelected + 1) % jumpMatches.length
+        jumpResults.querySelectorAll('[data-jump-idx]').forEach((el, idx) => el.classList.toggle('is-selected', idx === jumpSelected))
+      } else if (e.key === 'ArrowUp' && jumpMatches.length > 0) {
+        e.preventDefault()
+        jumpSelected = (jumpSelected - 1 + jumpMatches.length) % jumpMatches.length
+        jumpResults.querySelectorAll('[data-jump-idx]').forEach((el, idx) => el.classList.toggle('is-selected', idx === jumpSelected))
+      } else if (e.key === 'Enter' && jumpMatches[jumpSelected]) {
+        e.preventDefault()
+        const hit = jumpMatches[jumpSelected]
+        go(Math.max(0, Math.min(total - 1, hit.slide - 1)))
+        setOverview(false)
+        jumpDialog.close()
+      }
+    })
+  }
+
+  // --- Wave 3B: 'D' Live Whiteboard Annotation Pen ---
+  let drawActive = false
+  let drawingStroke = null
+  let penColor = '#EF4444'
+  let penWidth = 4
+  const strokesBySlide = new Map()
+  const drawCtx = drawCanvas ? drawCanvas.getContext('2d') : null
+
+  function resizeDrawCanvas() {
+    if (!drawCanvas || !drawCtx) return
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+    drawCanvas.width = Math.round(window.innerWidth * dpr)
+    drawCanvas.height = Math.round(window.innerHeight * dpr)
+    drawCanvas.style.width = window.innerWidth + 'px'
+    drawCanvas.style.height = window.innerHeight + 'px'
+    drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    redrawCanvas(current())
+  }
+  function redrawCanvas(slideIdx) {
+    if (!drawCanvas || !drawCtx) return
+    drawCtx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+    const strokes = strokesBySlide.get(slideIdx) || []
+    for (const st of strokes) {
+      if (!st.pts || st.pts.length < 2) continue
+      drawCtx.save()
+      drawCtx.strokeStyle = st.color
+      drawCtx.lineWidth = st.width
+      drawCtx.lineCap = 'round'
+      drawCtx.lineJoin = 'round'
+      drawCtx.beginPath()
+      drawCtx.moveTo(st.pts[0][0] * window.innerWidth, st.pts[0][1] * window.innerHeight)
+      for (let i = 1; i < st.pts.length; i += 1) {
+        drawCtx.lineTo(st.pts[i][0] * window.innerWidth, st.pts[i][1] * window.innerHeight)
+      }
+      drawCtx.stroke()
+      drawCtx.restore()
+    }
+  }
+  function setDrawActive(flag) {
+    drawActive = Boolean(flag)
+    if (drawCanvas) drawCanvas.classList.toggle('is-active', drawActive)
+    if (drawBar) drawBar.hidden = !drawActive
+    document.body.classList.toggle('draw-active', drawActive)
+    if (drawActive) resizeDrawCanvas()
+    showToast(drawActive ? cfg?.labels?.drawOn : cfg?.labels?.drawOff)
+  }
+  if (drawCanvas && drawCtx) {
+    window.addEventListener('resize', resizeDrawCanvas)
+    drawCanvas.addEventListener('pointerdown', (e) => {
+      if (!drawActive) return
+      drawCanvas.setPointerCapture?.(e.pointerId)
+      const slideIdx = current()
+      const list = strokesBySlide.get(slideIdx) || []
+      drawingStroke = {
+        color: penColor,
+        width: penWidth,
+        pts: [[e.clientX / Math.max(1, window.innerWidth), e.clientY / Math.max(1, window.innerHeight)]],
+      }
+      list.push(drawingStroke)
+      strokesBySlide.set(slideIdx, list)
+    })
+    drawCanvas.addEventListener('pointermove', (e) => {
+      if (!drawActive || !drawingStroke) return
+      drawingStroke.pts.push([e.clientX / Math.max(1, window.innerWidth), e.clientY / Math.max(1, window.innerHeight)])
+      redrawCanvas(current())
+    })
+    const finishStroke = () => { drawingStroke = null }
+    drawCanvas.addEventListener('pointerup', finishStroke)
+    drawCanvas.addEventListener('pointercancel', finishStroke)
+  }
+  if (drawBar) {
+    drawBar.querySelectorAll('.dsh-pen-color').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        penColor = btn.dataset.pen || '#EF4444'
+        penWidth = Number(btn.dataset.width) || 4
+        drawBar.querySelectorAll('.dsh-pen-color').forEach(b => b.classList.toggle('is-active', b === btn))
+      })
+    })
+    document.getElementById('dsh-draw-undo')?.addEventListener('click', () => {
+      const list = strokesBySlide.get(current())
+      if (list && list.length > 0) { list.pop(); redrawCanvas(current()) }
+    })
+    document.getElementById('dsh-draw-clear')?.addEventListener('click', () => {
+      strokesBySlide.set(current(), [])
+      redrawCanvas(current())
+    })
+    document.getElementById('dsh-draw-exit')?.addEventListener('click', () => setDrawActive(false))
+  }
+
+  // --- Wave 3C: 'T' Q&A Countdown Timer Pill ---
+  let qaPresetMins = 3
+  let qaRemainSec = 180
+  let qaRunning = false
+  let qaInterval = null
+  function renderQaTimer() {
+    if (!qaReadout || !qaTimer) return
+    const m = Math.floor(Math.max(0, qaRemainSec) / 60)
+    const s = Math.max(0, qaRemainSec) % 60
+    qaReadout.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+    qaTimer.classList.toggle('is-warn', qaRemainSec > 0 && qaRemainSec <= 30)
+    qaTimer.classList.toggle('is-over', qaRemainSec === 0)
+    if (qaToggleBtn) qaToggleBtn.textContent = qaRunning ? (cfg?.labels?.pause || 'Pause') : (cfg?.labels?.resume || 'Start')
+  }
+  function stopQaInterval() {
+    if (qaInterval) { clearInterval(qaInterval); qaInterval = null }
+    qaRunning = false
+    renderQaTimer()
+  }
+  function startQaTimer() {
+    if (qaRemainSec <= 0) qaRemainSec = qaPresetMins * 60
+    if (qaInterval) clearInterval(qaInterval)
+    qaRunning = true
+    renderQaTimer()
+    qaInterval = setInterval(() => {
+      qaRemainSec = Math.max(0, qaRemainSec - 1)
+      renderQaTimer()
+      if (qaRemainSec === 0) {
+        stopQaInterval()
+        showToast(cfg?.labels?.qaFinished || 'Q&A finished', 3200)
+      }
+    }, 1000)
+  }
+  function toggleQaPill() {
+    if (!qaTimer) return
+    const willOpen = qaTimer.hidden
+    qaTimer.hidden = !willOpen
+    if (!willOpen) stopQaInterval()
+    else renderQaTimer()
+  }
+  if (qaTimer) {
+    qaTimer.querySelectorAll('.dsh-qa-preset').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        qaPresetMins = Number(btn.dataset.mins) || 3
+        qaRemainSec = qaPresetMins * 60
+        stopQaInterval()
+        qaTimer.querySelectorAll('.dsh-qa-preset').forEach(b => b.classList.toggle('is-active', b === btn))
+      })
+    })
+    qaToggleBtn?.addEventListener('click', () => (qaRunning ? stopQaInterval() : startQaTimer()))
+    qaResetBtn?.addEventListener('click', () => { qaRemainSec = qaPresetMins * 60; stopQaInterval() })
+    qaCloseBtn?.addEventListener('click', () => { qaTimer.hidden = true; stopQaInterval() })
+  }
+
+  // --- Wave 3D: 'A' Narrated Auto-Tour + Live Subtitle Bar ---
+  let tourActive = false
+  let tourPaused = false
+  let tourSpeed = 1
+  let tourTimer = null
+  function updateSubtitleBar(idx) {
+    if (!subText) return
+    const caption = cfg?.slideSubtitles?.[idx] || cfg?.slideCues?.[idx] || ''
+    subText.textContent = caption || `Slide ${idx + 1} / ${total}`
+  }
+  function scheduleTourStep() {
+    if (tourTimer) { clearTimeout(tourTimer); tourTimer = null }
+    if (!tourActive || tourPaused) return
+    const idx = current()
+    updateSubtitleBar(idx)
+    const rawSec = Number(cfg?.slideBudgets?.[idx]?.seconds) || 12
+    const delayMs = Math.max(3000, Math.round((Math.min(24, Math.max(6, rawSec)) * 1000) / tourSpeed))
+    tourTimer = setTimeout(() => {
+      if (!tourActive || tourPaused) return
+      const nextIdx = current() + 1
+      if (nextIdx >= total) {
+        stopAutoTour()
+      } else {
+        go(nextIdx)
+        scheduleTourStep()
+      }
+    }, delayMs)
+  }
+  function stopAutoTour() {
+    tourActive = false
+    tourPaused = false
+    if (tourTimer) { clearTimeout(tourTimer); tourTimer = null }
+    if (subBar) subBar.hidden = true
+    if (tourBtn) {
+      tourBtn.setAttribute('aria-pressed', 'false')
+      tourBtn.textContent = cfg?.labels?.autoTourStart || 'Auto-Tour'
+    }
+  }
+  function startAutoTour() {
+    tourActive = true
+    tourPaused = false
+    if (subBar) subBar.hidden = false
+    if (tourBtn) {
+      tourBtn.setAttribute('aria-pressed', 'true')
+      tourBtn.textContent = cfg?.labels?.autoTourStop || 'Stop Tour'
+    }
+    if (subPauseBtn) subPauseBtn.textContent = cfg?.labels?.pause || 'Pause'
+    scheduleTourStep()
+  }
+  tourBtn?.addEventListener('click', () => (tourActive ? stopAutoTour() : startAutoTour()))
+  subStopBtn?.addEventListener('click', stopAutoTour)
+  subPauseBtn?.addEventListener('click', () => {
+    if (!tourActive) return
+    tourPaused = !tourPaused
+    subPauseBtn.textContent = tourPaused ? (cfg?.labels?.resume || 'Resume') : (cfg?.labels?.pause || 'Pause')
+    if (tourPaused && tourTimer) { clearTimeout(tourTimer); tourTimer = null }
+    else scheduleTourStep()
+  })
+  subSpeedBtn?.addEventListener('click', () => {
+    tourSpeed = tourSpeed === 1 ? 2 : 1
+    subSpeedBtn.textContent = tourSpeed + '×'
+    if (tourActive && !tourPaused) scheduleTourStep()
+  })
 
   // Phase 4 Dual-Screen Presenter Console (BroadcastChannel + window.opener.postMessage + Laser Pointer)
   let consoleWin = null
@@ -1147,29 +1682,51 @@ function initDelivery(go, setOverview, current, total, cfg) {
     else openConsole()
   }
 
-  // Laser pointer toggle ('L') + local stage tracking + fallback 'P' capture handler
+  // Live Presenter Hotkeys: Ctrl/Cmd+K (Jump Search), L (Laser), D (Whiteboard Draw), T (Q&A Timer), A (Auto-Tour)
   document.addEventListener('keydown', event => {
     const targetEl = event.target
+    const lower = String(event.key || '').toLowerCase()
+    if ((event.ctrlKey || event.metaKey) && lower === 'k') {
+      event.preventDefault()
+      openJumpModal()
+      return
+    }
     if (event.ctrlKey || event.metaKey || event.altKey) return
     if (targetEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(targetEl.tagName) || targetEl.isContentEditable === true)) return
-    if (panel.open) return
-    const lower = String(event.key || '').toLowerCase()
+    if (panel.open || (jumpDialog && jumpDialog.open)) return
     if (lower === 'l') {
       event.preventDefault()
       laserActive = !laserActive
       applyLaser(laserActive, 0.5, 0.5)
       document.body.classList.toggle('laser-active', laserActive)
       sendConsoleState()
-      const toastEl = document.getElementById('toast')
-      if (toastEl && cfg?.labels) {
-        toastEl.textContent = laserActive ? cfg.labels.laserOn : cfg.labels.laserOff
-        toastEl.hidden = false
-        setTimeout(() => { toastEl.hidden = true }, 2000)
+      showToast(laserActive ? cfg?.labels?.laserOn : cfg?.labels?.laserOff)
+    } else if (lower === 'd') {
+      event.preventDefault()
+      setDrawActive(!drawActive)
+    } else if (lower === 'z' && drawActive) {
+      event.preventDefault()
+      const list = strokesBySlide.get(current())
+      if (list && list.length > 0) { list.pop(); redrawCanvas(current()) }
+    } else if (lower === 'c' && drawActive) {
+      event.preventDefault()
+      strokesBySlide.set(current(), [])
+      redrawCanvas(current())
+    } else if (lower === 't') {
+      event.preventDefault()
+      toggleQaPill()
+    } else if (lower === 'a') {
+      event.preventDefault()
+      if (tourActive) stopAutoTour()
+      else startAutoTour()
+    } else if (lower === 'escape') {
+      if (drawActive) { event.preventDefault(); setDrawActive(false); return }
+      if (laserActive) {
+        applyLaser(false)
+        document.body.classList.remove('laser-active')
+        sendConsoleState()
       }
-    } else if (lower === 'escape' && laserActive) {
-      applyLaser(false)
-      document.body.classList.remove('laser-active')
-      sendConsoleState()
+      if (tourActive) stopAutoTour()
     }
   })
 
@@ -1185,6 +1742,8 @@ function initDelivery(go, setOverview, current, total, cfg) {
     previous.disabled = index === 0
     next.disabled = index === total - 1
     if (consoleOpen()) sendConsoleState(index)
+    if (drawActive || strokesBySlide.has(index)) redrawCanvas(index)
+    if (tourActive) updateSubtitleBar(index)
   }
 }
 
@@ -1198,6 +1757,42 @@ const DELIVERY_CSS = `
 #delivery-bar #download-pptx{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 #dsh-laser-dot{position:fixed;z-index:95;width:16px;height:16px;border-radius:99px;background:#EF4444;box-shadow:0 0 14px 6px rgba(239,68,68,.75);pointer-events:none;transform:translate(-50%,-50%);display:none}
 body.laser-active{cursor:crosshair}
+#dsh-draw-canvas{position:fixed;inset:0;z-index:88;pointer-events:none;touch-action:none}
+#dsh-draw-canvas.is-active{pointer-events:auto;cursor:crosshair}
+#dsh-draw-bar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:94;display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:99px;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--accent);box-shadow:0 10px 30px rgba(0,0,0,.35);backdrop-filter:blur(8px)}
+#dsh-draw-bar[hidden]{display:none}
+.dsh-pen-color{width:20px;height:20px;border-radius:99px;background:var(--swatch);border:2px solid transparent;cursor:pointer;padding:0}
+.dsh-pen-color.is-active{border-color:#FFF;box-shadow:0 0 0 2px var(--accent)}
+#dsh-draw-bar button:not(.dsh-pen-color){border:1px solid var(--muted);border-radius:99px;background:var(--bg);color:var(--fg);padding:4px 10px;font-size:12px;cursor:pointer}
+#dsh-qa-timer{position:fixed;top:64px;right:22px;z-index:92;display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:99px;background:color-mix(in srgb,var(--panel) 95%,transparent);border:1px solid var(--accent);box-shadow:0 10px 28px rgba(0,0,0,.32);font-size:12.5px;font-variant-numeric:tabular-nums}
+#dsh-qa-timer[hidden]{display:none}
+#dsh-qa-timer.is-warn{border-color:#F59E0B}
+#dsh-qa-timer.is-warn #dsh-qa-readout{color:#F59E0B}
+#dsh-qa-timer.is-over{border-color:#EF4444}
+#dsh-qa-timer.is-over #dsh-qa-readout{color:#EF4444}
+.dsh-qa-lbl{font-weight:700;color:var(--accent);font-size:11px;letter-spacing:.08em}
+#dsh-qa-readout{font-size:16px;font-weight:800;min-width:52px;text-align:center}
+#dsh-qa-timer button{border:1px solid color-mix(in srgb,var(--muted) 45%,transparent);border-radius:99px;background:var(--bg);color:var(--fg);padding:3px 8px;font-size:11.5px;cursor:pointer}
+#dsh-qa-timer button.is-active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+#dsh-sub-bar{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);z-index:90;max-width:min(820px,calc(100vw - 36px));display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:14px;background:rgba(15,23,42,.9);color:#F8FAFC;border:1px solid rgba(255,255,255,.16);box-shadow:0 12px 32px rgba(0,0,0,.38);backdrop-filter:blur(8px)}
+#dsh-sub-bar[hidden]{display:none}
+#dsh-sub-text{font-size:15px;line-height:1.45;font-weight:500}
+.dsh-sub-ctrl{display:flex;gap:6px;flex-shrink:0}
+.dsh-sub-ctrl button{border:1px solid rgba(255,255,255,.28);border-radius:99px;background:rgba(255,255,255,.1);color:#F8FAFC;padding:4px 9px;font-size:11.5px;cursor:pointer}
+#dsh-jump-dialog{background:var(--panel);color:var(--fg);border:1px solid var(--accent);border-radius:16px;width:min(620px,calc(100vw - 24px));max-height:76vh;padding:16px;box-shadow:0 20px 54px rgba(0,0,0,.45)}
+#dsh-jump-dialog::backdrop{background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+.dsh-jump-head{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px}
+.dsh-jump-head button{border:1px solid var(--muted);border-radius:8px;background:transparent;color:var(--fg);padding:3px 8px;font-size:11px;cursor:pointer}
+#dsh-jump-input{width:100%;padding:11px 14px;border-radius:10px;border:1px solid var(--muted);background:var(--bg);color:var(--fg);font:inherit;font-size:15px;margin-bottom:10px}
+#dsh-jump-results{list-style:none;margin:0;padding:0;max-height:48vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#dsh-jump-results li{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;background:var(--bg);border:1px solid transparent;cursor:pointer}
+#dsh-jump-results li:hover,#dsh-jump-results li.is-selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--bg))}
+.dsh-jump-badge{font-size:11px;font-weight:800;padding:2px 7px;border-radius:6px;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);flex-shrink:0}
+.dsh-jump-badge.is-ev{background:rgba(16,185,129,.18);color:#10B981}
+.dsh-jump-main{display:flex;flex-direction:column;min-width:0}
+.dsh-jump-main strong{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-jump-main small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-jump-empty{color:var(--muted);justify-content:center;cursor:default!important}
 #review-panel{background:var(--panel);color:var(--fg);border:1px solid var(--muted);border-radius:18px;width:min(620px,calc(100vw - 24px));max-height:85vh;padding:24px;overflow:auto}
 #review-panel::backdrop{background:rgba(0,0,0,.65)}
 .review-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
@@ -1223,5 +1818,5 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
   #notes-panel,#help-panel{bottom:160px}
   #review-panel{padding:18px}
 }
-@media print{#delivery-bar,#review-panel,#dsh-laser-dot{display:none!important}}
+@media print{#delivery-bar,#review-panel,#dsh-laser-dot,#dsh-draw-canvas,#dsh-draw-bar,#dsh-qa-timer,#dsh-sub-bar,#dsh-jump-dialog{display:none!important}}
 `

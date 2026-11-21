@@ -1594,6 +1594,28 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
     shapes.push(spText('Page number', folioBox, [paraRich(folio, { size: chromeCfg.folioPos === 'top-right' ? 1000 : 950, color: muted, align: 'r' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
   }
 
+  const watermarkText = typeof manifest?.brand?.watermark === 'string' ? manifest.brand.watermark.trim() : ''
+  if (watermarkText && !(slide.layout === 'image' && variant === 'full-bleed')) {
+    const hasLogo = Boolean(manifest?.brand?.logoAssetId)
+    const wmW = computeBadgePillWidth(watermarkText.toUpperCase(), 8.5, 4.1, 1.3)
+    const wmRight = chromeCfg.folioPos === 'top-right'
+      ? (hasLogo ? 9.85 : 10.45)
+      : (hasLogo ? 11.35 : 12.68)
+    const wmY = chromeCfg.folioPos === 'top-right'
+      ? 0.22
+      : (chromeCfg.folioPos === 'beamer-bar' ? 0.14 : 0.10)
+    shapes.push(spText('Brand watermark', { x: +(wmRight - wmW).toFixed(3), y: wmY, w: wmW, h: 0.23 }, [
+      paraRich(watermarkText.toUpperCase(), { size: 850, color: muted, bold: true, align: 'ctr' }),
+    ], {
+      anchor: 'ctr',
+      fill: surface1,
+      stroke: hairline,
+      strokeW: 6350,
+      roundAdj: 22000,
+      ins: [45720, 9144, 45720, 9144],
+    }))
+  }
+
   return shapes.join('')
 }
 
