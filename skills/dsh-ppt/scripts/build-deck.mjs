@@ -17,7 +17,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listThemes, THEME_IDS, DEFAULT_THEME } from './deck-themes.mjs'
 import { CHROME_STYLE_IDS } from './deck-absorb.mjs'
-import { buildDeckAsync, listTemplates, editDeck, remixDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus, buildResearchPlan, saveWorkspaceBrandKit, loadWorkspaceBrandKit } from './deck-advanced.mjs'
+import { buildDeckAsync, listTemplates, editDeck, remixDeck, undoDeck, checkDeckAsync, renderDeck, absorbPptx, importPptxDeck, importOfficeDeck, listAllTasteRecipes, listCuratedExemplars, loadWorkspaceExemplars, ingestExemplarCorpus, buildResearchPlan, saveWorkspaceBrandKit, loadWorkspaceBrandKit, listSlideBank, mergeDecks } from './deck-advanced.mjs'
 
 const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导出
 
@@ -47,6 +47,17 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --absorb <deck.pptx>    只读检查并输出参考 .pptx 的净化主题、推荐内置主题/骨架、深度审美配方 styleRecipe 与逐页分布 JSON
   --import-pptx <path>    导入外部 .pptx 全量内容（标题/要点/表格/图表/图片/备注）并一键翻新为 dsh-ppt 工程
   --from-office <path>    直吞 .xlsx / .csv / .tsv / .docx / .pdf 或本地混合素材目录，自动画像并生成全套文稿（多文件自动生成证据溯源账本）
+  --inspect-only          配合 --from-office 使用：仅输出精炼素材档案与 Mode C 权威外源补充检索计划（不直接出稿）
+  --instructions <text>   配合 --from-office 使用：自然语言呈现要求（如 "控制8页，跳过目录，product.png放封面"）
+  --bind-data             配合 --from-office 使用：自动把 Excel 数值工作表绑定进 dataModel 供后续 ppt_data 实时刷新
+  --export <list>         可选附加导出（逗号分隔）：xlsx,docx,qa-prep,memo,i18n,handout,one-pager,social-carousel,subtitles
+  --merge <json|@path>    跨工程拼装器：传入 sources[]（deckPath + slides 或 bankIds）自动去重资产与重映射 [E#] 证据
+  --save-to-bank <slide>  配合 --edit 将指定页码/ID 收藏至 .dsh-ppt/slide-bank.json 企业金页库
+  --list-bank             列出 .dsh-ppt/slide-bank.json 已收藏金页
+  --translate <json|@path> 配合 --edit 无损应用翻译包（保持 100% 原版式/图表/图片）
+  --bilingual             配合 --translate 输出中英双语对照版
+  --feedback <path>       配合 --check 读取 HTML 按 R 导出的 review-feedback.json 审阅批注
+  --motion-profile <id>   动效档位：subtle / executive / keynote
   --sync-pptx <path>      将 Office 修改后的 .pptx 内容回导同步至已有工程（自动写入 .history/ 支持撤销）
   --target-project <dir>  配合 --sync-pptx 指定目标工程目录（或传 --edit <deck.json>）
   --preserve-theme        配合 --import-pptx 使用，保留原 .pptx 净化后的品牌配色与 Logo
@@ -135,6 +146,17 @@ export function parseArgv(argv) {
     else if (key === '--absorb') args.absorb = nextValue()
     else if (key === '--import-pptx') args.importPptx = nextValue()
     else if (key === '--from-office') args.fromOffice = nextValue()
+    else if (key === '--inspect-only') args.inspectOnly = true
+    else if (key === '--instructions') args.instructions = nextValue()
+    else if (key === '--bind-data') args.bindData = true
+    else if (key === '--export') args.exports = nextValue().split(',').map(s => s.trim()).filter(Boolean)
+    else if (key === '--merge') args.merge = readJson(nextValue())
+    else if (key === '--save-to-bank') args.saveToBank = nextValue()
+    else if (key === '--list-bank') args.listBank = true
+    else if (key === '--translate') args.translate = readJson(nextValue())
+    else if (key === '--bilingual') args.bilingual = true
+    else if (key === '--feedback') args.feedback = nextValue()
+    else if (key === '--motion-profile') args.motionProfile = nextValue()
     else if (key === '--sync-pptx') args.syncPptx = nextValue()
     else if (key === '--target-project') args.targetProject = nextValue()
     else if (key === '--preserve-theme') args.preserveTheme = true
@@ -209,7 +231,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   if (args.listTemplates) { log(JSON.stringify({ templates: listTemplates(args.lang) }, null, 2)); return 0 }
   if (args.listTastes) { log(JSON.stringify({ tasteRecipes: listAllTasteRecipes(process.cwd()) }, null, 2)); return 0 }
   if (args.listExemplars) { log(JSON.stringify({ exemplars: listCuratedExemplars(loadWorkspaceExemplars(process.cwd())) }, null, 2)); return 0 }
+  if (args.listBank) { log(JSON.stringify(listSlideBank(process.cwd()), null, 2)); return 0 }
   if (args.plan) {
+    const kit = loadWorkspaceBrandKit(process.cwd())
     const plan = buildResearchPlan({
       topic: args.plan,
       persona: args.persona,
@@ -217,8 +241,27 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       evidence: args.evidence,
       lang: args.lang,
       workspaceExemplars: loadWorkspaceExemplars(process.cwd()),
+      preferredSources: kit?.preferredSources,
+      blockedDomains: kit?.blockedDomains,
     })
     log(JSON.stringify(plan, null, 2))
+    return 0
+  }
+  if (args.merge) {
+    const merged = await mergeDecks({
+      sources: Array.isArray(args.merge) ? args.merge : args.merge.sources,
+      title: args.title || undefined,
+      theme: args.theme,
+      lang: args.lang,
+      motion: args.motion,
+      motionProfile: args.motionProfile,
+      outputDir: resolvePath(args.out || '.'),
+      fileName: args.file || undefined,
+      overwrite: args.overwrite === true,
+      exports: args.exports,
+      cwd: process.cwd(),
+    })
+    log(JSON.stringify(merged, null, 2))
     return 0
   }
   if (args.ingestExemplars) {
@@ -258,6 +301,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       ...(args.chrome ? { chromeStyle: args.chrome } : {}),
       ...(args.lang ? { lang: args.lang } : {}),
       ...(args.motion ? { motion: args.motion } : {}),
+      ...(args.motionProfile ? { motionProfile: args.motionProfile } : {}),
+      ...(args.inspectOnly ? { inspectOnly: true } : {}),
+      ...(args.instructions ? { instructions: args.instructions } : {}),
+      ...(args.bindData ? { bindDataModel: true } : {}),
+      ...(args.evidence !== undefined ? { evidence: args.evidence } : {}),
+      ...(args.exports ? { exports: args.exports } : {}),
       ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
       overwrite: args.overwrite === true,
       handout: args.handout === true,
@@ -304,7 +353,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return 0
   }
   if (args.check) {
-    const report = await checkDeckAsync({ deckPath: args.check, renderReceipt: args.renderReceipt })
+    const report = await checkDeckAsync({ deckPath: args.check, renderReceipt: args.renderReceipt, ...(args.feedback ? { feedbackPath: args.feedback } : {}) })
     log(JSON.stringify(report, null, 2)); return report.ok && (args.renderReceipt === undefined || report.render?.status === 'rendered') ? 0 : 1
   }
   if (args.render) {
@@ -316,6 +365,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     : args.brand
 
   if (args.edit || args.undo) {
+    const bankSlideRef = args.saveToBank !== undefined
+      ? (/^\d+$/.test(String(args.saveToBank)) ? Number(args.saveToBank) : String(args.saveToBank))
+      : undefined
     const result = args.edit
       ? await editDeck({
           deckPath: args.edit,
@@ -324,6 +376,10 @@ export async function main(argv = process.argv.slice(2), io = {}) {
           ...(args.taste ? { taste: args.taste } : {}),
           referencePptx: args.referencePptx,
           brand: effectiveBrand,
+          ...(args.motionProfile ? { motionProfile: args.motionProfile } : {}),
+          ...(bankSlideRef !== undefined ? { saveToBank: { slide: bankSlideRef } } : {}),
+          ...(args.translate !== undefined ? { translations: args.translate, bilingualMode: args.bilingual === true } : {}),
+          ...(args.exports ? { exports: args.exports } : {}),
           ...(args.targetMinutes !== undefined ? { targetMinutes: args.targetMinutes } : {}),
           expectedRevision: args.revision,
         })
@@ -360,6 +416,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     smartLayout: args.smartLayout,
     lang: args.lang,
     motion: args.motion,
+    ...(args.motionProfile ? { motionProfile: args.motionProfile } : {}),
+    ...(args.exports ? { exports: args.exports } : {}),
     outputDir: resolvePath(args.out || '.'),
     fileName: args.file,
     overwrite: args.overwrite,

@@ -27,6 +27,7 @@ const ALLOWED_LAYOUTS = new Set([
   'marimekko', 'sankey', 'swot',
   'mockup', 'code', 'quadrant', 'radar', 'dumbbell', 'heatmap',
   'map', 'isometric',
+  'issue-tree', 'treemap', 'gauge', 'pricing',
   'table', 'closing', 'image', 'image-left', 'image-right', 'chart', 'chart-split',
   'waterfall', 'gallery', 'flywheel', 'chevron', 'value-chain',
   'mermaid', 'flowchart', 'sequence',
@@ -40,7 +41,7 @@ const ALLOWED_ICON_MODES = new Set(['off', 'explicit', 'auto'])
 const ALLOWED_COVER_PATTERNS = new Set(['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'])
 const ALLOWED_FOCAL_POINTS = new Set(['center', 'top', 'bottom', 'left', 'right'])
 const ALLOWED_REMIX_PRESETS = new Set(['exec-5min', 'board-brief', 'sales-pitch'])
-const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'icon', 'avatar', 'x', 'y', 'size', 'before', 'after', 'status', 'tone', 'bullets'])
+const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'icon', 'avatar', 'x', 'y', 'size', 'before', 'after', 'actual', 'target', 'max', 'status', 'tone', 'bullets'])
 const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'watermark', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste'])
 const VISUAL_KEYS = new Set(['titleSize', 'bodySize', 'chartLabelSize', 'density', 'tableStyle', 'chrome'])
 
@@ -1340,7 +1341,19 @@ export class PptWorkbench {
       }
     }
     if (body.operation === 'download') {
-      if (!['html', 'pptx', 'json', 'handout', 'onepager', 'social-carousel', 'subtitles', 'remotion'].includes(String(body.kind))) throw new Error('不支持此文件类型')
+      if (!['html', 'pptx', 'json', 'handout', 'onepager', 'social-carousel', 'subtitles', 'remotion', 'xlsx', 'docx', 'qa-prep'].includes(String(body.kind))) throw new Error('不支持此文件类型')
+      if (body.kind === 'xlsx') {
+        if (typeof engine.renderDeckWorkbookXlsx !== 'function') throw new Error('当前引擎版本暂不支持 Excel 工作簿导出')
+        return { ok: true, name: basename(entry.path, '.json') + '.xlsx', data: engine.renderDeckWorkbookXlsx(manifest).toString('base64') }
+      }
+      if (body.kind === 'docx') {
+        if (typeof engine.renderDeckReportDocx !== 'function') throw new Error('当前引擎版本暂不支持 Word 文档导出')
+        return { ok: true, name: basename(entry.path, '.json') + '.docx', data: engine.renderDeckReportDocx(manifest, manifest.language).toString('base64') }
+      }
+      if (body.kind === 'qa-prep') {
+        if (typeof engine.renderQaPrepMarkdown !== 'function') throw new Error('当前引擎版本暂不支持会前质询预案导出')
+        return { ok: true, name: basename(entry.path, '.json') + '.qa-prep.md', data: Buffer.from(engine.renderQaPrepMarkdown(manifest, manifest.language), 'utf8').toString('base64') }
+      }
       if (body.kind === 'handout') {
         const handoutPath = files.json.slice(0, -5) + '.handout.md'
         if (existsSync(handoutPath)) return { ok: true, name: basename(handoutPath), data: ordinaryFile(handoutPath).toString('base64') }

@@ -39,7 +39,22 @@ import {
   renderExemplarPromptGuide,
 } from './deck-exemplars.mjs'
 import { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
-import { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
+import {
+  normalizeEvidenceLedger,
+  applyEvidenceLedgerToSlides,
+  auditEvidenceAndSourcing,
+  buildResearchPlan,
+  AUTHORITATIVE_DOMAINS,
+  NOISE_DOMAINS,
+  detectResearchDomain,
+  buildAuthoritativeQueryPack,
+  classifySourceAuthority,
+  buildHybridEnrichmentPlan,
+  mergeHybridEvidence,
+} from './deck-evidence.mjs'
+import { renderDeckWorkbookXlsx, renderDeckReportDocx, renderDeckMemoMarkdown, renderQaPrepMarkdown } from './deck-export.mjs'
+import { slideBankPathFor, loadSlideBank, saveSlideToBank, listSlideBank, removeBankSlide, mergeDecks } from './deck-compose.mjs'
+import { extractTranslationBundle, applyTranslationBundle } from './deck-i18n.mjs'
 import { computeMapModel, computeIsometricModel, generateVisualBrief, normalizeImageBrief } from './deck-infographics.mjs'
 import {
   normalizeBrandKit,
@@ -58,7 +73,7 @@ export { absorbPptx } from './deck-absorb.mjs'
 export { extractPptxSlides } from './deck-import.mjs'
 export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml, renderSubtitlesSrt, renderSubtitlesVtt } from './deck-delivery.mjs'
 export { REMIX_PRESETS, REMIX_PRESET_IDS, remixSlides, renderSocialCarouselHtml } from './deck-remix.mjs'
-export { extractOfficeSource, importOfficeDeck } from './deck-office.mjs'
+export { extractOfficeSource, importOfficeDeck, inspectLocalImage, inspectImageBytes, inspectOfficePack } from './deck-office.mjs'
 export { inferThemeFromContent, optimizeVisualRhythm } from './deck-director.mjs'
 export { listAllTasteRecipes, listCuratedTasteRecipes, loadWorkspaceTasteRecipes, saveWorkspaceTasteRecipe, resolveTasteRecipe } from './deck-taste.mjs'
 export {
@@ -76,7 +91,23 @@ export {
   renderExemplarPromptGuide,
 } from './deck-exemplars.mjs'
 export { upgradeWeakDeck, resequenceSlidesToExemplar, selfRepairDeck, synthesizeActionTitle } from './deck-upgrader.mjs'
-export { normalizeEvidenceLedger, applyEvidenceLedgerToSlides, auditEvidenceAndSourcing, buildResearchPlan } from './deck-evidence.mjs'
+export {
+  normalizeEvidenceLedger,
+  applyEvidenceLedgerToSlides,
+  auditEvidenceAndSourcing,
+  buildResearchPlan,
+  AUTHORITATIVE_DOMAINS,
+  NOISE_DOMAINS,
+  detectResearchDomain,
+  buildAuthoritativeQueryPack,
+  classifySourceAuthority,
+  buildHybridEnrichmentPlan,
+  mergeHybridEvidence,
+} from './deck-evidence.mjs'
+export { renderDeckWorkbookXlsx, renderDeckReportDocx, renderDeckMemoMarkdown, renderQaPrepMarkdown } from './deck-export.mjs'
+export { slideBankPathFor, loadSlideBank, saveSlideToBank, listSlideBank, removeBankSlide, mergeDecks } from './deck-compose.mjs'
+export { extractTranslationBundle, applyTranslationBundle } from './deck-i18n.mjs'
+export { EXEC_CHART_LAYOUTS, computeIssueTreeModel, computeTreemapModel, computeGaugeModel, computePricingModel } from './deck-charts-exec.mjs'
 export { computeMapModel, computeIsometricModel, generateVisualBrief, normalizeImageBrief } from './deck-infographics.mjs'
 export {
   normalizeBrandKit,
@@ -298,7 +329,7 @@ function validateRawSlides(slides) {
 }
 
 function snapshot(manifest) {
-  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'slides', 'brand', 'brandKit', 'template', 'dataModel', 'evidence', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
+  return clone(Object.fromEntries(['title', 'theme', 'language', 'motion', 'motionProfile', 'slides', 'brand', 'brandKit', 'template', 'dataModel', 'evidence', 'targetMinutes', 'taste'].filter(k => manifest[k] !== undefined).map(k => [k, manifest[k]])))
 }
 
 function collectAssets(manifest) {
@@ -367,8 +398,10 @@ export function checkManifest(manifest) {
       issue(i, 'template-unfilled', '模板中还有待填写内容', '提供实际事实、依据和行动，填完后重新检查')
     }
     if (slide.layout === 'table') {
-      if ((slide.rows?.[0]?.length ?? 0) > 6) issue(i, 'small-font', '表格超过 6 列，使用较小字号，小屏放映可能难以阅读', '减少列数或把重点数据改成图表，导出后检查可读性')
-      if (slide.rows?.some(row => row.some(c => textWidth(c) > 18))) issue(i, 'table-density', '表格单元格文字较长，可能换行拥挤', '精简单元格或减少列数')
+      const colCount = slide.rows?.[0]?.length ?? 0
+      if (colCount > 6) issue(i, 'small-font', '表格超过 6 列，使用较小字号，小屏放映可能难以阅读', '减少列数或把重点数据改成图表，导出后检查可读性')
+      const cellLimit = colCount <= 4 && slide.tableStyle === 'booktabs' ? 24 : 18
+      if (slide.rows?.some(row => row.some(c => textWidth(c) > cellLimit))) issue(i, 'table-density', '表格单元格文字较长，可能换行拥挤', '精简单元格或减少列数')
     }
     const boxes = MEDIA_LAYOUTS.has(slide.layout) ? mediaBoxes(slide.layout, slide.variant, slide) : null
     if (Array.isArray(boxes?.gallery) && Array.isArray(slide.images) && slide.images.length > 1) {
@@ -567,6 +600,34 @@ function documentBytes(manifest) {
   if (Buffer.byteLength(text) > MAX_DOCUMENT) fail('JSON 工程含历史超过 64 MiB，请缩减图片或清理历史后另存工程')
   return text
 }
+const ALLOWED_EXPORT_KINDS = new Set(['xlsx', 'docx', 'qa-prep', 'memo', 'social-carousel', 'subtitles', 'handout', 'one-pager', 'i18n'])
+
+function parseExportOptions(options = {}) {
+  const list = Array.isArray(options.exports)
+    ? options.exports.map(x => String(x ?? '').trim().toLowerCase()).filter(Boolean)
+    : []
+  for (const kind of list) {
+    if (!ALLOWED_EXPORT_KINDS.has(kind)) {
+      fail('未知导出格式 exports：' + kind + '（支持 ' + [...ALLOWED_EXPORT_KINDS].join(' / ') + '）')
+    }
+  }
+  const set = new Set(list)
+  return {
+    writeHandout: options.handout === true || set.has('handout'),
+    writeOnePager: options.onePager === true || set.has('one-pager'),
+    writeCarousel: Boolean(options.socialCarousel) || set.has('social-carousel'),
+    carouselRatio: options.socialCarousel === '1:1' ? '1:1' : '4:5',
+    writeSubtitles: Boolean(options.subtitles) || set.has('subtitles'),
+    subtitlesFormat: options.subtitles === 'vtt' ? 'vtt' : 'srt',
+    writeXlsx: set.has('xlsx'),
+    writeDocx: set.has('docx'),
+    writeMemo: set.has('memo'),
+    writeQaPrep: set.has('qa-prep'),
+    writeI18n: set.has('i18n'),
+    hasAnyExtra: set.size > 0 || options.handout === true || options.onePager === true || Boolean(options.socialCarousel) || Boolean(options.subtitles),
+  }
+}
+
 function result(manifest, paths, writeHandout = false, writeOnePager = false, extra = {}) {
   const base = paths.json.slice(0, -5)
   const handoutPath = base + '.handout.md'
@@ -574,6 +635,11 @@ function result(manifest, paths, writeHandout = false, writeOnePager = false, ex
   const carouselPath = base + '.carousel.html'
   const subtitlesExt = extra.subtitlesFormat === 'vtt' ? '.vtt' : '.srt'
   const subtitlesPath = base + subtitlesExt
+  const xlsxPath = base + '.xlsx'
+  const docxPath = base + '.docx'
+  const memoPath = base + '.memo.md'
+  const qaPrepPath = base + '.qa-prep.md'
+  const i18nPath = base + '.i18n.json'
   const paceBudget = computePaceBudget(manifest)
   return { ok: true, title: manifest.title, theme: manifest.theme, language: manifest.language,
     slideCount: manifest.slides.length, deckId: manifest.deckId, revision: manifest.revision,
@@ -587,7 +653,12 @@ function result(manifest, paths, writeHandout = false, writeOnePager = false, ex
     ...(writeHandout ? { handoutPath } : {}),
     ...(writeOnePager ? { onePagerPath } : {}),
     ...(extra.writeCarousel ? { carouselPath } : {}),
-    ...(extra.writeSubtitles ? { subtitlesPath } : {}) }
+    ...(extra.writeSubtitles ? { subtitlesPath } : {}),
+    ...(extra.writeXlsx ? { xlsxPath } : {}),
+    ...(extra.writeDocx ? { docxPath } : {}),
+    ...(extra.writeMemo ? { memoPath } : {}),
+    ...(extra.writeQaPrep ? { qaPrepPath } : {}),
+    ...(extra.writeI18n ? { i18nPath } : {}) }
 }
 function pathsFor(jsonPath) {
   const base = jsonPath.slice(0, -5)
@@ -650,6 +721,21 @@ function commit(paths, data, writeHandout = false, writeOnePager = false, extra 
       ? renderSubtitlesVtt(data.manifest, data.language.id)
       : renderSubtitlesSrt(data.manifest, data.language.id)
     artifacts.push({ path: subtitlesPath, data: subData, encoding: 'utf8' })
+  }
+  if (extra.writeXlsx) {
+    artifacts.push({ path: base + '.xlsx', data: renderDeckWorkbookXlsx(data.manifest) })
+  }
+  if (extra.writeDocx) {
+    artifacts.push({ path: base + '.docx', data: renderDeckReportDocx(data.manifest, data.language.id) })
+  }
+  if (extra.writeMemo) {
+    artifacts.push({ path: base + '.memo.md', data: renderDeckMemoMarkdown(data.manifest, data.language.id), encoding: 'utf8' })
+  }
+  if (extra.writeQaPrep) {
+    artifacts.push({ path: base + '.qa-prep.md', data: renderQaPrepMarkdown(data.manifest, data.language.id), encoding: 'utf8' })
+  }
+  if (extra.writeI18n) {
+    artifacts.push({ path: base + '.i18n.json', data: JSON.stringify(extractTranslationBundle(data.manifest), null, 2) + '\n', encoding: 'utf8' })
   }
   commitDeckArtifacts(artifacts)
 }
@@ -746,6 +832,9 @@ function mapSlidesToAbsorbedSkeleton(slides, slideSkeleton, langId) {
 
 export async function buildDeckAsync(options = {}) {
   abort(options.signal)
+  if (Array.isArray(options.mergeSources) && options.mergeSources.length > 0) {
+    return mergeDecks({ ...options, sources: options.mergeSources })
+  }
   validateRawSlides(options.slides)
   const cwd = resolve(options.cwd || '.')
   const scenario = options.template ? findScenarioTemplate(options.template) : undefined
@@ -862,7 +951,10 @@ export async function buildDeckAsync(options = {}) {
     normalized.deck.slides = optimizeVisualRhythm(normalized.deck.slides, resolvedTaste)
   }
 
-  const evidence = normalizeEvidenceLedger(options.evidence)
+  const evidence = normalizeEvidenceLedger(options.evidence, {
+    preferredSources: activeBrandKit?.preferredSources,
+    blockedDomains: activeBrandKit?.blockedDomains,
+  })
   if (evidence.length > 0) {
     const appliedEvidence = applyEvidenceLedgerToSlides(normalized.deck.slides, evidence, {
       lang: langId,
@@ -916,6 +1008,8 @@ export async function buildDeckAsync(options = {}) {
         ...(activeBrandKit.watermark ? { watermark: activeBrandKit.watermark } : {}),
         ...(activeBrandKit.brand?.primaryColor ? { brand: { primaryColor: activeBrandKit.brand.primaryColor } } : {}),
         ...(Array.isArray(activeBrandKit.forbiddenTerms) && activeBrandKit.forbiddenTerms.length > 0 ? { forbiddenTerms: activeBrandKit.forbiddenTerms } : {}),
+        ...(Array.isArray(activeBrandKit.preferredSources) && activeBrandKit.preferredSources.length > 0 ? { preferredSources: activeBrandKit.preferredSources } : {}),
+        ...(Array.isArray(activeBrandKit.blockedDomains) && activeBrandKit.blockedDomains.length > 0 ? { blockedDomains: activeBrandKit.blockedDomains } : {}),
       }
     : undefined
 
@@ -935,6 +1029,7 @@ export async function buildDeckAsync(options = {}) {
     theme: normalized.theme.id,
     language: normalized.language.id,
     motion: normalized.motion,
+    ...(normalized.motionProfile ? { motionProfile: normalized.motionProfile } : {}),
     ...(resolvedTaste ? { taste: listCuratedTasteRecipes().some(r => r.id === resolvedTaste.id) ? resolvedTaste.id : resolvedTaste } : {}),
     ...(resolvedExemplar ? { exemplar: resolvedExemplar.id } : {}),
     ...(targetMinutesRaw !== undefined ? { targetMinutes: targetMinutesRaw } : {}),
@@ -980,16 +1075,9 @@ export async function buildDeckAsync(options = {}) {
   // Resolve collisions after asynchronous rendering; an earlier call may have committed meanwhile.
   const file = resolveDeckFileName(normalized.outputDir, normalized.fileName, normalized.overwrite)
   const paths = pathsFor(resolve(normalized.outputDir, file + '.json'))
-  const writeHandout = options.handout === true
-  const writeOnePager = options.onePager === true
-  const extraOpts = {
-    writeCarousel: Boolean(options.socialCarousel),
-    carouselRatio: options.socialCarousel === '1:1' ? '1:1' : '4:5',
-    writeSubtitles: Boolean(options.subtitles),
-    subtitlesFormat: options.subtitles === 'vtt' ? 'vtt' : 'srt',
-  }
-  withLock(paths.json, () => { abort(options.signal); commit(paths, data, writeHandout, writeOnePager, extraOpts) })
-  const builtResult = result(activeManifest, paths, writeHandout, writeOnePager, extraOpts)
+  const exp = parseExportOptions(options)
+  withLock(paths.json, () => { abort(options.signal); commit(paths, data, exp.writeHandout, exp.writeOnePager, exp) })
+  const builtResult = result(activeManifest, paths, exp.writeHandout, exp.writeOnePager, exp)
   return upgradeReport ? { ...builtResult, upgradeReport } : builtResult
 }
 
@@ -1032,7 +1120,7 @@ export function readDeckProject(options = {}) {
 function expected(manifest, revision) {
   if (revision !== undefined && (!Number.isInteger(revision) || revision !== manifest.revision)) fail(`修订号冲突：当前 revision=${manifest.revision}，请重新读取工程后修改`)
 }
-async function saveRevision(state, next, signal, saveAs = false, preserveUndo = false, saveAsSuffix = '-dsh') {
+async function saveRevision(state, next, signal, saveAs = false, preserveUndo = false, saveAsSuffix = '-dsh', expOpts = {}) {
   if (!saveAs) { const problem = artifactProblem(state.manifest, pathsFor(state.path)); if (problem) fail(problem) }
   next.version = DECK_VERSION; next.schemaVersion = 1; next.revision = state.manifest.revision + 1
   if (saveAs) { next.deckId = randomUUID(); next.revision = 0; next.history = preserveUndo ? [snapshot(state.manifest)] : [] }
@@ -1047,9 +1135,9 @@ async function saveRevision(state, next, signal, saveAs = false, preserveUndo = 
     } else {
       const problem = artifactProblem(state.manifest, paths); if (problem) fail(problem)
     }
-    commit(paths, data)
+    commit(paths, data, expOpts.writeHandout === true, expOpts.writeOnePager === true, expOpts)
   })
-  return result(next, paths)
+  return result(next, paths, expOpts.writeHandout === true, expOpts.writeOnePager === true, expOpts)
 }
 
 export async function remixDeck(options = {}) {
@@ -1077,6 +1165,7 @@ export async function editDeck(options = {}) {
   const state = readDocument(options.deckPath, options.cwd), current = state.manifest
   expected(current, options.expectedRevision)
   const next = clone(current)
+  const expOpts = parseExportOptions(options)
   if (!Array.isArray(options.edits) || !options.edits.length) {
     if (
       options.brand === undefined &&
@@ -1089,14 +1178,18 @@ export async function editDeck(options = {}) {
       options.append === undefined &&
       options.targetMinutes === undefined &&
       options.remixPreset === undefined &&
+      options.motionProfile === undefined &&
+      options.saveToBank === undefined &&
+      options.translations === undefined &&
+      !expOpts.hasAnyExtra &&
       options.saveAs !== true
     ) {
-      fail('请提供 edits、theme、taste、referencePptx、order、duplicate、remove、append、targetMinutes、remixPreset 或 brand')
+      fail('请提供 edits、theme、taste、referencePptx、order、duplicate、remove、append、targetMinutes、remixPreset、motionProfile、saveToBank、translations、exports 或 brand')
     }
   }
   const used = new Set()
   const allowed = new Set([
-    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'coverPattern', 'imageBrief', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
+    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'reveal', 'coverPattern', 'imageBrief', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
     'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'activeIndex', 'tableStyle',
     'bullets', 'items', 'cards', 'metrics', 'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])
@@ -1242,6 +1335,39 @@ export async function editDeck(options = {}) {
       ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, cwd)
     if (next.brand && Object.keys(next.brand).length === 0) delete next.brand
   }
+  if (options.motionProfile !== undefined) {
+    if (options.motionProfile === null || options.motionProfile === '') {
+      delete next.motionProfile
+    } else {
+      const mp = String(options.motionProfile).trim().toLowerCase()
+      if (!['subtle', 'executive', 'keynote'].includes(mp)) fail('motionProfile 仅支持 subtle / executive / keynote')
+      next.motionProfile = mp
+    }
+  }
+
+  let savedBankEntry
+  if (options.saveToBank !== undefined && options.saveToBank !== null) {
+    const bankSpec = typeof options.saveToBank === 'number' || typeof options.saveToBank === 'string'
+      ? { slide: options.saveToBank }
+      : options.saveToBank
+    savedBankEntry = saveSlideToBank(cwd, next, bankSpec.slide, {
+      bankId: bankSpec.bankId,
+      name: bankSpec.name,
+      tags: bankSpec.tags,
+    })
+  }
+
+  if (options.translations !== undefined && options.translations !== null) {
+    const mode = (options.bilingualMode === true || options.bilingualMode === 'bilingual') ? 'bilingual' : 'replace'
+    const translated = applyTranslationBundle(next, options.translations, {
+      mode,
+      targetLang: options.targetLang,
+    })
+    next.title = translated.title
+    next.language = translated.language
+    next.slides = translated.slides
+  }
+
   let remixReport
   let saveAsFlag = options.saveAs === true
   let saveAsSuffix = '-dsh'
@@ -1255,10 +1381,24 @@ export async function editDeck(options = {}) {
       saveAsSuffix = '-' + remixed.preset.id
     }
   }
-  if (!saveAsFlag && JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))) return { ...result(current, pathsFor(state.path)), changed: false }
-  next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
-  const saved = await saveRevision(state, next, options.signal, saveAsFlag, options.preserveUndo === true || Boolean(remixReport), saveAsSuffix)
-  return { ...saved, changed: true, ...(remixReport ? { remixReport } : {}) }
+  const unchangedContent = JSON.stringify(snapshot(next)) === JSON.stringify(snapshot(current))
+  if (!saveAsFlag && unchangedContent && !expOpts.hasAnyExtra) {
+    return {
+      ...result(current, pathsFor(state.path)),
+      changed: false,
+      ...(savedBankEntry ? { savedBankEntry } : {}),
+    }
+  }
+  if (!unchangedContent) {
+    next.history = [...next.history, snapshot(current)].slice(-MAX_HISTORY)
+  }
+  const saved = await saveRevision(state, next, options.signal, saveAsFlag, options.preserveUndo === true || Boolean(remixReport), saveAsSuffix, expOpts)
+  return {
+    ...saved,
+    changed: !unchangedContent || saveAsFlag || expOpts.hasAnyExtra,
+    ...(remixReport ? { remixReport } : {}),
+    ...(savedBankEntry ? { savedBankEntry } : {}),
+  }
 }
 
 /** An AI-selected, bounded formatting vocabulary; always an undoable new copy. */
@@ -1281,7 +1421,7 @@ export async function undoDeck(options = {}) {
   expected(state.manifest, options.expectedRevision)
   if (!state.manifest.history.length) fail('该工程没有可撤销的修改')
   const next = clone(state.manifest), prior = next.history.pop()
-  for (const key of ['brand', 'brandKit', 'template', 'dataModel', 'targetMinutes', 'taste']) delete next[key]
+  for (const key of ['brand', 'brandKit', 'template', 'dataModel', 'targetMinutes', 'taste', 'motionProfile']) delete next[key]
   Object.assign(next, prior)
   return saveRevision(state, next, options.signal)
 }
@@ -1308,13 +1448,42 @@ export async function updateDeckData(options = {}) {
 
 export function checkDeck(options = {}) {
   abort(options.signal)
-  const { manifest, path } = readDocument(options.deckPath, options.cwd)
+  const cwd = resolve(options.cwd || '.')
+  const { manifest, path } = readDocument(options.deckPath, cwd)
   const quality = checkManifest(manifest), problem = artifactProblem(manifest, pathsFor(path))
   if (problem) {
     quality.issues.push({ slide: 0, severity: 'error', code: 'artifact-conflict', message: problem, suggestion: '保留原成品，使用 saveAs:true 或面板「另存副本」。副本不包含 Office 手工修改。' })
     quality.errorCount++; quality.ok = false
   }
+  let stakeholderFeedback
+  if (options.feedbackPath !== undefined && options.feedbackPath !== null && String(options.feedbackPath).trim() !== '') {
+    const fbFile = resolve(cwd, String(options.feedbackPath).trim())
+    let parsedFb
+    try { parsedFb = JSON.parse(readFileSync(fbFile, 'utf8')) } catch { fail('无法读取审阅反馈文件 feedbackPath：' + fbFile) }
+    const rawList = Array.isArray(parsedFb) ? parsedFb : (Array.isArray(parsedFb?.comments) ? parsedFb.comments : [])
+    stakeholderFeedback = rawList
+      .filter(c => c && typeof c === 'object' && String(c.text || '').trim())
+      .map((c, idx) => ({
+        id: String(c.id || `fb-${idx + 1}`),
+        slide: Number.isInteger(c.slide) && c.slide >= 1 ? Math.min(manifest.slides.length, c.slide) : 1,
+        author: String(c.author || 'Reviewer').slice(0, 60),
+        text: String(c.text).replace(/\s+/g, ' ').trim().slice(0, 400),
+        createdAt: c.createdAt ? String(c.createdAt) : '',
+      }))
+    for (const c of stakeholderFeedback) {
+      quality.issues.push({
+        slide: c.slide,
+        slideId: manifest.slides[c.slide - 1]?.id,
+        severity: 'warning',
+        code: 'stakeholder-feedback',
+        message: `[审阅批注 · ${c.author}] ${c.text}`,
+        suggestion: '请根据审阅人意见调用 ppt_edit 修改对应页面并复核',
+      })
+      quality.warningCount += 1
+    }
+  }
   return { ...quality, deckPath: path, deckId: manifest.deckId, revision: manifest.revision,
+    ...(stakeholderFeedback ? { stakeholderFeedback } : {}),
     verification: { static: 'checked', pptxRender: 'not-verified', visual: 'not-verified' },
     undoAvailable: manifest.history.length, slides: manifest.slides.map((s, i) => ({ slide: i + 1, id: s.id, title: s.title, layout: s.layout })) }
 }

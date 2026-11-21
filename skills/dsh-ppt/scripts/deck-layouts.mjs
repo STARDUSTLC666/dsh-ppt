@@ -134,6 +134,16 @@ import {
   renderInfographicSlideBodyHtml,
   INFOGRAPHICS_CSS,
 } from './deck-infographics.mjs'
+import {
+  EXEC_CHART_LAYOUTS,
+  computeIssueTreeModel,
+  computeTreemapModel,
+  computeGaugeModel,
+  computePricingModel,
+  renderExecChartSlideBodyPptx,
+  renderExecChartSlideBodyHtml,
+  EXEC_CHARTS_CSS,
+} from './deck-charts-exec.mjs'
 
 export {
   CANVAS_IN,
@@ -206,6 +216,12 @@ export {
   generateVisualBrief,
   normalizeImageBrief,
   INFOGRAPHICS_CSS,
+  EXEC_CHART_LAYOUTS,
+  computeIssueTreeModel,
+  computeTreemapModel,
+  computeGaugeModel,
+  computePricingModel,
+  EXEC_CHARTS_CSS,
 }
 
 export const CORE_LAYOUTS = new Set([
@@ -239,6 +255,10 @@ export const CORE_LAYOUTS = new Set([
   'heatmap',
   'map',
   'isometric',
+  'issue-tree',
+  'treemap',
+  'gauge',
+  'pricing',
   'table',
   'closing',
 ])
@@ -260,6 +280,14 @@ export const LAYOUT_ALIASES = Object.freeze({
   'iso-layers': { layout: 'isometric', variant: 'stack' },
   '3d-stack': { layout: 'isometric', variant: 'stack' },
   'iso-pillars': { layout: 'isometric', variant: 'pillars' },
+  mece: { layout: 'issue-tree' },
+  'logic-tree': { layout: 'issue-tree' },
+  'rect-map': { layout: 'treemap' },
+  'budget-map': { layout: 'treemap' },
+  'bullet-chart': { layout: 'gauge' },
+  'okr-gauge': { layout: 'gauge' },
+  tiers: { layout: 'pricing' },
+  packages: { layout: 'pricing' },
   'kpi-grid': { layout: 'kpi', variant: 'grid' },
   scorecard: { layout: 'kpi', variant: 'grid' },
   bento: { layout: 'cards', variant: 'bento' },
@@ -946,6 +974,22 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
   })
   if (infographicShapes !== null) {
     shapes.push(infographicShapes)
+    shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
+    return shapes.join('')
+  }
+
+  const execChartShapes = renderExecChartSlideBodyPptx(slide, {
+    theme,
+    langAttr,
+    chromeCfg,
+    nextId,
+    bodyTopY,
+    bodyBottomY,
+    bodyH,
+    cardMaterial: taste.cardMaterial,
+  })
+  if (execChartShapes !== null) {
+    shapes.push(execChartShapes)
     shapes.push(renderSlideChromePptx(slide, index, total, theme, langAttr, manifest, nextId))
     return shapes.join('')
   }
@@ -2136,6 +2180,7 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
   const showcaseHtml = renderShowcaseSlideBodyHtml(slide, { theme, langId, manifest })
   const proChartHtml = renderProChartSlideBodyHtml(slide, { theme, langId, manifest })
   const infographicHtml = renderInfographicSlideBodyHtml(slide, { theme, langId, manifest })
+  const execChartHtml = renderExecChartSlideBodyHtml(slide, { theme, langId, manifest })
   const diagramHtml = renderDiagramSlideBodyHtml(slide, { theme, langId, chromeStyle })
 
   if (layout === 'cover') {
@@ -2224,6 +2269,8 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     inner = renderHeader() + proChartHtml
   } else if (infographicHtml !== null) {
     inner = renderHeader() + infographicHtml
+  } else if (execChartHtml !== null) {
+    inner = renderHeader() + execChartHtml
   } else if (diagramHtml !== null) {
     inner = renderHeader(layout === 'harvey' ? ui.tableKicker : '') + diagramHtml
   } else if (layout === 'table' && (slide.tableStyle || slide.visual?.tableStyle) === 'harvey') {
@@ -2469,7 +2516,7 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
   return inner + renderSlideChromeHtml(slide, chromeStyle, folioText, langId, manifest, isFraming)
 }
 
-export const LAYOUT_CSS = `
+const BASE_LAYOUT_CSS = `
 .slide-inner{display:flex;flex-direction:column;justify-content:center;width:100%;max-width:1560px;margin:0 auto;height:100%;gap:clamp(16px,2vw,28px)}
 .slide--cover .slide-inner,.slide--closing .slide-inner,.slide--section .slide-inner,.slide--statement .slide-inner,.slide--quote .slide-inner{justify-content:center}
 .slide-header{border-bottom:1px solid var(--hairline);padding-bottom:clamp(12px,1.5vw,20px)}
@@ -2582,13 +2629,6 @@ math.deck-math.is-block{display:block;font-size:clamp(20px,2.2vw,32px);margin:4p
 math.deck-math.is-inline{font-size:1.06em;vertical-align:middle}
 .callout-hero.is-omath{padding:22px 30px;display:flex;align-items:center;justify-content:center}
 .formula-caption{text-align:center;color:var(--ink-secondary);font-size:clamp(14px,1.35vw,18px);margin-top:-6px}
-${AESTHETIC_STUDIO_CSS}
-${SHOWCASE_CSS}
-${PRO_CHARTS_CSS}
-${INFOGRAPHICS_CSS}
-${DIAGRAMS_CSS}
-${CHROME_CSS}
-${MERMAID_CSS}
 @media (max-width:900px){
   .cols-3,.cols-4,.cols-5,.cols-6,.bento-grid.bento-3,.bento-grid.bento-4,.bento-grid.bento-5,.bento-grid.bento-6,.bento-hero-grid,.kpi-spotlight,.section-agenda-shell,.cover-shell.is-architectural,.ed-main-grid,.ed-meta-strip,.tam-board,.arch-board.has-sidecar,.org-children,.flywheel-stage,.mekko-board,.porter-board,.swot-cross{grid-template-columns:1fr}
   .bento-grid.bento-3 > :first-child,.bento-grid.bento-4 > *,.bento-hero-grid > :first-child{grid-row:auto;grid-column:auto}
@@ -2596,3 +2636,27 @@ ${MERMAID_CSS}
   .flywheel-hub,.swot-anchor{position:static;transform:none;margin:0 auto}
 }
 `
+
+export const LAYOUT_CSS = `${BASE_LAYOUT_CSS}\n${AESTHETIC_STUDIO_CSS}\n${SHOWCASE_CSS}\n${PRO_CHARTS_CSS}\n${INFOGRAPHICS_CSS}\n${EXEC_CHARTS_CSS}\n${DIAGRAMS_CSS}\n${CHROME_CSS}\n${MERMAID_CSS}`
+
+export function buildLayoutCss(slides = []) {
+  const list = Array.isArray(slides) ? slides : []
+  const used = new Set(list.map((s) => s?.layout || 'bullets'))
+  const hasShowcase = [...SHOWCASE_LAYOUTS].some((l) => used.has(l))
+  const hasPro = [...PRO_CHART_LAYOUTS].some((l) => used.has(l))
+  const hasInfo = [...INFOGRAPHIC_LAYOUTS].some((l) => used.has(l)) || list.some((s) => Boolean(s?.imageBrief))
+  const hasExec = [...EXEC_CHART_LAYOUTS].some((l) => used.has(l))
+  const hasDiag = [...DIAGRAM_LAYOUTS].some((l) => used.has(l)) || list.some((s) => (s?.tableStyle || s?.visual?.tableStyle) === 'harvey')
+  const hasMermaid = used.has('mermaid') || list.some((s) => Boolean(s?.mermaid))
+  return [
+    BASE_LAYOUT_CSS,
+    CHROME_CSS,
+    AESTHETIC_STUDIO_CSS,
+    hasShowcase ? SHOWCASE_CSS : '',
+    hasPro ? PRO_CHARTS_CSS : '',
+    hasInfo ? INFOGRAPHICS_CSS : '',
+    hasExec ? EXEC_CHARTS_CSS : '',
+    hasDiag ? DIAGRAMS_CSS : '',
+    hasMermaid ? MERMAID_CSS : '',
+  ].filter(Boolean).join('\n')
+}

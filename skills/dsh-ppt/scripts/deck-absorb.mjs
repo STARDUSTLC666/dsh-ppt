@@ -1493,6 +1493,8 @@ export async function absorbPptx(options = {}) {
       watermark: options.watermark || bkOpts.watermark,
       footer: options.footer || bkOpts.footer,
       forbiddenTerms: Array.isArray(options.forbiddenTerms) ? options.forbiddenTerms : bkOpts.forbiddenTerms,
+      preferredSources: Array.isArray(options.preferredSources) ? options.preferredSources : bkOpts.preferredSources,
+      blockedDomains: Array.isArray(options.blockedDomains) ? options.blockedDomains : bkOpts.blockedDomains,
       mandatoryClosing: options.mandatoryClosing || bkOpts.mandatoryClosing,
     })
     const savedBk = saveWorkspaceBrandKit(cwd, builtKit)

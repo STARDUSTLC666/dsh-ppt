@@ -17,11 +17,13 @@
  *      经智能导演 + smartLayout 生成 5–20 页高品味演示文稿。
  */
 
-import { lstatSync, readdirSync, readFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, extname, join, posix, resolve } from 'node:path'
 import { inflateRawSync, inflateSync } from 'node:zlib'
 import { promoteMarkdownSlides, inferThemeFromContent } from './deck-director.mjs'
+import { buildHybridEnrichmentPlan, mergeHybridEvidence } from './deck-evidence.mjs'
+import { loadWorkspaceBrandKit } from './deck-brand-kit.mjs'
 
 const MAX_OFFICE_BYTES = 32 * 1024 * 1024
 const MAX_ENTRY_BYTES = 32 * 1024 * 1024
@@ -1030,6 +1032,7 @@ function profileTabularWorkbook(sheets, fileName, en) {
     title: baseTitle,
     language: en ? 'en' : 'zh',
     slides,
+    _sheets: sheets,
     stats: {
       sourceFormat: extname(fileName).slice(1).toLowerCase() || 'xlsx',
       sheetCount: sheets.length,
@@ -1432,6 +1435,8 @@ function parseDocxArchive(bytes, fileName) {
     title,
     language: en ? 'en' : 'zh',
     slides: promoted,
+    _rawSections: sections,
+    _embeddedMedia: [...mediaDataUris.values()],
     stats: {
       sourceFormat: 'docx',
       sectionCount: sections.length,
@@ -1839,6 +1844,7 @@ function parsePdfDocument(bytes, fileName, langHint) {
     title,
     language: en ? 'en' : 'zh',
     slides: promoted,
+    _rawSections: sections,
     stats: {
       sourceFormat: 'pdf',
       lineCount: lines.length,
@@ -1846,6 +1852,315 @@ function parsePdfDocument(bytes, fileName, langHint) {
       slideCount: promoted.length,
     },
   }
+}
+
+// ---------------------------------------------------------------------------
+// Zero-dep Local Image Inspector (PNG / JPEG / WebP header parser + Smart Photo Role)
+// ---------------------------------------------------------------------------
+
+const PORTRAIT_HINT_RE = /(?:team|founder|ceo|cto|people|person|portrait|avatar|staff|speaker|headshot|团队|合影|人像|人物|头像|嘉宾|讲师|员工|领导)/i
+const COVER_HINT_RE = /(?:cover|hero|banner|keynote|title|overview|封面|主图|全景|头图|开场)/i
+const MOBILE_HINT_RE = /(?:mobile|phone|ios|android|app|wechat|miniapp|手机|移动端|小程序|竖屏)/i
+const BROWSER_HINT_RE = /(?:ui|screen|screenshot|dashboard|web|browser|demo|console|admin|portal|界面|截图|看板|系统|后台|工作台|网页|演示)/i
+
+function parseImageDimensions(bytes) {
+  if (!bytes || bytes.length < 16) return null
+  // PNG: IHDR width/height at offsets 16..23
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes.length >= 24) {
+    return { mime: 'image/png', width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  }
+  // JPEG: scan SOF0/1/2/3/5/6/7/9/10/11/13/14/15 markers
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let offset = 2
+    while (offset + 4 < bytes.length) {
+      if (bytes[offset] !== 0xff) break
+      while (offset < bytes.length && bytes[offset] === 0xff) offset += 1
+      const marker = bytes[offset]
+      offset += 1
+      if (marker === 0xd9 || marker === 0xda) break
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue
+      if (offset + 2 > bytes.length) break
+      const len = bytes.readUInt16BE(offset)
+      if (len < 2 || offset + len > bytes.length) break
+      if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker) && len >= 7) {
+        return { mime: 'image/jpeg', height: bytes.readUInt16BE(offset + 3), width: bytes.readUInt16BE(offset + 5) }
+      }
+      offset += len
+    }
+    return { mime: 'image/jpeg', width: 0, height: 0 }
+  }
+  // WebP: VP8 / VP8L / VP8X
+  if (bytes.length >= 30 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = bytes.toString('ascii', 12, 16)
+    if (chunk === 'VP8 ') {
+      return { mime: 'image/webp', width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff }
+    }
+    if (chunk === 'VP8L') {
+      const bits = bytes.readUInt32LE(21)
+      return { mime: 'image/webp', width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 }
+    }
+    if (chunk === 'VP8X') {
+      const w = 1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16))
+      const h = 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16))
+      return { mime: 'image/webp', width: w, height: h }
+    }
+  }
+  return null
+}
+
+export function inspectImageBytes(bytes, fileName = 'image.png') {
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
+  const dims = parseImageDimensions(buf)
+  const width = dims?.width || 0
+  const height = dims?.height || 0
+  const aspectRatio = width > 0 && height > 0 ? Math.round((width / height) * 100) / 100 : 1
+  const orientation = width > 0 && height > 0
+    ? (aspectRatio >= 1.15 ? 'landscape' : (aspectRatio <= 0.85 ? 'portrait' : 'square'))
+    : 'unknown'
+  const baseName = cleanLine(fileName.replace(/\.[^.]+$/, ''))
+  const isPortraitSubject = orientation === 'portrait' || PORTRAIT_HINT_RE.test(baseName)
+  const recommendedFocalPoint = isPortraitSubject ? 'top' : 'center'
+
+  let recommendedRole = 'section'
+  let recommendedLayout = 'image-right'
+  if (COVER_HINT_RE.test(baseName) && orientation !== 'portrait') {
+    recommendedRole = 'cover'
+    recommendedLayout = 'cover'
+  } else if (MOBILE_HINT_RE.test(baseName) || (orientation === 'portrait' && aspectRatio <= 0.68)) {
+    recommendedRole = 'mockup-mobile'
+    recommendedLayout = 'mockup[mobile]'
+  } else if (BROWSER_HINT_RE.test(baseName)) {
+    recommendedRole = 'mockup-browser'
+    recommendedLayout = 'mockup[browser]'
+  } else if (orientation === 'landscape' && width >= 1200 && height >= 650) {
+    recommendedRole = 'section'
+    recommendedLayout = 'image-right'
+  }
+
+  return {
+    fileName,
+    label: baseName || fileName,
+    mime: dims?.mime || detectImageMime(buf) || 'image/png',
+    sizeBytes: buf.length,
+    width,
+    height,
+    aspectRatio,
+    orientation,
+    recommendedRole,
+    recommendedLayout,
+    recommendedFocalPoint,
+  }
+}
+
+export function inspectLocalImage(filePath, cwd = '.') {
+  const full = resolve(String(cwd || '.'), String(filePath || '').trim())
+  const stat = lstatSync(full)
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_IMAGE_BYTES) {
+    fail('图片需为 5 MiB 内的普通文件：' + full)
+  }
+  const bytes = readFileSync(full)
+  return {
+    path: full,
+    ...inspectImageBytes(bytes, basename(full)),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Natural-Language Instructions Parser & Smart Filter Helpers
+// ---------------------------------------------------------------------------
+
+function parseUserInstructions(rawInstructions = '') {
+  const text = cleanLine(rawInstructions)
+  if (!text) return { raw: '', targetSlides: null, skipAgenda: false, focusTerms: [], coverHints: [], mockupHints: [] }
+
+  const slideMatch = /(?:约|大概|控制[在为]?|一共|总共|做|生成)?\s*(\d{1,2})\s*(?:页|张|slides?|pages?)/i.exec(text)
+  const parsedCount = slideMatch ? Number(slideMatch[1]) : null
+  const targetSlides = Number.isInteger(parsedCount) && parsedCount >= 3 && parsedCount <= 40 ? parsedCount : null
+  const skipAgenda = /不要目录|跳过目录|无需目录|no\s+agenda|skip\s+agenda/i.test(text)
+
+  const coverHints = []
+  const mockupHints = []
+  for (const m of text.matchAll(/([A-Za-z0-9_\u4e00-\u9fa5-]+\.(?:png|jpe?g|webp))\s*(?:放|做|当|作为|用于|in|as|on)?\s*(封面|cover|主图|hero|样机|mockup|手机|浏览器|截图)/gi)) {
+    const fn = m[1].toLowerCase()
+    if (/封面|cover|主图|hero/i.test(m[2])) coverHints.push(fn)
+    else mockupHints.push(fn)
+  }
+
+  const focusTerms = text
+    .replace(/[，。；：、,.!！?？()（）【】[\]「」"'`]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 2 && !/^(?:帮我|请把|生成|制作|一个|一份|按照|要求|控制|左右|不要|跳过|封面|目录|ppt|deck|slides?|pages?|with|from|the|and|for)$/i.test(t))
+    .slice(0, 14)
+
+  return { raw: text, targetSlides, skipAgenda, focusTerms, coverHints, mockupHints }
+}
+
+function filterSheetsByInclude(sheets, includeSheets) {
+  if (!Array.isArray(includeSheets) || includeSheets.length === 0) return sheets
+  const needles = includeSheets.map(s => String(s ?? '').trim().toLowerCase()).filter(Boolean)
+  if (needles.length === 0) return sheets
+  const filtered = sheets.filter(sh => {
+    const name = String(sh.name || '').toLowerCase()
+    return needles.some(n => name === n || name.includes(n))
+  })
+  return filtered.length > 0 ? filtered : sheets
+}
+
+function applyMaxSlidesBudget(slides, maxSlides, focusTerms = []) {
+  if (!Number.isInteger(maxSlides) || maxSlides < 3 || slides.length <= maxSlides) return slides
+  const first = slides[0]
+  const last = slides[slides.length - 1]
+  const hasCover = first?.layout === 'cover'
+  const hasClosing = last?.layout === 'closing'
+  const middle = slides.slice(hasCover ? 1 : 0, hasClosing ? -1 : undefined)
+  const keepBudget = Math.max(1, maxSlides - (hasCover ? 1 : 0) - (hasClosing ? 1 : 0))
+  if (middle.length <= keepBudget) return slides
+
+  const scored = middle.map((slide, origIdx) => {
+    const hay = [slide.kicker, slide.title, slide.subtitle, slide.takeaway, ...(slide.bullets || [])].filter(Boolean).join(' ').toLowerCase()
+    let score = 0
+    if (slide.layout === 'kpi') score += 5
+    if (slide.layout === 'chart-split' || slide.layout === 'sankey' || slide.layout === 'gantt' || slide.layout === 'marimekko') score += 4
+    if (slide.layout === 'mockup' || slide.layout === 'image-right' || slide.layout === 'image-left') score += 3.5
+    if (slide.layout === 'table' && /附录|Appendix|明细/i.test(`${slide.kicker || ''} ${slide.title || ''}`)) score -= 2.5
+    if (slide.layout === 'agenda') score -= 1.5
+    for (const term of focusTerms) {
+      if (hay.includes(term.toLowerCase())) score += 3
+    }
+    return { slide, origIdx, score }
+  })
+
+  const chosen = [...scored]
+    .sort((a, b) => b.score - a.score || a.origIdx - b.origIdx)
+    .slice(0, keepBudget)
+    .sort((a, b) => a.origIdx - b.origIdx)
+    .map(x => x.slide)
+
+  return [
+    ...(hasCover ? [first] : []),
+    ...chosen,
+    ...(hasClosing ? [last] : []),
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// Live Excel-to-dataModel Binder (bindDataModel: true)
+// ---------------------------------------------------------------------------
+
+function buildAutoDataModelFromSheets(sheetEntries = []) {
+  if (!Array.isArray(sheetEntries) || sheetEntries.length === 0) return null
+  const sources = []
+  const metrics = []
+  const bindingsBySheet = new Map()
+
+  for (let sIdx = 0; sIdx < sheetEntries.length && sources.length < 6; sIdx += 1) {
+    const entry = sheetEntries[sIdx]
+    const rows = entry?.rows
+    if (!Array.isArray(rows) || rows.length < 2) continue
+    const headers = rows[0].slice(0, 12)
+    const dataRows = rows.slice(1, 30)
+    const cols = profileColumns([headers, ...dataRows])
+    const numCols = cols.filter(c => c.isNumeric)
+    if (numCols.length === 0) continue
+
+    const sourceId = `sheet${sources.length + 1}`
+    const cleanRows = [
+      headers.map(h => cleanLine(h) || 'Col'),
+      ...dataRows.map(r => headers.map((_, ci) => {
+        const p = parseCellNumber(r[ci])
+        if (cols[ci]?.isNumeric && p.ok) {
+          return p.isPercent ? `${p.num}%` : p.num
+        }
+        return cleanLine(r[ci] ?? '')
+      })),
+    ]
+    sources.push({
+      id: sourceId,
+      name: cleanLine(entry.name || sourceId).slice(0, 100),
+      kind: 'table',
+      rows: cleanRows,
+    })
+
+    const primaryCol = numCols[0]
+    const colLetter = String.fromCharCode(65 + primaryCol.index)
+    const catCol = cols.find(c => !c.isNumeric) || cols[0]
+    const boundCells = []
+    for (let rIdx = 0; rIdx < dataRows.length && metrics.length < 48; rIdx += 1) {
+      const p = primaryCol.parsed[rIdx]
+      if (!p?.ok) continue
+      const cellAddr = `${colLetter}${rIdx + 2}`
+      const metricId = `${sourceId}r${rIdx + 2}c${primaryCol.index + 1}`
+      const rowLabel = cleanLine(dataRows[rIdx][catCol.index] || `Row${rIdx + 1}`)
+      metrics.push({
+        id: metricId,
+        label: `${entry.name} · ${rowLabel} (${primaryCol.header})`.slice(0, 110),
+        kind: 'source',
+        source: { sourceId, cell: cellAddr },
+        format: {
+          style: primaryCol.isPercentCol ? 'percent' : 'number',
+          digits: primaryCol.isPercentCol ? 1 : (Number.isInteger(p.num) ? 0 : 1),
+          ...(!primaryCol.isPercentCol && primaryCol.unit ? { unit: primaryCol.unit.slice(0, 20) } : {}),
+        },
+      })
+      boundCells.push({ rowIndex: rIdx, metricId, value: p.num, label: rowLabel })
+    }
+    if (boundCells.length > 0) {
+      bindingsBySheet.set(entry.name, { sourceId, primaryCol, boundCells })
+    }
+  }
+
+  if (sources.length === 0 || metrics.length === 0) return null
+  return {
+    dataModel: { schemaVersion: 1, sources, metrics },
+    bindingsBySheet,
+  }
+}
+
+function bindSlidesWithAutoDataModel(slides, autoBound) {
+  if (!autoBound || !autoBound.bindingsBySheet?.size) return slides
+  const usedMetrics = new Set()
+  return slides.map((slide) => {
+    // Bind first matching chart-split single-series primary values to {{metricId}}
+    if ((slide.layout === 'chart-split' || slide.layout === 'chart') && slide.chart && Array.isArray(slide.chart.series) && slide.chart.series.length > 0) {
+      const binding = autoBound.bindingsBySheet.get(slide.kicker)
+      if (binding && slide.chart.kind !== 'waterfall') {
+        const s0 = slide.chart.series[0]
+        if (Array.isArray(s0.values) && s0.values.length === binding.boundCells.length) {
+          const nextSeries = slide.chart.series.map((ser, idx) => {
+            if (idx !== 0) return ser
+            return {
+              ...ser,
+              values: binding.boundCells.map((bc) => {
+                usedMetrics.add(bc.metricId)
+                return `{{${bc.metricId}}}`
+              }),
+            }
+          })
+          return { ...slide, chart: { ...slide.chart, series: nextSeries } }
+        }
+      }
+    }
+    // Bind peak KPI item on Executive Summary KPI slide when available
+    if (slide.layout === 'kpi' && Array.isArray(slide.items) && slide.items.length > 0) {
+      const nextItems = slide.items.map((it) => {
+        for (const [sheetName, binding] of autoBound.bindingsBySheet.entries()) {
+          if (String(it.title || it.tag || '').includes(sheetName) && binding.boundCells.length > 0) {
+            const peak = binding.boundCells.reduce((b, c) => (c.value > b.value ? c : b), binding.boundCells[0])
+            usedMetrics.add(peak.metricId)
+            const { unit: _dropUnit, ...restItem } = it
+            return {
+              ...restItem,
+              value: `{{${peak.metricId}}}`,
+            }
+          }
+        }
+        return it
+      })
+      return { ...slide, items: nextItems }
+    }
+    return slide
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -1874,11 +2189,10 @@ function readImageAsDataUri(resolvedFile) {
   return `data:${mime};base64,${buf.toString('base64')}`
 }
 
-async function extractMultiSourcePack(rawFilePaths, options = {}) {
-  const cwd = resolve(String(options.cwd ?? '.'))
+function collectPackFiles(rawFilePaths, cwd, signal) {
   const resolvedFiles = []
   for (const fp of rawFilePaths) {
-    abort(options.signal)
+    abort(signal)
     const full = resolve(cwd, String(fp ?? '').trim())
     let st
     try { st = lstatSync(full) } catch { fail('找不到素材路径：' + full, 'Source path not found: ' + full) }
@@ -1905,19 +2219,258 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
       }
     }
   }
-
   const uniqueFiles = [...new Set(resolvedFiles)]
     .sort((a, b) => packFilePriority(a) - packFilePriority(b) || basename(a).localeCompare(basename(b)))
     .slice(0, MAX_PACK_FILES)
-
   if (uniqueFiles.length === 0) {
     fail('目录中未找到可导入的素材文件（支持 .xlsx / .csv / .tsv / .docx / .pdf / .png / .jpg / .webp）', 'No supported source files found')
   }
+  return uniqueFiles
+}
+
+function resolvePhotoRole(photoMeta, explicitRoles = {}, parsedInstr = null) {
+  const fnameLower = photoMeta.fileName.toLowerCase()
+  const stemLower = photoMeta.label.toLowerCase()
+  for (const [k, v] of Object.entries(explicitRoles || {})) {
+    const kl = String(k).toLowerCase()
+    if (kl === fnameLower || kl === stemLower || fnameLower.includes(kl)) {
+      const role = String(v || '').trim().toLowerCase()
+      if (['cover', 'mockup', 'mockup-mobile', 'mockup-browser', 'gallery', 'full-bleed', 'section'].includes(role)) {
+        return role
+      }
+    }
+  }
+  if (parsedInstr?.coverHints?.some(h => h === fnameLower || fnameLower.includes(h))) return 'cover'
+  if (parsedInstr?.mockupHints?.some(h => h === fnameLower || fnameLower.includes(h))) {
+    return photoMeta.orientation === 'portrait' ? 'mockup-mobile' : 'mockup-browser'
+  }
+  return photoMeta.recommendedRole
+}
+
+/**
+ * 精炼素材包体检模式（`inspectOnly: true`）：
+ * 零耗 Token 防爆：只输出结构化摘要（Excel 统计极值+推荐图型+前5行预览、Word/PDF 章节摘要+表格维度+内嵌图尺寸、
+ * 照片像素/比例/防裁歪建议、本地 `[E1..Ek]` 证据台账，以及 Mode C 外部权威检索补充计划），供 AI 按用户要求精准编排 PPT。
+ */
+export async function inspectOfficePack(options = {}) {
+  abort(options.signal)
+  const cwd = resolve(String(options.cwd ?? '.'))
+  const rawList = Array.isArray(options.filePaths) && options.filePaths.length > 0
+    ? options.filePaths
+    : [options.filePath ?? options.path].filter(Boolean)
+  if (rawList.length === 0) {
+    fail('inspectOfficePack 需提供 filePath 或 filePaths')
+  }
+
+  const uniqueFiles = collectPackFiles(rawList, cwd, options.signal)
+  const todayYm = new Date().toISOString().slice(0, 7)
+  const sources = []
+  const excelSheets = []
+  const docSections = []
+  const photos = []
+  const localEvidence = []
+  let cjkHits = 0
+  let primaryTopic = cleanLine(options.title || '')
+
+  for (let idx = 0; idx < uniqueFiles.length; idx += 1) {
+    abort(options.signal)
+    const file = uniqueFiles[idx]
+    const fname = basename(file)
+    const ext = extname(file).toLowerCase()
+    const stat = lstatSync(file)
+    const evId = `E${idx + 1}`
+
+    sources.push({ fileName: fname, path: file, format: ext.slice(1), sizeBytes: stat.size })
+
+    if (PACK_IMG_EXTS.has(ext)) {
+      const meta = inspectLocalImage(file, cwd)
+      cjkHits += (meta.label.match(/[\u3400-\u9fff]/g) || []).length
+      photos.push({ ...meta, evidenceId: evId })
+      localEvidence.push({
+        id: evId,
+        origin: 'local-file',
+        claim: `本地视觉素材「${meta.label}」（${meta.width}×${meta.height}, ${meta.orientation}）`,
+        source: fname,
+        date: todayYm,
+        confidence: 'verified',
+      })
+      continue
+    }
+
+    const single = await extractSingleOfficeFile({ ...options, filePath: file, filePaths: undefined })
+    if (!primaryTopic && single.title) primaryTopic = single.title
+    const sample = [single.title, ...(single.slides || []).slice(0, 4).map(s => s.title || '')].join(' ')
+    cjkHits += (sample.match(/[\u3400-\u9fff]/g) || []).length
+
+    if (PACK_DATA_EXTS.has(ext)) {
+      const rawSheets = single._sheets || []
+      for (const sh of rawSheets) {
+        const headers = sh.rows[0] || []
+        const dataRows = sh.rows.slice(1)
+        const cols = profileColumns(sh.rows)
+        const numCols = cols.filter(c => c.isNumeric)
+        const catCol = cols.find(c => !c.isNumeric) || cols[0]
+        const profiled = buildNumericSheetSlides(sh, options.lang === 'en')
+        const firstSlide = profiled.slides[0]
+        const topMetrics = numCols.slice(0, 3).map(nc => {
+          const vals = nc.parsed.filter(p => p.ok).map(p => p.num)
+          const sum = vals.reduce((a, b) => a + b, 0)
+          const max = vals.length ? Math.max(...vals) : 0
+          const min = vals.length ? Math.min(...vals) : 0
+          const avg = vals.length ? sum / vals.length : 0
+          const maxRowIdx = nc.parsed.findIndex(p => p.ok && p.num === max)
+          return {
+            column: nc.header,
+            unit: nc.unit,
+            isPercent: nc.isPercentCol,
+            sum: Number(sum.toFixed(2)),
+            avg: Number(avg.toFixed(2)),
+            min: Number(min.toFixed(2)),
+            max: Number(max.toFixed(2)),
+            peakCategory: maxRowIdx >= 0 ? (dataRows[maxRowIdx]?.[catCol.index] || '') : '',
+          }
+        })
+        excelSheets.push({
+          sourceFile: fname,
+          evidenceId: evId,
+          sheetName: sh.name,
+          bannerTitle: sh.bannerTitle || '',
+          rowCount: dataRows.length,
+          colCount: headers.length,
+          headers,
+          topMetrics,
+          recommendedLayout: firstSlide?.layout || 'table',
+          recommendedChartKind: firstSlide?.chart?.kind || firstSlide?.layout || 'table',
+          ...(firstSlide?.chart ? { chartSpec: firstSlide.chart } : {}),
+          rowsPreview: sh.rows.slice(0, 6),
+        })
+      }
+      localEvidence.push({
+        id: evId,
+        origin: 'local-file',
+        claim: `${fname} 数据工作簿（${rawSheets.length} 张表，${single.stats?.totalRows ?? 0} 条记录）`,
+        source: fname,
+        date: todayYm,
+        confidence: 'verified',
+      })
+    } else {
+      // .docx or .pdf
+      const rawSecs = single._rawSections || []
+      const embeddedMedia = Array.isArray(single._embeddedMedia) ? single._embeddedMedia : []
+      let cachedImgMap = new Map()
+      if (embeddedMedia.length > 0) {
+        try {
+          const cacheDir = join(cwd, '.dsh-ppt', 'office-media-cache')
+          mkdirSync(cacheDir, { recursive: true })
+          for (let mIdx = 0; mIdx < embeddedMedia.length; mIdx += 1) {
+            const em = embeddedMedia[mIdx]
+            const b64 = String(em.dataUri || '').split(',')[1]
+            if (!b64) continue
+            const buf = Buffer.from(b64, 'base64')
+            const meta = inspectImageBytes(buf, em.name || `docx-img-${mIdx + 1}.png`)
+            const safeName = `${basename(fname, extname(fname)).replace(/[^A-Za-z0-9_-]/g, '_')}-${mIdx + 1}-${basename(em.name || 'img.png').replace(/[^A-Za-z0-9._-]/g, '_')}`
+            const outPath = join(cacheDir, safeName)
+            writeFileSync(outPath, buf)
+            cachedImgMap.set(em.dataUri, { ...meta, path: outPath })
+          }
+        } catch { /* read-only cwd: fall back to metadata only */ }
+      }
+      for (const sec of rawSecs.slice(0, 20)) {
+        const secImages = (sec.images || []).map((im) => {
+          const cached = cachedImgMap.get(im.src)
+          return cached
+            ? { fileName: cached.fileName, path: cached.path, width: cached.width, height: cached.height, orientation: cached.orientation, recommendedFocalPoint: cached.recommendedFocalPoint }
+            : { fileName: im.alt || 'embedded.png' }
+        })
+        docSections.push({
+          sourceFile: fname,
+          evidenceId: evId,
+          heading: sec.title,
+          level: sec.level || 2,
+          bulletCount: sec.bullets?.length || 0,
+          summaryBullets: (sec.bullets || []).slice(0, 4).map(b => cleanLine(b).slice(0, 110)),
+          tableCount: sec.tables?.length || 0,
+          tableDims: (sec.tables || []).map(t => `${t.length}x${t[0]?.length || 0}`),
+          hasMermaid: (sec.mermaids?.length || 0) > 0,
+          hasFormula: (sec.formulas?.length || 0) > 0,
+          ...(secImages.length > 0 ? { embeddedImages: secImages } : {}),
+        })
+      }
+      localEvidence.push({
+        id: evId,
+        origin: 'local-file',
+        claim: cleanLine(`${single.title}（${rawSecs.length} 组章节）`).slice(0, 120),
+        source: fname,
+        date: todayYm,
+        confidence: 'verified',
+      })
+    }
+  }
+
+  const en = options.lang ? options.lang === 'en' : cjkHits < 4
+  const topic = primaryTopic || (en ? 'Material Pack Presentation' : '多源素材汇报')
+  const brandKit = loadWorkspaceBrandKit(cwd)
+
+  const enrichmentPlan = buildHybridEnrichmentPlan({
+    topic,
+    instructions: options.instructions || '',
+    localAssets: { excelSheets, docSections, photos },
+    localEvidence,
+    lang: en ? 'en' : 'zh',
+    preferredSources: brandKit?.preferredSources,
+    blockedDomains: brandKit?.blockedDomains,
+  })
+
+  const mdLines = [
+    `# ${en ? 'Material Pack Dossier' : '本地素材包精炼档案'}：${topic}`,
+    '',
+    `- **${en ? 'Files' : '文件清单'}**：${sources.map(s => `${s.fileName} (${s.format})`).join(' · ')}`,
+    ...(excelSheets.length ? [
+      '',
+      `## ${en ? 'Excel / Tabular Sheets' : '数据表画像'} (${excelSheets.length})`,
+      ...excelSheets.map(sh => `- **${sh.sheetName}** (${sh.rowCount}×${sh.colCount}, [${sh.evidenceId}]) → 推荐 \`${sh.recommendedLayout}\` / \`${sh.recommendedChartKind}\`；核心指标：${sh.topMetrics.map(m => `${m.column} 峰值 ${m.peakCategory}=${m.max}${m.unit}`).join('，') || sh.headers.join('/')}`),
+    ] : []),
+    ...(docSections.length ? [
+      '',
+      `## ${en ? 'Word / PDF Sections' : '文档核心章节'} (${docSections.length})`,
+      ...docSections.slice(0, 12).map(d => `- **${d.heading}** ([${d.evidenceId}], ${d.bulletCount} 条要点${d.tableCount ? `, ${d.tableCount} 表格` : ''}${d.embeddedImages?.length ? `, ${d.embeddedImages.length} 内嵌图` : ''})：${d.summaryBullets[0] || ''}`),
+    ] : []),
+    ...(photos.length ? [
+      '',
+      `## ${en ? 'Photos & Visual Assets' : '本地图片与配图体检'} (${photos.length})`,
+      ...photos.map(p => `- **${p.fileName}** (${p.width}×${p.height} · ${p.orientation}, [${p.evidenceId}]) → 建议角色 \`${p.recommendedRole}\` / 版式 \`${p.recommendedLayout}\` / 焦点 \`focalPoint: "${p.recommendedFocalPoint}"\``),
+    ] : []),
+    '',
+    enrichmentPlan.planMarkdown,
+  ]
+
+  return {
+    ok: true,
+    inspectOnly: true,
+    topic,
+    language: en ? 'en' : 'zh',
+    sources,
+    excelSheets,
+    docSections,
+    photos,
+    localEvidence,
+    enrichmentPlan,
+    dossierMarkdown: mdLines.join('\n'),
+  }
+}
+
+async function extractMultiSourcePack(rawFilePaths, options = {}) {
+  const cwd = resolve(String(options.cwd ?? '.'))
+  const uniqueFiles = collectPackFiles(rawFilePaths, cwd, options.signal)
+  const parsedInstr = parseUserInstructions(options.instructions || '')
+  const explicitPhotoRoles = options.photoRoles && typeof options.photoRoles === 'object' ? options.photoRoles : {}
 
   const todayYm = new Date().toISOString().slice(0, 7)
   const evidence = []
   const bodySlides = []
   const sourceSummaries = []
+  const collectedSheets = []
+  const pendingPhotos = []
   const formatCounts = { docs: 0, tables: 0, images: 0 }
   let detectedEn = options.lang === 'en'
   let cjkHits = 0
@@ -1932,32 +2485,34 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
     if (PACK_IMG_EXTS.has(ext)) {
       const dataUri = readImageAsDataUri(file)
       if (!dataUri) continue
+      const meta = inspectLocalImage(file, cwd)
+      const role = resolvePhotoRole(meta, explicitPhotoRoles, parsedInstr)
       formatCounts.images += 1
-      const label = cleanLine(fname.replace(/\.[^.]+$/, '')) || fname
-      cjkHits += (label.match(/[\u3400-\u9fff]/g) || []).length
+      cjkHits += (meta.label.match(/[\u3400-\u9fff]/g) || []).length
       evidence.push({
         id: evId,
-        claim: `视觉素材「${label}」来自本地图片文件`,
+        origin: 'local-file',
+        claim: `视觉素材「${meta.label}」来自本地图片文件`,
         source: fname,
         date: todayYm,
         confidence: 'verified',
       })
-      bodySlides.push({
-        layout: 'image',
-        variant: 'framed',
-        kicker: `VISUAL · ${evId}`,
-        title: label,
-        image: { src: dataUri, alt: label, fit: 'contain', caption: fname },
-        source: fname,
-        evidenceIds: [evId],
+      pendingPhotos.push({
+        ...meta,
+        role,
+        dataUri,
+        evId,
       })
-      sourceSummaries.push({ file: fname, title: label, evId })
+      sourceSummaries.push({ file: fname, title: meta.label, evId })
       continue
     }
 
     const single = await extractSingleOfficeFile({ ...options, filePath: file, filePaths: undefined })
     if (PACK_DOC_EXTS.has(ext)) formatCounts.docs += 1
-    else formatCounts.tables += 1
+    else {
+      formatCounts.tables += 1
+      if (Array.isArray(single._sheets)) collectedSheets.push(...single._sheets)
+    }
 
     const innerBody = (single.slides || []).filter(s => !['cover', 'closing', 'agenda'].includes(s.layout))
     const sampleText = [single.title, ...innerBody.slice(0, 3).map(s => s.title || '')].join(' ')
@@ -1968,6 +2523,7 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
     ).slice(0, 96)
     evidence.push({
       id: evId,
+      origin: 'local-file',
       claim: summaryClaim || `来自 ${fname} 的业务资料`,
       source: fname,
       date: todayYm,
@@ -1987,6 +2543,124 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
 
   if (!options.lang) detectedEn = cjkHits < 4
   const en = detectedEn
+
+  // Smart Photo Choreography: Cover Hero / Device Mockup / Section Pair / Multi-Photo Gallery
+  let coverPhoto = null
+  const remainingGallery = []
+
+  for (const ph of pendingPhotos) {
+    if (ph.role === 'cover' && !coverPhoto) {
+      coverPhoto = ph
+      continue
+    }
+    if (ph.role === 'mockup' || ph.role === 'mockup-mobile' || ph.role === 'mockup-browser') {
+      const variant = ph.role === 'mockup-mobile' || (ph.role === 'mockup' && ph.orientation === 'portrait') ? 'mobile' : 'browser'
+      bodySlides.push({
+        layout: 'mockup',
+        variant,
+        kicker: `PRODUCT · ${ph.evId}`,
+        title: en ? `${ph.label}: Live interface showcase` : `${ph.label}：核心产品界面展示`,
+        image: { src: ph.dataUri, alt: ph.label, fit: 'cover', focalPoint: ph.recommendedFocalPoint },
+        bullets: [
+          en ? `Captured from ${ph.fileName} (${ph.width}×${ph.height})` : `原始界面素材：${ph.fileName}（${ph.width}×${ph.height}）`,
+          en ? 'Embedded in crisp device frame with focal crop preserved' : '自动匹配设备画框与焦点裁切，确保界面清晰呈现',
+        ],
+        source: ph.fileName,
+        evidenceIds: [ph.evId],
+      })
+      continue
+    }
+    if (ph.role === 'full-bleed') {
+      bodySlides.push({
+        layout: 'image',
+        variant: 'full-bleed',
+        kicker: `VISUAL · ${ph.evId}`,
+        title: ph.label,
+        image: { src: ph.dataUri, alt: ph.label, fit: 'cover', focalPoint: ph.recommendedFocalPoint },
+        source: ph.fileName,
+        evidenceIds: [ph.evId],
+      })
+      continue
+    }
+    if (ph.role === 'gallery') {
+      remainingGallery.push(ph)
+      continue
+    }
+
+    // Try keyword-matching photo to an existing text/bullets slide without chart/image
+    const tokens = ph.label.toLowerCase().split(/[\s_-]+/).filter(t => t.length >= 2)
+    const matchIdx = tokens.length > 0
+      ? bodySlides.findIndex(s =>
+          !s.image && !s.images && !s.chart && ['bullets', 'cards', 'callout'].includes(s.layout) &&
+          tokens.some(tk => `${s.title || ''} ${s.kicker || ''}`.toLowerCase().includes(tk))
+        )
+      : -1
+
+    if (matchIdx >= 0) {
+      const target = bodySlides[matchIdx]
+      const pairedBullets = Array.isArray(target.bullets) && target.bullets.length > 0
+        ? target.bullets.slice(0, 4)
+        : (Array.isArray(target.items) ? target.items.slice(0, 4).map(it => `**${it.title || it.tag || ''}**：${it.text || ''}`) : [])
+      bodySlides[matchIdx] = {
+        ...target,
+        layout: 'image-right',
+        variant: 'framed',
+        bullets: pairedBullets,
+        items: undefined,
+        image: { src: ph.dataUri, alt: ph.label, fit: 'cover', focalPoint: ph.recommendedFocalPoint },
+        evidenceIds: [...new Set([...(target.evidenceIds || []), ph.evId])],
+      }
+    } else {
+      remainingGallery.push(ph)
+    }
+  }
+
+  // Group remaining photos into crisp 2-4 photo gallery slides, or single framed image slide
+  if (remainingGallery.length >= 2) {
+    for (let g = 0; g < remainingGallery.length; g += 4) {
+      const chunk = remainingGallery.slice(g, g + 4)
+      if (chunk.length === 1) {
+        const ph = chunk[0]
+        bodySlides.push({
+          layout: 'image',
+          variant: 'framed',
+          kicker: `VISUAL · ${ph.evId}`,
+          title: ph.label,
+          image: { src: ph.dataUri, alt: ph.label, fit: 'contain', caption: ph.fileName },
+          source: ph.fileName,
+          evidenceIds: [ph.evId],
+        })
+      } else {
+        bodySlides.push({
+          layout: 'image',
+          variant: 'gallery',
+          kicker: en ? 'VISUAL GALLERY' : '现场与视觉图集',
+          title: en ? `Visual Evidence Showcase (${chunk.length} Assets)` : `核心视觉实景图集（共 ${chunk.length} 组素材）`,
+          images: chunk.map(ph => ({
+            src: ph.dataUri,
+            alt: ph.label,
+            fit: 'cover',
+            focalPoint: ph.recommendedFocalPoint,
+            caption: ph.label,
+          })),
+          source: chunk.map(ph => ph.fileName).join(' · '),
+          evidenceIds: chunk.map(ph => ph.evId),
+        })
+      }
+    }
+  } else if (remainingGallery.length === 1) {
+    const ph = remainingGallery[0]
+    bodySlides.push({
+      layout: 'image',
+      variant: 'framed',
+      kicker: `VISUAL · ${ph.evId}`,
+      title: ph.label,
+      image: { src: ph.dataUri, alt: ph.label, fit: 'contain', caption: ph.fileName },
+      source: ph.fileName,
+      evidenceIds: [ph.evId],
+    })
+  }
+
   const defaultPackTitle = cleanLine(options.title || '')
     || (options.filePath && lstatSync(resolve(cwd, String(options.filePath))).isDirectory()
       ? basename(resolve(cwd, String(options.filePath)))
@@ -1997,18 +2671,29 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
   if (formatCounts.tables > 0) partsDesc.push(en ? `${formatCounts.tables} table(s)` : `${formatCounts.tables} 份数据表`)
   if (formatCounts.images > 0) partsDesc.push(en ? `${formatCounts.images} visual(s)` : `${formatCounts.images} 张视觉素材`)
 
-  const mergedSlides = [
-    {
-      layout: 'cover',
-      kicker: en ? 'MULTI-SOURCE BRIEFING' : '多源素材融合汇报',
-      title: defaultPackTitle,
-      subtitle: en
-        ? `Synthesized from ${uniqueFiles.length} local files (${partsDesc.join(' · ')}) with [E1–E${evidence.length}] provenance`
-        : `融合 ${uniqueFiles.length} 份本地资料（${partsDesc.join(' · ')}），全篇自动绑定 [E1–E${evidence.length}] 溯源台账`,
-    },
-  ]
+  const coverSlide = {
+    layout: 'cover',
+    kicker: en ? 'MULTI-SOURCE BRIEFING' : '多源素材融合汇报',
+    title: defaultPackTitle,
+    subtitle: en
+      ? `Synthesized from ${uniqueFiles.length} local files (${partsDesc.join(' · ')}) with [E1–E${evidence.length}] provenance`
+      : `融合 ${uniqueFiles.length} 份本地资料（${partsDesc.join(' · ')}），全篇自动绑定 [E1–E${evidence.length}] 溯源台账`,
+    ...(coverPhoto
+      ? {
+          image: {
+            src: coverPhoto.dataUri,
+            alt: coverPhoto.label,
+            fit: 'cover',
+            focalPoint: coverPhoto.recommendedFocalPoint,
+          },
+          evidenceIds: [coverPhoto.evId],
+        }
+      : {}),
+  }
 
-  if (sourceSummaries.length >= 2) {
+  const mergedSlides = [coverSlide]
+
+  if (sourceSummaries.length >= 2 && !parsedInstr.skipAgenda) {
     mergedSlides.push({
       layout: 'agenda',
       kicker: en ? 'SOURCE PACK' : '资料目录',
@@ -2035,14 +2720,18 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
     })),
   })
 
+  const effectiveMaxSlides = Number.isInteger(options.maxSlides) ? options.maxSlides : parsedInstr.targetSlides
+  const budgetedSlides = applyMaxSlidesBudget(mergedSlides, effectiveMaxSlides, parsedInstr.focusTerms)
+
   return {
     ok: true,
     importedFrom: uniqueFiles.join(', '),
     importedFiles: uniqueFiles,
     title: defaultPackTitle,
     language: en ? 'en' : 'zh',
-    slides: mergedSlides,
+    slides: budgetedSlides,
     evidence,
+    _sheets: collectedSheets,
     stats: {
       sourceFormat: 'multi-source-pack',
       fileCount: uniqueFiles.length,
@@ -2050,7 +2739,7 @@ async function extractMultiSourcePack(rawFilePaths, options = {}) {
       tableCount: formatCounts.tables,
       imageCount: formatCounts.images,
       evidenceCount: evidence.length,
-      slideCount: mergedSlides.length,
+      slideCount: budgetedSlides.length,
     },
   }
 }
@@ -2059,16 +2748,22 @@ async function extractSingleOfficeFile(options = {}) {
   abort(options.signal)
   const input = readOfficeInput(options)
   const enHint = options.lang === 'en'
+  const parsedInstr = parseUserInstructions(options.instructions || '')
 
   if (input.format === 'xlsx') {
-    const { sheets } = parseXlsxArchive(input.bytes)
+    const parsed = parseXlsxArchive(input.bytes)
+    const sheets = filterSheetsByInclude(parsed.sheets, options.includeSheets)
     const sample = sheets.flatMap(s => s.rows.slice(0, 5).flat()).join(' ')
     const en = options.lang ? enHint : (sample.match(/[\u3400-\u9fff]/g) || []).length < 4
     const profiled = profileTabularWorkbook(sheets, input.fileName, en)
+    const maxBudget = Number.isInteger(options.maxSlides) ? options.maxSlides : parsedInstr.targetSlides
+    const finalSlides = applyMaxSlidesBudget(profiled.slides, maxBudget, parsedInstr.focusTerms)
     return {
       ok: true,
       importedFrom: input.resolvedPath,
       ...profiled,
+      slides: finalSlides,
+      stats: { ...profiled.stats, slideCount: finalSlides.length },
     }
   }
 
@@ -2078,27 +2773,43 @@ async function extractSingleOfficeFile(options = {}) {
     const en = options.lang ? enHint : (sample.match(/[\u3400-\u9fff]/g) || []).length < 4
     const sheetTitle = cleanLine(input.fileName.replace(/\.[^.]+$/, '')) || (en ? 'Dataset' : '数据表')
     const profiled = profileTabularWorkbook([{ name: sheetTitle, bannerTitle: '', rows }], input.fileName, en)
+    const maxBudget = Number.isInteger(options.maxSlides) ? options.maxSlides : parsedInstr.targetSlides
+    const finalSlides = applyMaxSlidesBudget(profiled.slides, maxBudget, parsedInstr.focusTerms)
     return {
       ok: true,
       importedFrom: input.resolvedPath,
       ...profiled,
+      slides: finalSlides,
+      stats: { ...profiled.stats, slideCount: finalSlides.length },
     }
   }
 
   if (input.format === 'pdf') {
     const parsedPdf = parsePdfDocument(input.bytes, input.fileName, options.lang)
+    let slides = parsedPdf.slides
+    if (parsedInstr.skipAgenda) slides = slides.filter(s => s.layout !== 'agenda')
+    const maxBudget = Number.isInteger(options.maxSlides) ? options.maxSlides : parsedInstr.targetSlides
+    slides = applyMaxSlidesBudget(slides, maxBudget, parsedInstr.focusTerms)
     return {
       ok: true,
       importedFrom: input.resolvedPath,
       ...parsedPdf,
+      slides,
+      stats: { ...parsedPdf.stats, slideCount: slides.length },
     }
   }
 
   const parsedDocx = parseDocxArchive(input.bytes, input.fileName)
+  let slides = parsedDocx.slides
+  if (parsedInstr.skipAgenda) slides = slides.filter(s => s.layout !== 'agenda')
+  const maxBudget = Number.isInteger(options.maxSlides) ? options.maxSlides : parsedInstr.targetSlides
+  slides = applyMaxSlidesBudget(slides, maxBudget, parsedInstr.focusTerms)
   return {
     ok: true,
     importedFrom: input.resolvedPath,
     ...parsedDocx,
+    slides,
+    stats: { ...parsedDocx.stats, slideCount: slides.length },
   }
 }
 
@@ -2109,10 +2820,13 @@ async function extractSingleOfficeFile(options = {}) {
 /**
  * Extract structured slides & metadata from `.xlsx`, `.csv`, `.tsv`, `.docx`, `.pdf`,
  * OR a multi-source pack (directory path or `filePaths[]` combining docs + tables + PDF + images).
- * Zero external new dependencies (uses Node zlib inflateSync/inflateRawSync + lazy csv-parse).
+ * Pass `inspectOnly: true` to return a compact Material Dossier + Hybrid Authoritative Enrichment Plan without building slides.
  */
 export async function extractOfficeSource(options = {}) {
   abort(options.signal)
+  if (options.inspectOnly === true) {
+    return inspectOfficePack(options)
+  }
   if (Array.isArray(options.filePaths) && options.filePaths.length > 0) {
     return extractMultiSourcePack(options.filePaths, options)
   }
@@ -2124,6 +2838,9 @@ export async function extractOfficeSource(options = {}) {
       if (st.isDirectory()) {
         return extractMultiSourcePack([resolved], options)
       }
+      if (st.isFile() && PACK_IMG_EXTS.has(extname(resolved).toLowerCase())) {
+        return extractMultiSourcePack([resolved], options)
+      }
     } catch { /* fall through to readOfficeInput error */ }
   }
   return extractSingleOfficeFile(options)
@@ -2131,10 +2848,15 @@ export async function extractOfficeSource(options = {}) {
 
 /**
  * Import an Office/PDF document or multi-source folder pack directly into a full dsh-ppt deck
- * (HTML slideshow + 100% native editable PPTX + JSON project + optional evidence ledger & handout/one-pager).
+ * (HTML slideshow + 100% native editable PPTX + JSON project + optional live dataModel binding,
+ * hybrid external authoritative evidence merge, and reverse exports).
+ * When `inspectOnly: true`, returns the compact Material Dossier + Mode C Enrichment Plan without writing files.
  */
 export async function importOfficeDeck(options = {}) {
   abort(options.signal)
+  if (options.inspectOnly === true) {
+    return inspectOfficePack(options)
+  }
   const extracted = await extractOfficeSource(options)
   const { buildDeckAsync } = await import('./deck-advanced.mjs')
 
@@ -2156,16 +2878,86 @@ export async function importOfficeDeck(options = {}) {
     ? { ...(options.brand && typeof options.brand === 'object' ? options.brand : {}), chromeStyle: options.chromeStyle }
     : options.brand
 
+  let finalSlides = extracted.slides
+  let autoDataModel
+  if (options.bindDataModel === true && Array.isArray(extracted._sheets) && extracted._sheets.length > 0) {
+    const bound = buildAutoDataModelFromSheets(extracted._sheets)
+    if (bound) {
+      autoDataModel = bound.dataModel
+      finalSlides = bindSlidesWithAutoDataModel(finalSlides, bound)
+    }
+  }
+
+  // Merge local evidence + optional external authoritative web-research evidence with zero ID collisions
+  const localEv = Array.isArray(extracted.evidence) && extracted.evidence.length > 0
+    ? extracted.evidence
+    : (Array.isArray(options.evidence) && options.evidence.length > 0
+        ? [{
+            id: 'E1',
+            origin: 'local-file',
+            claim: cleanLine(`${title} 本地原始资料`),
+            source: basename(extracted.importedFrom || title),
+            date: new Date().toISOString().slice(0, 7),
+            confidence: 'verified',
+          }]
+        : [])
+  let mergedEvidence = localEv
+  let hybridMergeInfo
+  if (Array.isArray(options.evidence) && options.evidence.length > 0) {
+    const cwd = resolve(String(options.cwd ?? '.'))
+    const kit = loadWorkspaceBrandKit(cwd)
+    const merged = mergeHybridEvidence(localEv, options.evidence, {
+      preferredSources: kit?.preferredSources,
+      blockedDomains: kit?.blockedDomains,
+    })
+    mergedEvidence = merged.evidence
+    hybridMergeInfo = {
+      localCount: merged.localCount,
+      externalCount: merged.externalCount,
+      remappedIds: merged.remappedIds,
+    }
+    // Add an authoritative external benchmark synthesis slide if external evidence wasn't already referenced
+    const extOnly = merged.evidence.filter(e => e.origin === 'web-research')
+    if (extOnly.length > 0) {
+      const en = lang === 'en'
+      const closingIdx = finalSlides.findIndex(s => s.layout === 'closing')
+      const extSlide = {
+        layout: 'cards',
+        variant: 'pillars',
+        kicker: en ? 'EXTERNAL BENCHMARKS' : '权威外部基准对标',
+        title: en
+          ? `Authoritative External Context Anchors ${extOnly.length} Key Benchmarks`
+          : `外部权威基准校准核心判断（共引入 ${extOnly.length} 项权威外源）`,
+        items: extOnly.slice(0, 4).map((e) => ({
+          tag: `${e.id}${e.tier ? ` · T${e.tier}` : ''}`,
+          title: cleanLine(e.source).slice(0, 28),
+          text: cleanLine(e.claim).slice(0, 72) + (e.claimType === 'forecast' ? (en ? ' (Forecast)' : '（预计）') : ''),
+        })),
+        evidenceIds: extOnly.map(e => e.id),
+        takeaway: en
+          ? 'Internal metrics are benchmarked against verified external Tier 1/2 sources; full provenance is recorded in the Evidence Appendix.'
+          : '内部数据已与外部权威基准完成双轨对标，完整出处、年份与原文链接详见附录溯源清单。',
+      }
+      if (closingIdx >= 0) {
+        finalSlides = [...finalSlides.slice(0, closingIdx), extSlide, ...finalSlides.slice(closingIdx)]
+      } else {
+        finalSlides = [...finalSlides, extSlide]
+      }
+    }
+  }
+
   const built = await buildDeckAsync({
     title,
-    slides: extracted.slides,
+    slides: finalSlides,
     theme: inferred,
     persona,
     lang,
     motion: options.motion,
+    motionProfile: options.motionProfile,
     brand,
-    ...(Array.isArray(extracted.evidence) && extracted.evidence.length > 0
-      ? { evidence: extracted.evidence, evidenceAppendix: options.evidenceAppendix !== false }
+    ...(autoDataModel ? { dataModel: autoDataModel } : {}),
+    ...(Array.isArray(mergedEvidence) && mergedEvidence.length > 0
+      ? { evidence: mergedEvidence, evidenceAppendix: options.evidenceAppendix !== false }
       : {}),
     outputDir: options.outputDir || options.outDir || '.',
     fileName: baseFileName,
@@ -2173,6 +2965,7 @@ export async function importOfficeDeck(options = {}) {
     smartLayout: false,
     handout: options.handout === true,
     onePager: options.onePager === true,
+    ...(Array.isArray(options.exports) && options.exports.length > 0 ? { exports: options.exports } : {}),
     ...(options.targetMinutes !== undefined ? { targetMinutes: options.targetMinutes } : {}),
     cwd: options.cwd,
     signal: options.signal,
@@ -2182,6 +2975,8 @@ export async function importOfficeDeck(options = {}) {
     ...built,
     importedFrom: extracted.importedFrom,
     ...(extracted.importedFiles ? { importedFiles: extracted.importedFiles } : {}),
+    ...(autoDataModel ? { dataModelBound: true, boundMetricCount: autoDataModel.metrics.length } : {}),
+    ...(hybridMergeInfo ? { hybridEvidence: hybridMergeInfo } : {}),
     officeStats: extracted.stats,
   }
 }

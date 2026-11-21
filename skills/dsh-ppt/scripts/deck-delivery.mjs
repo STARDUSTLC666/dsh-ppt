@@ -11,7 +11,8 @@ const VISUAL_DIAGRAM_LAYOUTS = new Set([
   'chart', 'chart-split', 'table', 'gantt', 'architecture', 'harvey',
   'tam', 'org', 'marimekko', 'sankey', 'value-chain', 'swot',
   'process', 'matrix', 'mermaid', 'flowchart', 'sequence',
-  'quadrant', 'radar', 'dumbbell', 'heatmap', 'map', 'isometric', 'mockup', 'code',
+  'quadrant', 'radar', 'dumbbell', 'heatmap', 'map', 'isometric',
+  'issue-tree', 'treemap', 'gauge', 'pricing', 'mockup', 'code',
   'image', 'image-left', 'image-right', 'gallery',
 ])
 
@@ -961,18 +962,36 @@ export function renderDelivery(manifest, files = {}, language) {
       autoTourStart: label('自动导览', 'Auto-Tour'),
       autoTourStop: label('停止导览', 'Stop Tour'),
       qaFinished: label('Q&A 倒计时结束', 'Q&A time is up'),
+      reviewCommentSaved: label('已保存当前页审阅批注', 'Review comment pinned to slide'),
+      reviewCommentEmpty: label('暂无批注；按 R 添加当前页修改意见并导出给 AI 修订', 'No comments yet; add feedback for this slide and export JSON for AI revision'),
+      reviewExported: label('已导出 review-feedback.json，可直接发给 AI 自动修订', 'Exported review-feedback.json for AI revision'),
       hint: label('← → 翻页 · P/空格 暂停 · T 重置 · A+/A- 字号 · L 激光笔 · B/W 黑白屏 · Esc 结束', '← → Navigate · T Reset · A+/A- Zoom · L Laser · B/W Blank · Esc End'),
     },
   }
 
   return {
     body: `<div id="delivery-bar">
-  <span id="delivery-status">${escape(draft ? label('待补全草稿', 'Draft: content needed') : label('演示文稿 · Ctrl+K 速搜 · D 标注 · T 计时 · A 导览', 'Presentation · Ctrl+K Jump · D Draw · T Timer · A Tour'))}</span>
+  <span id="delivery-status">${escape(draft ? label('待补全草稿', 'Draft: content needed') : label('演示文稿 · Ctrl+K 速搜 · R 批注 · D 标注 · T 计时 · A 导览', 'Presentation · Ctrl+K Jump · R Comment · D Draw · T Timer · A Tour'))}</span>
   <button id="dsh-jump-open" type="button" title="Ctrl/Cmd+K">${escape(label('速搜 (⌘K)', 'Search (⌘K)'))}</button>
+  <button id="dsh-comments-btn" type="button" title="R">${escape(label('批注 (R)', 'Comments (R)'))}</button>
   <button id="dsh-autotour-btn" type="button" aria-pressed="false" title="A">${escape(label('自动导览', 'Auto-Tour'))}</button>
   ${download('pptx', pptxLabel, 'download-pptx')}
   <button id="review-toggle" type="button" aria-haspopup="dialog">${escape(reviewLabel)}</button>
 </div>
+<aside id="dsh-review-comments" hidden role="region" aria-label="${escape(label('离线审阅批注面板', 'Offline Review Comments'))}">
+  <div class="dsh-rc-head">
+    <strong>${escape(label('审阅批注 · 离线回流 AI', 'Review Comments · Export for AI'))}</strong>
+    <button type="button" id="dsh-rc-close" aria-label="${escape(label('关闭', 'Close'))}">✕</button>
+  </div>
+  <div id="dsh-rc-slide-ctx" class="dsh-rc-ctx"></div>
+  <input id="dsh-rc-author" type="text" placeholder="${escape(label('审阅人（可选，如 老板 / CFO）', 'Reviewer (optional, e.g. CFO)'))}"/>
+  <textarea id="dsh-rc-input" rows="3" placeholder="${escape(label('输入本页修改意见（如：把第3项数字放大并补充对比口径）…', 'Write slide-pinned revision note…'))}"></textarea>
+  <div class="dsh-rc-actions">
+    <button type="button" id="dsh-rc-add">${escape(label('添加批注', 'Pin Comment'))}</button>
+    <button type="button" id="dsh-rc-export">${escape(label('导出 Feedback JSON', 'Export Feedback JSON'))}</button>
+  </div>
+  <ul id="dsh-rc-list"></ul>
+</aside>
 <div id="dsh-laser-dot" aria-hidden="true"></div>
 <canvas id="dsh-draw-canvas" aria-label="${escape(label('实时白板标注画布', 'Live annotation canvas'))}"></canvas>
 <div id="dsh-draw-bar" hidden role="toolbar" aria-label="${escape(label('白板标注工具条', 'Whiteboard pen toolbar'))}">
@@ -1058,6 +1077,106 @@ function initDelivery(go, setOverview, current, total, cfg) {
   const subSpeedBtn = document.getElementById('dsh-sub-speed')
   const subPauseBtn = document.getElementById('dsh-sub-pause')
   const subStopBtn = document.getElementById('dsh-sub-stop')
+  const commentsBtn = document.getElementById('dsh-comments-btn')
+  const commentsDrawer = document.getElementById('dsh-review-comments')
+  const rcCloseBtn = document.getElementById('dsh-rc-close')
+  const rcSlideCtx = document.getElementById('dsh-rc-slide-ctx')
+  const rcAuthor = document.getElementById('dsh-rc-author')
+  const rcInput = document.getElementById('dsh-rc-input')
+  const rcAddBtn = document.getElementById('dsh-rc-add')
+  const rcExportBtn = document.getElementById('dsh-rc-export')
+  const rcList = document.getElementById('dsh-rc-list')
+
+  // --- Wave 3E: 'R' Offline Stakeholder Review Comment Drawer ---
+  const rcStorageKey = 'dsh-ppt-feedback-' + (cfg?.channelId || 'deck')
+  let reviewComments = []
+  try {
+    const rawSaved = localStorage.getItem(rcStorageKey)
+    if (rawSaved) {
+      const parsed = JSON.parse(rawSaved)
+      if (Array.isArray(parsed)) reviewComments = parsed
+    }
+  } catch (_) {}
+  function persistComments() {
+    try { localStorage.setItem(rcStorageKey, JSON.stringify(reviewComments)) } catch (_) {}
+  }
+  function updateCommentsContext(idx) {
+    if (!rcSlideCtx) return
+    const i = typeof idx === 'number' ? idx : current()
+    const sl = document.querySelectorAll('.slide')[i]
+    const heading = sl ? (sl.querySelector('h1,h2,.statement-title,.quote-text')?.textContent || '').trim() : ''
+    rcSlideCtx.textContent = `P${String(i + 1).padStart(2, '0')} · ${heading || ('Slide ' + (i + 1))}`
+  }
+  function renderCommentsList() {
+    if (!rcList) return
+    if (commentsBtn) {
+      const baseLbl = (commentsBtn.dataset.baseLbl ||= commentsBtn.textContent)
+      commentsBtn.textContent = reviewComments.length > 0 ? `${baseLbl} (${reviewComments.length})` : baseLbl
+    }
+    if (reviewComments.length === 0) {
+      rcList.innerHTML = `<li class="dsh-rc-empty">${escape(cfg?.labels?.reviewCommentEmpty || 'No comments')}</li>`
+      return
+    }
+    rcList.innerHTML = reviewComments.map((c, idx) =>
+      `<li><button type="button" class="dsh-rc-jump" data-rc-slide="${c.slide}"><strong>P${String(c.slide).padStart(2, '0')}</strong>${c.author ? ` <em>${escape(c.author)}</em>` : ''}：${escape(c.text)}</button><button type="button" class="dsh-rc-del" data-rc-del="${idx}" aria-label="Delete">✕</button></li>`
+    ).join('')
+    rcList.querySelectorAll('[data-rc-slide]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const s = Number(btn.dataset.rcSlide)
+        if (Number.isInteger(s) && s >= 1 && s <= total) go(s - 1)
+      })
+    })
+    rcList.querySelectorAll('[data-rc-del]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.rcDel)
+        if (Number.isInteger(idx) && idx >= 0 && idx < reviewComments.length) {
+          reviewComments.splice(idx, 1)
+          persistComments()
+          renderCommentsList()
+        }
+      })
+    })
+  }
+  function toggleCommentsDrawer(forceOpen) {
+    if (!commentsDrawer) return
+    const willOpen = typeof forceOpen === 'boolean' ? forceOpen : commentsDrawer.hidden
+    commentsDrawer.hidden = !willOpen
+    if (willOpen) {
+      updateCommentsContext(current())
+      renderCommentsList()
+      setTimeout(() => rcInput?.focus(), 20)
+    }
+  }
+  commentsBtn?.addEventListener('click', () => toggleCommentsDrawer())
+  rcCloseBtn?.addEventListener('click', () => toggleCommentsDrawer(false))
+  rcAddBtn?.addEventListener('click', () => {
+    const txt = String(rcInput?.value || '').trim()
+    if (!txt) return
+    const slideNum = current() + 1
+    reviewComments.push({
+      id: 'rc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      slide: slideNum,
+      author: String(rcAuthor?.value || '').trim() || 'Reviewer',
+      text: txt,
+      createdAt: new Date().toISOString(),
+    })
+    if (rcInput) rcInput.value = ''
+    persistComments()
+    renderCommentsList()
+    showToast(cfg?.labels?.reviewCommentSaved || 'Comment pinned')
+  })
+  rcExportBtn?.addEventListener('click', () => {
+    const payload = {
+      schemaVersion: 1,
+      deckId: cfg?.channelId || '',
+      title: cfg?.title || document.title,
+      exportedAt: new Date().toISOString(),
+      comments: reviewComments,
+    }
+    triggerBlobDownload(JSON.stringify(payload, null, 2), 'application/json;charset=utf-8', 'review-feedback.json')
+    showToast(cfg?.labels?.reviewExported || 'Exported review-feedback.json')
+  })
+  renderCommentsList()
 
   previous.addEventListener('click', () => go(Math.max(0, current() - 1)))
   next.addEventListener('click', () => go(Math.min(total - 1, current() + 1)))
@@ -1719,7 +1838,11 @@ function initDelivery(go, setOverview, current, total, cfg) {
       event.preventDefault()
       if (tourActive) stopAutoTour()
       else startAutoTour()
+    } else if (lower === 'r') {
+      event.preventDefault()
+      toggleCommentsDrawer()
     } else if (lower === 'escape') {
+      if (commentsDrawer && !commentsDrawer.hidden) { event.preventDefault(); toggleCommentsDrawer(false); return }
       if (drawActive) { event.preventDefault(); setDrawActive(false); return }
       if (laserActive) {
         applyLaser(false)
@@ -1744,6 +1867,7 @@ function initDelivery(go, setOverview, current, total, cfg) {
     if (consoleOpen()) sendConsoleState(index)
     if (drawActive || strokesBySlide.has(index)) redrawCanvas(index)
     if (tourActive) updateSubtitleBar(index)
+    if (commentsDrawer && !commentsDrawer.hidden) updateCommentsContext(index)
   }
 }
 
@@ -1818,5 +1942,19 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
   #notes-panel,#help-panel{bottom:160px}
   #review-panel{padding:18px}
 }
-@media print{#delivery-bar,#review-panel,#dsh-laser-dot,#dsh-draw-canvas,#dsh-draw-bar,#dsh-qa-timer,#dsh-sub-bar,#dsh-jump-dialog{display:none!important}}
+#dsh-review-comments{position:fixed;top:64px;right:22px;z-index:93;width:min(360px,calc(100vw - 24px));max-height:74vh;display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:14px;background:color-mix(in srgb,var(--panel) 97%,transparent);color:var(--fg);border:1px solid var(--accent);box-shadow:0 18px 46px rgba(0,0,0,.38);backdrop-filter:blur(8px);overflow:hidden}
+#dsh-review-comments[hidden]{display:none}
+.dsh-rc-head{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.dsh-rc-head button{border:1px solid var(--muted);border-radius:8px;background:transparent;color:var(--fg);padding:2px 7px;cursor:pointer}
+.dsh-rc-ctx{font-size:12px;font-weight:700;color:var(--accent)}
+#dsh-rc-author,#dsh-rc-input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--muted);background:var(--bg);color:var(--fg);font:inherit;font-size:12.5px}
+.dsh-rc-actions{display:flex;gap:8px}
+.dsh-rc-actions button{flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+#dsh-rc-export{background:var(--bg);color:var(--fg);border-color:var(--muted)}
+#dsh-rc-list{list-style:none;margin:0;padding:0;overflow:auto;display:flex;flex-direction:column;gap:6px;max-height:30vh}
+#dsh-rc-list li{display:flex;gap:6px;align-items:flex-start;background:var(--bg);border:1px solid color-mix(in srgb,var(--muted) 30%,transparent);border-radius:8px;padding:7px 8px;font-size:12px}
+.dsh-rc-jump{flex:1;text-align:left;background:transparent;border:0;color:var(--fg);font:inherit;cursor:pointer;padding:0;line-height:1.4}
+.dsh-rc-del{background:transparent;border:0;color:var(--muted);cursor:pointer;padding:0 4px}
+.dsh-rc-empty{color:var(--muted);justify-content:center}
+@media print{#delivery-bar,#review-panel,#dsh-review-comments,#dsh-laser-dot,#dsh-draw-canvas,#dsh-draw-bar,#dsh-qa-timer,#dsh-sub-bar,#dsh-jump-dialog{display:none!important}}
 `

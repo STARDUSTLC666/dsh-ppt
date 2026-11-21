@@ -4,6 +4,7 @@
 
 ## 本次改进
 
+- **0.35.0 8 域权威信源引擎、Mode C 混合素材包（`inspectOnly`）、4 套高管图谱（41 种标准版式 + 53 别名）、逆向 Office 导出、企业金页拼装、无损双语与离线 `R` 键审阅闭环**：`deck-evidence.mjs` 内置 8 大专业领域 `site:` + `filetype:pdf` + `-site:`（排除 25 站营销号）权威检索包与代码级 `classifySourceAuthority`（T1/T2/T3），`SLOP-13` 升级 9 项拦截（新增 `secondary-relay-source` / `low-authority-source` / `unmarked-forecast-claim` / `missing-external-date` / `stale-evidence-date`），`.dsh-ppt/brand-kit.json` 支持 `preferredSources` 与 `blockedDomains`；`deck-office.mjs` 新增 Mode C `inspectOnly: true`（Material Dossier + `enrichmentPlan` + `nextEvidenceId`）、`instructions`、`maxSlides`、`includeSheets`、`photoRoles`、`bindDataModel: true` 与照片二进制头防裁歪（人像自动 `focalPoint: 'top'`、截图自动 `mockup`）；`deck-charts-exec.mjs` 新增 **`issue-tree`**（MECE 议题树）、**`treemap`**（比例矩形树图）、**`gauge`**（OKR 水平子弹仪）与 **`pricing`**（三档商业报价矩阵）并启用 HTML CSS 按需 Tree-Shaking（`buildLayoutCss`）；零新增依赖新增 `deck-export.mjs`（`exports: ['xlsx', 'docx', 'qa-prep', 'memo', 'i18n', ...]`，工作台同步支持 `.xlsx`/`.docx`/`.qa-prep.md` 下载）、`deck-compose.mjs`（`.dsh-ppt/slide-bank.json` `saveToBank` + `mergeSources` 跨工程拼装）、`deck-i18n.mjs`（100% 版式无损 `translations` / `bilingualMode`）、`reveal: 'step'` + `motionProfile` 与独立 HTML `R` 键离线批注导出 `review-feedback.json` → `ppt_check({ feedbackPath })` 闭环。
 - **0.34.0 企业品牌宪章锁（`SLOP-14`）、多源资料包直吞（含 `.pdf`）、多受众改编/社媒长图、HTML 现场演示增强包与工作台全量对齐**：新增零依赖 `deck-brand-kit.mjs`（`.dsh-ppt/brand-kit.json` 原子锁存、HTML/PPTX 同构保密水印、固定封底与 `SLOP-14` 禁用词/色板漂移审计，支持 `ppt_absorb({ saveBrandKit: true })` / `--save-brand-kit` / `--no-brand-kit`）与 `deck-remix.mjs`（`exec-5min`/`board-brief`/`sales-pitch` 无损备注归档改编 + `4:5`/`1:1` 社媒长图卡片 HTML）；`deck-office.mjs` 新增零依赖纯 Node `.pdf` 提取器及目录/`filePaths[]` 多源素材包一键融合（自动绑定 `[E1..En]` 证据账本）；`deck-delivery.mjs` 新增 `Ctrl/Cmd+K` 速搜跳页（支持 `[E#]`）、`D` 键白板画笔、`T` 键 Q&A 倒计时、`A` 键自动字幕导览与 `.srt`/`.vtt` 字幕导出（同步打包进 `dsh-remotion`）；工作台全面同步 `map`/`isometric`、3 套新封面底纹、Layout Morph、`focalPoint`、`imageBrief`、证据账本抽屉、修订差异面板、多受众改编、`.pdf` 上传与社媒长图/字幕下载。
 - **0.33.0 视觉与信息图智能（全球/中国点阵地图、2.5D 等轴测信息图、封面矢量底纹与智能配图协作）**：新增零外部依赖 `deck-infographics.mjs`，将原生可编辑版式扩展至 **37+**——支持主题自适应 **战略矢量点阵地图 `map`**（`world` / `china` + `world-map` / `china-map` / `::: map`）、**2.5D 等轴测信息图 `isometric`**（`stack` 悬浮平台架构 + 左侧防遮挡层号胶囊与 `pillars` 3D 立体柱碑，100% 原生 `<a:custGeom>` 可编辑）、封面程序化底纹 `coverPattern` 扩展 `waves` / `isometric-mesh` / `editorial-arcs`，以及 **智能配图协作槽位 `imageBrief`**（策划器同步输出 `visualBriefs[]`，填入 `image.src` 自动清除占位提醒）、`image.focalPoint` 焦距安全裁切与 `image[full-bleed]` 自动暗色渐变护眼层（`sendShapeToBack` + WCAG AAA 白字）。
 - **0.32.0 零资料深度调研、事实核验账本与 `SLOP-13` 事实出处门禁**：新增零外部依赖 `deck-evidence.mjs` 与技能协议 `skills/dsh-ppt/references/research-plan.md`（严格保持 13 个注册工具、0 引擎内联网）；`ppt_templates({ topic, evidence })` 与 CLI `--plan` 可按选题自动匹配 20 套标杆范本并生成 3 轮检索清单、量化槽位缺口诊断与逐页分镜策划表（`planMarkdown`）；`ppt_create({ evidence, evidenceAppendix: true })` 与 CLI `--evidence @file.json --evidence-appendix` 自动把核验后的 `E1..En` 证据账本注入单行精简 `source` 脚注、演讲备注完整 URL/口径溯源卡、封底前零溢出 4 列 `booktabs` 核验清单附录页及讲义总表；`SLOP-13` 静态门禁自动拦截悬空 `[E99]`、未标注口径的 `unverified`/`conflicting` 声明、「数据来源：网络整理」等空洞假出处及调研模式下无出处量化页。
@@ -22,25 +23,26 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| `ppt_create` 工具 | Markdown / 结构化 `slides` → `*.html` + `*.pptx` + `*.json` 三件套；默认 `theme: "auto"` 自动匹配主题与骨架，支持 `referencePptx`、`cloneStructure: true` 与 `targetMinutes` 演讲时长预算 |
-| `ppt_from_office` 工具 | 零新增依赖直吞 `.xlsx` 多工作表、`.csv`/`.tsv` 与 `.docx` Word 报告，自动识别流向/排期/份额/增减桥/组合指标并生成高颜值全套工程 |
+| `ppt_create` 工具 | Markdown / 结构化 `slides` → `*.html` + `*.pptx` + `*.json` 三件套；默认 `theme: "auto"`，支持 `exemplar`、`alignOrder`、`evidence[]`、`mergeSources` 跨工程拼装、`exports[]` 配套导出、`motionProfile`、`referencePptx`、`cloneStructure` 与 `targetMinutes` |
+| `ppt_from_office` 工具 | 零新增依赖直吞 `.xlsx`/`.csv`/`.tsv`/`.docx`/`.pdf`/照片混合素材包；支持 Mode C `inspectOnly: true`（输出 Material Dossier + `enrichmentPlan`）、`instructions`、`maxSlides`、`includeSheets`、`photoRoles`、`bindDataModel: true`、`evidence[]` 双轨融合与 `exports[]` |
 | `ppt_import` 工具 | 导入外部 `.pptx`（正文、表格、原生图表、图片、备注）一键翻新为可编辑工程，或传入 `projectId` 将 Office 修改稿导回既有工程更新（支持撤销） |
 | `ppt_cite` 工具 | 联动 `dsh-cite` 文献库/BibTeX，核验并替换 `[@citeKey]` / `[doi:...]` 为真实 `slide.source` 学术尾注并生成 `References` 文献页（零捏造 DOI） |
-| `ppt_remotion` 工具 | 按 `computePaceBudget` 时长预算导出 `dsh-remotion` 30fps 视频分镜包（`DeckVideo.tsx` + `slides-data.json` + `remotion-storyboard.json`） |
-| `ppt_absorb` 工具 | 本地只读解析参考 `.pptx` 的主题修饰色板、字体、画幅比例、母版骨架几何（`extractedSkeleton` / `recommendedChrome`）、逐页序列（`slideSkeleton`）与可选嵌入 Logo |
+| `ppt_remotion` 工具 | 按 `computePaceBudget` 时长预算导出 `dsh-remotion` 30fps 视频分镜包（含 `DeckVideo.tsx`、`slides-data.json`、`captions.srt`/`.vtt`） |
+| `ppt_absorb` 工具 | 本地只读解析参考 `.pptx`（单份或目录批量 `--ingest-exemplars`）的配色、字体、骨架、6 维审美 DNA（`styleRecipe`）与逐页序列；支持保存品味库、范本库与企业品牌宪章锁（`.dsh-ppt/brand-kit.json`，含 `watermark` / `forbiddenTerms` / `preferredSources` / `blockedDomains`） |
 | `ppt_themes` 工具 | 列出 24 套内置主题（16 明亮 + 8 深色）与 6 套母版骨架；传 `preview: true, outputDir: "dist"` 生成主题对比页 + 每套 SVG 色板卡 |
-| 29+ 种页型与图示 | `cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `process` / `callout`（支持原生 `<m:oMath>` `formula`） / `mermaid`（原生可编辑流程图与时序图） / `gantt` / `architecture` / `harvey` / `tam` / `org` / `marimekko` / `sankey` / `swot` / `value-chain` / `table` / `closing` / `image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `flowchart`、`sequence`、`chevron`、`waterfall`、`gallery`、`flywheel` 别名） |
-| 13 类原生图表 | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall`，支持 `highlight` 焦点项染色 |
-| `ppt_templates` | 20 套场景蓝图：`weekly`、`defense`、`project`、`pitch`、`consulting`、`keynote`、`gov-report`、`workshop`、`architecture-review`、`financial-earnings`、`medical-case`、`postmortem`、`marketing-campaign`、`promotion-review`、`legal-compliance`、`creative-lookbook`、`quarterly-okr`、`product-prd`、`vc-daylight`、`industry-research` |
-| `ppt_edit` / `ppt_undo` | 按页或整套切换主题/品牌/参考 `.pptx`、增删改排页面，支持最多 20 次历史与修订号冲突保护 |
-| `ppt_check` | 只读版面与信息密度检查（含标题动作化、密度过载、连续同构页等提醒），定位具体页；可复核当前渲染收据 |
+| 41 种标准版式 + 53 别名 | **36 核心**：`cover` / `agenda` / `section` / `bullets` / `statement` / `quote` / `kpi` / `cards` / `comparison` / `matrix` / `swot` / `process` / `value-chain` / `marimekko` / `sankey` / `mermaid` / `callout`（含原生 `<m:oMath>` `formula`） / `gantt` / `architecture` / `harvey` / `tam` / `org` / `mockup` / `code` / `quadrant` / `radar` / `dumbbell` / `heatmap` / `map` / `isometric` / **`issue-tree`** / **`treemap`** / **`gauge`** / **`pricing`** / `table` / `closing`；**5 媒体**：`image` / `image-left` / `image-right` / `chart` / `chart-split`（兼容 `mece`、`logic-tree`、`rect-map`、`budget-map`、`bullet-chart`、`okr-gauge`、`tiers`、`packages`、`world-map`、`china-map`、`iso-stack`、`flowchart`、`sequence`、`chevron`、`waterfall`、`gallery` 等 53 个别名） |
+| 13 类原生图表 | `column` / `bar` / `stacked-column` / `stacked-bar` / `percent-column` / `percent-bar` / `line` / `area` / `pie` / `doughnut` / `scatter` / `combo` / `waterfall`，支持 `spotlight` / `highlight` / `referenceLine` / `showGrowthCallout` |
+| `ppt_templates` | 20 套行业蓝图 + 20 套标杆范本（含 Few-Shot JSON）+ Mode B 8 大领域权威调研策划器（`topic` + `evidence` → 3 轮 `site:` 检索包与 `planMarkdown`） |
+| `ppt_edit` / `ppt_undo` | 按页或整套切换主题/品味/品牌/参考 `.pptx`、`motionProfile`、增删改排、`remixPreset` 多受众压缩、`saveToBank` 收藏金页、`translations`/`bilingualMode` 100% 无损翻译与 `exports[]` 配套导出（最多 20 次撤销与修订锁） |
+| `ppt_check` | 只读版面与 `SLOP-01..14` 质量/权威信源/品牌合规审计；支持 `renderReceipt` 渲染摘要复核与 `feedbackPath` 导入 HTML `R` 键离线批注（`stakeholder-feedback`） |
 | `ppt_render` | 可选官方引擎生成逐页 PNG / PDF，保留源 PPTX，报告缺失字体 |
-| `ppt_data` | 可选来源更新与假设推演，先预览差异再确认保存；见[数据说明](DATA.md) |
+| `ppt_data` | 可选来源更新与假设推演（支持 `bindDataModel: true` 自动绑定 Excel 表），先预览差异再确认保存；见[数据说明](DATA.md) |
+| 逆向配套导出与金页库 | `exports: ['xlsx', 'docx', 'qa-prep', 'memo', 'i18n', 'handout', 'one-pager', 'social-carousel', 'subtitles']`；工作台直接下载 `.xlsx`/`.docx`/`.qa-prep.md`/`.pdf`/`.zip`；`.dsh-ppt/slide-bank.json` 跨工程复用 |
 | AI 看图修复 | 可选实际 PPTX 图片检查（最多 24 页）、12 种无损排版动作、可撤销副本与重新渲染复查；见[看图修复](VISUAL.md) |
 | AI 预审与模拟答辩 | 可选叙事主线（SCQA / 金字塔 / 动作标题）、表达、逻辑与证据缺口预审（最多 8 条）及 7 类听众模拟答辩；见[预审与答辩](COACHING.md) |
-| 品牌与母版 | 共享主色、背景色、文字色、字体、Logo、页脚，HTML 与 PPTX 同源同步 |
-| 演讲者提词台、讲义与动效 | `<!-- 备注: ... -->` 或 `notes` 字段同步至 HTML 双屏演讲者提词台（`P` 开启、`L` 激光笔）与 PPTX 原生备注页，支持导出 `.handout.md` 讲义；`motion` 默认开启，`motion: 'off'` / `--motion off` 产出纯静态 |
-| `dsh-ppt` 技能 & 裸 CLI | 完整自动审美指导 SOP 注册进 DSH；也可将 `skills/dsh-ppt/` 复制到 Claude Code / Cursor / Gemini CLI / Codex 跨环境独立运行 |
+| 品牌宪章与母版 | 共享主色、背景色、文字色、字体、Logo、页脚、内容页保密水印与 `preferredSources`/`blockedDomains`，HTML 与 PPTX 同源同步 |
+| 现场演示增强包与动效 | 独立 HTML 支持 `P` 双屏提词台、`L` 激光笔、`Ctrl/Cmd+K` 全局速搜、`R` 离线批注导出 JSON、`D` 白板画笔、`T` Q&A 倒计时、`A` 自动字幕导览；支持 `reveal: 'step'` 分步点击显现、`motionProfile` 与 `motion: 'off'` 纯静态输出 |
+| `dsh-ppt` 技能 & 裸 CLI | 三模路由（Mode A/B/C）SOP 注册进 DSH（共 13 个工具）；也可将 `skills/dsh-ppt/` 复制到 Claude Code / Cursor / Gemini CLI / Codex 跨环境独立运行 |
 
 示例对话：
 
@@ -54,14 +56,14 @@
 dsh plugin --profile web add dsh-ppt
 ```
 
-桌面版可在插件管理中安装 `dsh-ppt`。更新后重启对应宿主，加载九个工具与 `dsh-ppt` 技能。无需手写 JSON，可直接要求 Agent「按管理层汇报风格自动排版」「参考我的模板 PPTX」「把第三页改成三栏卡片」「撤销上次修改」。
+桌面版可在插件管理中安装 `dsh-ppt`。更新后重启对应宿主，加载 13 个工具与 `dsh-ppt` 技能。无需手写 JSON，可直接要求 Agent「按管理层汇报风格自动排版」「参考我的模板 PPTX」「把第三页改成三栏卡片」「撤销上次修改」。
 
 ## 快速开始
 
 ### DSH 内（推荐）
 
 ```
-1. ppt_themes { preview: true, outputDir: "dist" }   # 预览 18 套主题 + 生成对比页
+1. ppt_themes { preview: true, outputDir: "dist" }   # 预览 24 套主题 + 生成对比页
 2. ppt_create {
      title: "季度经营复盘与下阶段重点",
      content: "# 核心结论\n> [!TAKEAWAY] 首次响应时间降至 8 秒，续费率提升 4.2 个百分点\n\n::: kpi\n- 8s | 首次响应时长 | 环比 -64%\n- 98.5% | 服务达成率 | +4.2%\n:::",
@@ -100,16 +102,16 @@ node <skill-dir>/scripts/build-deck.mjs \
 
 打开左侧栏「演示文稿工作台」（或「设置 → 演示文稿」），选择由 `ppt_create`、`ppt_edit` 或 `ppt_check` 登记的本插件工程：
 
-- **内容编辑与一键换版式**：左侧页面栏展示每页版式标签与质量状态圆点，支持「+ 新建页面」按版式原型插入起始页（含甘特图、系统架构、哈维球、TAM/SAM/SOM、组织图谱等），以及上移/下移、复制、删除（保留 1–120 页，均支持撤销）。右侧顶部提供 **24 种版式原型切换器**、变体（`variant`）、单页母版骨架（`chrome`）与疏密（`compact | balanced | airy`）选择，切换版式时自动在要点列表、结构化卡片（`items`）与表格（`rows`）之间无损映射草稿；支持结构化编辑卡片数值/甘特图时间跨度/标签/状态、切换表格样式（咨询表 / 学术三线表 `booktabs` / 极简 / 条纹 / 哈维球 `harvey`）以及编辑底部结论栏（`takeaway`）与来源脚注（`source`）。
-- **风格与母版（Style Studio）**：按「明亮主题（12 套）」与「深色主题（6 套）」分区浏览实时色板与适用场景，一键切换整套文稿主题或 **6 套母版骨架（`brand.chromeStyle`）**；支持自定义品牌色、字体、页脚与 PNG/JPEG Logo；支持拖拽上传自有 `.pptx`（≤10 MiB，浏览器端转交内存解析，绝不读取宿主机任意本地路径）预览 `recommendedChrome`、`extractedSkeleton` 与 `slideSkeleton` 摘要并一键应用。
+- **内容编辑与一键换版式**：左侧页面栏展示每页版式标签与质量状态圆点，支持「+ 新建页面」按版式原型插入起始页（含 `issue-tree`、`treemap`、`gauge`、`pricing`、`map`、`isometric`、甘特图、系统架构、哈维球、TAM/SAM/SOM、组织图谱等），以及拖拽调序、复制、删除（保留 1–120 页，均支持撤销）。右侧顶部提供 **41 种标准版式原型切换器**、变体（`variant`）、单页母版骨架（`chrome`）与疏密（`compact | balanced | airy`）选择，切换版式时自动在要点列表、结构化卡片（`items`）与表格（`rows`）之间无损映射草稿；支持结构化编辑卡片数值/目标上限（`actual`/`target`/`max`）/甘特图时间跨度/标签/状态、切换表格样式（咨询表 / 学术三线表 `booktabs` / 极简 / 条纹 / 哈维球 `harvey`）以及编辑底部结论栏（`takeaway`）与来源脚注（`source`）。
+- **风格与母版（Style Studio）**：按「明亮主题（16 套）」与「深色主题（8 套）」分区浏览实时色板与适用场景，一键切换整套文稿主题、8 套大师品味配方或 **6 套母版骨架（`brand.chromeStyle`）**；支持自定义品牌色、字体、页脚、保密水印与 PNG/JPEG Logo；支持拖拽上传自有 `.pptx`（≤10 MiB，浏览器端转交内存解析，绝不读取宿主机任意本地路径）预览 `recommendedChrome`、`extractedSkeleton` 与 `slideSkeleton` 摘要并一键应用。
 - **并排对比与质量定位**：画布区支持「HTML 预览」「PPTX 渲染页」「HTML + PPTX 并排对比」三种视图；点击质量提示行可直接跳转到对应问题页。
 - **并发与资产保护**：保存会原子更新 HTML、PPTX 和 JSON。若助手同时修改了工程，旧修订返回 409 冲突保护，点击「载入最新版本，保留我的输入」核对后再保存。面板上传 PNG/JPEG 每张最多 5 MiB（读取期间切页或取消会自动中止读取）。保存后可单独下载「讲稿 Markdown」（按当前页序生成，不含撤销历史旧备注）。面板仅编辑本插件生成的 JSON 工程，不直接改写外部手工编辑的任意 PPTX。
 
 ### 结构化页型、媒体与图表
 
-结构化 `slides` 支持全部 24 种标准版式与专业图示：
+结构化 `slides` 支持全部 **41 种标准版式（36 核心 + 5 媒体）+ 53 个别名**：
 
-- **结构化卡片 / KPI / 对比 / 矩阵 / 流程 / 甘特图 / 架构 / TAM / 组织图谱**：通过 `items` 数组传入最多 8 项，每项支持 `{ tag, title, text, value, unit, delta, start, span, milestone, role, conversion, status, bullets }`，甘特图支持 `columns: ["Q1","Q2","Q3","Q4"]`，并可搭配 `chrome`、`takeaway`（核心结论条）与 `source`（数据来源角注）。
+- **高管咨询与战略图谱（`issue-tree | treemap | gauge | pricing | map | isometric | quadrant | radar | dumbbell | heatmap | mockup | code | mermaid | gantt | architecture | tam | org | marimekko | sankey | value-chain | swot`）与结构化卡片（`kpi | cards | comparison | matrix | process`）**：通过 `items` 数组传入最多 8 项，每项支持 `{ tag, title, text, value, unit, delta, actual, target, max, before, after, x, y, size, start, span, milestone, role, conversion, icon, status, bullets }`，甘特图支持 `columns: ["Q1","Q2","Q3","Q4"]`，并可搭配 `chrome`、`reveal: 'step'`、`takeaway`（核心结论条）与 `source`（数据来源角注）。
 - **哈维球矩阵与表格**（`harvey | table`）：支持 `tableStyle: "consulting" | "booktabs" | "minimal" | "banded" | "harvey"`；`harvey` 矩阵支持在单元格中使用 `●` / `◕` / `◑` / `◔` / `○` / `✓` / `✗` 渲染原生矢量哈维球与状态符号。
 - **图文页**（`image | image-left | image-right`）：
   ```json
@@ -122,7 +124,7 @@ node <skill-dir>/scripts/build-deck.mjs \
   ```
   支持 `column | bar | stacked-column | stacked-bar | percent-column | percent-bar | line | area | pie | doughnut | scatter | combo | waterfall`（也可传表头 + 数据行的 `rows`）。数值须有限且系列长度一致；饼图/环形图要求单个非负系列且总和大于零。HTML 输出无障碍 SVG 与读屏数据表，PPTX 写入原生可编辑图表与工作簿。
 
-`brand` 支持 `name`、`primaryColor`、`backgroundColor`、`textColor`、`fontFamily`、`logo`、`footer`、`chromeStyle`（颜色为 `#RRGGBB`，字体请选接收方设备常见字体）。`template` 支持 `weekly | defense | project | pitch | consulting | keynote | gov-report | workshop | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook` 共 16 套行业蓝图，提供正文时不会覆盖用户原有叙事。
+`brand` 支持 `name`、`primaryColor`、`backgroundColor`、`textColor`、`fontFamily`、`logo`、`footer`、`watermark`、`chromeStyle`（颜色为 `#RRGGBB`，字体请选接收方设备常见字体）。`template` 支持 `weekly | defense | project | pitch | consulting | keynote | gov-report | workshop | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook | quarterly-okr | product-prd | vc-daylight | industry-research` 共 20 套行业蓝图，提供正文时不会覆盖用户原有叙事。
 
 编辑与结构操作示例：
 - 单页与整套主题更新：`ppt_edit { deckPath: "report.json", expectedRevision: 0, theme: "consulting", edits: [{ slide: 3, patch: { layout: "kpi", title: "关键经营指标全面达标", takeaway: "三大核心指标均超季度目标" } }] }`
@@ -144,27 +146,31 @@ npm install --ignore-scripts @deepseek-ai/libreoffice-kit@0.2.3
 
 `ppt_render { pptxPath: "report.pptx", format: "both" }` 读取最终 PPTX，生成逐页 PNG、PDF 和 `render-receipt.json`，不重新保存可编辑源文稿。`ppt_check` 可携带返回的 `receiptPath` 作为 `renderReceipt`，核验源文件和每个输出的摘要；编辑源文稿或修改输出后旧收据失效。静态产物不保留动画；LibreOffice 与 PowerPoint/WPS 的排版可能不同。字体诊断不保证每个字符，也不自动安装字体。更多细节见 [渲染说明](../docs/LIBREOFFICE-INTEGRATION-2026-10-01.md)。
 
-CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office report.xlsx`、`--import-pptx legacy.pptx`、`--one-pager`、`--target-minutes 15`、`--handout`、`--reference-pptx ref.pptx`、`--absorb ref.pptx`、`--template consulting`、`--edit report.json --edits @edits.json --revision 0`、`--undo report.json --revision 1`、`--check report.json`、`--render report.pptx --format both`。收据核验用 `--check report.json --render-receipt path/to/render-receipt.json`；失败返回非零退出码。
+CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office report.xlsx`（可组合 `--inspect-only`、`--instructions "..."`、`--bind-data`）、`--export xlsx,docx,qa-prep,memo,i18n`、`--merge @sources.json`、`--save-to-bank 3`、`--list-bank`、`--translate @en.json --bilingual`、`--motion-profile executive`、`--plan "选题"`、`--evidence @evidence.json --evidence-appendix`、`--import-pptx legacy.pptx`、`--sync-pptx edited.pptx`、`--one-pager`、`--target-minutes 15`、`--handout`、`--reference-pptx ref.pptx`、`--absorb ref.pptx`、`--template consulting`、`--edit report.json --edits @edits.json --revision 0`、`--undo report.json --revision 1`、`--check report.json --feedback review-feedback.json`、`--render report.pptx --format both`。收据核验用 `--check report.json --render-receipt path/to/render-receipt.json`；失败返回非零退出码。
 
-## 内置主题（18 套）与 6 套母版骨架
+## 内置主题（24 套）与 6 套母版骨架
 
 ### 6 套差异化母版骨架（`chromeStyle`）
 
 | ID | 名称 | 结构特征 | 默认绑定主题 |
 | --- | --- | --- | --- |
-| `consulting-classic` | 麦肯锡直角 | 0px 直角卡片 + 左侧强调竖线 + 右上章节胶囊 + 0.75pt 页眉线 | `consulting`、`cobalt-cream`、`financial-ft` |
-| `keynote-spatial` | Apple 空间留白 | 无顶部分隔线 + 16pt 留白无边框浮卡 + 极简底栏结论 | `keynote-light`、`bold` |
-| `editorial-folio` | 杂志社论书脊 | 顶栏刊号 + 页码移至右上角 + 0px 锐利边线 + 衬线大序号 | `editorial-forest`、`cartesian`、`velvet`、`luxury-noir` |
-| `saas-bento` | 黑曜石 Bento | 10pt 圆角 `surface1` 描边网格 + 主卡强调高亮 + 等宽标签 | `linear-dark`、`swiss`、`data`、`soft` |
+| `consulting-classic` | 麦肯锡直角 | 0px 直角卡片 + 左侧强调竖线 + 右上章节胶囊 + 0.75pt 页眉线 | `consulting`、`cobalt-cream`、`financial-ft`、`bcg-emerald`、`obsidian-amber` |
+| `keynote-spatial` | Apple 空间留白 | 无顶部分隔线 + 16pt 留白无边框浮卡 + 极简底栏结论 | `keynote-light`、`bold`、`venture-daylight`、`aurora-stage` |
+| `editorial-folio` | 杂志社论书脊 | 顶栏刊号 + 页码移至右上角 + 0px 锐利边线 + 衬线大序号 | `editorial-forest`、`cartesian`、`velvet`、`luxury-noir`、`economist-brief` |
+| `saas-bento` | 黑曜石 Bento | 10pt 圆角 `surface1` 描边网格 + 主卡强调高亮 + 等宽标签 | `linear-dark`、`swiss`、`data`、`soft`、`stripe-craft` |
 | `academic-minimal` | 学术顶栏横幅 | Beamer 通栏色带页眉 + 三段学术底栏（来源 \| 章节 \| 页码） | `academic`、`course-sage`、`medical-clean` |
 | `gov-ceremonial` | 东方政务双线 | 主金双线页眉 + `【01 · 章节】` 标识 + 对称暖纸卡片 | `exec-jilan`、`exec-palace` |
 
-### 明亮主题（12 套，推荐日常投影、打印、咨询、政务、医疗与学术答辩）
+### 明亮主题（16 套，推荐日常投影、打印、咨询、政务、医疗与学术答辩）
 
 | ID | 名称 | 情绪 | 适用场景 |
 | --- | --- | --- | --- |
 | `consulting` | 蔚蓝战略（`auto` 商务默认） | 权威 / 清晰 | 管理咨询、商业分析、经营汇报、项目复盘 |
 | `cobalt-cream` | 钴蓝简报 | 理性纸感 / 现代简报 | 产品方案、B2B 提案、研究简报、技术方案 |
+| `bcg-emerald` | 翡翠战略 | 精炼 / 战略感 | 战略咨询、业务增长、数字化转型提案 |
+| `economist-brief` | 社论红标 | 锐利 / 杂志感 | 宏观研报、政策解读、深度行业分析 |
+| `venture-daylight` | 硅谷创投白 | 明亮 / 现代投资 | 创业融资 Pitch、投资备忘录、路演简报 |
+| `stripe-craft` | 极光产研 | 精致 / 工艺感 | SaaS 产品发布、PRD、技术架构与产研汇报 |
 | `exec-jilan` | 霁蓝政务 | 沉稳 / 权威 | 集团汇报、政企沟通、重大立项 |
 | `exec-palace` | 故宫丹宸 | 庄重 / 典雅 | 政务总结、年度述职、庆典与典礼汇报 |
 | `academic` | 清澄学术 | 克制 / 规范 | 论文答辩、基金申报、学术研讨会 |
@@ -172,11 +178,11 @@ CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office repo
 | `cartesian` | 暖石极简 | 极简 / 几何 | 架构评审、工程复盘、设计方法论 |
 | `course-sage` | 知行讲义 | 清爽 / 易读 | 课程培训、工作坊、教学讲义 |
 | `soft` | 柔和信号 | 温暖 / 人本 | 品牌故事、内部赋能、团队分享 |
-| `keynote-light` | 库比蒂诺留白 | 纯净 / 空间留白 | 苹果风产品发布、高端品牌简报 |
-| `financial-ft` | 金融时报 | 权威 / 财经纸感 | 财报发布、投研路演、宏观分析 |
-| `medical-clean` | 仁心临床 | 洁净 / 严谨 | 临床病例汇报、医药研发、生物健康评审 |
+| `keynote-light` | 苹果极简白 | 纯净 / 空间留白 | 苹果风产品发布、高端品牌简报 |
+| `financial-ft` | 金融时报粉 | 权威 / 财经纸感 | 财报发布、投研路演、宏观分析 |
+| `medical-clean` | 循证医学蓝绿 | 洁净 / 严谨 | 临床病例汇报、医药研发、生物健康评审 |
 
-### 深色主题（6 套，推荐大屏发布会、科技路演、奢侈策展与沉浸式演示）
+### 深色主题（8 套，推荐大屏发布会、科技路演、奢侈策展与沉浸式演示）
 
 | ID | 名称 | 情绪 | 适用场景 |
 | --- | --- | --- | --- |
@@ -185,9 +191,11 @@ CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office repo
 | `velvet` | 天鹅绒标准 | 高级 / 克制 | 高端品牌、投资人闭门路演 |
 | `bold` | 极繁大字 | 大声 / 动能 | 发布会金句、活动开场、大事件宣言 |
 | `linear-dark` | 黑曜石路演 | 锐利 / 现代 | 现代软件发布、创业融资 Pitch |
-| `luxury-noir` | 黑金策展 | 奢雅 / 社论暗调 | 创意 Lookbook、奢侈品牌策展、高端发布 |
+| `luxury-noir` | 黑金典藏 | 奢雅 / 社论暗调 | 创意 Lookbook、奢侈品牌策展、高端发布 |
+| `aurora-stage` | 极光发布会 | 舞台 / 沉浸感 | 旗舰新品 Keynote、年度大会主旨演讲 |
+| `obsidian-amber` | 黑曜终端 | 凌厉 / 交易室 | 量化金融、数据工程、技术指挥大屏 |
 
-完整色板与排版令牌见 `skills/dsh-ppt/references/themes.md`。也可运行 `ppt_themes { preview: true, outputDir: "dist" }` 生成 18 套并排对比页与 SVG 色板卡。
+完整色板与排版令牌见 `skills/dsh-ppt/references/themes.md`。也可运行 `ppt_themes { preview: true, outputDir: "dist" }` 生成 24 套并排对比页与 SVG 色板卡。
 
 ## Markdown 输入规则
 
@@ -199,7 +207,7 @@ CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office repo
 - 没有标题的纯文本 → 第一段作封面，后续每 5 句一页；只有一句话 → 自动生成「封面 → 核心观点 → 结束页」三页完整结构。
 - 长表格自动分页：每页重复表头，最多 8 行数据；备注只放第一页。支持 `tableStyle`（`consulting | booktabs | minimal | banded | harvey`），超限会明确提示拆分，短行自动补齐，三种产物数据一致。
 - `maxSlides` 计算分页后的总页数；超过限制时先报错，不落盘、不静默删掉中间页。可提高配置上限（最多 120）或拆分文稿。
-- 需要精确控制时直接传结构化 `slides`，支持全部 24 种 `layout`、`chrome`、`columns`、`items`、`rows`、`chart`、`image`、`takeaway`、`source` 与 `notes`。
+- 需要精确控制时直接传结构化 `slides`，支持全部 41 种标准 `layout`（+ 53 个别名）、`chrome`、`reveal`、`columns`、`items`、`rows`、`chart`、`image`、`takeaway`、`source` 与 `notes`。
 
 ## 配置
 
@@ -210,7 +218,7 @@ CLI 支持 `--slides @slides.json`、`--brand @brand.json`、`--from-office repo
   config:
     outputDir: E:\decks   # 可选；默认会话工作目录
     maxSlides: 40         # 可选；默认 60（3–120）
-    defaultTheme: auto    # 可选；ppt_create 未指定 theme 时使用（支持 auto 或 18 套主题 ID）
+    defaultTheme: auto    # 可选；ppt_create 未指定 theme 时使用（支持 auto 或 24 套主题 ID）
     defaultLang: zh       # 可选；ppt_create 未指定 lang 时使用（zh/en/bilingual）
 ```
 
@@ -236,7 +244,7 @@ dsh plugin --profile web remove dsh-ppt
 
 - 技能和工具共用异步生成器；纯文本的旧同步 API 保留，媒体输入会明确要求 `buildDeckAsync`。
 - 图片与原生图表采用 MIT 的 `@office-kit/pptx@0.21.0`；参考 `.pptx` 吸收基于本地 `fflate` + OOXML 安全解析（防 ZIP 炸弹与路径穿越）；可选渲染引擎按需加载。
-- 单元测试覆盖注册契约、JSON Schema、18 套主题、6 套母版骨架与自动选型、24 种版式与专业图示、16 套行业蓝图、13 类图表、深度参考 `.pptx` 吸收（`cloneStructure`）、三件套落盘、PPTX 部件完整性、工作台安全边界与 CLI。
+- 单元测试覆盖注册契约（13 工具）、JSON Schema、24 套主题、6 套母版骨架、8 套品味配方、20 套标杆范本、41 种标准版式 + 53 别名、20 套行业蓝图、13 类图表、61 枚原生矢量图标、深度参考 `.pptx` 吸收、8 域权威检索与 `SLOP-13/14`、Mode C 素材包融合、逆向导出/金页拼装/无损翻译、三件套落盘、PPTX 部件完整性、工作台安全边界与 CLI。
 - 无 `eval` / `child_process` / 密钥；产物只写用户指定的本地目录。
 
 ## 开发

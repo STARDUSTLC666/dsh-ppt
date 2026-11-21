@@ -100,6 +100,12 @@ import {
   renderCoreSlidePptx,
   renderCoreSlideHtml,
   LAYOUT_CSS,
+  buildLayoutCss,
+  EXEC_CHART_LAYOUTS,
+  computeIssueTreeModel,
+  computeTreemapModel,
+  computeGaugeModel,
+  computePricingModel,
 } from './deck-layouts.mjs'
 
 export {
@@ -166,6 +172,12 @@ export {
   has2dMathConstruct,
   measureMathAst,
   fitFormulaBoxIn,
+  buildLayoutCss,
+  EXEC_CHART_LAYOUTS,
+  computeIssueTreeModel,
+  computeTreemapModel,
+  computeGaugeModel,
+  computePricingModel,
 }
 
 /**
@@ -1155,12 +1167,15 @@ function normalizeSlideContent(raw, index) {
   const rawEvidenceIds = Array.isArray(source.evidenceIds)
     ? [...new Set(source.evidenceIds.map((id) => stripInlineMarkdown(id).trim().toUpperCase()).filter(Boolean))].slice(0, 12)
     : undefined
+  const rawReveal = String(source.reveal ?? '').trim().toLowerCase()
+  const reveal = rawReveal === 'step' || rawReveal === 'all' ? rawReveal : undefined
 
   const commonExtras = {
     ...(variant !== '' ? { variant } : {}),
     ...(chrome ? { chrome } : {}),
     ...(cardMaterial ? { cardMaterial } : {}),
     ...(iconMode ? { iconMode } : {}),
+    ...(reveal ? { reveal } : {}),
     ...(formula !== '' ? { formula } : {}),
     ...(mermaid !== '' ? { mermaid } : {}),
     ...(rawCode !== '' ? { code: rawCode } : {}),
@@ -1206,7 +1221,7 @@ function normalizeSlideContent(raw, index) {
     return { layout, kicker, title: truncate(quoteText, 220), subtitle, ...commonExtras }
   }
 
-  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey' || layout === 'quadrant' || layout === 'radar' || layout === 'dumbbell' || layout === 'heatmap' || layout === 'map' || layout === 'isometric') {
+  if (layout === 'harvey' || layout === 'marimekko' || layout === 'sankey' || layout === 'quadrant' || layout === 'radar' || layout === 'dumbbell' || layout === 'heatmap' || layout === 'map' || layout === 'isometric' || layout === 'treemap') {
     let rows = []
     if (Array.isArray(source.rows)) {
       rows = source.rows
@@ -1302,7 +1317,9 @@ export function normalizeBuildOptions(options = {}) {
   const outputDir = resolvePath(String(options.outputDir ?? '.').trim() || '.')
   const fileName = sanitizeFileName(options.fileName ?? title)
   const overwrite = options.overwrite === true
-  return { title, theme, language, motion, deck, outputDir, fileName, overwrite }
+  const rawMotionProfile = String(options.motionProfile ?? '').trim().toLowerCase()
+  const motionProfile = ['subtle', 'executive', 'keynote'].includes(rawMotionProfile) ? rawMotionProfile : undefined
+  return { title, theme, language, motion, ...(motionProfile ? { motionProfile } : {}), deck, outputDir, fileName, overwrite }
 }
 
 /**
@@ -1388,6 +1405,7 @@ export function buildDeck(options = {}) {
     theme: theme.id,
     language: language.id,
     motion,
+    ...(normalized.motionProfile ? { motionProfile: normalized.motionProfile } : {}),
     ...(targetMinutes !== undefined ? { targetMinutes } : {}),
     slideCount: deck.slides.length,
     slides: deck.slides,
@@ -1448,8 +1466,17 @@ body.motion .bullets li{
   opacity:0;animation:bullet-in .55s cubic-bezier(.22,.8,.36,1) forwards;
   animation-delay:calc(var(--i, 0)*90ms + .12s);
 }
-@keyframes bullet-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}`
+@keyframes bullet-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+body.motion .slide[data-reveal="step"] [data-reveal-step]{opacity:0;transform:translateY(14px);transition:opacity .38s ease,transform .38s ease}
+body.motion .slide[data-reveal="step"] [data-reveal-step].is-revealed,body.overview .slide[data-reveal="step"] [data-reveal-step]{opacity:1;transform:none}`
     : ''
+  const needsMediaCss = Boolean(
+    manifest.brand?.logoAssetId ||
+    manifest.brand?.footer ||
+    manifest.brand?.watermark ||
+    manifest.slides.some((s) => deckMedia.MEDIA_LAYOUTS.has(s.layout) || s.image || (Array.isArray(s.images) && s.images.length > 0) || s.chart)
+  )
+  const treeShakenLayoutCss = buildLayoutCss(manifest.slides)
   const slides = manifest.slides.map((slide, index) => {
     const label = slide.title || slide.kicker || (ui.slide + ' ' + (index + 1))
     return '<div class="slide-frame" data-frame="' + (index + 1) + '" tabindex="-1" role="button" aria-label="' + escapeHtml(String(label)) + '">' +
@@ -1516,8 +1543,8 @@ body{
 }
 .slide.is-active{display:flex}
 ${motionCss}
-${LAYOUT_CSS}
-${deckMedia.MEDIA_CSS}
+${treeShakenLayoutCss}
+${needsMediaCss ? deckMedia.MEDIA_CSS : ''}
 ${VISUAL_CSS}
 .kicker{
   color:var(--accent-text);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
@@ -1672,7 +1699,7 @@ body.presenting #hud:hover{opacity:1;pointer-events:auto}
   html,body{height:auto;overflow:visible;background:#fff}
   .slide-frame{position:relative;display:block !important}
   .slide{position:relative;display:block !important;height:100vh;page-break-after:always;padding:48px}
-  ${motion ? 'body.motion .bullets li{opacity:1 !important;animation:none !important}' : ''}
+  ${motion ? 'body.motion .bullets li{opacity:1 !important;transform:none !important;animation:none !important}\n  body.motion .slide[data-reveal="step"] [data-reveal-step]{opacity:1 !important;transform:none !important;animation:none !important}' : ''}
   #progress,#hud,#notes-panel,#help-panel,#toast{display:none !important}
 }
 ${delivery.css}
@@ -1793,12 +1820,32 @@ ${slides}
 
   function updatePresenter() { sendState(); }
 
+  function resetStepReveal(slideEl) {
+    if (!slideEl || slideEl.dataset.reveal !== 'step') return;
+    slideEl.querySelectorAll('[data-reveal-step]').forEach(function (el) { el.classList.remove('is-revealed'); });
+  }
+  function advanceStep(dir) {
+    const curSlide = slides[index];
+    if (!curSlide || curSlide.dataset.reveal !== 'step' || !document.body.classList.contains('motion')) return false;
+    const steps = Array.from(curSlide.querySelectorAll('[data-reveal-step]'));
+    if (steps.length === 0) return false;
+    if (dir > 0) {
+      const nextHidden = steps.find(function (el) { return !el.classList.contains('is-revealed'); });
+      if (nextHidden) { nextHidden.classList.add('is-revealed'); return true; }
+      return false;
+    }
+    const revealed = steps.filter(function (el) { return el.classList.contains('is-revealed'); });
+    if (revealed.length > 0) { revealed[revealed.length - 1].classList.remove('is-revealed'); return true; }
+    return false;
+  }
+
   function go(next) {
     if (document.body.classList.contains('blank-black') || document.body.classList.contains('blank-white')) setBlank(null);
     const wrapped = next < 0 || next >= total;
     index = (next + total) % total;
     slides.forEach(function (slide, i) {
       slide.classList.toggle('is-active', i === index);
+      if (i === index) resetStepReveal(slide);
       if (frames[i]) frames[i].classList.toggle('is-current', i === index);
     });
     counter.textContent = ui.slide + ' ' + (index + 1) + ' ' + ui.of + ' ' + total;
@@ -2021,9 +2068,11 @@ ${slides}
     }
     const inOverview = document.body.classList.contains('overview');
     if (key === 'ArrowRight' || key === 'PageDown' || key === ' ' || (key === 'ArrowDown' && !inOverview)) {
-      event.preventDefault(); go(index + 1);
+      event.preventDefault();
+      if (inOverview || !advanceStep(1)) go(index + 1);
     } else if (key === 'ArrowLeft' || key === 'PageUp' || (key === 'ArrowUp' && !inOverview)) {
-      event.preventDefault(); go(index - 1);
+      event.preventDefault();
+      if (inOverview || !advanceStep(-1)) go(index - 1);
     } else if (/^[1-9]$/.test(key) && !inOverview) {
       const jumped = Number(key);
       if (jumped <= total) { event.preventDefault(); go(jumped - 1); }
@@ -2111,9 +2160,19 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
   const total = manifest.slides?.length ?? 1
   const number = String(index + 1).padStart(2, '0')
   const chromeStyle = resolveChromeStyle(theme, slide, manifest.brand)
-  const inner = deckMedia.MEDIA_LAYOUTS.has(layout)
+  let inner = deckMedia.MEDIA_LAYOUTS.has(layout)
     ? deckMedia.renderMediaHtml(slide, manifest, theme)
     : renderCoreSlideHtml(slide, index, total, ui, langId, manifest, theme)
+
+  const isStepReveal = slide.reveal === 'step'
+  if (isStepReveal && inner.includes('data-item-index="')) {
+    let stepSeq = 0
+    inner = inner.replace(/data-item-index="(\d+)"/g, (_, idxStr) => {
+      stepSeq += 1
+      return `data-item-index="${idxStr}" data-reveal-step="${stepSeq}"`
+    })
+  }
+  const revealAttr = isStepReveal ? ' data-reveal="step"' : ''
 
   const notesAttr = typeof slide.notes === 'string' && slide.notes.trim() !== ''
     ? ' data-notes="' + escapeHtml(slide.notes) + '"'
@@ -2133,7 +2192,7 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
     ? '<div class="brand-watermark" aria-label="Watermark">' + escapeHtml(manifest.brand.watermark.trim()) + '</div>'
     : ''
 
-  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
+  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + revealAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
     '<div class="slide-inner">' + inner + '</div>' +
     watermarkHtml +
     (hasLogo ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
@@ -2223,15 +2282,70 @@ function bulletTimingXml(spid, clicks) {
     '<p:bldLst><p:bldP spid="' + spid + '" grpId="0"/></p:bldLst></p:timing>'
 }
 
+function multiShapeTimingXml(spids) {
+  let id = 2
+  const nextId = () => { id += 1; return String(id) }
+  const clickPars = spids.map((spid, grpIdx) =>
+    '<p:par><p:cTn id="' + nextId() + '" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>' +
+    '<p:par><p:cTn id="' + nextId() + '" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="' + grpIdx + '" nodeType="clickEffect">' +
+    '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
+    '<p:set><p:cBhvr><p:cTn id="' + nextId() + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>' +
+    '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+    '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>' +
+    '<p:to><p:strVal val="visible"/></p:to></p:set>' +
+    '<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="' + nextId() + '" dur="350"/>' +
+    '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl></p:cBhvr></p:animEffect>' +
+    '</p:childTnLst></p:cTn></p:par>' +
+    '</p:childTnLst></p:cTn></p:par>',
+  )
+  const bldPs = spids.map((spid, grpIdx) => '<p:bldP spid="' + spid + '" grpId="' + grpIdx + '"/>').join('')
+  return '<p:timing><p:tnLst><p:par>' +
+    '<p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>' +
+    '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>' +
+    clickPars.join('') +
+    '</p:childTnLst></p:cTn>' +
+    '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>' +
+    '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>' +
+    '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>' +
+    '<p:bldLst>' + bldPs + '</p:bldLst></p:timing>'
+}
+
+function extractStepRevealSpids(shapesXml) {
+  const spids = []
+  const seen = new Set()
+  const stepNameRe = /<p:cNvPr\s+id="(\d+)"\s+name="((?:KPI Surface|KPI Hero Surface|KPI Sat Val|Card Surface|Card Hero Surface|Comparison Card|Issue Card|Matrix Surface|Matrix Cell|Matrix Quadrant|Step Surface|Timeline Card|Timeline Step|Stage |Layer |Chevron |Iso Info Card|Iso Pillar Cap|Iso Stack Card|IssueTree Branch|Pricing Card|Gauge Row)[^"]*)"/gi
+  for (const m of shapesXml.matchAll(stepNameRe)) {
+    const spid = m[1]
+    const name = m[2]
+    if (/hairline|rule|bar|shadow|top|bottom|accent|editorial|label|tag|badge|head|title|desc|stripe|axis|connector|number|rail|leader|anchor|tick|pill/i.test(name)) continue
+    if (!seen.has(spid)) {
+      seen.add(spid)
+      spids.push(spid)
+    }
+  }
+  return spids.slice(0, 8)
+}
+
+function transitionXmlFor(motionProfile) {
+  if (motionProfile === 'subtle') return '<p:transition spd="fast"><p:fade/></p:transition>'
+  if (motionProfile === 'keynote') return '<p:transition spd="med"><p:push dir="l"/></p:transition>'
+  return '<p:transition spd="med"><p:fade/></p:transition>'
+}
+
 function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
   const p = theme.palette
   const shapesXml = slideShapeList(slide, index, total, theme, langId, manifest)
   let motionXml = ''
   if (motion) {
-    motionXml = '<p:transition spd="med"><p:fade/></p:transition>'
+    motionXml = transitionXmlFor(manifest.motionProfile)
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
     const bodySpid = (index + 1) * 10 + 3
-    if (slide.layout === 'bullets' && bullets.length >= 2 && shapesXml.includes('id="' + bodySpid + '"')) {
+    if (slide.reveal === 'step' && slide.layout !== 'bullets') {
+      const stepSpids = extractStepRevealSpids(shapesXml)
+      if (stepSpids.length >= 2) {
+        motionXml += multiShapeTimingXml(stepSpids)
+      }
+    } else if (slide.layout === 'bullets' && bullets.length >= 2 && shapesXml.includes('id="' + bodySpid + '"')) {
       motionXml += bulletTimingXml(bodySpid, bullets.length)
     }
   }
@@ -2387,7 +2501,7 @@ function slideLayoutRelXml() {
     '</Relationships>'
 }
 
-function themeXml(theme) {
+export function themeXml(theme) {
   const p = theme.palette
   const series = theme.tokens?.chartSeries ?? [p.accent, p.accent2, p.fg, p.muted, p.accent, p.accent2]
   const color = (name, value) => '<a:' + name + '><a:srgbClr val="' + hex(value) + '"/></a:' + name + '>'
@@ -2471,7 +2585,7 @@ function appXml(slideCount, notesCount) {
     '</Properties>'
 }
 
-function buildZip(entries) {
+export function buildZip(entries) {
   const chunks = []
   const central = []
   let offset = 0

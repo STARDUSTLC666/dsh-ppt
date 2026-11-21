@@ -1,60 +1,75 @@
-# 零资料深度调研、事实核验与策划出稿协议（Zero-Material Research-to-Deck）
+# 深度调研、权威信源导航与事实核验协议（Research & Authority Protocol）
 
-当用户**没有现成文档、表格或数据**，只给出一个主题并要求「你去搜资料、核对准确性、先策划 PPT 方案再生成」时，必须走本协议的四阶段流水线。
+当用户**没有现成文档/数据**（Mode B），或**有本地文件但要求补充行业规模/竞品财报/官方政策等外部权威对标**（Mode C）时，必须按本协议执行。
 
-> **架构红线**：`dsh-ppt` 引擎本身保持 100% 离线、零网络外联与零新增依赖；实时联网检索与一手网页阅读由**宿主 Agent 的联网搜索/浏览器工具**完成（学术场景可叠加 `dsh-cite`），校验后的结构化证据通过 `evidence[]` 证据账本交给 `dsh-ppt` 确定性绑定、审计（`SLOP-13`）并渲染成稿。
+> **架构红线**：`dsh-ppt` 引擎保持 100% 离线、零网络外联与零新增依赖；实时联网检索与一手网页阅读由**宿主 Agent 的联网搜索/浏览器工具**完成（学术场景可叠加 `dsh-cite`），校验后的结构化证据通过 `evidence[]` 账本交给 `dsh-ppt` 进行代码级信源定级（`classifySourceAuthority`）、`SLOP-13` 深度审计与双轨溯源渲染。
 
 ---
 
-## 一、双模路由判定（Mode A vs Mode B）
+## 一、三模路由判定（Tri-Mode Routing：Mode A / Mode B / Mode C）
 
-| 模式 | 触发条件 | 动作 |
+| 模式 | 触发条件 | 核心动作 |
 | --- | --- | --- |
-| **Mode A：有资料直出** | 用户已提供大纲、文档、Excel/CSV/Word、参考 `.pptx` 或明确数字 | 零追问自动定调（`theme: 'auto'` / `exemplar: 'auto'`），直接出稿并做视觉验收 |
-| **Mode B：零资料深研策划** | 用户只给主题且无资料，或明确要求「先搜索资料 / 查准数据 / 出方案再做 PPT」 | 严格执行下方 **4 步闭环**：定向检索 → 双源交叉核验 → 策划方案确认 → 证据溯源成稿 |
+| **Mode A：有资料直出** | 用户已给出完整大纲、文档、表格、参考 `.pptx` 或明确数据且无需外源对标 | 零追问自动定调（`theme: 'auto'` / `exemplar: 'auto'`），直接出稿并复核 |
+| **Mode B：零资料深研策划** | 用户只给主题且无资料，或明确要求「先去搜资料、查准数据、出方案再做 PPT」 | 严格走 **4 步闭环**：调 `ppt_templates({ topic })` 拿 8 域权威检索式 → 3 轮定向检索与双源交叉核验 → 展示策划方案确认 → 带 `evidence[]` 成稿过 `SLOP-13` |
+| **Mode C：混合资料 × 权威外源** | 用户给了本地 `.docx/.xlsx/.pdf/照片`，并要求结合外部权威行业数据、竞品或政策对标（或复杂编排要求） | 先调 `ppt_from_office({ inspectOnly: true })` 获取素材档案与 `enrichmentPlan`（详见 `references/office-pack.md`）→ 按顺延编号 `nextEvidenceId` 补齐 Tier 1/2 外源 `evidence[]` → 双轨融合出稿 |
 
 ---
 
-## 二、四阶段执行协议
+## 二、v0.35 八大领域权威信源检索引擎（`buildAuthoritativeQueryPack`）
 
-### Step 1：先调策划器定骨架 + 三轮定向检索（Research）
+`ppt_templates({ topic })` / CLI `--plan` 与 `ppt_from_office({ inspectOnly: true })` 内置 `detectResearchDomain` + `buildAuthoritativeQueryPack`，自动将选题路由至 **8 大专业领域**，输出自带 **`site:` 权威白名单 + `filetype:pdf` 官方报告指令 + `-site:` 营销号排除清单** 的 3 轮检索式：
 
-1. 先调用 `ppt_templates({ topic: "<用户主题>", persona: "<可选画像>", lang: "zh" })`（或裸 CLI `--plan "<主题>"`），获取：
-   - 最佳匹配的 20 套内置标杆范本（`exemplar.id`、`theme`、`chromeStyle`）；
-   - 三轮定向检索词建议（`researchRounds`）；
-   - 逐页分镜蓝图与需要量化证据的槽位清单（`storyboard`、`evidenceAudit.gaps`）。
-2. 使用宿主 Agent 的联网搜索工具按**三轮递进法**采集一手资料（避免只搜一轮把营销软文当权威数据）：
-   - **Round 1（权威基线）**：政府公报、监管机构、上市公司年报/财报、IEA/Gartner/IDC/麦肯锡/学术顶刊白皮书，确认核心规模、增速、年份与地域口径。
-   - **Round 2（竞品与实测）**：头部厂商官方发布、同口径市场份额、改造前后实测性能/成本数据。
-   - **Round 3（最新进展与反方风险）**：2025–2026 最新量产/政策节点、技术瓶颈、失败案例与机构预测分歧（避免一边倒的宣传稿）。
+| 领域 ID | 覆盖场景 | Tier 1 一手权威域名白名单（示例） |
+| --- | --- | --- |
+| `gov-macro` | 宏观政务、规划与监管政策 | `gov.cn`, `stats.gov.cn`, `miit.gov.cn`, `ndrc.gov.cn`, `pbc.gov.cn`, `worldbank.org`, `imf.org`, `oecd.org` |
+| `finance-filings` | 金融财报、估值与资本市场 | `sec.gov`, `hkexnews.hk`, `cninfo.com.cn`, `sse.com.cn`, `szse.cn`, `bis.org`, `federalreserve.gov` |
+| `ai-tech` | AI、大模型、云计算与硬科技 | `caict.ac.cn`, `miit.gov.cn`, `nist.gov`, `arxiv.org`, `ieee.org`, `acm.org`, `nature.com`, `sec.gov` |
+| `medical-clinical` | 医疗健康、临床与生物医药 | `who.int`, `pubmed.ncbi.nlm.nih.gov`, `nih.gov`, `fda.gov`, `nhc.gov.cn`, `nmpa.gov.cn`, `nejm.org`, `thelancet.com`, `bmj.com` |
+| `energy-climate` | 新能源、电池、双碳与汽车 | `iea.org`, `irena.org`, `nea.gov.cn`, `miit.gov.cn`, `energy.gov`, `ipcc.ch`, `unep.org` |
+| `academic-science` | 学术科研、答辩与工程基准 | `nature.com`, `science.org`, `arxiv.org`, `ieee.org`, `acm.org`, `springer.com`, `sciencedirect.com`, `pnas.org` |
+| `consumer-retail` | 消费零售、品牌出海与电商 | `stats.gov.cn`, `mofcom.gov.cn`, `census.gov`, `sec.gov`, `hkexnews.hk`, `cninfo.com.cn` |
+| `general-business` | 通用商业战略与行业研究 | `stats.gov.cn`, `gov.cn`, `sec.gov`, `hkexnews.hk`, `cninfo.com.cn`, `worldbank.org`, `oecd.org`, `imf.org` |
 
-### Step 2：一手优先与双源交叉核验（Fact-Check & Evidence Ledger）
+- **默认排除噪声域名（`NOISE_DOMAINS`，25 站）**：中文自动加 `-site:baijiahao.baidu.com -site:sohu.com -site:zhihu.com -site:163.com`（英文 `-site:medium.com -site:reddit.com -site:quora.com`），审计阶段同步覆盖 `mp.weixin.qq.com`、`toutiao.com`、`csdn.net`、`36kr.com`、`huxiu.com`、`tmtpost.com`、`xiaohongshu.com`、`weibo.com`、`eastmoney.com` 等 25 个自媒体/论坛/二手资讯域名。
+- **工作区企业级信源治理（`.dsh-ppt/brand-kit.json`）**：
+  通过 `ppt_absorb({ saveBrandKit: true, preferredSources: ["caict.ac.cn", "公司研究院"], blockedDomains: ["example-blog.com"] })` 持久化后：
+  - `preferredSources` 自动注入第 1 轮 `site:` 检索优先级，并在 `classifySourceAuthority` 中直接定级为 **Tier 1**；
+  - `blockedDomains` 自动追加至 `-site:` 排除列表，且在 `SLOP-13` 中强制按 `low-authority-source` 拦截。
 
-将搜集到的每条拟上屏事实整理为 `evidence[]` 账本，执行**三层信源分级与四条核验红线**：
+---
 
-- **信源可信度分级**：
-  - **Tier 1（直接采信）**：政府统计局/部委、央行/SEC/港交所财报、权威国际组织（IEA/IMF/WHO/ISO）、Peer-reviewed 学术期刊、厂商官方技术文档与财报。
-  - **Tier 2（须交叉验证）**：主流咨询/研究机构（Gartner/IDC/TrendForce/高工锂电等）报告、权威财经/科技媒体（FT/Reuters/Bloomberg/财新）转引。
-  - **Tier 3（禁止单独作为上屏数字依据）**：自媒体公众号、无原始出处二手榜单、匿名论坛贴、营销公关软文。
+## 三、四阶段执行协议（Mode B）
+
+### Step 1：先调策划器定骨架 + 3 轮权威定向检索
+
+1. 调 `ppt_templates({ topic: "<用户主题>", persona: "<可选画像>", lang: "zh" })`（或 CLI `--plan "<主题>"`），获取匹配标杆范本（20 套内置 + 工作区）、领域识别结果、`researchRounds`（含精准 `site:`/`filetype:pdf`/`-site:` 检索词）、`visualBriefs[]` 与逐页分镜蓝图（`storyboard`）。
+2. 用宿主 Agent 联网工具执行 **3 轮递进检索**：
+   - **Round 1（Tier 1 权威基线）**：部委/统计公报、SEC/港交所/巨潮年报、IEA/IMF/WHO/顶刊与 `filetype:pdf` 白皮书，锁定核心规模、增速、年份与地域口径。
+   - **Round 2（Tier 1–2 竞品与实测）**：同单位/同地域口径的头部上市同行财报、权威咨询机构（Gartner/IDC/McKinsey/TrendForce/GGII）基准；遇到媒体转引必须顺藤摸瓜核对原始官网链接。
+   - **Round 3（Tier 1–2 最新节点与反方风险）**：最新政策标准、落地瓶颈、失败案例与机构预测分歧；预测数字标 `claimType: "forecast"`。
+
+### Step 2：代码级信源定级（`classifySourceAuthority`）与核验红线
+
+每条拟上屏证据整理为结构化 `evidence[]` 条目（完整字段见下例），引擎通过 `classifySourceAuthority` 自动定级：
+
+- **Tier 1（直接采信）**：`local-file` 本地一手原件、政府/监管/央行/统计局、SEC/港交所/交易所财报、国际组织（WHO/IEA/IMF/World Bank/OECD/IPCC）、顶刊论文与工作区 `preferredSources`。
+- **Tier 2（须交叉印证）**：主流咨询/行研机构（Gartner/IDC/McKinsey/BCG/Bain/PwC/Deloitte/TrendForce/GGII/Nielsen/Kantar/BNEF）与权威财经媒体（FT/Reuters/Bloomberg/Economist/财新）。
+- **Tier 3（禁止单独作为 `verified` 依据）**：25 个 `NOISE_DOMAINS` 自媒体/论坛/二手资讯站及工作区 `blockedDomains`。
 - **四条核验红线**：
-  1. **关键大数字双源核验**：封面/KPI/核心图表中的决定性数字，须由至少 2 个独立可信来源相互印证，或直接定位至 Tier 1 原始发布文件；记清**时间窗口（`date`）与统计口径（`scope`）**，禁止把全球口径与中国口径、出货量与装机量混在同一张图里。
-  2. **冲突不拍脑袋**：不同权威机构预测存在明显差异时，将 `confidence` 设为 `"conflicting"`，在 `note` 中写明双方口径，并在幻灯片展示**区间**（如 `18–25 GWh`）而非单点断言。
-  3. **查不到就诚实降级**：某页规划为 `kpi` / `chart` 但检索后确实缺乏可靠量化数据时，**严禁凭训练记忆估算编造精确小数**！立刻将该页降级为定性图示（`comparison` / `architecture` / `process` / `matrix` / `cards`），或在 `evidence[]` 中明确标为 `estimated` / `unverified` 并在画面显眼处说明口径。
-  4. **禁用空洞假出处**：绝对禁止写 `数据来源：网络整理` / `公开资料` / `综合整理` / `Internet`（会被 `SLOP-13` 自动拦截）。
+  1. **关键大数字双源或一手定位**：严禁混拼全球与中国口径、出货量与装机量；外源必须带准确 `date`（如 `"2026-01"` / `"2025"`）。
+  2. **预测与实绩清晰分轨**：前瞻预测必须传 `claimType: "forecast"` 并在画面可见文案标注 `预计 / 预测 / 2028E / Forecast`。
+  3. **冲突报区间、缺数改定性**：多方口径差异设为 `confidence: "conflicting"` 并在画面写区间；查无确凿数字一律降级为定性图示（`comparison` / `issue-tree` / `architecture` / `process` / `matrix`），严禁编造小数。
+  4. **禁用空洞假出处与二手冒充一手**：禁止「网络整理 / 公开资料 / 综合整理 / Internet」，且禁止名义写权威机构却挂自媒体转引 URL。
 
 ### Step 3：向用户展示策划方案并确认（Plan Gate）
 
-在搜集并核验完毕后，**先向用户输出结构化策划方案，再生成 PPT**（除非用户已明确指示「搜完直接出稿，不用问我」）：
+检索核验后先输出结构化策划方案待确认（除非用户明确指示直接出稿）：
+1. 核心叙事主线、目标受众、推荐标杆范本、主题与页数/时长预算；
+2. 核验后的核心证据账本摘要（`E1..En`，含来源级别 `T1/T2`、年份口径与冲突说明）；
+3. 逐页分镜策划表（可调 `ppt_templates({ topic, evidence })` 自动诊断缺口并生成 `planMarkdown`）。
 
-1. **核心叙事主线与风格定位**：目标听众、推荐标杆范本（如 `daylight-earnings-research` / `mckinsey-strategy`）、主题色与预计页数/演讲时长；
-2. **核验后的核心事实账本摘要（`E1..En`）**：列出关键数字、一手出处、年份口径及核验状态（含任何已发现的口径分歧或待补项）；
-3. **逐页分镜策划表（Storyboard）**：页码、叙事角色、结论先行标题（Action Title）、拟用版式、绑定证据 `[E#]`（可直接调用 `ppt_templates({ topic, evidence })` 自动生成 `planMarkdown` 并补齐真实标题）。
-
-等待用户确认或微调页数/口径/侧重点后，进入 Step 4。
-
-### Step 4：带证据账本成稿与 SLOP-13 门禁交付（Grounded Build）
-
-调用 `ppt_create`（或 CLI `build-deck.mjs`），一次性传入核验后的 `evidence[]`、`evidenceAppendix: true`、`exemplar`、`alignOrder: true` 与带 `evidenceIds: ["E1", ...]`（或内联 `[E1]`）的 `slides[]`：
+### Step 4：带证据账本成稿与 `SLOP-13` 深度门禁交付
 
 ```json
 {
@@ -65,62 +80,78 @@
   "evidence": [
     {
       "id": "E1",
-      "claim": "2025 年全球半固态电池出货量突破 12 GWh，中国车企装车贡献超 75%",
-      "source": "GGII 高工产研《2025 固态电池产业蓝皮书》",
+      "origin": "web-research",
+      "tier": 1,
+      "claimType": "actual",
+      "claim": "2025 年全球动力电池装车量达 894 GWh，固态路线进入中试放量期",
+      "source": "IEA Global EV Outlook",
       "date": "2026-01",
-      "scope": "全球出货口径",
-      "url": "https://example.org/ggii-solid-state-2025",
+      "scope": "全球动力电池口径",
+      "url": "https://www.iea.org/reports/global-ev-outlook-2026",
       "confidence": "verified"
     },
     {
       "id": "E2",
-      "claim": "全固态电芯小批量装车验证集中于 2027 年，规模化降本至 <0.6 元/Wh 预计需至 2030 年前后",
-      "source": "中汽协 & TrendForce 联合口径对比",
+      "origin": "web-research",
+      "tier": 2,
+      "claimType": "forecast",
+      "claim": "预计 2030E 全固态电芯规模化成本区间为 0.55–0.72 元/Wh",
+      "source": "TrendForce 集邦咨询研究报告",
       "date": "2026-02",
       "scope": "全固态硫化物路线",
+      "url": "https://www.trendforce.com/presscenter/example",
       "confidence": "conflicting",
-      "note": "车企官方规划偏乐观（2027），供应链普遍预计量产平价在 2030 年"
+      "note": "车企官方规划偏乐观（2027），供应链预计平价窗口在 2030E"
     }
   ],
   "slides": [
     {
       "layout": "kpi",
       "kicker": "01 · 产业拐点",
-      "title": "半固态已跨越 12 GWh 商用门槛，全固态平价仍需 3–4 年攻坚",
+      "title": "全球装车迈过 894 GWh，2030E 全固态平价预计落在 0.55–0.72 元/Wh 区间",
       "evidenceIds": ["E1", "E2"],
       "items": [
-        { "tag": "2025 全球出货", "value": "12+ GWh", "delta": "中国占 >75% [E1]" },
-        { "tag": "全固态验证窗口", "value": "2027–2030", "delta": "多机构预测区间 [E2]" }
+        { "tag": "2025 全球装车", "value": "894 GWh", "delta": "IEA 一手年报 [E1]" },
+        { "tag": "2030E 预计成本区间", "value": "0.55–0.72 元/Wh", "delta": "多机构口径区间 [E2]" }
       ],
-      "takeaway": "半固态率先贡献出货增量；全固态在车企与供应链口径间存在 2–3 年量产预期差。"
+      "takeaway": "实绩数据源自 IEA [E1]；全固态 2030E 成本为预测口径区间 [E2]，需持续跟踪硫化物良率。"
     }
   ]
 }
 ```
 
-### 引擎自动为你完成的 4 件事（零模型确定性保障）
+---
 
-1. **清爽页面脚注自动注入**：凡带 `evidenceIds` 或内联 `[E#]` 的页面，若未手工写 `source`（或写了空洞占位词），引擎自动生成紧凑规范的 `source` 底栏（如 `GGII 高工产研 (2026-01) [E1]；TrendForce (2026-02) [E2]`），不把冗长 URL 塞进正文污染排版。
-2. **演讲者备注完整溯源卡**：自动将完整 `claim`、发布方、年份、口径、核验状态与原文 `url` 写入对应页的 `notes`（在 HTML 按 `P` 进提词台或 PowerPoint 备注区答辩随时可查）。
-3. **封底前自动三线表附录页**：开启 `evidenceAppendix: true` 时，自动在 `closing` 页之前生成符合 `booktabs` 规范且零溢出（0 `table-density` 告警）的「核心论据溯源清单」页；若同步输出 `.handout.md`，末尾还会附带含可点击 Markdown 链接的完整《事实核验与证据账本》总表。
-4. **`SLOP-13` 事实出处门禁**：`ppt_check` 与生成阶段自动扫描 4 类事实卫生问题：
-   - `dangling-evidence-ref`：页面引用了 `evidence[]` 中不存在的 `[E99]`；
-   - `unverified-evidence-claim`：页面引用了 `unverified` 或 `conflicting` 证据，但未在页面可见文案中声明「待核实 / 口径差异 / 区间 / 估算」；
-   - `vague-placeholder-source`：出现「数据来源：网络整理 / 公开资料 / 综合整理 / Internet」等空洞假出处；
-   - `unsourced-research-numbers`：在启用 `evidence[]` 调研账本时，存在含数字的 `kpi / chart / chart-split / waterfall / marimekko / tam / dumbbell / heatmap` 页面既未绑定 `[E#]` 也无有效 `source` 出处。
+## 四、`SLOP-13` 事实出处与权威信源静态门禁（9 项确定性审计）
+
+`ppt_check` 与生成前审计自动执行以下 9 项零误报检查：
+
+| 规则代码 | 拦截场景 | 修复动作 |
+| --- | --- | --- |
+| `dangling-evidence-ref` | 页面引用了 `evidence[]` 中不存在的 `[E99]` | 补齐对应条目或移除悬空引用 |
+| `unverified-evidence-claim` | 引用 `unverified`/`conflicting` 证据，但画面未说明口径差异/区间/待核实 | 完成双源核验，或在标题/`takeaway`/正文中显式标注区间与口径 |
+| `vague-placeholder-source` | 出现「网络整理 / 公开资料 / 综合整理 / Internet」等空洞假出处 | 替换为真实机构、报告名与年份 |
+| `unsourced-research-numbers` | 启用 `evidence[]` 时，量化页（含 `kpi`/`chart`/`treemap`/`gauge` 等）既无 `[E#]` 也无有效 `source` | 绑定 `evidenceIds` 或改用定性版式 |
+| `secondary-relay-source` | **v0.35**：`source` 声称 T1/T2 权威机构，但 `url` 实际指向自媒体/资讯站等 T3 二手转引域名 | 追溯原机构官网/PDF 链接，或在 `source`/`note` 中注明「媒体转引」 |
+| `low-authority-source` | **v0.35**：属于 Tier 3 噪声站或工作区 `blockedDomains` 却标成 `verified` 且无口径免责 | 替换为 Tier 1/2 一手权威源，或改为 `estimated` 并如实标注 |
+| `unmarked-forecast-claim` | **v0.35**：`claimType: 'forecast'` 预测数据上屏，却未在可见文案标注「预计 / 预测 / E / Forecast」 | 在标题、指标或 `takeaway` 中显式区分预测值与历史实绩 |
+| `missing-external-date` | **v0.35**：`origin: 'web-research'` 且 `confidence: 'verified'` 的外部权威数据缺少 `date` | 补齐准确年份或季度（如 `"2026-Q1"` / `"2025"`） |
+| `stale-evidence-date` | **v0.35**：外部基准数据年份距今 ≥ 4 年，且未注明「历史基线 / 演变回溯」 | 替换为近 2 年最新数据，或在页面中注明历史基线对比 |
+
+> 引擎同时自动完成：单行精简脚注注入（混源时标注 `内部` vs `外源T1/T2`）、演讲备注完整 URL/口径溯源卡、封底前零溢出 4 列 `booktabs` 附录页（`evidenceAppendix: true`）以及讲义 `.handout.md` / `.xlsx` / `.docx` 同步附带完整证据台账。
 
 ---
 
-## 三、裸 CLI 用法速查
+## 五、裸 CLI 用法速查
 
 ```bash
-# 1. 先按主题生成 3 轮调研清单 + 逐页分镜策划表
+# 1. Mode B：按选题自动识别 8 大领域并生成 3 轮权威 site: 检索包 + 分镜策划表
 node skills/dsh-ppt/scripts/build-deck.mjs --plan "2026 固态电池商业化进展与产业研报" --lang zh
 
-# 2. 检索并核验后，带已核验 evidence.json 重新检查量化槽位缺口
-node skills/dsh-ppt/scripts/build-deck.mjs --plan "2026 固态电池商业化进展与产业研报" --evidence @evidence.json --lang zh
+# 2. Mode C：先体检本地素材包，拿 Material Dossier + 外部权威顺延检索计划
+node skills/dsh-ppt/scripts/build-deck.mjs --from-office ./materials --inspect-only --instructions "控制10页，补充行业规模与竞品对标"
 
-# 3. 确认方案后，带证据账本 + 附录三线表 + 讲义一键出稿
+# 3. 核验确认后带证据账本 + 附录三线表 + 配套逆向导出出稿
 node skills/dsh-ppt/scripts/build-deck.mjs \
   --title "2026 固态电池商业化进展与产业研报" \
   --slides @slides.json \
@@ -128,6 +159,6 @@ node skills/dsh-ppt/scripts/build-deck.mjs \
   --align-order \
   --evidence @evidence.json \
   --evidence-appendix \
-  --handout \
+  --export xlsx,docx,qa-prep,handout \
   --out dist
 ```

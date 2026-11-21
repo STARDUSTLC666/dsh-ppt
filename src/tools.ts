@@ -26,7 +26,7 @@ export interface ToolDefinition {
 interface ParameterSpec {
   type: string | string[]
   description?: string
-  required?: boolean
+  required?: boolean | readonly string[]
   enum?: readonly string[]
   items?: Record<string, unknown>
   properties?: Record<string, unknown>
@@ -66,8 +66,9 @@ function compileParameters(spec: Record<string, ParameterSpec>): Record<string, 
     if (typeof prop?.type === 'string' || Array.isArray(prop?.type)) node.type = prop.type
     if (typeof prop?.description === 'string') node.description = prop.description
     if (Array.isArray(prop?.enum)) node.enum = prop.enum
-    if (prop?.type === 'array' && prop.items !== null && typeof prop.items === 'object') node.items = prop.items
+    if ((prop?.type === 'array' || (Array.isArray(prop?.type) && prop.type.includes('array'))) && prop.items !== null && typeof prop.items === 'object') node.items = prop.items
     if (prop.properties) node.properties = prop.properties
+    if (Array.isArray(prop?.required)) node.required = [...prop.required]
     if (prop.additionalProperties !== undefined) node.additionalProperties = prop.additionalProperties
     properties[key] = compileNode(node)
   }
@@ -173,6 +174,9 @@ function renderAbsorb(value: PptAbsorbResult): TextBlock[] {
 }
 
 function renderCreate(value: PptCreateResult): TextBlock[] {
+  if (value.inspectOnly === true && typeof value.dossierMarkdown === 'string') {
+    return oneText(value.dossierMarkdown)
+  }
   const up = value.upgradeReport as Record<string, unknown> | undefined
   const sr = (up?.selfRepair && typeof up.selfRepair === 'object') ? up.selfRepair as Record<string, unknown> : undefined
   const srNote = sr && Number(sr.fixedCount || 0) > 0
@@ -191,7 +195,12 @@ function renderCreate(value: PptCreateResult): TextBlock[] {
     '可直接修改的 PPTX：' + value.pptxPath + '\n' +
     '可继续编辑的项目：' + value.jsonPath + '\n' +
     (value.handoutPath ? '演讲讲义：' + value.handoutPath + '\n' : '') +
-    'HTML 双击即可放映；可点击上一页/下一页、输入页码，以及“检查与导出”定位问题或下载 PPTX。PPTX 可用 PowerPoint / WPS / Keynote 直接编辑。' +
+    (value.xlsxPath ? '配套 Excel 数据簿：' + value.xlsxPath + '\n' : '') +
+    (value.docxPath ? '配套 Word 文档：' + value.docxPath + '\n' : '') +
+    (value.memoPath ? '高管阅读备忘录：' + value.memoPath + '\n' : '') +
+    (value.qaPrepPath ? '会前高管质询预案：' + value.qaPrepPath + '\n' : '') +
+    (value.i18nPath ? '无损翻译槽位包：' + value.i18nPath + '\n' : '') +
+    'HTML 双击即可放映；可点击上一页/下一页、输入页码，按 R 离线审阅批注，以及“检查与导出”定位问题或下载 PPTX。PPTX 可用 PowerPoint / WPS / Keynote 直接编辑。' +
     upgradeLine +
     evidenceLine +
     (value.revision !== undefined ? '\n修订号：' + value.revision + '；可撤销修改：' + value.undoAvailable + '。用 ppt_edit 修改指定页，ppt_undo 撤销。' : '') +
@@ -381,11 +390,15 @@ const slideItemSchema = {
     size: { type: 'number', description: 'Relative bubble size weight for quadrant/bubble-matrix items.' },
     before: { type: 'number', description: 'Baseline/before numeric value for dumbbell/slope comparison items.' },
     after: { type: 'number', description: 'Target/after numeric value for dumbbell/slope comparison items.' },
+    actual: { type: 'number', description: 'Actual numeric progress value for gauge/bullet-chart items.' },
+    target: { type: 'number', description: 'Target threshold numeric value for gauge/bullet-chart items.' },
+    max: { type: 'number', description: 'Maximum scale ceiling for gauge/bullet-chart items.' },
     status: { type: 'string', enum: ['positive', 'negative', 'warning', 'neutral', 'accent'] },
     tone: { type: 'string', enum: ['positive', 'negative', 'warning', 'neutral', 'accent'] },
   },
   additionalProperties: false,
 }
+const exportKinds = ['xlsx', 'docx', 'qa-prep', 'memo', 'social-carousel', 'subtitles', 'handout', 'one-pager', 'i18n'] as const
 const slideLayouts = [
   'cover', 'agenda', 'section', 'bullets', 'statement', 'quote',
   'kpi', 'cards', 'comparison', 'matrix', 'process', 'callout',
@@ -394,6 +407,7 @@ const slideLayouts = [
   'mockup', 'code', 'quadrant', 'radar', 'dumbbell', 'heatmap',
   'device', 'browser', 'mobile', 'snippet', 'bubble-matrix', 'magic-quadrant', 'spider', 'slope', 'heat-matrix',
   'map', 'world-map', 'china-map', 'geo-map', 'isometric', 'iso-stack', 'iso-layers', '3d-stack', 'iso-pillars',
+  'issue-tree', 'mece', 'logic-tree', 'treemap', 'rect-map', 'budget-map', 'gauge', 'bullet-chart', 'okr-gauge', 'pricing', 'tiers', 'packages',
   'table', 'closing', 'image', 'image-left', 'image-right',
   'chart', 'chart-split', 'gallery', 'waterfall', 'flywheel',
   'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel', 'chevron', 'value-chain',
@@ -415,6 +429,7 @@ const slideProperties = {
   chrome: { type: 'string', enum: ALLOWED_CHROME_STYLES, description: 'Optional per-slide master chrome skeleton override.' },
   cardMaterial: { type: 'string', enum: ['solid', 'frameless', 'glass', 'editorial-rule'], description: 'Optional per-slide card surface materiality.' },
   iconMode: { type: 'string', enum: ['off', 'explicit', 'auto'], description: 'Optional per-slide native vector icon badge mode.' },
+  reveal: { type: 'string', enum: ['step', 'all'], description: 'Progressive step-by-step click reveal choreography ("step") on kpi/cards/comparison/process/isometric/matrix/issue-tree/pricing/gauge slides.' },
   title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' },
   takeaway: { type: 'string', description: 'Bottom key-takeaway synthesis banner.' },
   source: { type: 'string', description: 'Bottom-left data/citation source line.' },
@@ -486,6 +501,9 @@ const evidenceEntrySchema = {
     scope: { type: 'string', description: 'Geographic/segment scope or statistical definition (e.g. "Global", "中国大陆", "乘用车口径").' },
     url: { type: 'string', description: 'Optional verified http:// or https:// source URL (stored in speaker notes & handout).' },
     confidence: { type: 'string', enum: ['verified', 'estimated', 'conflicting', 'unverified'], description: 'Fact-check verification status (default "verified").' },
+    origin: { type: 'string', enum: ['local-file', 'web-research'], description: 'Provenance origin separating user local materials ("local-file") from external authoritative research ("web-research").' },
+    tier: { type: 'integer', description: 'Authoritative source credibility tier: 1 (Official/Gov/Filing/Peer-Reviewed), 2 (Analyst/Research Institute), 3 (Media/UGC).' },
+    claimType: { type: 'string', enum: ['actual', 'forecast', 'policy', 'benchmark'], description: 'Distinguishes realized actuals from forward projections ("forecast") or policy/benchmark figures.' },
     note: { type: 'string', description: 'Optional methodology caveat or cross-check discrepancy note.' },
   },
   required: ['claim', 'source'],
@@ -527,6 +545,8 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         brandKitName: { type: 'string', description: 'Optional corporate brand kit display name when saveBrandKit is true.' },
         watermark: { type: 'string', description: 'Optional subtle content-slide classification watermark locked into the brand kit (e.g. "CONFIDENTIAL · 内部资料").' },
         forbiddenTerms: { type: 'array', items: { type: 'string' }, description: 'Optional corporate compliance forbidden terms scanned automatically by SLOP-14.' },
+        preferredSources: { type: 'array', items: { type: 'string' }, description: 'Optional corporate/industry trusted authoritative domains or publisher names promoted to Tier 1 in research query packs and SLOP-13.' },
+        blockedDomains: { type: 'array', items: { type: 'string' }, description: 'Optional domains blacklisted as low-authority noise sources in research queries and SLOP-13.' },
       }),
       output: {
         schema: { type: 'object', additionalProperties: true },
@@ -551,6 +571,21 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         smartLayout: { type: 'boolean', description: 'Enable or disable automatic multi-archetype Markdown layout promotion on >=4-section decks. Default true in async tool mode.' },
         lang: { type: 'string', description: 'UI language of the generated player: zh (default), en, or bilingual. Content language is whatever you write.' },
         motion: { type: 'string', enum: ['on', 'off'], description: 'Slide transitions plus bullet entrance animations: on (default) or off for a fully static deck.' },
+        motionProfile: { type: 'string', enum: ['subtle', 'executive', 'keynote'], description: 'Optional native PPTX transition profile: subtle (fast fade), executive (med fade), or keynote (push).' },
+        exports: { type: 'array', items: { type: 'string', enum: exportKinds }, description: 'Optional extra companion deliverables written alongside the 3-file core trio: xlsx (reverse Excel workbook), docx (Word report), qa-prep (executive Q&A defense sheet), memo (narrative memo), i18n (lossless translation bundle), handout, one-pager, social-carousel, subtitles.' },
+        mergeSources: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              deckPath: { type: 'string', description: 'Path to an existing dsh-ppt .json project to cherry-pick slides from.' },
+              slides: { type: 'array', items: { oneOf: [{ type: 'integer' }, { type: 'string' }] }, description: 'Optional 1-based slide numbers or slide IDs to pick from deckPath.' },
+              bankIds: { type: 'array', items: { type: 'string' }, description: 'Optional slide bank entry IDs from .dsh-ppt/slide-bank.json.' },
+            },
+            additionalProperties: false,
+          },
+          description: 'Compose a unified new deck from 2+ existing .json projects and/or workspace slide-bank entries with SHA-256 asset dedup and collision-free [E#] evidence remapping.',
+        },
         slides: { type: 'array', items: { type: 'object', properties: slideProperties, additionalProperties: true }, description: 'Structured slides across 30+ native layouts & pro diagrams (cover, agenda, section, bullets, kpi, cards, comparison, matrix, process, callout, gantt, architecture, harvey, tam, org, marimekko, sankey, swot, value-chain, mockup, code, quadrant, radar, dumbbell, heatmap, mermaid, statement, quote, table, chart, chart-split, waterfall, image, image-left, image-right, closing) with items[], columns[], takeaway, source, chrome, tableStyle (consulting|booktabs|minimal|banded|harvey), local images, and 13 chart kinds.' },
         template: { type: 'string', enum: templateIds, description: 'Industry blueprint from ppt_templates (20 blueprints). Provide finished content/slides following its outline; template alone creates an unfilled draft.' },
         brand: { type: 'object', properties: brandProperties, additionalProperties: false, description: 'Shared brand: #RRGGBB primary/background/text colors, fontFamily, logo, footer, and chromeStyle (' + ALLOWED_CHROME_STYLES.join('|') + '). Applied to HTML and PPTX.' },
@@ -613,6 +648,23 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         brand: { type: ['object', 'null'], properties: brandProperties, additionalProperties: false, description: 'Merge shared branding. null clears all branding. Empty footer clears footer; logo:null clears logo.' },
         targetMinutes: { type: ['number', 'null'], description: 'Optional target speaking duration in minutes for pace budgeting (null clears).' },
         remixPreset: { type: 'string', enum: ['exec-5min', 'board-brief', 'sales-pitch'], description: 'Multi-audience compression remix preset (exec-5min: 6 slides / board-brief: 8 slides / sales-pitch: 7 slides). Preserves omitted takeaways in speaker notes and defaults saveAs to true.' },
+        motionProfile: { type: ['string', 'null'], description: 'Optional native PPTX transition profile (subtle | executive | keynote, or null to clear).' },
+        exports: { type: 'array', items: { type: 'string', enum: exportKinds }, description: 'Optional extra companion exports to write: xlsx, docx, qa-prep, memo, i18n, handout, one-pager, social-carousel, subtitles.' },
+        saveToBank: {
+          type: 'object',
+          properties: {
+            slide: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: '1-based slide number or slide ID to save into .dsh-ppt/slide-bank.json.' },
+            bankId: { type: 'string' },
+            name: { type: 'string' },
+            tags: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['slide'],
+          additionalProperties: false,
+          description: 'Bookmark a golden slide (with its embedded assets & evidence) into workspace .dsh-ppt/slide-bank.json for cross-deck reuse.',
+        },
+        translations: { type: ['object', 'array'], items: { type: 'object', additionalProperties: true }, additionalProperties: true, description: 'Lossless translation bundle (from exports:["i18n"] or per-slide array) applied in-place while preserving 100% of layouts, charts, images, and evidence.' },
+        bilingualMode: { type: 'boolean', description: 'When applying translations, keep original + translated copy side-by-side in bilingual mode instead of replacing.' },
+        targetLang: { type: 'string', enum: ['zh', 'en', 'bilingual'], description: 'Optional target UI language when applying translations.' },
       }),
       output: { schema: createResultSchema, render: (_args, value) => renderCreate(value as PptCreateResult) },
       execute: executors.edit,
@@ -642,6 +694,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
       description: 'Inspect a dsh-ppt JSON project without rewriting artifacts. Report revision, slide IDs, page-specific errors and warnings for dense text, estimated overflow, small table fonts, missing/low-resolution images, chart labels, contrast and unfilled template slots. Static estimates require final visual review in browser and PowerPoint/WPS. 中文：交付前检查工程，定位具体页的问题并给出修改建议，不改文件。',
       parameters: compileParameters({ deckPath: projectParameters.deckPath,
         renderReceipt: { type: 'string', description: 'Optional receiptPath returned by ppt_render. Rechecks current PPTX hash and every rendered output; never implies a visual pass.' },
+        feedbackPath: { type: 'string', description: 'Optional path to review-feedback.json exported offline from the HTML player (R key); surfaces every stakeholder comment as actionable slide-level issues.' },
       }),
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => renderCheck(value as PptCheckResult) },
       execute: executors.check,
@@ -684,6 +737,14 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
       parameters: compileParameters({
         filePath: { type: 'string', required: true, description: 'Local .xlsx, .csv, .tsv, .docx, .pdf file path OR a local directory containing mixed source files (relative to session cwd or absolute).' },
         filePaths: { type: 'array', items: { type: 'string' }, description: 'Optional additional local file paths (.xlsx/.csv/.tsv/.docx/.pdf/.png/.jpg/.webp) to fuse together with filePath into one deck with automatic [E1..En] source provenance.' },
+        inspectOnly: { type: 'boolean', description: 'Return a compact, token-efficient Material Dossier (Excel sheet profiles/charts, Word/PDF sections, photo pixel dimensions/orientation/focal-point tips, local [E1..Ek] ledger, AND Mode C Authoritative External Enrichment queries) without writing files yet — ideal when following custom user presentation instructions or enriching with web research.' },
+        instructions: { type: 'string', description: 'Natural-language presentation requirements (e.g. "控制 8 页，跳过目录，product.png 放封面，重点讲毛利变化") applied deterministically during direct build.' },
+        maxSlides: { type: 'integer', description: 'Optional maximum slide budget for direct build.' },
+        includeSheets: { type: 'array', items: { type: 'string' }, description: 'Optional list of Excel worksheet names (or substrings) to include.' },
+        photoRoles: { type: 'object', additionalProperties: true, description: 'Optional explicit filename-to-role map overriding smart photo choreography (e.g. {"hero.png":"cover","app.png":"mockup-mobile","site1.jpg":"gallery"}).' },
+        bindDataModel: { type: 'boolean', description: 'Automatically bind Excel/CSV numeric tables & KPI cards into live dataModel {{metricId}} placeholders so future ppt_data updates refresh the deck live.' },
+        evidence: { type: 'array', items: evidenceEntrySchema, description: 'Optional external authoritative web-research evidence[] (origin:"web-research", tier:1|2) merged collision-free after local file evidence [E1..Ek] (Mode C Hybrid).' },
+        exports: { type: 'array', items: { type: 'string', enum: exportKinds }, description: 'Optional extra companion exports: xlsx, docx, qa-prep, memo, i18n, handout, one-pager, social-carousel, subtitles.' },
         outputDir: { type: 'string', description: 'Directory to write the generated files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: derived from source file or title.' },
         theme: { type: 'string', description: 'Target built-in theme id (or "auto", default "auto").' },

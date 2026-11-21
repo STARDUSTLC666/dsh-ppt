@@ -516,10 +516,16 @@ export function normalizeSlideItems(rawItems, layout) {
       const before = Number.isFinite(beforeNum) ? beforeNum : undefined
       const afterNum = entry.after !== undefined && entry.after !== null && entry.after !== '' ? Number(entry.after) : NaN
       const after = Number.isFinite(afterNum) ? afterNum : undefined
+      const actualNum = entry.actual !== undefined && entry.actual !== null && entry.actual !== '' ? Number(entry.actual) : NaN
+      const actual = Number.isFinite(actualNum) ? actualNum : undefined
+      const targetNum = entry.target !== undefined && entry.target !== null && entry.target !== '' ? Number(entry.target) : NaN
+      const target = Number.isFinite(targetNum) ? targetNum : undefined
+      const maxNum = entry.max !== undefined && entry.max !== null && entry.max !== '' ? Number(entry.max) : NaN
+      const max = Number.isFinite(maxNum) ? maxNum : undefined
       const bullets = Array.isArray(entry.bullets ?? entry.items)
         ? (entry.bullets ?? entry.items).map((b) => cleanRichText(String(b))).filter(Boolean).slice(0, 8)
         : undefined
-      if (!title && !text && !value && x === undefined && before === undefined && (!bullets || bullets.length === 0)) return null
+      if (!title && !text && !value && x === undefined && before === undefined && actual === undefined && (!bullets || bullets.length === 0)) return null
       return {
         ...(tag ? { tag } : {}),
         ...(title ? { title } : {}),
@@ -539,6 +545,9 @@ export function normalizeSlideItems(rawItems, layout) {
         ...(size !== undefined ? { size } : {}),
         ...(before !== undefined ? { before } : {}),
         ...(after !== undefined ? { after } : {}),
+        ...(actual !== undefined ? { actual } : {}),
+        ...(target !== undefined ? { target } : {}),
+        ...(max !== undefined ? { max } : {}),
         ...(status ? { status } : {}),
         ...(bullets?.length ? { bullets } : {}),
       }

@@ -56,6 +56,15 @@ export function normalizeBrandKit(raw) {
       .filter((t) => t.length >= 2),
   )].slice(0, MAX_FORBIDDEN_TERMS)
 
+  const normalizeSourceList = (arr) => [...new Set(
+    (Array.isArray(arr) ? arr : [])
+      .map((s) => cleanStr(s, 96).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase())
+      .filter((s) => s.length >= 2),
+  )].slice(0, MAX_FORBIDDEN_TERMS)
+
+  const preferredSources = normalizeSourceList(raw.preferredSources)
+  const blockedDomains = normalizeSourceList(raw.blockedDomains)
+
   let mandatoryClosing
   if (raw.mandatoryClosing && typeof raw.mandatoryClosing === 'object' && !Array.isArray(raw.mandatoryClosing)) {
     const mcTitle = cleanStr(raw.mandatoryClosing.title, 120)
@@ -78,6 +87,8 @@ export function normalizeBrandKit(raw) {
     ...(Object.keys(brand).length > 0 ? { brand } : {}),
     ...(watermark ? { watermark } : {}),
     ...(forbiddenTerms.length > 0 ? { forbiddenTerms } : {}),
+    ...(preferredSources.length > 0 ? { preferredSources } : {}),
+    ...(blockedDomains.length > 0 ? { blockedDomains } : {}),
     ...(mandatoryClosing ? { mandatoryClosing } : {}),
     updatedAt: raw.updatedAt || new Date().toISOString(),
   }
@@ -121,6 +132,8 @@ export function buildBrandKitFromAbsorbed(absorbed, options = {}) {
     },
     ...(options.watermark ? { watermark: options.watermark } : {}),
     ...(Array.isArray(options.forbiddenTerms) ? { forbiddenTerms: options.forbiddenTerms } : {}),
+    ...(Array.isArray(options.preferredSources) ? { preferredSources: options.preferredSources } : {}),
+    ...(Array.isArray(options.blockedDomains) ? { blockedDomains: options.blockedDomains } : {}),
     ...(options.mandatoryClosing ? { mandatoryClosing: options.mandatoryClosing } : {}),
   })
 }

@@ -35,7 +35,7 @@ export interface PptTasteRecipe {
 }
 export type PptPersonaId = 'auto' | 'consulting' | 'tech-pitch' | 'academic' | 'gov-exec' | 'education' | 'editorial';
 export type PptLanguage = 'zh' | 'en' | 'bilingual';
-export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team' | 'mermaid' | 'flowchart' | 'sequence' | 'map' | 'world-map' | 'china-map' | 'geo-map' | 'isometric' | 'iso-stack' | 'iso-layers' | '3d-stack' | 'iso-pillars';
+export type PptSlideLayout = 'cover' | 'agenda' | 'section' | 'bullets' | 'statement' | 'quote' | 'kpi' | 'cards' | 'comparison' | 'matrix' | 'process' | 'callout' | 'gantt' | 'architecture' | 'harvey' | 'tam' | 'org' | 'marimekko' | 'sankey' | 'swot' | 'table' | 'closing' | 'image' | 'image-left' | 'image-right' | 'chart' | 'chart-split' | 'gallery' | 'waterfall' | 'flywheel' | 'bento' | 'pillars' | 'exec-summary' | 'timeline' | 'steps' | 'layers' | 'funnel' | 'chevron' | 'value-chain' | 'issue-action' | 'before-after' | 'matrix-2x2' | 'kpi-grid' | 'scorecard' | 'formula-callout' | 'takeaways' | 'gallery-grid' | 'ablation-compare' | 'roadmap' | 'swimlane' | 'team' | 'mermaid' | 'flowchart' | 'sequence' | 'map' | 'world-map' | 'china-map' | 'geo-map' | 'isometric' | 'iso-stack' | 'iso-layers' | '3d-stack' | 'iso-pillars' | 'issue-tree' | 'mece' | 'logic-tree' | 'treemap' | 'rect-map' | 'budget-map' | 'gauge' | 'bullet-chart' | 'okr-gauge' | 'pricing' | 'tiers' | 'packages';
 export type PptTemplateId = 'weekly' | 'defense' | 'project' | 'pitch' | 'consulting' | 'keynote' | 'gov-report' | 'workshop' | 'architecture-review' | 'financial-earnings' | 'medical-case' | 'postmortem' | 'marketing-campaign' | 'promotion-review' | 'legal-compliance' | 'creative-lookbook' | 'quarterly-okr' | 'product-prd' | 'vc-daylight' | 'industry-research';
 export type PptTableStyle = 'consulting' | 'booktabs' | 'minimal' | 'banded' | 'harvey';
 export interface PptImageSpec {
@@ -69,6 +69,9 @@ export interface PptSlideItem {
     role?: string;
     conversion?: string;
     icon?: string;
+    actual?: number;
+    target?: number;
+    max?: number;
     status?: 'positive' | 'negative' | 'warning' | 'neutral' | 'accent';
     tone?: 'positive' | 'negative' | 'warning' | 'neutral' | 'accent';
 }
@@ -169,6 +172,13 @@ export interface PptCheckResult extends PptQualityResult {
     verification: PptVerification;
     render?: PptRenderResult;
 }
+export type PptExportKind = 'xlsx' | 'docx' | 'qa-prep' | 'memo' | 'social-carousel' | 'subtitles' | 'handout' | 'one-pager' | 'i18n';
+export type PptMotionProfile = 'subtle' | 'executive' | 'keynote';
+export interface PptMergeSource {
+    deckPath?: string;
+    slides?: Array<number | string>;
+    bankIds?: string[];
+}
 export interface PptEditArgs {
     deckPath: string;
     edits?: Array<{
@@ -185,6 +195,17 @@ export interface PptEditArgs {
     brand?: PptBrand | null;
     targetMinutes?: number | null;
     remixPreset?: 'exec-5min' | 'board-brief' | 'sales-pitch';
+    motionProfile?: PptMotionProfile | null;
+    exports?: PptExportKind[];
+    saveToBank?: {
+        slide: number | string;
+        bankId?: string;
+        name?: string;
+        tags?: string[];
+    };
+    translations?: Record<string, unknown> | Array<Record<string, unknown>>;
+    bilingualMode?: boolean | 'replace' | 'bilingual';
+    targetLang?: PptLanguage;
     expectedRevision?: number;
     saveAs?: boolean;
 }
@@ -237,6 +258,9 @@ export interface PptEvidenceEntry {
     scope?: string;
     url?: string;
     confidence?: 'verified' | 'estimated' | 'conflicting' | 'unverified';
+    origin?: 'local-file' | 'web-research';
+    tier?: 1 | 2 | 3;
+    claimType?: 'actual' | 'forecast' | 'policy' | 'benchmark';
     note?: string;
 }
 export interface PptSlideSpec {
@@ -246,6 +270,7 @@ export interface PptSlideSpec {
     chrome?: PptChromeStyle | string;
     cardMaterial?: PptCardMaterial;
     iconMode?: PptIconMode;
+    reveal?: 'step' | 'all';
     title?: string;
     subtitle?: string;
     kicker?: string;
@@ -315,6 +340,9 @@ export interface PptCreateArgs {
     lang?: string;
     /** 页间转场与要点入场动画：on（默认）/ off。 */
     motion?: 'on' | 'off';
+    motionProfile?: PptMotionProfile;
+    exports?: PptExportKind[];
+    mergeSources?: PptMergeSource[];
     outputDir?: string;
     fileName?: string;
     /** 是否覆盖同名三件套；默认 false，同名时自动选择唯一后缀。 */
@@ -377,6 +405,8 @@ export interface PptAbsorbArgs {
     brandKitName?: string;
     watermark?: string;
     forbiddenTerms?: string[];
+    preferredSources?: string[];
+    blockedDomains?: string[];
     signal?: AbortSignal;
 }
 export interface PptExemplarSummary {
@@ -459,6 +489,14 @@ export interface PptImportArgs {
 export interface PptFromOfficeArgs {
     filePath: string;
     filePaths?: string[];
+    inspectOnly?: boolean;
+    instructions?: string;
+    maxSlides?: number;
+    includeSheets?: string[];
+    photoRoles?: Record<string, string>;
+    bindDataModel?: boolean;
+    evidence?: PptEvidenceEntry[];
+    exports?: PptExportKind[];
     outputDir?: string;
     fileName?: string;
     theme?: string;
@@ -523,6 +561,17 @@ export interface PptCreateResult {
     pptxPath: string;
     jsonPath: string;
     handoutPath?: string;
+    onePagerPath?: string;
+    carouselPath?: string;
+    subtitlesPath?: string;
+    xlsxPath?: string;
+    docxPath?: string;
+    memoPath?: string;
+    qaPrepPath?: string;
+    i18nPath?: string;
+    inspectOnly?: boolean;
+    dossierMarkdown?: string;
+    enrichmentPlan?: Record<string, unknown>;
     deckId?: string;
     revision?: number;
     undoAvailable?: number;
@@ -563,6 +612,14 @@ export interface DeckEngine {
     renderSocialCarouselHtml?(manifest: any, options?: Record<string, unknown>): string;
     renderSubtitlesSrt?(manifest: any, lang?: string): string;
     renderSubtitlesVtt?(manifest: any, lang?: string): string;
+    renderDeckWorkbookXlsx?(manifest: any): Buffer;
+    renderDeckReportDocx?(manifest: any, lang?: string): Buffer;
+    renderDeckMemoMarkdown?(manifest: any, lang?: string): string;
+    renderQaPrepMarkdown?(manifest: any, lang?: string): string;
+    extractTranslationBundle?(manifest: any): Record<string, unknown>;
+    applyTranslationBundle?(manifest: any, translations: unknown, options?: Record<string, unknown>): Record<string, unknown>;
+    listSlideBank?(cwd?: string, tag?: string): Record<string, unknown>;
+    mergeDecks?(options?: Record<string, unknown>): Promise<PptCreateResult>;
     remixDeck?(options: Record<string, unknown>): Promise<PptCreateResult>;
     loadWorkspaceBrandKit?(cwd?: string): Record<string, unknown> | null;
     saveWorkspaceBrandKit?(cwd: string, rawKit: Record<string, unknown>): {
