@@ -1,5 +1,13 @@
 # 更新记录
 
+## 0.36.0 (2026-11-22)
+
+- **实体胶片灯箱工作台（`灯箱总览` 默认进入 + `单页精修` 一键切换）**：
+  - 打开任意演示文稿工程默认进入发光桌面级 **16:9 实体胶片灯箱（`灯箱总览`）**：每页幻灯片以透光 16:9 胶片卡片呈现，带胶片页码印章、版式徽标、质量指示点、拖拽 / `← →` 一键调序、原地复制与 `+16:9` 全部 31 种版式快速加页卡片；点击任意胶片卡片即可平滑跃入 **`单页精修`**（`document.startViewTransition`，完整尊重 `prefers-reduced-motion`）。
+  - 完整保留 `0.35.0` 的全部能力（8 大领域权威信源检索、`SLOP-13/14`、三模路由、41 种图谱、逆向 Office 导出、企业金页库、无损翻译、离线 `R` 键审阅及 `@stardustlc/dsh-updates 0.2.10` 更新条）。
+- **交互引导、英文顶栏适配与文档焕新**：同步升级工程库与灯箱/单页双态 4 步「? 引导」聚光灯导览，优化英文工程顶栏标签排布避免截断，并刷新双语 README、使用说明、8 张浅深色流程示意图与最新工作台实景截图。
+- **Physical Slide Lightbox Workbench (`Lightbox` default + 1-click `Slide Studio` toggle)**: opening any deck lands on an illuminated 16:9 drafting-table Lightbox with slide stamps, layout badges, quality dots, drag/`←→` reorder, duplicate, and `+16:9` 31-archetype starter card; clicking any transparency transitions smoothly into `Slide Studio` (with `prefers-reduced-motion` support). Includes updated 4-step `? Tour`, crisp English header layout, and refreshed bilingual docs, workflow SVGs, and screenshots while preserving 100% of `0.35.0` capabilities.
+
 ## 0.35.0 (2026-11-22)
 
 - **8 大领域权威信源检索引擎、代码级信源审计（`SLOP-13` 升级 9 项）与三模路由（`deck-evidence.mjs` + `deck-brand-kit.mjs`）**：

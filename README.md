@@ -9,10 +9,10 @@
 **[安装使用](#安装) · [使用流程](#开始使用) · [完整说明](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)**
 
 <picture>
-  <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-dark.svg?v=0.28.0">
-  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-light.svg?v=0.28.0">
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-dark.svg?v=0.28.0">
-  <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-light.svg?v=0.28.0" alt="从文档、表格、流程图或旧 PPTX 出发，一键生成高审美可交付全套产物。 · 流程示意" width="100%">
+  <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-dark.svg?v=0.36.0">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-light.svg?v=0.36.0">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-dark.svg?v=0.36.0">
+  <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-light.svg?v=0.36.0" alt="从文档、表格、流程图或旧 PPTX 出发，经实体胶片灯箱编排与单页精修，一键交付全套产物。 · 流程示意" width="100%">
 </picture>
 
 ## 功能
@@ -22,7 +22,7 @@
 - **逆向 Office 配套导出、企业金页拼装、100% 无损翻译与离线 `R` 键审阅闭环**：零新增依赖通过 `exports[]`（CLI `--export`）按需配套导出 **`.xlsx` Excel 数据工作簿**、**`.docx` Word 汇报文档**、**`.qa-prep.md` 会前高管质询预案**、**`.memo.md` 高管备忘录** 与 **`.i18n.json` 翻译槽位包**（工作台同步支持下载 `.xlsx`/`.docx`/`.qa-prep.md`）；支持 **企业金页库 `.dsh-ppt/slide-bank.json`（`saveToBank`）+ 跨工程拼装（`mergeSources`）**（SHA-256 图片去重 + 跨工程 `[E#]` 无冲突重映射）、**100% 版式无损翻译与中英双语化（`translations` / `bilingualMode`）**、单页分步点击显现 **`reveal: 'step'`** 与 **`motionProfile`**，以及独立 HTML 按 **`R` 键离线批注导出 `review-feedback.json`** → `ppt_check({ feedbackPath })` 回流 AI 逐页修订。
 - **企业品牌宪章锁（`SLOP-14`）、多受众改编、社媒长图与现场演示增强包**：支持将企业色板、字体、Logo、统一页脚、内容页保密水印（`CONFIDENTIAL · 内部资料`，HTML/PPTX 同构）、官方封底及权威信源名单锁存至 `.dsh-ppt/brand-kit.json`；`ppt_edit({ remixPreset })` / `--remix` 一键压缩改编为 **高管 5 分钟（6 页）** / **董事会（8 页）** / **客户路演（7 页）**副本（被折叠要点无损归档备注）并导出 **4:5 / 1:1 社媒长图卡片（`.carousel.html`）**；独立 HTML 内置 **`Ctrl/Cmd+K` 全局速搜（含 `[E#]` 证据）**、**`R` 键审阅批注**、**`D` 键白板画笔**、**`T` 键 Q&A 倒计时**、**`A` 键自动字幕导览**、**`P` 键双屏提词台**、**`L` 键虚拟激光笔** 与 **`.srt`/`.vtt` 字幕导出**（同步内置于 `dsh-remotion`）。
 - **20 套标杆范本槽位契约（含 12 套 GitHub 开源实机蒸馏）、8 套品味配方与零模型自检修复闭环**：内置 **13 个注册工具**、**24 套大师主题（16 浅 8 深）**、**6 套母版骨架**、**8 套大师 Taste Recipes**、**20 套行业蓝图**、**20 套标杆范本**（支持 `exemplar: "auto"`、`alignOrder: true` 与 Few-Shot JSON 样板）与 **61 枚原生 `<a:custGeom>` 矢量图标**；支持 `ppt_absorb` / `--ingest-exemplars` 批量吸收本地 `.pptx` 目录沉淀审美 DNA 与范本；内置 **确定性弱模型补偿器 + 落盘前 `SLOP-01..14` 零模型自检修复闭环**，0 额外模型开销直出零告警成品。
-- **全格式直吞、直接操纵工作台与生态联动**：`ppt_from_office` 零新增依赖直吞 `.pdf`/`.docx`/`.xlsx`/`.csv`/`.tsv`/`.png`/`.jpg`/`.webp` 混合素材包；`ppt_import` 支持外部 `.pptx` 一键翻新与 Office 双向导回（保留撤销历史）；`ppt_cite` 联动 `dsh-cite` 核验文献，`ppt_remotion` 导出 `dsh-remotion` 视频分镜包；工作台（适配 DSH `>=0.2.2-rc.3`）支持左侧拖拽排序、画布双击原地改写、证据账本与修订差异抽屉、一键导出 PPTX / PDF / PNG 图包 / Excel / Word / 质询预案 / 一页纸 / 社媒长图 / 字幕，以及按需开启的 **数字溯源推演、24 页双层 AI 视觉审查与模拟答辩**。
+- **全格式直吞、实体胶片灯箱工作台与生态联动**：`ppt_from_office` 零新增依赖直吞 `.pdf`/`.docx`/`.xlsx`/`.csv`/`.tsv`/`.png`/`.jpg`/`.webp` 混合素材包；`ppt_import` 支持外部 `.pptx` 一键翻新与 Office 双向导回（保留撤销历史）；`ppt_cite` 联动 `dsh-cite` 核验文献，`ppt_remotion` 导出 `dsh-remotion` 视频分镜包；工作台（适配 DSH `>=0.2.2-rc.3`，内置 13 套视觉风格与 8 套字体）打开工程默认进入 **发光 16:9 实体胶片灯箱（`灯箱总览`）**，支持拖拽/`←→` 调序、1 键复制与新增空白胶片，单击任意胶片跃入 **`单页精修`**（画布双击原地改写、证据账本与修订差异抽屉、一键导出 PPTX / PDF / PNG 图包 / Excel / Word / 质询预案 / 一页纸 / 社媒长图 / 字幕，以及按需开启的 **数字溯源推演、24 页双层 AI 视觉审查与模拟答辩**）。
 
 ## 风格预览
 
@@ -56,7 +56,7 @@
 <details>
 <summary>查看工作台界面</summary>
 
-![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-zh.webp?v=0.22.0)
+![workbench example](https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/screen-zh.webp?v=0.36.0)
 
 图片来自验证环境的真实界面或示例 PPTX 渲染，使用示例数据。
 
@@ -79,7 +79,7 @@ dsh plugin --profile desktop add dsh-ppt
 1. **快速起稿（三选一）**：
    - **直接在面板起稿或一键体验**：从左侧栏打开「演示文稿」（可随时点顶部 **`? 引导`** 启动四步导览），点击 **「一键体验旗舰示例」** 零延迟预览旗舰版式，或点击 **「新建演示文稿」** 从 20 套行业蓝图起步，或拖入 **`.xlsx` / `.csv` / `.docx` / `.pptx`** 直接建稿。
    - **在对话中交给助手**：把 Word、Excel/CSV、Markdown（含 ```` ```mermaid ```` 流程图/时序图）或参考 `.pptx` 发给助手，自动导演会按听众匹配明亮投影风与多版式节奏，并可调用 `ppt_cite` 关联 `dsh-cite` 真实文献。
-2. **点哪改哪 & 换版式与时长预算**：在「内容编辑」直接点击预览画面里的标题、卡片或表格即可定位到右侧编辑框；顶部可一键切换 **Mermaid 流程图/时序图、KPI 大数字、不等宽市场图（Marimekko）、桑基流向图（Sankey）、波特价值链、SWOT 矩阵、甘特图、系统架构图、哈维球矩阵或学术三线表**（并支持 LaTeX 原生公式），设置 **目标演讲时长（分钟）** 实时检查每页超时风险，改完按 `Ctrl/⌘+S` 或点击「保存此页」同步更新 HTML 与 PPTX。
+2. **实体胶片灯箱总览 → 单页精修**：打开工程默认进入发光 16:9 **「灯箱总览」** 实体胶片桌，俯瞰全稿页序、版式徽章与排版提醒，支持拖拽或 `←/→` 调序、1 键复制与末尾卡片插入 31+ 版式空白胶片；单击任意胶片（或点击切换条 **「单页精修」**）直达三栏精调画布——单击画布文字定位、双击原地改写，切换 **41 种图谱（含 MECE 议题树、Treemap、OKR 子弹仪、三档报价、Mermaid 流程图、点阵地图、2.5D 等轴测与原生公式）** 与演讲时长预算，按 `Ctrl/⌘+S` 同步更新 HTML 与 PPTX。
 3. **导入翻新、Office 导回与品牌沉淀**：支持点击「**导入 PPTX 翻新**」或「**导入 Word/Excel**」直接重塑现有文件，或在 PowerPoint / WPS 微调后通过「**导入 Office 修改稿**」同步回工作台（保留撤销历史）；也可在「风格与母版」一键套用 8 套名家范本或收藏公司模板到「我的品牌库」。
 4. **双屏演讲、一页纸与视频分镜交付**：需要精检排版时点「渲染当前 PPTX」开启 **HTML + PPTX 并排对比**（或按需开启 AI 叙事预审、模拟答辩与 24 页视觉看图修复）；放映 HTML 时按 `P` 开启双屏提词台、按 `L` 使用虚拟激光笔，并在下载菜单一键导出最新 PPTX、**高管一页纸（`.onepager.html`）**、**Remotion 视频分镜包（`.zip`）**、**演讲讲义（`.md`）** 或分享包 ZIP。
 

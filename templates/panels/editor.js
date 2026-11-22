@@ -349,15 +349,8 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
         h(W.Button, { variant: 'ghost', disabled, onClick: onClose }, pptText('取消', 'Cancel'))))));
 }
 
-function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide, onReorderSlide, onDuplicate, onAppend, dirty, dataDirty }) {
-  const railId = React.useId();
-  const [newOpen, setNewOpen] = React.useState(false);
-  const [archetype, setArchetype] = React.useState('cards');
-  const [dragIdx, setDragIdx] = React.useState(-1);
-  const [overIdx, setOverIdx] = React.useState(-1);
-  const blocked = busy || dirty || imagePending || dataDirty || project.slides.length >= 120;
-  const issues = project.quality?.issues || [];
-  const newOptions = [
+function pptSlideAddOptions() {
+  return [
     ['cards', pptText('Bento / 支柱卡片页', 'Bento / pillar cards')],
     ['kpi', pptText('大数字指标 KPI 页', 'KPI metrics')],
     ['mockup', pptText('设备原型 / 产品界面页', 'Device mockup showcase')],
@@ -390,6 +383,169 @@ function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide
     ['agenda', pptText('汇报目录页', 'Agenda')],
     ['closing', pptText('结束与行动号召页', 'Closing & CTA')],
   ];
+}
+
+function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, onOpenSlide, onMoveSlide, onReorderSlide, onDuplicateSlide, onAppend }) {
+  const lightboxId = React.useId();
+  const [archetype, setArchetype] = React.useState('cards');
+  const [dragIdx, setDragIdx] = React.useState(-1);
+  const [overIdx, setOverIdx] = React.useState(-1);
+  const blocked = busy || dirty || imagePending || dataDirty || project.slides.length >= 120;
+  const issues = project.quality?.issues || [];
+  const newOptions = pptSlideAddOptions();
+
+  function renderFilmPreview(row) {
+    const items = Array.isArray(row.items) ? row.items : Array.isArray(row.cards) ? row.cards : [];
+    const bullets = Array.isArray(row.bullets) ? row.bullets : [];
+    const imgData = row.image?.assetId && project.assets?.[row.image.assetId]?.data;
+    return h('div', { className: 'ppt-film-inner', 'data-layout': row.layout || 'bullets' },
+      h('div', { className: 'ppt-film-head' },
+        row.kicker ? h('span', { className: 'ppt-film-kicker' }, row.kicker) : null,
+        h('div', { className: 'ppt-film-title', 'data-dsh-serif': '' }, row.title || t('未命名页')),
+        row.subtitle ? h('p', { className: 'ppt-film-sub' }, row.subtitle) : null),
+      h('div', { className: 'ppt-film-body' },
+        imgData ? h('div', { className: 'ppt-film-media' }, h('img', { src: imgData, alt: row.image?.alt || row.title || '' })) : null,
+        items.length > 0 ? h('div', { className: 'ppt-film-grid' },
+          items.slice(0, 4).map((item, idx) => h('div', { key: idx, className: 'ppt-film-chip' },
+            item.value !== undefined && item.value !== '' ? h('strong', null, String(item.value) + (item.unit || '')) : null,
+            h('span', null, item.title || item.tag || item.text || ''))))
+        : bullets.length > 0 ? h('ul', { className: 'ppt-film-bullets' },
+          bullets.slice(0, 3).map((b, idx) => h('li', { key: idx }, String(b).replace(/\*\*/g, ''))))
+        : Array.isArray(row.rows) && row.rows.length > 0 ? h('div', { className: 'ppt-film-table' },
+          row.rows.slice(0, 3).map((r, rIdx) => h('div', { key: rIdx, className: 'ppt-film-table-row' },
+            (Array.isArray(r) ? r : []).slice(0, 3).map((cell, cIdx) => h('span', { key: cIdx }, String(cell ?? ''))))))
+        : row.text ? h('p', { className: 'ppt-film-text' }, row.text)
+        : row.formula ? h('code', { className: 'ppt-film-formula' }, row.formula)
+        : row.code ? h('code', { className: 'ppt-film-formula' }, String(row.code).split('\n')[0] || '')
+        : row.mermaid ? h('code', { className: 'ppt-film-formula' }, String(row.mermaid).split('\n')[0] || 'mermaid')
+        : null),
+      row.takeaway ? h('div', { className: 'ppt-film-takeaway' }, row.takeaway) : null);
+  }
+
+  return h('section', {
+    className: 'ppt-lightbox-table',
+    'data-ppt-lightbox': 'true',
+    'data-tour': 'ppt-lightbox',
+    'aria-label': pptText('实体胶片灯箱总览', 'Physical Slide Lightbox'),
+  },
+    h('div', { className: 'ppt-lightbox-grid' },
+      project.slides.map((row, index) => {
+        const slideIssues = issues.filter(item => item.slide === index + 1 || (item.slideId && item.slideId === row.id));
+        const severity = slideIssues.some(item => item.severity === 'error') ? 'error' : slideIssues.length ? 'warning' : '';
+        const active = row.id === selected;
+        const canDrag = !blocked && Boolean(onReorderSlide) && project.slides.length > 1;
+        return h('article', {
+          key: row.id,
+          className: 'ppt-lightbox-slide',
+          'data-dsh-card': '',
+          'data-active': active ? 'true' : 'false',
+          draggable: canDrag,
+          'data-dragging': dragIdx === index ? 'true' : undefined,
+          'data-drag-over': overIdx === index && dragIdx >= 0 && dragIdx !== index ? 'true' : undefined,
+          onDragStart: e => {
+            if (!canDrag) { e.preventDefault(); return; }
+            setDragIdx(index);
+            try {
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', String(index));
+            } catch {}
+          },
+          onDragOver: e => {
+            if (!canDrag || dragIdx < 0) return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'move'; } catch {}
+            if (overIdx !== index) setOverIdx(index);
+          },
+          onDragLeave: () => {
+            if (overIdx === index) setOverIdx(-1);
+          },
+          onDrop: e => {
+            e.preventDefault();
+            const from = dragIdx;
+            setDragIdx(-1);
+            setOverIdx(-1);
+            if (from >= 0 && from !== index && !blocked) onReorderSlide?.(from, index);
+          },
+          onDragEnd: () => {
+            setDragIdx(-1);
+            setOverIdx(-1);
+          },
+        },
+          h('div', { className: 'ppt-lightbox-mount-top' },
+            h('span', { className: 'ppt-lightbox-stamp' }, 'SLIDE ' + String(index + 1).padStart(2, '0')),
+            h('span', { className: 'w-tag ppt-lightbox-layout' }, typeof pptLayoutLabel === 'function' ? pptLayoutLabel(row.layout) : (row.layout || 'bullets')),
+            severity ? h('span', {
+              className: 'ppt-page-dot',
+              'data-severity': severity,
+              title: slideIssues.map(it => languageOf() === 'en' ? (it.messageEn || it.message) : it.message).join(' · '),
+              'aria-label': severity === 'error' ? pptText('有待修复错误', 'Has error') : pptText('有排版提醒', 'Has warning'),
+            }) : null),
+          h('button', {
+            type: 'button',
+            className: 'ppt-lightbox-film',
+            'data-lightbox-slide': row.id,
+            disabled: busy || imagePending,
+            'aria-label': pptText('精修第 ' + (index + 1) + ' 页：', 'Edit slide ' + (index + 1) + ': ') + (row.title || t('未命名页')),
+            onClick: () => onOpenSlide(row),
+          }, renderFilmPreview(row)),
+          h('div', { className: 'ppt-lightbox-mount-bottom', 'data-window-drag-exclude': '' },
+            h('div', { className: 'ppt-lightbox-move-group' },
+              h('button', {
+                type: 'button',
+                className: 'ppt-lightbox-mini-btn',
+                disabled: blocked || index === 0,
+                title: pptText('左移一页', 'Move slide left'),
+                'aria-label': pptText('左移第 ' + (index + 1) + ' 页', 'Move slide ' + (index + 1) + ' left'),
+                onClick: () => onMoveSlide(index, -1),
+              }, '←'),
+              h('button', {
+                type: 'button',
+                className: 'ppt-lightbox-mini-btn',
+                disabled: blocked || index === project.slides.length - 1,
+                title: pptText('右移一页', 'Move slide right'),
+                'aria-label': pptText('右移第 ' + (index + 1) + ' 页', 'Move slide ' + (index + 1) + ' right'),
+                onClick: () => onMoveSlide(index, 1),
+              }, '→'),
+              h('button', {
+                type: 'button',
+                className: 'ppt-lightbox-mini-btn',
+                disabled: blocked,
+                title: t('复制本页'),
+                'aria-label': t('复制本页') + ' ' + (index + 1),
+                onClick: () => onDuplicateSlide(row.id),
+              }, pptText('复制', 'Dup'))),
+            h('button', {
+              type: 'button',
+              className: 'ppt-lightbox-focus-btn',
+              disabled: busy || imagePending,
+              onClick: () => onOpenSlide(row),
+            }, pptText('精修 →', 'Edit →'))));
+      }),
+      onAppend ? h('div', { className: 'ppt-lightbox-add-card', 'data-dsh-card': '' },
+        h('div', { className: 'ppt-lightbox-mount-top' },
+          h('span', { className: 'ppt-lightbox-stamp' }, 'NEW SLIDE'),
+          h('span', { className: 'w-tag' }, '+16:9')),
+        h('div', { className: 'ppt-lightbox-add-body' },
+          h('label', { htmlFor: lightboxId + '-archetype' }, pptText('选择新增胶片版式', 'New transparency archetype')),
+          h('select', { id: lightboxId + '-archetype', value: archetype, disabled: blocked, onChange: e => setArchetype(e.target.value) },
+            newOptions.map(([id, label]) => h('option', { key: id, value: id }, label))),
+          h(W.Button, {
+            variant: 'primary',
+            icon: 'plus',
+            disabled: blocked,
+            onClick: () => onAppend(archetype),
+          }, pptText('插入空白胶片', 'Insert slide')))) : null));
+}
+
+function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide, onReorderSlide, onDuplicate, onAppend, dirty, dataDirty }) {
+  const railId = React.useId();
+  const [newOpen, setNewOpen] = React.useState(false);
+  const [archetype, setArchetype] = React.useState('cards');
+  const [dragIdx, setDragIdx] = React.useState(-1);
+  const [overIdx, setOverIdx] = React.useState(-1);
+  const blocked = busy || dirty || imagePending || dataDirty || project.slides.length >= 120;
+  const issues = project.quality?.issues || [];
+  const newOptions = pptSlideAddOptions();
   return h('aside', { className: 'ppt-page-rail', 'aria-label': pptText('幻灯片目录', 'Slide outline') },
     h('h3', { 'data-dsh-serif': '' }, pptText('幻灯片', 'Slides')),
     h('div', { className: 'ppt-page-buttons' }, project.slides.map((row, index) => {
@@ -584,4 +740,59 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench .ppt-inspector .image-preview{max-height:180px;object-fit:contain;background:var(--w-soft)}
 @container dsh-workbench (max-width:1100px){.ppt-workbench .ppt-editor{flex-wrap:wrap}.ppt-workbench .ppt-page-rail{width:var(--ppt-rail-width,180px)}.ppt-workbench .ppt-canvas-region{flex:1 1 320px}.ppt-workbench .ppt-split-resizer-right{display:none}.ppt-workbench .ppt-inspector{width:100%;border-top:var(--dsh-control-border-width,0.5px) solid var(--w-border);padding:16px 0}.ppt-workbench .ppt-inspector .coaching-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ppt-workbench .ppt-page-buttons{max-height:400px}.ppt-workbench .ppt-split-preview,.ppt-workbench .ppt-canvas-visual-diff{grid-template-columns:1fr}}
 @container dsh-workbench (max-width:760px){.ppt-workbench .ppt-editor{flex-direction:column;min-height:0}.ppt-workbench .ppt-split-resizer{display:none}.ppt-workbench .ppt-page-rail{width:100%;border-bottom:var(--dsh-control-border-width,0.5px) solid var(--w-border);padding:12px 0}.ppt-workbench .ppt-page-buttons{display:flex;flex-direction:row;max-height:150px;overflow:auto;gap:8px}.ppt-workbench .ppt-slide-row{min-width:165px;max-width:220px;flex-shrink:0}.ppt-workbench .ppt-rail-actions{flex-direction:row;flex-wrap:wrap}.ppt-workbench .ppt-rail-actions .w-button{width:auto}.ppt-workbench .ppt-canvas-region{padding:14px 0;background:var(--w-canvas);margin:0}.ppt-workbench .preview{margin:0;min-height:0}.ppt-workbench .ppt-preview-tools .w-icon-button{margin-inline-start:0}.ppt-workbench .ppt-inspector .coaching-grid{grid-template-columns:1fr}.ppt-workbench .ppt-preview-tools .w-button{font-size:12px}.ppt-workbench .ppt-inspector{width:100%;padding:16px 0}}
+.ppt-workbench .ppt-editor-modebar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:4px 0 10px;padding:6px 10px;border:var(--dsh-control-border-width,1px) solid var(--w-border);border-radius:var(--dsw-radius-md,10px);background:var(--dsw-alias-settings-card-fill,var(--w-bg))}
+.ppt-workbench .ppt-editor-modemeta{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--w-muted)}
+.ppt-workbench .ppt-lightbox-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:color-mix(in oklab,var(--w-accent) 14%,var(--w-canvas));border:1px solid color-mix(in oklab,var(--w-accent) 32%,transparent);color:var(--w-accent);font-family:var(--dsh-font-mono,ui-monospace,monospace);font-size:11px;font-weight:700;letter-spacing:0.04em}
+.ppt-workbench .ppt-mode-toggle{display:inline-flex;align-items:center;gap:3px;padding:3px;border-radius:var(--dsw-radius-md,10px);border:var(--dsh-control-border-width,1px) solid var(--w-border);background:var(--w-canvas)}
+.ppt-workbench .ppt-mode-btn{border:0!important;border-radius:var(--dsw-radius-sm,7px)!important;padding:4px 11px!important;font-size:12px!important;font-weight:650;background:transparent!important;color:var(--w-muted)!important}
+.ppt-workbench .ppt-mode-btn[aria-pressed=true]{background:var(--w-primary)!important;color:var(--w-on-primary)!important}
+.ppt-workbench .ppt-lightbox-table{position:relative;padding:18px;border-radius:var(--dsw-radius-lg,14px);border:var(--dsh-control-border-width,1px) solid var(--w-border);background-color:var(--w-bg);background-image:radial-gradient(ellipse at 50% 35%,color-mix(in oklab,var(--w-accent) 9%,var(--w-canvas)) 0%,transparent 72%),linear-gradient(to right,color-mix(in oklab,var(--w-border) 42%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in oklab,var(--w-border) 42%,transparent) 1px,transparent 1px);background-size:100% 100%,24px 24px,24px 24px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.22);min-width:0}
+.ppt-workbench .ppt-lightbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:16px;align-items:stretch;min-width:0}
+.ppt-workbench .ppt-lightbox-slide,.ppt-workbench .ppt-lightbox-add-card{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:var(--dsw-radius-md,12px);border:var(--dsh-control-border-width,1px) solid var(--w-border);background:var(--dsw-alias-settings-card-fill,var(--w-canvas));box-shadow:0 6px 18px rgba(15,23,42,0.08),inset 0 1px 0 rgba(255,255,255,0.3);min-width:0}
+.ppt-workbench .ppt-lightbox-slide[draggable=true]{cursor:grab}
+.ppt-workbench .ppt-lightbox-slide[data-dragging=true]{opacity:.45}
+.ppt-workbench .ppt-lightbox-slide[data-drag-over=true]{box-shadow:0 0 0 2px var(--w-accent),0 10px 24px rgba(15,23,42,0.12)}
+.ppt-workbench .ppt-lightbox-slide[data-active=true]{border-color:var(--w-accent);box-shadow:0 0 0 2px color-mix(in oklab,var(--w-accent) 28%,transparent),0 10px 24px rgba(15,23,42,0.12)}
+.ppt-workbench .ppt-lightbox-mount-top{display:flex;align-items:center;gap:6px;min-width:0}
+.ppt-workbench .ppt-lightbox-stamp{font-family:var(--dsh-font-mono,ui-monospace,monospace);font-variant-numeric:tabular-nums;font-size:10.5px;font-weight:700;letter-spacing:0.05em;color:var(--w-muted);flex:none}
+.ppt-workbench .ppt-lightbox-slide[data-active=true] .ppt-lightbox-stamp{color:var(--w-accent)}
+.ppt-workbench .ppt-lightbox-layout{font-size:10.5px!important;padding:0 6px!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px}
+.ppt-workbench .ppt-lightbox-mount-top .ppt-page-dot{margin-inline-start:auto}
+.ppt-workbench .ppt-lightbox-film{width:100%;aspect-ratio:16/9;padding:0!important;border:1px solid color-mix(in oklab,var(--w-border) 85%,var(--w-accent))!important;border-radius:var(--dsw-radius-sm,8px)!important;background:linear-gradient(160deg,var(--w-canvas) 0%,color-mix(in oklab,var(--w-accent) 5%,var(--w-bg)) 100%)!important;box-shadow:inset 0 0 18px color-mix(in oklab,var(--w-accent) 7%,transparent);overflow:hidden;cursor:pointer;display:block!important;text-align:start!important}
+.ppt-workbench .ppt-lightbox-film:hover:not(:disabled){border-color:var(--w-accent)!important;box-shadow:inset 0 0 22px color-mix(in oklab,var(--w-accent) 13%,transparent),0 4px 12px rgba(15,23,42,0.1)}
+.ppt-workbench .ppt-film-inner{height:100%;display:flex;flex-direction:column;justify-content:space-between;gap:5px;padding:10px 11px;min-width:0;overflow:hidden}
+.ppt-workbench .ppt-film-head{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ppt-workbench .ppt-film-kicker{font-family:var(--dsh-font-mono,ui-monospace,monospace);font-size:9px;font-weight:700;text-transform:uppercase;color:var(--w-accent);letter-spacing:0.06em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-film-title{font-size:12.5px;font-weight:700;line-height:1.25;color:var(--w-text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ppt-workbench .ppt-film-sub{margin:0;font-size:10px;color:var(--w-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-film-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden}
+.ppt-workbench .ppt-film-media{height:44px;border-radius:4px;overflow:hidden;background:var(--w-soft);display:flex;justify-content:center}
+.ppt-workbench .ppt-film-media img{height:100%;width:100%;object-fit:cover}
+.ppt-workbench .ppt-film-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.ppt-workbench .ppt-film-chip{padding:3px 5px;border-radius:4px;background:color-mix(in oklab,var(--w-bg) 85%,var(--w-accent) 5%);border:0.5px solid var(--w-border);font-size:9.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;flex-direction:column}
+.ppt-workbench .ppt-film-chip strong{font-size:11px;color:var(--w-accent)}
+.ppt-workbench .ppt-film-bullets{margin:0;padding-inline-start:13px;font-size:9.5px;line-height:1.35;color:var(--w-muted)}
+.ppt-workbench .ppt-film-bullets li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-film-table{display:grid;gap:2px;font-size:9px;color:var(--w-muted)}
+.ppt-workbench .ppt-film-table-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;border-bottom:0.5px solid var(--w-border);padding-bottom:1px}
+.ppt-workbench .ppt-film-table-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-film-text{margin:0;font-size:10px;line-height:1.35;color:var(--w-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ppt-workbench .ppt-film-formula{font-size:9.5px;padding:3px 6px;border-radius:4px;background:var(--w-bg);border:0.5px solid var(--w-border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-film-takeaway{font-size:9px;font-weight:600;color:var(--w-text);padding:2px 5px;border-radius:4px;background:color-mix(in oklab,var(--w-accent) 10%,var(--w-bg));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-lightbox-mount-bottom{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ppt-workbench .ppt-lightbox-move-group{display:inline-flex;align-items:center;gap:4px}
+.ppt-workbench .ppt-lightbox-mini-btn{padding:2px 7px!important;font-size:11px!important;min-height:24px;border-radius:6px!important}
+.ppt-workbench .ppt-lightbox-focus-btn{padding:2px 9px!important;font-size:11px!important;font-weight:650;min-height:24px;border-radius:6px!important;background:var(--w-selected)!important;border-color:var(--w-accent)!important;color:var(--w-accent)!important}
+.ppt-workbench .ppt-lightbox-add-card{border-style:dashed;background:color-mix(in oklab,var(--w-canvas) 82%,transparent)}
+.ppt-workbench .ppt-lightbox-add-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:6px 2px}
+.ppt-workbench .ppt-lightbox-add-body label{margin:0;font-size:11.5px;color:var(--w-muted)}
+@media(prefers-reduced-motion:no-preference){.ppt-workbench .ppt-lightbox-slide,.ppt-workbench .ppt-lightbox-film{transition:transform 160ms var(--dsh-ease-out,ease-out),box-shadow 160ms var(--dsh-ease-out,ease-out),border-color 160ms ease}.ppt-workbench .ppt-lightbox-slide:hover{transform:translateY(-2px)}}
+.ppt-workbench.ppt-in-project>.dsh-header{gap:6px;padding-inline:10px}
+.ppt-workbench.ppt-in-project>.dsh-header .dsh-header-leading{gap:6px}
+.ppt-workbench.ppt-in-project>.dsh-header .dsh-header-title{max-width:118px;overflow:hidden;text-overflow:ellipsis}
+.ppt-workbench.ppt-in-project>.dsh-header .w-tabs>button{padding:4px 7px;gap:4px;font-size:12px;flex:none}
+.ppt-workbench.ppt-in-project>.dsh-header .w-header-actions{gap:4px}
+.ppt-workbench.ppt-in-project>.dsh-header .w-header-actions .w-button{padding-inline:8px}
+@container dsh-workbench (max-width:1090px){.ppt-workbench.ppt-in-project>.dsh-header{flex-wrap:wrap;height:auto;min-height:48px;padding-block:6px;row-gap:6px;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header>.dsh-header-leading{flex:0 1 auto;max-width:100%;overflow:visible;flex-wrap:wrap;gap:6px 8px}.ppt-workbench.ppt-in-project>.dsh-header .dsh-header-tabs{flex:0 1 auto;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header .w-tabs{flex-wrap:wrap;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header>.w-header-actions{margin-inline-start:auto;flex-wrap:wrap;gap:4px}}
+@container dsh-workbench (max-width:560px){.ppt-workbench .ppt-lightbox-grid{grid-template-columns:1fr}}
 `;
