@@ -1560,12 +1560,12 @@ ${VISUAL_CSS}
   color:var(--accent-text);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
   font-size:clamp(12px,1.15vw,16px);margin-bottom:14px;
 }
-h1,h2,.statement-title{font-family:var(--font-heading);line-height:1.12;letter-spacing:-.018em;margin:0}
-h1{font-size:clamp(40px,5.8vw,86px);max-width:22ch;font-weight:800}
-h2{font-size:clamp(28px,3.6vw,56px);max-width:28ch;font-weight:750}
+h1,h2,.statement-title{font-family:var(--font-heading);line-height:1.14;letter-spacing:-.018em;margin:0;text-wrap:balance}
+h1{font-size:clamp(36px,4.8vw,74px);max-width:min(100%,20em);font-weight:800}
+h2{font-size:clamp(26px,3.2vw,48px);max-width:min(100%,26em);font-weight:750}
 .subtitle{
   color:var(--ink-secondary);font-size:clamp(17px,1.9vw,28px);line-height:1.5;
-  max-width:46em;margin-top:18px;
+  max-width:min(100%,46em);margin-top:18px;
 }
 .meta{
   color:var(--muted);font-size:clamp(12px,1.1vw,15px);margin-top:32px;
@@ -1574,7 +1574,7 @@ h2{font-size:clamp(28px,3.6vw,56px);max-width:28ch;font-weight:750}
 .section .kicker,.slide--section .kicker{margin-bottom:10px}
 .section .accent-line,.slide--section .accent-line{width:min(140px,14vw);height:5px;background:var(--accent);margin:18px 0;border-radius:2px}
 .statement-title{
-  font-size:clamp(30px,4.4vw,68px);max-width:24ch;font-weight:800;line-height:1.24;
+  font-size:clamp(28px,3.8vw,58px);max-width:min(100%,24em);font-weight:800;line-height:1.24;
 }
 .slide--closing .subtitle{color:var(--accent-text);font-weight:600}
 .quote-mark{
@@ -1582,9 +1582,16 @@ h2{font-size:clamp(28px,3.6vw,56px);max-width:28ch;font-weight:750}
   color:var(--accent);margin-bottom:clamp(10px,1.4vw,20px);
 }
 .quote-text{
-  font-family:var(--font-heading);font-size:clamp(24px,3.4vw,48px);line-height:1.34;
-  font-weight:700;max-width:26ch;margin:0;
+  font-family:var(--font-heading);font-size:clamp(22px,3.0vw,44px);line-height:1.34;
+  font-weight:700;max-width:min(100%,26em);margin:0;text-wrap:balance;
 }
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) .slide{line-break:strict;overflow-wrap:anywhere;word-break:normal}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) h1{font-size:clamp(34px,4.4vw,66px);max-width:min(100%,22em);letter-spacing:-.01em}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) h2{font-size:clamp(24px,3.0vw,44px);max-width:min(100%,28em)}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) .slide-header h2{font-size:clamp(22px,2.35vw,36px);max-width:100%;line-height:1.24}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) .statement-title{font-size:clamp(26px,3.5vw,52px);max-width:min(100%,24em);line-height:1.3}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) .quote-text{font-size:clamp(22px,2.8vw,40px);max-width:min(100%,26em);line-height:1.42}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) .subtitle{line-height:1.58;max-width:min(100%,42em)}
 .quote-attr{color:var(--muted);margin-top:clamp(14px,2vw,24px);font-size:clamp(14px,1.5vw,22px);letter-spacing:.03em}
 table.deck-table{
   border-collapse:collapse;margin-top:clamp(12px,1.8vw,24px);width:100%;max-width:100%;
@@ -1703,6 +1710,10 @@ body.is-scaled-stage:not(.overview) .card-body{font-size:16px}
 body.is-scaled-stage:not(.overview) .kpi-value{font-size:50px}
 body.is-scaled-stage:not(.overview) .kpi-label{font-size:14.5px}
 body.is-scaled-stage:not(.overview) .mermaid-board{flex:1 1 auto;min-height:360px}
+body.is-scaled-stage:not(.overview) .code-body{font-size:var(--code-fs,14px);line-height:var(--code-lh,1.46)}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) body.is-scaled-stage:not(.overview) h1{font-size:52px}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) body.is-scaled-stage:not(.overview) .slide-header h2{font-size:31px}
+:is(html:lang(zh),html:lang(ja),html:lang(ko)) body.is-scaled-stage:not(.overview) .statement-title{font-size:42px}
 body.is-embedded #hud{left:12px;right:12px;bottom:8px;gap:6px;font-size:11.5px}
 body.is-embedded #hud button{padding:5px 10px;min-height:28px}
 body.is-embedded #theme-label{display:none}

@@ -593,7 +593,7 @@ body.long-card .op-grid,body.long-card .op-pillars,body.long-card .op-actions{gr
 .op-header{background:var(--cover-bg);color:var(--header-fg);border-radius:12px;padding:18px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .op-kicker{font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.85;margin-bottom:4px;font-weight:700}
 .op-header h1{margin:0;font-family:var(--font-heading);font-size:22px;line-height:1.25}
-.op-thesis{margin:6px 0 0;font-size:13.5px;opacity:.92;max-width:64ch}
+.op-thesis{margin:6px 0 0;font-size:13.5px;opacity:.92;max-width:min(100%,44em)}
 .op-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
 .op-meta-chip{background:var(--header-chip-bg);padding:4px 10px;border-radius:99px;white-space:nowrap}
 .op-section-title{font-family:var(--font-heading);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:16px 0 8px;display:flex;align-items:center;gap:8px}

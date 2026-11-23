@@ -2536,7 +2536,7 @@ const BASE_LAYOUT_CSS = `
 .slide--cover .slide-inner,.slide--closing .slide-inner,.slide--section .slide-inner,.slide--statement .slide-inner,.slide--quote .slide-inner{justify-content:center}
 .slide-header{border-bottom:1px solid var(--hairline);padding-bottom:clamp(12px,1.5vw,20px)}
 .slide-header .kicker{margin-bottom:8px}
-.slide-header h2{font-size:clamp(26px,3.1vw,46px);max-width:34ch;line-height:1.18}
+.slide-header h2{font-size:clamp(22px,2.55vw,38px);max-width:100%;line-height:1.2;text-wrap:balance}
 .cover-shell{display:flex;flex-direction:column;justify-content:center;gap:clamp(24px,3.5vw,44px);min-height:72%}
 .cover-shell.is-inverted,.closing-shell.is-inverted{
   background:var(--cover-bg);color:#F8FAFC;padding:clamp(36px,5vw,76px);
@@ -2566,7 +2566,7 @@ const BASE_LAYOUT_CSS = `
   border:1px solid var(--hairline);border-left:4px solid var(--accent);border-radius:var(--radius);
 }
 .bullets-list.cols-2{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px}
-.bullets-list li{position:relative;padding-left:clamp(22px,2vw,32px);font-size:clamp(17px,1.8vw,26px);line-height:1.48;max-width:52ch}
+.bullets-list li{position:relative;padding-left:clamp(22px,2vw,32px);font-size:clamp(17px,1.8vw,26px);line-height:1.48;max-width:100%}
 .bullets-list li::before{
   content:"";position:absolute;left:0;top:.56em;width:.42em;height:.42em;
   background:var(--accent);border-radius:2px;

@@ -326,10 +326,13 @@ export function computeTextFit(linesInput, boxIn, role = 'body', overrides = {})
   const innerWPt = Math.max(36, boxIn.w * 72 - padXPt * 2)
   const innerHPt = Math.max(20, boxIn.h * 72 - padYPt * 2)
   const emWidths = paragraphs.map((p) => measureEmWidth(p, cfg.bold))
+  const hasCjk = paragraphs.some((p) => /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(p))
 
   const evalAt = (pt) => {
     const lines = emWidths.reduce((sum, em) => sum + Math.max(1, Math.ceil((em * pt) / innerWPt)), 0)
-    const totalHPt = lines * pt * cfg.lineHeight + Math.max(0, paragraphs.length - 1) * cfg.spaceAfterPt
+    // PowerPoint / WPS 对微软雅黑等 CJK 字体的 spcPct 行框实测比西文高 ~7%，多行场景预留安全系数防底边溢出
+    const cjkVertSafety = hasCjk && lines >= 3 ? 1.07 : 1.0
+    const totalHPt = lines * pt * cfg.lineHeight * cjkVertSafety + Math.max(0, paragraphs.length - 1) * cfg.spaceAfterPt
     return { lines, totalHPt }
   }
 

@@ -955,9 +955,10 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
 
   // Step 4：自适应盒尺寸与子图感知均衡坐标求解
   const hasSubgraphs = ast.subgraphs.length > 0
-  const padOuterX = hasSubgraphs ? 0.18 : 0.06
-  const padOuterTop = hasSubgraphs ? (isHoriz ? 0.40 : 0.34) : 0.05
-  const padOuterBot = hasSubgraphs ? 0.14 : 0.05
+  const hasBackEdge = rawEdges.some((e) => e.from !== e.to && (rank.get(e.from) ?? 0) > (rank.get(e.to) ?? 0))
+  const padOuterX = Math.max(hasSubgraphs ? 0.18 : 0.06, !isHoriz && hasBackEdge ? 0.46 : 0)
+  const padOuterTop = Math.max(hasSubgraphs ? (isHoriz ? 0.40 : 0.34) : 0.05, isHoriz && hasBackEdge ? 0.44 : 0)
+  const padOuterBot = Math.max(hasSubgraphs ? 0.14 : 0.05, isHoriz && hasBackEdge ? 0.44 : 0)
   const innerBox = {
     x: areaBox.x + padOuterX,
     y: areaBox.y + padOuterTop,
@@ -1328,8 +1329,13 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
 
   const posNodeMap = new Map(positionedNodes.map((n) => [n.id, n]))
 
-  // 计算每条边的精确连接站点（0=top, 1=left, 2=bottom, 3=right）与路由几何
+  // 计算每条边的精确连接站点（0=top, 1=left, 2=bottom, 3=right）与路由几何（含反馈回路/跨层遮挡的外圈 U 型槽道避障）
   const usedLabelAnchors = []
+  let topChannelLane = 0
+  let botChannelLane = 0
+  let leftChannelLane = 0
+  let rightChannelLane = 0
+
   const positionedEdges = rawEdges
     .map((e, idx) => {
       const src = posNodeMap.get(e.from)
@@ -1339,8 +1345,98 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
       let outIdx = 2
       let inIdx = 0
       let orientation = isHoriz ? 'horizontal' : 'vertical'
+      let waypoints = null
+      let channelAnchor = null
 
-      if (src.id === dst.id) {
+      const isHorizBackEdge = isHoriz && src.id !== dst.id && (
+        (direction === 'LR' && src.x >= dst.x + dst.w - 0.06) ||
+        (direction === 'RL' && dst.x >= src.x + src.w - 0.06)
+      )
+      const isVertBackEdge = !isHoriz && src.id !== dst.id && (
+        (direction !== 'BT' && src.y >= dst.y + dst.h - 0.06) ||
+        (direction === 'BT' && dst.y >= src.y + src.h - 0.06)
+      )
+
+      // 检查是否属于跨层直穿障碍边（例如 LR 同行跳层直连穿过中间节点）
+      const minSpanXRaw = Math.min(src.x, dst.x)
+      const maxSpanXRaw = Math.max(src.x + src.w, dst.x + dst.w)
+      const minSpanYRaw = Math.min(src.y, dst.y)
+      const maxSpanYRaw = Math.max(src.y + src.h, dst.y + dst.h)
+      const hasInlineHorizBlocker = isHoriz && src.id !== dst.id && !isHorizBackEdge && Math.abs(src.cy - dst.cy) < 0.22 &&
+        positionedNodes.some((n) =>
+          n.id !== src.id && n.id !== dst.id &&
+          n.x < maxSpanXRaw - 0.06 && n.x + n.w > minSpanXRaw + 0.06 &&
+          src.cy >= n.y - 0.06 && src.cy <= n.y + n.h + 0.06,
+        )
+      const hasInlineVertBlocker = !isHoriz && src.id !== dst.id && !isVertBackEdge && Math.abs(src.cx - dst.cx) < 0.22 &&
+        positionedNodes.some((n) =>
+          n.id !== src.id && n.id !== dst.id &&
+          n.y < maxSpanYRaw - 0.06 && n.y + n.h > minSpanYRaw + 0.06 &&
+          src.cx >= n.x - 0.06 && src.cx <= n.x + n.w + 0.06,
+        )
+
+      if (isHorizBackEdge || hasInlineHorizBlocker) {
+        const spanned = positionedNodes.filter((n) =>
+          n.x < maxSpanXRaw + 0.04 && n.x + n.w > minSpanXRaw - 0.04,
+        )
+        const minSpanY = Math.min(...spanned.map((n) => n.y))
+        const maxSpanY = Math.max(...spanned.map((n) => n.y + n.h))
+        const midSpanY = (minSpanY + maxSpanY) / 2
+        const blockedAboveEndpoint = (ptNode) => positionedNodes.some((n) =>
+          n.id !== ptNode.id && n.x < ptNode.cx + 0.04 && n.x + n.w > ptNode.cx - 0.04 && n.y + n.h <= ptNode.y + 0.04,
+        )
+        const blockedBelowEndpoint = (ptNode) => positionedNodes.some((n) =>
+          n.id !== ptNode.id && n.x < ptNode.cx + 0.04 && n.x + n.w > ptNode.cx - 0.04 && n.y >= ptNode.y + ptNode.h - 0.04,
+        )
+        const topBlocked = blockedAboveEndpoint(src) || blockedAboveEndpoint(dst)
+        const botBlocked = blockedBelowEndpoint(src) || blockedBelowEndpoint(dst)
+        let useTop = ((src.cy + dst.cy) / 2) <= midSpanY
+        if (useTop && topBlocked && !botBlocked) useTop = false
+        else if (!useTop && botBlocked && !topBlocked) useTop = true
+
+        outIdx = useTop ? 0 : 2
+        inIdx = useTop ? 0 : 2
+        orientation = 'horizontal'
+        const channelY = useTop
+          ? Math.max(areaBox.y + 0.08, minSpanY - 0.24 - topChannelLane * 0.20)
+          : Math.min(areaBox.y + areaBox.h - 0.08, maxSpanY + 0.24 + botChannelLane * 0.20)
+        if (useTop) topChannelLane += 1
+        else botChannelLane += 1
+        const fp = portCoordinates(src, outIdx)
+        const tp = portCoordinates(dst, inIdx)
+        waypoints = [
+          { x: +fp.x.toFixed(4), y: +fp.y.toFixed(4) },
+          { x: +fp.x.toFixed(4), y: +channelY.toFixed(4) },
+          { x: +tp.x.toFixed(4), y: +channelY.toFixed(4) },
+          { x: +tp.x.toFixed(4), y: +tp.y.toFixed(4) },
+        ]
+        channelAnchor = { x: (fp.x + tp.x) / 2, y: channelY }
+      } else if (isVertBackEdge || hasInlineVertBlocker) {
+        const spanned = positionedNodes.filter((n) =>
+          n.y < maxSpanYRaw + 0.04 && n.y + n.h > minSpanYRaw - 0.04,
+        )
+        const minSpanX = Math.min(...spanned.map((n) => n.x))
+        const maxSpanX = Math.max(...spanned.map((n) => n.x + n.w))
+        const midSpanX = (minSpanX + maxSpanX) / 2
+        const useLeft = ((src.cx + dst.cx) / 2) <= midSpanX
+        outIdx = useLeft ? 1 : 3
+        inIdx = useLeft ? 1 : 3
+        orientation = 'vertical'
+        const channelX = useLeft
+          ? Math.max(areaBox.x + 0.08, minSpanX - 0.26 - leftChannelLane * 0.22)
+          : Math.min(areaBox.x + areaBox.w - 0.08, maxSpanX + 0.26 + rightChannelLane * 0.22)
+        if (useLeft) leftChannelLane += 1
+        else rightChannelLane += 1
+        const fp = portCoordinates(src, outIdx)
+        const tp = portCoordinates(dst, inIdx)
+        waypoints = [
+          { x: +fp.x.toFixed(4), y: +fp.y.toFixed(4) },
+          { x: +channelX.toFixed(4), y: +fp.y.toFixed(4) },
+          { x: +channelX.toFixed(4), y: +tp.y.toFixed(4) },
+          { x: +tp.x.toFixed(4), y: +tp.y.toFixed(4) },
+        ]
+        channelAnchor = { x: channelX, y: (fp.y + tp.y) / 2 }
+      } else if (src.id === dst.id) {
         outIdx = 3
         inIdx = 0
         orientation = 'horizontal'
@@ -1398,18 +1494,22 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
       const toPt = portCoordinates(dst, inIdx)
       const dx = toPt.x - fromPt.x
       const dy = toPt.y - fromPt.y
-      const isCollinear = (orientation === 'vertical' && Math.abs(dx) < 0.035) ||
+      const isCollinear = !waypoints && (
+        (orientation === 'vertical' && Math.abs(dx) < 0.035) ||
         (orientation === 'horizontal' && Math.abs(dy) < 0.035)
-      const connectorPreset = src.id === dst.id
-        ? 'bentConnector3'
-        : isCollinear
-          ? 'straightConnector1'
-          : 'bentConnector3'
+      )
+      const connectorPreset = waypoints
+        ? 'routedPolyline'
+        : src.id === dst.id
+          ? 'bentConnector3'
+          : isCollinear
+            ? 'straightConnector1'
+            : 'bentConnector3'
 
       // 跨层折线避障：若 horizontal bentConnector3 默认中点折弯穿过了中间层节点，将折弯位置 adj1 移至中间节点之前/之后的净空槽道
       let adj1 = 50000
       let avoidedBlocker = null
-      if (connectorPreset === 'bentConnector3' && orientation === 'horizontal' && Math.abs(dx) > 0.35 && Math.abs(dy) > 0.15) {
+      if (!waypoints && connectorPreset === 'bentConnector3' && orientation === 'horizontal' && Math.abs(dx) > 0.35 && Math.abs(dy) > 0.15) {
         const minX = Math.min(fromPt.x, toPt.x)
         const maxX = Math.max(fromPt.x, toPt.x)
         const blockersOnStartRay = positionedNodes.filter((n) =>
@@ -1439,7 +1539,7 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
         }
       }
 
-      // 计算标签胶囊坐标并避让已有标签与节点框（短竖直直线边右移；水平净空不足时上抬至连线上方避免盖住节点文字）
+      // 计算标签胶囊坐标并避让已有标签与节点框（外圈槽道边直接置于槽道中段；短竖直直线边右移；水平净空不足时上抬至连线上方避免盖住节点文字）
       let labelBox = null
       if (e.label) {
         const labelFontPt = 10
@@ -1447,7 +1547,10 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
         const lh = 0.23
         let lx = (fromPt.x + toPt.x) / 2 - lw / 2
         let ly = (fromPt.y + toPt.y) / 2 - lh / 2
-        if (avoidedBlocker && avoidedBlocker.side === 'start') {
+        if (channelAnchor) {
+          lx = channelAnchor.x - lw / 2
+          ly = channelAnchor.y - lh / 2
+        } else if (avoidedBlocker && avoidedBlocker.side === 'start') {
           lx = (avoidedBlocker.bendX + toPt.x) / 2 - lw / 2
           ly = toPt.y - lh / 2
         } else if (connectorPreset === 'straightConnector1' && orientation === 'vertical' && Math.abs(dy) < 0.62) {
@@ -1458,7 +1561,7 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
           ly = fromPt.y + dy * 0.62 - lh / 2
         }
         const horizClearSpan = Math.abs(toPt.x - fromPt.x)
-        if (!avoidedBlocker && orientation === 'horizontal' && horizClearSpan < lw + 0.08) {
+        if (!channelAnchor && !avoidedBlocker && orientation === 'horizontal' && horizClearSpan < lw + 0.08) {
           const liftedY = Math.min(fromPt.y, toPt.y) - lh - 0.06
           ly = liftedY >= areaBox.y + 0.02 ? liftedY : Math.max(fromPt.y, toPt.y) + 0.06
         }
@@ -1492,6 +1595,7 @@ export function layoutMermaidFlowchart(astInput, areaBox = { x: 0.62, y: 1.86, w
         orientation,
         connectorPreset,
         adj1,
+        waypoints,
         fromPt: { x: +fromPt.x.toFixed(4), y: +fromPt.y.toFixed(4) },
         toPt: { x: +toPt.x.toFixed(4), y: +toPt.y.toFixed(4) },
         labelBox,
@@ -2152,18 +2256,32 @@ function renderFlowchartPptx(model, nextIdFn, chromeCfg, theme, langAttr) {
     const strokeColor = edge.thick ? tk.accentPrimary : (theme.dark ? tk.inkSecondary : mixHex(tk.inkSecondary, tk.accentPrimary, 0.32))
     const widthPt = edge.thick ? 2.25 : 1.4
 
-    shapes.push(ooxmlConnector(nextIdFn(), 'Mermaid Edge ' + edge.from + '->' + edge.to, edge.fromPt, edge.toPt, {
-      preset: edge.connectorPreset,
-      orientation: edge.orientation,
-      adj1: edge.adj1 ?? 50000,
-      stCxn: { id: srcSpid, idx: outOoxmlIdx },
-      endCxn: { id: dstSpid, idx: inOoxmlIdx },
-      color: strokeColor,
-      widthPt,
-      dash: edge.dash,
-      headArrow: edge.headArrow,
-      tailArrow: edge.tailArrow,
-    }))
+    if (Array.isArray(edge.waypoints) && edge.waypoints.length >= 3) {
+      for (let wi = 0; wi < edge.waypoints.length - 1; wi += 1) {
+        const segFrom = edge.waypoints[wi]
+        const segTo = edge.waypoints[wi + 1]
+        shapes.push(ooxmlLine(nextIdFn(), 'Mermaid Edge ' + edge.from + '->' + edge.to + ' Seg ' + (wi + 1), segFrom, segTo, {
+          color: strokeColor,
+          widthPt,
+          dash: edge.dash,
+          headArrow: wi === 0 && Boolean(edge.headArrow),
+          tailArrow: wi === edge.waypoints.length - 2 && Boolean(edge.tailArrow),
+        }))
+      }
+    } else {
+      shapes.push(ooxmlConnector(nextIdFn(), 'Mermaid Edge ' + edge.from + '->' + edge.to, edge.fromPt, edge.toPt, {
+        preset: edge.connectorPreset,
+        orientation: edge.orientation,
+        adj1: edge.adj1 ?? 50000,
+        stCxn: { id: srcSpid, idx: outOoxmlIdx },
+        endCxn: { id: dstSpid, idx: inOoxmlIdx },
+        color: strokeColor,
+        widthPt,
+        dash: edge.dash,
+        headArrow: edge.headArrow,
+        tailArrow: edge.tailArrow,
+      }))
+    }
 
     if (edge.label && edge.labelBox) {
       labelShapes.push(ooxmlShape(nextIdFn(), 'Mermaid Edge Label ' + edge.id, edge.labelBox, {
@@ -2497,6 +2615,31 @@ function svgFlowShapeMarkup(node, px) {
 }
 
 function buildEdgePathSvg(edge, px) {
+  if (Array.isArray(edge.waypoints) && edge.waypoints.length >= 3) {
+    const pts = edge.waypoints.map((pt) => ({ x: px(pt.x), y: px(pt.y) }))
+    const r = 10
+    const parts = [`M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`]
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const prev = pts[i - 1]
+      const cur = pts[i]
+      const next = pts[i + 1]
+      const d1 = Math.hypot(cur.x - prev.x, cur.y - prev.y)
+      const d2 = Math.hypot(next.x - cur.x, next.y - cur.y)
+      const cr = Math.min(r, d1 / 2, d2 / 2)
+      if (cr < 2) {
+        parts.push(`L ${cur.x.toFixed(1)} ${cur.y.toFixed(1)}`)
+      } else {
+        const ax = cur.x - ((cur.x - prev.x) / d1) * cr
+        const ay = cur.y - ((cur.y - prev.y) / d1) * cr
+        const bx = cur.x + ((next.x - cur.x) / d2) * cr
+        const by = cur.y + ((next.y - cur.y) / d2) * cr
+        parts.push(`L ${ax.toFixed(1)} ${ay.toFixed(1)} Q ${cur.x.toFixed(1)} ${cur.y.toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}`)
+      }
+    }
+    const last = pts[pts.length - 1]
+    parts.push(`L ${last.x.toFixed(1)} ${last.y.toFixed(1)}`)
+    return parts.join(' ')
+  }
   const x1 = px(edge.fromPt.x)
   const y1 = px(edge.fromPt.y)
   const x2 = px(edge.toPt.x)

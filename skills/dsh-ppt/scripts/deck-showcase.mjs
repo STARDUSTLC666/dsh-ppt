@@ -218,9 +218,29 @@ export function computeMockupGeometry(slide, bodyTopY, bodyH) {
 // 2. PPTX 原生 DrawingML 渲染器（mockup & code）
 // ---------------------------------------------------------------------------
 
-function ooxmlCodeParagraph(lineNum, tokens, sizePt, lineHeight) {
+function measureCodeColumns(line) {
+  let cols = 0
+  for (const ch of String(line ?? '')) {
+    const cp = ch.codePointAt(0) ?? 0
+    if (
+      (cp >= 0x2E80 && cp <= 0x9FFF) ||
+      (cp >= 0xF900 && cp <= 0xFAFF) ||
+      (cp >= 0xFF00 && cp <= 0xFFEF) ||
+      (cp >= 0x3000 && cp <= 0x303F) ||
+      cp > 0x1F000
+    ) {
+      cols += 1.9
+    } else {
+      cols += 1
+    }
+  }
+  return cols
+}
+
+function ooxmlCodeParagraph(lineNum, tokens, sizePt, lineHeightPt) {
   const numStr = String(lineNum).padStart(2, ' ') + '  '
   const sz = Math.round(sizePt * 100)
+  const spcPts = Math.round(lineHeightPt * 100)
   const runs = [
     `<a:r><a:rPr lang="en-US" sz="${sz}" dirty="0">${ooxmlSolidFill(CODE_THEME.gutter)}<a:latin typeface="Consolas"/><a:ea typeface="Microsoft YaHei"/></a:rPr><a:t xml:space="preserve">${escapeXml(numStr)}</a:t></a:r>`,
     ...tokens.map((tok) => {
@@ -230,7 +250,8 @@ function ooxmlCodeParagraph(lineNum, tokens, sizePt, lineHeight) {
       return `<a:r><a:rPr lang="en-US" sz="${sz}"${boldAttr}${italicAttr} dirty="0">${ooxmlSolidFill(col)}<a:latin typeface="Consolas"/><a:ea typeface="Microsoft YaHei"/></a:rPr><a:t xml:space="preserve">${escapeXml(tok.value)}</a:t></a:r>`
     }),
   ]
-  return `<a:p><a:pPr algn="l"><a:lnSpc><a:spcPct val="${Math.round(lineHeight * 100000)}"/></a:lnSpc></a:pPr>${runs.join('')}</a:p>`
+  // 使用绝对磅值 <a:spcPts> 替代百分比 <a:spcPct>，消除 PowerPoint/WPS 下 Consolas + 微软雅黑混排行高膨胀导致末行溢出暗色代码窗的问题
+  return `<a:p><a:pPr algn="l"><a:lnSpc><a:spcPts val="${spcPts}"/></a:lnSpc></a:pPr>${runs.join('')}</a:p>`
 }
 
 export function renderShowcaseSlideBodyPptx(slide, ctx) {
@@ -312,18 +333,20 @@ export function renderShowcaseSlideBodyPptx(slide, ctx) {
       ],
     }))
 
-    // 代码内容区（自适应字号防溢出）
-    const maxLineLen = Math.max(20, ...rawLines.map((l) => l.length + 4))
+    // 代码内容区（按 CJK 双宽列数与绝对行距自适应字号，确保 PowerPoint/WPS/LibreOffice 全链路不溢出暗色代码窗）
+    const maxLineCols = Math.max(24, ...rawLines.map((l) => measureCodeColumns(l) + 5))
     const availCodeW = winW - 0.44
-    const availCodeH = winH - chromeH - 0.28
-    const ptByH = (availCodeH * 72) / (Math.max(1, rawLines.length) * 1.44)
-    const ptByW = (availCodeW * 72) / (maxLineLen * 0.60)
-    const codePt = Math.max(9.5, Math.min(13.5, +Math.min(ptByH, ptByW).toFixed(1)))
+    const availCodeH = winH - chromeH - 0.36
+    const lineRatio = rawLines.length > 16 ? 1.34 : rawLines.length > 12 ? 1.40 : 1.44
+    const ptByH = (availCodeH * 72) / ((Math.max(1, rawLines.length) + 0.45) * lineRatio)
+    const ptByW = (availCodeW * 72) / (maxLineCols * 0.62)
+    const codePt = Math.max(7.5, Math.min(13.0, +Math.min(ptByH, ptByW).toFixed(1)))
+    const lineHeightPt = +(codePt * lineRatio).toFixed(2)
 
     const codeParagraphs = rawLines.map((line, idx) =>
-      ooxmlCodeParagraph(idx + 1, tokenizeCodeLine(line, langTag), codePt, 1.38),
+      ooxmlCodeParagraph(idx + 1, tokenizeCodeLine(line, langTag), codePt, lineHeightPt),
     )
-    shapes.push(ooxmlShape(nextId(), 'Code Content', { x: winX + 0.20, y: winY + chromeH + 0.14, w: availCodeW, h: availCodeH }, {
+    shapes.push(ooxmlShape(nextId(), 'Code Content', { x: winX + 0.20, y: winY + chromeH + 0.18, w: availCodeW, h: availCodeH }, {
       txBox: true,
       anchor: rawLines.length <= 10 ? 'ctr' : 't',
       marginsIn: { l: 0.04, r: 0.04, t: 0.02, b: 0.02 },
@@ -605,10 +628,19 @@ export function renderShowcaseSlideBodyHtml(slide, ctx = {}) {
       return `<div class="code-line"><span class="code-ln">${String(idx + 1).padStart(2, ' ')}</span><span class="code-src">${codeHtml}</span></div>`
     }).join('')
 
+    const maxLineCols = Math.max(24, ...rawLines.map((l) => measureCodeColumns(l) + 5))
+    const htmlFsByLines = rawLines.length > 16 ? 11.5 : rawLines.length > 13 ? 12.5 : rawLines.length > 10 ? 13.5 : 14.5
+    const htmlFsByWidth = hasSide
+      ? (maxLineCols > 64 ? 11.5 : maxLineCols > 52 ? 12.5 : 14.5)
+      : (maxLineCols > 96 ? 11.5 : maxLineCols > 80 ? 12.5 : 14.5)
+    const htmlCodeFs = Math.min(htmlFsByLines, htmlFsByWidth)
+    const htmlCodeLh = rawLines.length > 15 ? 1.34 : rawLines.length > 11 ? 1.40 : 1.48
+    const codeBodyStyle = ` style="--code-fs:${htmlCodeFs}px;--code-lh:${htmlCodeLh}"`
+
     const winHtml =
       `<div class="code-window">` +
       `<div class="code-chrome"><span class="win-dots"><i></i><i></i><i></i></span><span class="code-file">${escapeHtml(fileLabel)}</span><span class="code-lang">${escapeHtml(langTag.toUpperCase())}</span></div>` +
-      `<pre class="code-body"><code>${linesHtml}</code></pre>` +
+      `<pre class="code-body"${codeBodyStyle}><code>${linesHtml}</code></pre>` +
       `</div>`
 
     if (!hasSide) return `<div class="code-stage">${winHtml}</div>`
@@ -688,9 +720,9 @@ export function renderShowcaseSlideBodyHtml(slide, ctx = {}) {
 
 export const SHOWCASE_CSS = `
 /* Phase 7 Tech & Product Showcase: Device Mockups & Syntax-Highlighted Code Windows */
-.code-stage{display:grid;grid-template-columns:1fr;gap:clamp(16px,2vw,26px);width:100%;align-items:stretch}
+.code-stage{display:grid;grid-template-columns:1fr;gap:clamp(16px,2vw,26px);width:100%;align-items:stretch;flex:1 1 auto;min-height:0}
 .code-stage.is-split{grid-template-columns:1.68fr 1fr}
-.code-window{background:#0F172A;border:1px solid #334155;border-radius:12px;overflow:hidden;box-shadow:0 18px 44px rgba(2,6,23,.24);display:flex;flex-direction:column}
+.code-window{background:#0F172A;border:1px solid #334155;border-radius:12px;overflow:hidden;box-shadow:0 18px 44px rgba(2,6,23,.24);display:flex;flex-direction:column;min-height:0;max-height:100%}
 .code-chrome,.browser-chrome{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#1E293B;border-bottom:1px solid #334155}
 .browser-chrome{background:var(--surface2);border-bottom-color:var(--hairline)}
 .win-dots{display:inline-flex;gap:6px;flex:0 0 auto}
@@ -700,11 +732,11 @@ export const SHOWCASE_CSS = `
 .win-dots i:nth-child(3){background:#27C93F}
 .code-file{font-family:Consolas,"SFMono-Regular",ui-monospace,monospace;font-size:13px;font-weight:600;color:#CBD5E1;margin-right:auto}
 .code-lang{font-family:Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:.08em;padding:2px 10px;border-radius:999px;background:rgba(56,189,248,.18);border:1px solid rgba(56,189,248,.45);color:#E2E8F0}
-.code-body{margin:0;padding:16px 20px;overflow:auto;font-family:Consolas,"SFMono-Regular",ui-monospace,monospace;font-size:clamp(12px,1.15vw,16px);line-height:1.52;color:#E2E8F0;flex:1}
+.code-body{margin:0;padding:14px 18px;overflow:auto;font-family:Consolas,"SFMono-Regular",ui-monospace,monospace;font-size:var(--code-fs,clamp(12px,1.08vw,15px));line-height:var(--code-lh,1.48);color:#E2E8F0;flex:1;min-height:0}
 .code-line{display:flex;gap:14px;white-space:pre}
 .code-ln{color:#64748B;user-select:none;min-width:2ch;text-align:right}
 .tok-keyword{color:#C084FC;font-weight:700}.tok-string{color:#34D399}.tok-comment{color:#64748B;font-style:italic}.tok-number{color:#FBBF24}.tok-func{color:#38BDF8}.tok-type{color:#F472B6}.tok-operator{color:#94A3B8}
-.code-notes,.mockup-notes{display:flex;flex-direction:column;gap:12px;justify-content:space-between}
+.code-notes,.mockup-notes{display:flex;flex-direction:column;gap:12px;justify-content:space-between;min-height:0}
 .code-note,.mockup-note{flex-direction:row;align-items:center;gap:12px;padding:14px 16px}
 .mockup-stage{display:flex;justify-content:center;align-items:center;width:100%;gap:clamp(20px,2.8vw,38px)}
 .mockup-stage.is-split{display:grid;grid-template-columns:1.65fr 1fr;align-items:stretch}

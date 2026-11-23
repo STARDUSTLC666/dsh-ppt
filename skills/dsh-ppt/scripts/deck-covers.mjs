@@ -1039,7 +1039,7 @@ export const AESTHETIC_STUDIO_CSS = `
 .cover-glow-orb{position:absolute;border-radius:50%;filter:blur(56px);pointer-events:none;opacity:.28}
 .cover-glow-orb.orb-a{width:440px;height:440px;top:-140px;right:-90px;background:radial-gradient(circle,var(--accent),transparent 70%)}
 .cover-glow-orb.orb-b{width:380px;height:380px;bottom:-140px;left:-80px;background:radial-gradient(circle,var(--accent2),transparent 70%)}
-.cover-center-stack{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:960px}
+.cover-center-stack{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:min(100%,1080px)}
 .cover-pill-kicker{display:inline-flex;padding:5px 16px;border-radius:999px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 42%,transparent)}
 .cover-glow-rule{width:96px;height:4px;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .cover-shell.is-editorial-grid{display:grid;grid-template-rows:auto 1fr auto;gap:22px;height:100%;padding:8px 0}

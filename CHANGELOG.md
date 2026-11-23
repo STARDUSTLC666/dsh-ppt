@@ -1,5 +1,22 @@
 # 更新记录
 
+## 1.0.0 (2026-11-24)
+
+首个正式稳定大版本发布，整合全部 41 种原生可编辑图谱、24 主题、20 标杆范本、三层内置艺术总监提示词与 `SLOP-15` 视觉门禁、整卡联动 PPTX 动效、16:9 灯箱工作台及全套逆向 Office 导出，并重点补齐实机验证暴露的中西文排版同构与关键渲染精度问题：
+
+- **中西文 HTML/PPTX 排版全面适配（`deck-core.mjs` / `deck-layouts.mjs` / `deck-covers.mjs` / `deck-delivery.mjs` / `deck-chrome.mjs`）**：
+  - 彻底移除 HTML 样式中按西文半角 `0` 宽度计算的 `max-width: 22ch/24ch/26ch/28ch/34ch/52ch/64ch` 截断陷阱（此前中文封面仅 ~11 字、页标题仅 ~17 字即被迫提前折行），统一改为自适应百分比 / `em` 宽度与 `text-wrap: balance`，并新增 `:is(html:lang(zh),html:lang(ja),html:lang(ko))` 中日韩专属字阶、`line-break: strict` 与内嵌 `is-scaled-stage` 比例对齐；西文文稿继续保持平衡排版与宽阔版面。
+  - 在 PPTX `computeTextFit()` 中为多行 CJK 文本（≥3 行）补充 `1.07×` 纵向行高安全余量，兼顾 Windows PowerPoint/WPS 微软雅黑真实字框高度而不压缩单双行标题。
+- **代码页跨渲染器零溢出修复（`deck-showcase.mjs`）**：
+  - 修复 PowerPoint/WPS 下 `<a:spcPct>` 乘以 `Consolas (1.17×)` 与 `微软雅黑 (1.32×)` 真实字框导致 12 行代码末行溢出暗色圆角代码窗底边的错位问题：全面切换为绝对磅值行距 `<a:spcPts>`，新增 CJK 双宽列数测算（`measureCodeColumns`）与安全高度预算，确保 1–22 行中英混排代码在 PowerPoint、WPS、Keynote 与 LibreOffice 中完全对齐且零溢出；
+  - 同步为 HTML `.code-stage` / `.code-window` 补充 `min-height: 0` 与按行数/列宽动态下发的 `--code-fs` / `--code-lh`，杜绝 16:9 舞台下代码区挤出底部结论栏。
+- **Mermaid 流程图外圈 U 型回路避障路由（`deck-mermaid.mjs`）**：
+  - 修复 `flowchart LR/RL/TD/BT` 中反馈回路边（及跨层直穿遮挡边）横向穿过中间节点框的问题：检测到回路边时自动预留外圈净空槽道并按上/下（或左/右）独立泳道生成 4 点正交 U 型路径（PPTX 原生 `<p:cxnSp>` 圆帽线段 + HTML 平滑圆角 SVG `<path>`），边标签精准落于外圈通道中段，零穿框、零叠字。
+- **v1.0.0 General Availability — Bilingual CJK/Western Parity, Code-Window Overflow Fix & Mermaid Loop Routing**:
+  - Replaces Latin-biased `ch` max-width caps (`22ch–64ch`) across HTML decks & one-pagers with `em`/`100%` measures, `text-wrap: balance`, and dedicated `:is(html:lang(zh),html:lang(ja),html:lang(ko))` CJK scaling rules (for both fullscreen and `is-scaled-stage` preview), plus subtle multi-line CJK vertical safety in PPTX `computeTextFit()`.
+  - Switches PPTX `code` slides from renderer-drifting `<a:spcPct>` to deterministic absolute `<a:spcPts>` line spacing with CJK double-width column calculation (`measureCodeColumns`), eliminating bottom-border overflow in PowerPoint/WPS for 1–22 lines of mixed code, and adds adaptive `--code-fs`/`--code-lh` + `min-height: 0` in HTML.
+  - Adds non-overlapping outer U-channel obstacle-avoiding routing for Mermaid `flowchart` back-edges and inline skip-rank blockers across both PPTX and HTML SVG.
+
 ## 0.37.0 (2026-11-24)
 
 - **三层按需内置「首席艺术总监」提示词体系与 `SLOP-15` 视觉密度门禁（0 非 PPT 对话 Token 开销）**：
