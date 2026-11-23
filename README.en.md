@@ -22,7 +22,7 @@ Publication-grade presentation engine & illuminated 16:9 Physical Slide Lightbox
 | Pillar | Capabilities |
 | :--- | :--- |
 | **Tri-Mode Research Routing** | **Mode A** Direct Build · **Mode B** Zero-Material 8-Domain Research (excluding 25 noise sites) · **Mode C** Hybrid Local Pack + External Benchmarks, guarded by the 9-check `SLOP-13` authority gate |
-| **41 Native-Editable Layouts** | 100% HTML/SVG + OOXML parity with zero runtime bloat: MECE Issue Tree, Treemap, OKR Gauge, Pricing Matrix, World/China Maps, 2.5D Isometric, Magic Quadrant, Radar, Mermaid, Formulas & Code |
+| **41 Native-Editable Layouts** | 100% HTML/SVG + OOXML parity with bilingual CJK/Western typography tuning: MECE Issue Tree, Treemap, OKR Gauge, Pricing Matrix, World/China Maps, 2.5D Isometric, Magic Quadrant, Radar, obstacle-free Mermaid loops, Formulas & zero-overflow Code windows |
 | **Design System & Self-Repair** | 13 tools · 3-layer built-in Art-Director prompts & golden field cheat-sheet · 24 themes (16 daylight + 8 dark) · 6 master skeletons · 8 Taste Recipes · 20 Gold Exemplars · 61 native vector icons; deterministic `SLOP-01..15` Self-Repair Loop, whole-card PPTX step animations & per-slide transitions |
 | **Brand Lock & Slide Bank** | Lock palette, fonts, logo, footer, confidentiality watermark & source lists in `.dsh-ppt/brand-kit.json` (`SLOP-14`); reuse & merge slides across decks via `.dsh-ppt/slide-bank.json` |
 | **Multi-Source Ingest & Exports** | Zero-dep ingestion of `.pdf`/`.docx`/`.xlsx`/`.csv`/`.pptx`/images; reverse exports to `.xlsx`, `.docx`, `.qa-prep.md`, `.memo.md`, One-Pager, Social Carousel, subtitles & lossless `.i18n.json` |
