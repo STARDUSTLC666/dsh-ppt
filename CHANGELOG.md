@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.36.1 (2026-11-23)
+
+- **工作台逆向 Office 导出与 4 套高管图谱全链路接线**：
+  - GET `/api/dsh-ppt/download` 与下载弹窗完整接入 `.xlsx`（Excel 数据工作簿）、`.docx`（Word 报告文档）与 `.qa-prep.md`（高管质询预案），并补充正确 MIME 类型与双语报错映射。
+  - 修复 `itemsPatch()` 与前端 `save()` 静默丢弃 `gauge` 达标仪 `actual`/`target`/`max` 数值字段的问题；补齐 `issue-tree`、`treemap`、`gauge`、`pricing` 后端 `starterSlide()` 及前端 41 种版式目录（`PPT_LAYOUT_CATALOG`）、35 项快速加页菜单与结构化编辑器控件；加固 `originVerdict` 对桌面端 `dsh-app://app` 的 `Sec-Fetch-Site` 与伪造 Origin 校验。
+- **离线 HTML 快捷键协调、技能包版本对齐与文档同步**：协调含 `dataModel` 离线 HTML 中的 `D` 键冲突（`D` 打开数据推演、`Shift+D` 切换白板标注；普通文稿保持 `D` 切换白板标注），更新内置快捷键提示（`V/P` 演讲者提词台）；同步 `skills/dsh-ppt/package.json` 至 `0.36.1`，刷新 `cordis.patch.yml`、`src/tools.ts`、旗舰示例文案及 `REFERENCE`/`WORKBENCH`/`USAGE`/`README.en.md`。
+- **Workbench Reverse Office Exports, Complete 41-Layout Executive Chart Wiring & Hotkey Fix**:
+  - Wired `.xlsx`, `.docx`, and `.qa-prep.md` reverse exports end-to-end into GET `/api/dsh-ppt/download` (with OOXML/Markdown MIME types) and the workbench Download dialog.
+  - Fixed `itemsPatch()` and client `save()` dropping `actual`/`target`/`max` on `gauge` slides; added `issue-tree`, `treemap`, `gauge`, and `pricing` to `starterSlide()`, the 41-layout `PPT_LAYOUT_CATALOG`, `pptSlideAddOptions()`, and structured editors; hardened `originVerdict` for DSH Desktop `dsh-app://app`.
+  - Resolved offline HTML `D` hotkey conflict when `dataModel` is bound (`D` for Data What-If, `Shift+D` for Whiteboard Pen; unchanged `D` without `dataModel`), synced `skills/dsh-ppt/package.json` to `0.36.1`, and refreshed bilingual docs and unit tests.
+
 ## 0.36.0 (2026-11-22)
 
 - **实体胶片灯箱工作台（`灯箱总览` 默认进入 + `单页精修` 一键切换）**：

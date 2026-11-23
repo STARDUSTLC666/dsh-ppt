@@ -971,7 +971,7 @@ export function renderDelivery(manifest, files = {}, language) {
 
   return {
     body: `<div id="delivery-bar">
-  <span id="delivery-status">${escape(draft ? label('待补全草稿', 'Draft: content needed') : label('演示文稿 · Ctrl+K 速搜 · R 批注 · D 标注 · T 计时 · A 导览', 'Presentation · Ctrl+K Jump · R Comment · D Draw · T Timer · A Tour'))}</span>
+  <span id="delivery-status">${escape(draft ? label('待补全草稿', 'Draft: content needed') : manifest.dataModel ? label('演示文稿 · Ctrl+K 速搜 · R 批注 · D 推演 · Shift+D 标注 · T 计时 · A 导览', 'Presentation · Ctrl+K Jump · R Comment · D Data · Shift+D Draw · T Timer · A Tour') : label('演示文稿 · Ctrl+K 速搜 · R 批注 · D 标注 · T 计时 · A 导览', 'Presentation · Ctrl+K Jump · R Comment · D Draw · T Timer · A Tour'))}</span>
   <button id="dsh-jump-open" type="button" title="Ctrl/Cmd+K">${escape(label('速搜 (⌘K)', 'Search (⌘K)'))}</button>
   <button id="dsh-comments-btn" type="button" title="R">${escape(label('批注 (R)', 'Comments (R)'))}</button>
   <button id="dsh-autotour-btn" type="button" aria-pressed="false" title="A">${escape(label('自动导览', 'Auto-Tour'))}</button>
@@ -1034,7 +1034,7 @@ export function renderDelivery(manifest, files = {}, language) {
   <p id="review-summary">${escape(summary)}</p>
   <p id="review-pace" class="review-pace">${escape(paceSummaryText)}</p>
   <div class="review-exports">${download('pptx', pptxLabel, 'review-download-pptx')}${download('json', label('保存可编辑项目', 'Save project'), 'download-project')}${handoutLink}${onePagerLink}${carouselLink}${subtitlesLink}</div>
-  <p>${escape(label('用 PowerPoint / WPS 打开 PPTX 可直接修改文字、图片和图表。快捷键：P 双屏提词台 · L 激光笔 · Ctrl/Cmd+K 速搜跳页 · D 实时白板标注 · T 现场 Q&A 倒计时 · A 自动字幕导览。', 'Open the PPTX in PowerPoint / WPS to edit text, images and charts. Shortcuts: P Presenter Console · L Laser · Ctrl/Cmd+K Search · D Draw Pen · T Q&A Timer · A Auto-Tour.'))}</p>
+  <p>${escape(manifest.dataModel ? label('用 PowerPoint / WPS 打开 PPTX 可直接修改文字、图片和图表。快捷键：P / V 双屏提词台 · L 激光笔 · Ctrl/Cmd+K 速搜跳页 · D 数据推演 · Shift+D 实时白板标注 · T 现场 Q&A 倒计时 · A 自动字幕导览。', 'Open the PPTX in PowerPoint / WPS to edit text, images and charts. Shortcuts: P / V Presenter Console · L Laser · Ctrl/Cmd+K Search · D Data What-If · Shift+D Draw Pen · T Q&A Timer · A Auto-Tour.') : label('用 PowerPoint / WPS 打开 PPTX 可直接修改文字、图片和图表。快捷键：P / V 双屏提词台 · L 激光笔 · Ctrl/Cmd+K 速搜跳页 · D 实时白板标注 · T 现场 Q&A 倒计时 · A 自动字幕导览。', 'Open the PPTX in PowerPoint / WPS to edit text, images and charts. Shortcuts: P / V Presenter Console · L Laser · Ctrl/Cmd+K Search · D Draw Pen · T Q&A Timer · A Auto-Tour.'))}</p>
   <h3>${escape(label('检查提示 · 点击定位页面', 'Review items · click to open slide'))}</h3>
   ${issues.length ? `<ul id="review-issues">${rows}</ul>` : `<p>${escape(manifest.quality ? label('静态检查未发现问题；仍需核对实际排版和事实。', 'No static issues found; check the actual layout and facts.') : label('暂无报告。', 'No report available.'))}</p>`}
   <p>${escape(label('文字尺寸是静态估算；这里不能证明 PowerPoint / WPS 排版已通过验收。', 'Text fit is estimated; this does not verify the rendered PowerPoint / WPS layout.'))}</p>
@@ -1812,7 +1812,8 @@ function initDelivery(go, setOverview, current, total, cfg) {
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return
     if (targetEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(targetEl.tagName) || targetEl.isContentEditable === true)) return
-    if (panel.open || (jumpDialog && jumpDialog.open)) return
+    const dataPanel = document.getElementById('data-panel')
+    if (panel.open || (jumpDialog && jumpDialog.open) || (dataPanel && dataPanel.open)) return
     if (lower === 'l') {
       event.preventDefault()
       laserActive = !laserActive
@@ -1821,6 +1822,7 @@ function initDelivery(go, setOverview, current, total, cfg) {
       sendConsoleState()
       showToast(laserActive ? cfg?.labels?.laserOn : cfg?.labels?.laserOff)
     } else if (lower === 'd') {
+      if (dataPanel && !drawActive && !event.shiftKey) return
       event.preventDefault()
       setDrawActive(!drawActive)
     } else if (lower === 'z' && drawActive) {

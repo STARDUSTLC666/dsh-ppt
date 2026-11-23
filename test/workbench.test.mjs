@@ -6,6 +6,7 @@ import { buildDeckAsync, editDeck, undoDeck, readDeckProject } from '../skills/d
 import * as engine from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { PptWorkbench, installPptWorkbench, PPT_WORKBENCH_ROUTE, PPT_DOWNLOAD_ROUTE } from '../lib/workbench.js'
 import { unzipSync, strFromU8 } from 'fflate'
+import { runInNewContext } from 'node:vm'
 const work = resolve('.test-output'); mkdirSync(work, { recursive: true })
 const slides = [{ layout: 'cover', title: '原始封面' }, { layout: 'bullets', title: '行动', bullets: ['保留资料'] }, { layout: 'closing', title: '下一步' }]
 async function fixture(run) {
@@ -792,7 +793,177 @@ test('workbench Pace Budget & client bundle include Phase-5 tour, Mermaid editor
     'buildPptTourSteps', '一键体验旗舰示例', 'Load Flagship Demo', '导入 Excel / Word', 'Import Excel / Word',
     '下载高管一页纸 (.html)', '导出 Remotion 视频分镜包 (.zip)', 'Mermaid 流程图 / 时序图', '.deck-mermaid-svg',
     'ppt-pace-card', '演讲节奏预算', 'Speaking Pace Budget',
+    '导出 Excel 数据工作簿 (.xlsx)', 'Export Excel Workbook (.xlsx)',
+    '导出 Word 报告文档 (.docx)', 'Export Word Report (.docx)',
+    '导出高管质询预案 (.qa-prep.md)', 'Export Executive Q&A Prep (.qa-prep.md)',
   ]) {
     assert.ok(bundle.includes(marker), marker + ' missing from built client bundle')
   }
 }))
+
+test('GET fetchDownload supports reverse Office exports (xlsx, docx, qa-prep) and enforces revision & desktop origin checks', () => fixture(async ({ dir, wb }) => {
+  const deck = await buildDeckAsync({
+    title: '逆向导出联调',
+    slides: [
+      { layout: 'cover', title: '逆向导出联调', subtitle: 'Q4 复盘' },
+      { layout: 'gauge', title: '核心 OKR 达标情况', items: [{ tag: 'KR1', title: '营收达成', actual: 88, target: 80, max: 100, unit: '%' }] },
+      { layout: 'closing', title: '下一步' },
+    ],
+    outputDir: dir,
+  })
+  await wb.remember(deck, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  const get = (kind, revision = 0, headers = {}) => wb.fetchDownload(new Request('http://dsh.internal' + PPT_DOWNLOAD_ROUTE + `?id=${id}&kind=${kind}&revision=${revision}`, {
+    headers: { host: '127.0.0.1:8181', 'sec-fetch-site': 'same-origin', ...headers },
+  }))
+
+  const xlsxRes = await get('xlsx')
+  assert.equal(xlsxRes.status, 200)
+  assert.equal(xlsxRes.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  assert.match(decodeURIComponent(xlsxRes.headers.get('content-disposition')), /\.xlsx$/)
+  const xlsxZip = unzipSync(new Uint8Array(await xlsxRes.arrayBuffer()))
+  assert.ok(xlsxZip['xl/workbook.xml'], 'GET xlsx must return valid OOXML workbook')
+
+  const docxRes = await get('docx')
+  assert.equal(docxRes.status, 200)
+  assert.equal(docxRes.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  assert.match(decodeURIComponent(docxRes.headers.get('content-disposition')), /\.docx$/)
+  const docxZip = unzipSync(new Uint8Array(await docxRes.arrayBuffer()))
+  assert.ok(docxZip['word/document.xml'], 'GET docx must return valid OOXML document')
+
+  const qaRes = await get('qa-prep')
+  assert.equal(qaRes.status, 200)
+  assert.match(qaRes.headers.get('content-type'), /text\/markdown/)
+  assert.match(decodeURIComponent(qaRes.headers.get('content-disposition')), /\.qa-prep\.md$/)
+  const qaText = await qaRes.text()
+  assert.ok(qaText.length > 40 && qaText.includes('逆向导出联调'))
+
+  // Stale revision guard
+  assert.equal((await get('xlsx', 99)).status, 409)
+  assert.equal((await get('docx', 99)).status, 409)
+  assert.equal((await get('qa-prep', 99)).status, 409)
+
+  // DSH Desktop origin exemption (including cross-site Sec-Fetch-Site) on both POST and GET
+  assert.equal((await wb.fetch(request({ operation: 'list' }, { origin: 'dsh-app://app', 'sec-fetch-site': 'cross-site' }))).status, 200)
+  assert.equal((await get('qa-prep', 0, { origin: 'dsh-app://app', 'sec-fetch-site': 'cross-site' })).status, 200)
+  assert.equal((await wb.fetch(request({ operation: 'list' }, { origin: 'dsh-app://app.evil', 'sec-fetch-site': 'cross-site' }))).status, 403)
+  assert.equal((await wb.fetch(request({ operation: 'list' }, { origin: 'null' }))).status, 403)
+  assert.equal((await get('qa-prep', 0, { origin: 'dsh-app://app.evil' })).status, 403)
+  assert.equal((await get('qa-prep', 0, { origin: 'null' })).status, 403)
+}))
+
+test('v0.35 executive charts (issue-tree, treemap, gauge, pricing) append, switch, and round-trip gauge actual/target/max', () => fixture(async ({ created, wb }) => {
+  await wb.remember(created, {})
+  const id = (await wb.action({ operation: 'list' })).projects[0].id
+  let rev = 0
+  let gaugeSlideId = ''
+
+  for (const archetype of ['issue-tree', 'treemap', 'gauge', 'pricing']) {
+    const appended = await wb.action({ operation: 'append', id, expectedRevision: rev, archetype })
+    const added = appended.project.slides.find(s => s.id === appended.selected)
+    assert.ok(added, `appended ${archetype} slide must exist`)
+    assert.equal(added.layout, archetype, `starterSlide must produce ${archetype} instead of falling back to bullets`)
+    assert.ok(Array.isArray(added.items) && added.items.length >= 3, `${archetype} starter must include structured items`)
+    if (archetype === 'gauge') {
+      gaugeSlideId = added.id
+      assert.equal(typeof added.items[0].actual, 'number')
+      assert.equal(typeof added.items[0].target, 'number')
+      assert.equal(typeof added.items[0].max, 'number')
+    }
+    rev = appended.project.revision
+  }
+
+  // Round-trip gauge actual/target/max through itemsPatch & manifest persistence
+  const edited = await wb.action({
+    operation: 'edit',
+    id,
+    expectedRevision: rev,
+    slide: gaugeSlideId,
+    patch: {
+      layout: 'gauge',
+      items: [
+        { tag: 'KR1', title: '收入达标率', text: '重点突破', actual: 91.5, target: 85, max: 120, unit: '%', status: 'positive' },
+        { tag: 'KR2', title: '交付准时率', actual: 78, target: 90, max: 100, unit: '%', status: 'warning' },
+      ],
+    },
+  })
+  const savedGauge = edited.project.slides.find(s => s.id === gaugeSlideId)
+  assert.equal(savedGauge.items[0].actual, 91.5)
+  assert.equal(savedGauge.items[0].target, 85)
+  assert.equal(savedGauge.items[0].max, 120)
+  assert.equal(savedGauge.items[1].actual, 78)
+  assert.equal(savedGauge.items[1].target, 90)
+  assert.equal(savedGauge.items[1].max, 100)
+
+  const persisted = readDeckProject({ deckPath: created.jsonPath }).manifest.slides.find(s => s.id === gaugeSlideId)
+  assert.equal(persisted.items[0].actual, 91.5)
+  assert.equal(persisted.items[0].target, 85)
+  assert.equal(persisted.items[0].max, 120)
+
+  // Non-finite gauge numeric values are rejected
+  await assert.rejects(
+    wb.action({ operation: 'edit', id, expectedRevision: edited.project.revision, slide: gaugeSlideId, patch: { items: [{ title: 'Bad', actual: 'not-a-number' }] } }),
+    /结构化卡片内容无效/,
+  )
+
+  // Verify compiled client bundle wires all 41 canonical layouts + actual/target/max normalization & layout switching
+  const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8').replace(
+    '__internals: { draftFor,',
+    '__internals: { PPT_LAYOUT_CATALOG, PPT_ITEM_LAYOUTS, pptSlideAddOptions, normalizeSlideItems, projectDraftToLayout, draftFor,',
+  )
+  let mod
+  runInNewContext(source, {
+    window: { __ModuleLoader__: { load({ factory }) { mod = factory(() => ({ createElement() {}, useState: () => [null, () => {}], useEffect() {}, useMemo: f => f(), useRef: () => ({ current: null }), useId: () => 'id' })) } } },
+  })
+  const { PPT_LAYOUT_CATALOG, PPT_ITEM_LAYOUTS, pptSlideAddOptions, normalizeSlideItems, projectDraftToLayout } = mod.__internals
+  assert.equal(PPT_LAYOUT_CATALOG.length, 41, 'PPT_LAYOUT_CATALOG must expose all 41 canonical layouts')
+  const addIds = new Set(pptSlideAddOptions().map(([k]) => k))
+  for (const layoutId of ['issue-tree', 'treemap', 'gauge', 'pricing']) {
+    assert.ok(PPT_LAYOUT_CATALOG.some(r => r.id === layoutId), `PPT_LAYOUT_CATALOG missing ${layoutId}`)
+    assert.ok(PPT_ITEM_LAYOUTS.has(layoutId), `PPT_ITEM_LAYOUTS missing ${layoutId}`)
+    assert.ok(addIds.has(layoutId), `pptSlideAddOptions missing ${layoutId}`)
+    const projected = projectDraftToLayout({ layout: 'bullets', items: [] }, layoutId)
+    assert.equal(projected.layout, layoutId)
+    assert.ok(Array.isArray(projected.items) && projected.items.length >= 3, `projectDraftToLayout(${layoutId}) must seed items`)
+  }
+  const normalized = normalizeSlideItems({ items: [{ title: 'KR', actual: 88, target: 80, max: 100 }] })
+  assert.equal(normalized[0].actual, '88')
+  assert.equal(normalized[0].target, '80')
+  assert.equal(normalized[0].max, '100')
+}))
+
+test('offline HTML resolves D hotkey cleanly between data-view and whiteboard pen', async t => {
+  const dir = mkdtempSync(join(work, 'hotkey-d-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+
+  const dataDeck = await buildDeckAsync({
+    title: '推演热键测试',
+    slides: [{ layout: 'cover', title: '热键测试', subtitle: '收入 {{rev}}' }],
+    dataModel: {
+      sources: [{ id: 's', name: 's.csv', format: 'csv', content: 'K,V\nA,100' }],
+      metrics: [
+        { id: 'base', label: '基期', kind: 'source', source: { sourceId: 's', cell: 'B2' } },
+        { id: 'rate', label: '增速', kind: 'input', value: 0.2, min: 0, max: 1, step: 0.1 },
+        { id: 'rev', label: '收入', kind: 'formula', formula: 'base*(1+rate)' },
+      ],
+    },
+    outputDir: dir,
+    fileName: 'with-data',
+  })
+  const plainDeck = await buildDeckAsync({
+    title: '普通热键测试',
+    slides: [{ layout: 'cover', title: '普通测试' }],
+    outputDir: dir,
+    fileName: 'plain',
+  })
+
+  const dataHtml = readFileSync(dataDeck.htmlPath, 'utf8')
+  const plainHtml = readFileSync(plainDeck.htmlPath, 'utf8')
+  assert.match(dataHtml, /Shift\+D/)
+  assert.doesNotMatch(plainHtml, /Shift\+D 标注/)
+
+  // Verify the compiled guards directly in both HTML scripts
+  assert.match(dataHtml, /!event\.shiftKey/)
+  assert.match(dataHtml, /if \(dataPanel && !drawActive && !event\.shiftKey\) return/)
+  assert.match(dataHtml, /\(dataPanel && dataPanel\.open\)/)
+})

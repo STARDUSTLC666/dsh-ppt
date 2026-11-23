@@ -45,6 +45,10 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'heatmap', zh: '矩阵热力图', en: 'Heatmap matrix', group: 'data', quick: true, variants: [] },
   { id: 'map', zh: '全球 / 中国点阵地图', en: 'World / China Map', group: 'data', quick: true, variants: [['world', '全球地图', 'World map'], ['china', '中国版图', 'China map']] },
   { id: 'isometric', zh: '2.5D 等轴测立体图', en: '2.5D Isometric', group: 'structured', quick: true, variants: [['stack', '立体分层堆叠', '3D layer stack'], ['pillars', '立体柱碑阶梯', '3D pillars']] },
+  { id: 'issue-tree', zh: 'MECE 逻辑议题树', en: 'MECE Issue Tree', group: 'structured', quick: true, variants: [] },
+  { id: 'treemap', zh: '比例矩形树图', en: 'Proportional Treemap', group: 'data', quick: true, variants: [] },
+  { id: 'gauge', zh: 'OKR 达标仪 / 子弹图', en: 'OKR Bullet Gauge', group: 'data', quick: true, variants: [] },
+  { id: 'pricing', zh: '商业报价 / 方案矩阵', en: 'Pricing Tiers', group: 'structured', quick: true, variants: [] },
   { id: 'table', zh: '表格 / 学术三线表', en: 'Table', group: 'data', quick: true, variants: [] },
   { id: 'chart', zh: '原生数据图表', en: 'Chart', group: 'data', variants: [] },
   { id: 'chart-split', zh: '图表 + 洞察分栏', en: 'Chart + insights', group: 'data', variants: [['chart-left', '左图右洞察', 'Chart left'], ['chart-right', '左洞察右图', 'Chart right']] },
@@ -56,7 +60,7 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'closing', zh: '结束与行动号召', en: 'Closing & CTA', group: 'framing', variants: [['standard', '标准致谢', 'Standard'], ['cta-cards', '行动卡片', 'CTA cards'], ['inverted', '深色封底', 'Inverted']] },
 ]);
 
-const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain', 'mockup', 'quadrant', 'dumbbell', 'map', 'isometric']);
+const PPT_ITEM_LAYOUTS = new Set(['cards', 'kpi', 'comparison', 'matrix', 'process', 'chart-split', 'gantt', 'architecture', 'tam', 'org', 'sankey', 'swot', 'value-chain', 'mockup', 'quadrant', 'dumbbell', 'map', 'isometric', 'issue-tree', 'treemap', 'gauge', 'pricing']);
 
 function pptLayoutMeta(layout) {
   return PPT_LAYOUT_CATALOG.find(item => item.id === layout) || { id: layout || 'bullets', zh: layout || '要点', en: layout || 'Bullets', group: 'structured', variants: [] };
@@ -89,6 +93,9 @@ function normalizeSlideItems(slide) {
     size: typeof entry?.size === 'number' && Number.isFinite(entry.size) ? String(entry.size) : '',
     before: typeof entry?.before === 'number' && Number.isFinite(entry.before) ? String(entry.before) : '',
     after: typeof entry?.after === 'number' && Number.isFinite(entry.after) ? String(entry.after) : '',
+    actual: typeof entry?.actual === 'number' && Number.isFinite(entry.actual) ? String(entry.actual) : '',
+    target: typeof entry?.target === 'number' && Number.isFinite(entry.target) ? String(entry.target) : '',
+    max: typeof entry?.max === 'number' && Number.isFinite(entry.max) ? String(entry.max) : '',
     bullets: Array.isArray(entry?.bullets) ? entry.bullets.map(b => String(b)) : [],
   }));
 }
@@ -259,8 +266,8 @@ function projectDraftToLayout(draft, nextLayout) {
           ? 'sequenceDiagram\n  participant User\n  participant Studio\n  participant Engine\n  User->>Studio: Upload .xlsx / .docx\n  Studio->>Engine: Profile & choreograph\n  Engine-->>User: HTML + Native PPTX'
           : 'sequenceDiagram\n  participant 用户\n  participant 工作台\n  participant 引擎\n  用户->>工作台: 上传 .xlsx / .docx\n  工作台->>引擎: 智能剖析与编排\n  引擎-->>用户: HTML + 原生 PPTX')
       : (en
-          ? 'flowchart LR\n  A([Inputs]) --> B{Auto-Director}\n  B -->|Data| C[Sankey & KPI]\n  B -->|Docs| D[24+ Layouts]\n  C --> E[(HTML & PPTX)]\n  D --> E'
-          : 'flowchart LR\n  A([多源输入]) --> B{智能导演}\n  B -->|数据表| C[桑基与指标]\n  B -->|文稿| D[24+ 版式]\n  C --> E[(同源交付)]\n  D --> E');
+          ? 'flowchart LR\n  A([Inputs]) --> B{Auto-Director}\n  B -->|Data| C[Sankey & KPI]\n  B -->|Docs| D[41 Layouts]\n  C --> E[(HTML & PPTX)]\n  D --> E'
+          : 'flowchart LR\n  A([多源输入]) --> B{智能导演}\n  B -->|数据表| C[桑基与指标]\n  B -->|文稿| D[41 种版式]\n  C --> E[(同源交付)]\n  D --> E');
   }
   if (nextLayout === 'code' && !next.code?.trim()) {
     next.language = next.language || 'typescript';
@@ -338,19 +345,77 @@ function projectDraftToLayout(draft, nextLayout) {
           { tag: '华北', title: '华北大区', text: '', value: '¥2.4亿', unit: '', delta: '+18%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
         ];
   }
-  if (nextLayout === 'isometric' && next.items.length === 0) {
+  if (nextLayout === 'isometric' && (!Array.isArray(next.items) || !next.items.length)) {
     const en = languageOf() === 'en';
     next.variant = next.variant || 'stack';
     next.items = en
       ? [
-          { tag: 'L4', title: 'Agent Applications', text: 'Executive studio & interactive delivery', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
-          { tag: 'L3', title: 'Orchestration Engine', text: 'Layout compiler & SLOP compliance gates', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
-          { tag: 'L2', title: 'Evidence & Brand Lock', text: 'Verified provenance ledger & brand kit', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'L4', title: 'Agent Applications', text: 'Executive studio & interactive delivery', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'L3', title: 'Orchestration Engine', text: 'Layout compiler & SLOP compliance gates', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'L2', title: 'Evidence & Brand Lock', text: 'Verified provenance ledger & brand kit', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
         ]
       : [
-          { tag: 'L4', title: '业务应用与交互层', text: '工作台预览、双屏提词与社媒长图交付', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
-          { tag: 'L3', title: '智能编排与合规层', text: '版式编译器、审美升维与 SLOP-14 门禁', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
-          { tag: 'L2', title: '证据账本与品牌锁', text: '多源融合溯源与企业品牌宪章锁', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', bullets: [] },
+          { tag: 'L4', title: '业务应用与交互层', text: '工作台预览、双屏提词与社媒长图交付', value: '', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'L3', title: '智能编排与合规层', text: '版式编译器、审美升维与 SLOP-14 门禁', value: '', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'L2', title: '证据账本与品牌锁', text: '多源融合溯源与企业品牌宪章锁', value: '', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+        ];
+  }
+  if (nextLayout === 'issue-tree' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: '01', title: 'Revenue Mix', text: '', value: '+3.2 pts', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['Expand enterprise tier adoption to 65%', 'Bundle annual governance add-ons'] },
+          { tag: '02', title: 'Delivery Efficiency', text: '', value: '+1.8 pts', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['Cut unit inference cost by 40%', 'Automate deployment & QA workflows'] },
+          { tag: '03', title: 'Retention Leverage', text: '', value: '+1.0 pts', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['Drive net dollar retention above 118%', 'Reduce onboarding churn in first 90 days'] },
+        ]
+      : [
+          { tag: '01', title: '增长结构优化', text: '', value: '+3.2 pct', unit: '', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['高毛利企业版收入占比提升至 65%', '推进年度合规与治理增值模块打包'] },
+          { tag: '02', title: '交付成本压降', text: '', value: '+1.8 pct', unit: '', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['推理算力单元成本压缩 40%', '端到端自动化部署与视觉质检提效'] },
+          { tag: '03', title: '存量留存复利', text: '', value: '+1.0 pct', unit: '', delta: '', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['核心客户净收入留存 NRR 突破 118%', '缩短首季上线交付周期降低流失'] },
+        ];
+  }
+  if (nextLayout === 'treemap' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'CORE', title: 'Core Platform', text: '', value: '42', unit: 'M', delta: '+18%', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'AI', title: 'Cloud AI Runtime', text: '', value: '32', unit: 'M', delta: '+45%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'DATA', title: 'Data & Governance', text: '', value: '15', unit: 'M', delta: '+22%', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: 'SEC', title: 'Security & Audit', text: '', value: '11', unit: 'M', delta: '+15%', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+        ]
+      : [
+          { tag: '核心底座', title: '基础平台研发', text: '', value: '4200', unit: '万', delta: '+18%', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: '智能引擎', title: '云智算与模型', text: '', value: '3200', unit: '万', delta: '+45%', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: '数据治理', title: '证据链与数据中台', text: '', value: '1500', unit: '万', delta: '+22%', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+          { tag: '安全合规', title: '安全审计与私有化', text: '', value: '1100', unit: '万', delta: '+15%', status: 'neutral', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: [] },
+        ];
+  }
+  if (nextLayout === 'gauge' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'KR1', title: 'Annual ARR Attainment', text: 'Enterprise renewals ahead of plan', value: '', unit: '%', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '88', target: '80', max: '100', bullets: [] },
+          { tag: 'KR2', title: 'Gross Margin Level', text: 'Compute optimization underway', value: '', unit: '%', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '74', target: '75', max: '100', bullets: [] },
+          { tag: 'KR3', title: 'On-Time Delivery Rate', text: 'Automated CI/QA gates active', value: '', unit: '%', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '94', target: '90', max: '100', bullets: [] },
+        ]
+      : [
+          { tag: 'KR1', title: '年度 ARR 营收达成', text: '大客户续约与增购超预期', value: '', unit: '%', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '88', target: '80', max: '100', bullets: [] },
+          { tag: 'KR2', title: '综合毛利率水平', text: '算力与推理成本持续优化', value: '', unit: '%', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '74', target: '75', max: '100', bullets: [] },
+          { tag: 'KR3', title: '按期交付达标率', text: '自动化质检门禁全面上线', value: '', unit: '%', delta: '', status: 'positive', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '94', target: '90', max: '100', bullets: [] },
+        ];
+  }
+  if (nextLayout === 'pricing' && (!Array.isArray(next.items) || !next.items.length)) {
+    const en = languageOf() === 'en';
+    next.items = en
+      ? [
+          { tag: 'STARTER', title: 'Standard', text: 'Fast start for a single team', value: '$990', unit: '/yr', delta: '', status: '', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['✓ Up to 10 seats', '✓ Standard theme library', '✗ Private deployment'] },
+          { tag: 'RECOMMENDED', title: 'Enterprise Pro', text: 'Scale across business units', value: '$2,990', unit: '/yr', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['✓ Unlimited seats & Brand Lock', '✓ Bidirectional Office + Evidence Ledger', '✓ Dedicated customer success'] },
+          { tag: 'CUSTOM', title: 'Private Cloud', text: 'Isolated deployment for regulated orgs', value: 'Custom', unit: '', delta: '', status: '', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['✓ Air-gapped intranet runtime', '✓ SSO & full audit trail', '✓ 24/7 enterprise SLA'] },
+        ]
+      : [
+          { tag: '标准版', title: 'Standard', text: '适合单团队快速启动', value: '¥9,800', unit: '/年', delta: '', status: '', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['✓ 10 席位协作', '✓ 标准大师主题库', '✗ 私有化部署'] },
+          { tag: '推荐主推', title: 'Enterprise Pro', text: '适合中大型企业规模化赋能', value: '¥29,800', unit: '/年', delta: '', status: 'accent', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['✓ 无限席位与品牌宪章锁', '✓ Office 双向引擎 + 权威溯源', '✓ 专属客户成功顾问'] },
+          { tag: '旗舰定制', title: 'Private Cloud', text: '金融政企专享隔离部署', value: '定制报价', unit: '', delta: '', status: '', icon: '', avatar: '', start: '', span: '', milestone: false, role: '', conversion: '', x: '', y: '', size: '', before: '', after: '', actual: '', target: '', max: '', bullets: ['✓ 全链路本地化/内网运行', '✓ SSO 单点登录与审计日志', '✓ 7×24 SLA 响应'] },
         ];
   }
   return next;
@@ -377,8 +442,8 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
         tag: currentLayout === 'kpi' ? '' : currentLayout === 'tam' ? ['TAM', 'SAM', 'SOM'][items.length] || 'SOM' : String(items.length + 1).padStart(2, '0'),
         title: L('卡片标题', 'Card title'),
         text: currentLayout === 'kpi' ? '' : L('补充关键论据或举措', 'Supporting point or action'),
-        value: currentLayout === 'kpi' ? '95%' : currentLayout === 'tam' ? '$1B' : '',
-        unit: '',
+        value: currentLayout === 'kpi' ? '95%' : currentLayout === 'tam' ? '$1B' : currentLayout === 'treemap' ? '20' : currentLayout === 'pricing' ? '¥19,800' : '',
+        unit: currentLayout === 'gauge' ? '%' : currentLayout === 'pricing' ? L('/年', '/yr') : '',
         delta: '',
         status: currentLayout === 'kpi' ? 'accent' : '',
         icon: '',
@@ -393,7 +458,10 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
         size: currentLayout === 'quadrant' ? '22' : '',
         before: currentLayout === 'dumbbell' ? '40' : '',
         after: currentLayout === 'dumbbell' ? '80' : '',
-        bullets: [],
+        actual: currentLayout === 'gauge' ? '80' : '',
+        target: currentLayout === 'gauge' ? '85' : '',
+        max: currentLayout === 'gauge' ? '100' : '',
+        bullets: currentLayout === 'issue-tree' ? [L('子假设 / 行动 1', 'Sub-driver / action 1')] : currentLayout === 'pricing' ? [L('✓ 核心权益项', '✓ Core feature')] : [],
       }],
     });
   }
@@ -584,11 +652,31 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
           h('div', null,
             h('label', null, L('单位', 'Unit')),
             h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: '%', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
+        currentLayout === 'gauge' ? h('div', { className: 'ppt-archetype-subgrid' },
+          h('div', null,
+            h('label', null, L('当前实绩 (Actual)', 'Actual value')),
+            h('input', { type: 'number', step: 'any', value: entry.actual ?? '', disabled, placeholder: '88', onChange: e => updateItem(idx, 'actual', e.target.value) })),
+          h('div', null,
+            h('label', null, L('目标阈值 (Target)', 'Target value')),
+            h('input', { type: 'number', step: 'any', value: entry.target ?? '', disabled, placeholder: '80', onChange: e => updateItem(idx, 'target', e.target.value) })),
+          h('div', null,
+            h('label', null, L('刻度上限 (Max)', 'Max scale')),
+            h('input', { type: 'number', step: 'any', value: entry.max ?? '', disabled, placeholder: '100', onChange: e => updateItem(idx, 'max', e.target.value) })),
+          h('div', null,
+            h('label', null, L('单位', 'Unit')),
+            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: '%', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
+        (currentLayout === 'treemap' || currentLayout === 'pricing') ? h('div', { className: 'ppt-archetype-subgrid' },
+          h('div', null,
+            h('label', null, currentLayout === 'pricing' ? L('价格锚点', 'Price') : L('数值权重', 'Numeric value')),
+            h('input', { value: entry.value ?? '', disabled, maxLength: 120, placeholder: currentLayout === 'pricing' ? '¥29,800' : '42', onChange: e => updateItem(idx, 'value', e.target.value) })),
+          h('div', null,
+            h('label', null, L('单位', 'Unit')),
+            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: currentLayout === 'pricing' ? L('/年', '/yr') : 'M', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
         h('label', null, L('卡片标题', 'Card title')),
         h('input', { value: entry.title, disabled, maxLength: 300, onChange: e => updateItem(idx, 'title', e.target.value) }),
         h('label', null, L('说明正文', 'Card description')),
         h('textarea', { rows: 2, value: entry.text, disabled, maxLength: 1500, onChange: e => updateItem(idx, 'text', e.target.value) }),
-        currentLayout === 'architecture' || (Array.isArray(entry.bullets) && entry.bullets.length > 0) ? h('div', null,
+        ['architecture', 'issue-tree', 'pricing', 'swot'].includes(currentLayout) || (Array.isArray(entry.bullets) && entry.bullets.length > 0) ? h('div', null,
           h('label', null, L('子模块 / 要点（每行一项）', 'Sub-modules / bullets (one per line)')),
           h('textarea', {
             rows: 2,

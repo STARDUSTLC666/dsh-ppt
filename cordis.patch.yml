@@ -2,7 +2,8 @@
 #
 # 安装即同时注册：
 #   1. 技能 dsh-ppt（把一句话/一篇文档变成完整演示文稿的完整 SOP）
-#   2. 工具 ppt_create / ppt_themes（确定性生成 HTML 网页放映 + PPTX 导出）
+#   2. 13 个工具（ppt_create / ppt_edit / ppt_undo / ppt_check / ppt_render / ppt_data /
+#      ppt_themes / ppt_templates / ppt_absorb / ppt_import / ppt_from_office / ppt_cite / ppt_remotion）
 #
 # 插件自带空配置，绝不弄崩启动；无需任何账号或密钥。可选配置：
 #

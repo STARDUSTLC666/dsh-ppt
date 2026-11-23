@@ -115,7 +115,7 @@ function initDataView(data, math, chartRenderer) {
   document.addEventListener('click',event=>{const link=event.target.closest('a[download]');if(link&&/\.(?:pptx|json)(?:[?#]|$)/i.test(link.href)&&(dirty||!valid)){event.preventDefault();event.stopImmediatePropagation();open();}},true);
   panel.addEventListener('keydown',event=>event.stopPropagation());
   for(const name of ['wheel','touchstart','touchend'])panel.addEventListener(name,event=>event.stopPropagation(),{passive:true});
-  document.addEventListener('keydown',event=>{if(event.key.toLowerCase()==='d'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest('input,textarea,select')){event.preventDefault();open();}});
+  document.addEventListener('keydown',event=>{if(event.key.toLowerCase()==='d'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest('input,textarea,select')){if(document.getElementById('review-panel')?.open||document.getElementById('dsh-jump-dialog')?.open||document.getElementById('dsh-draw-canvas')?.classList.contains('is-active'))return;event.preventDefault();open();}});
   window.__dshData={getState:()=>({schemaVersion:1,deckId:data.deckId,revision:data.revision,fingerprint:data.fingerprint,parameters:{...parameters},dirty,valid}),setParameters:next=>update(next,false),onChange:null};redraw();
 }
 

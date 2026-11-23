@@ -97,6 +97,7 @@ For the web profile, replace `desktop` with `web` and restart DSH. Requires DSH 
 
 - **Quarterly / OKR review**: `Turn these notes into a Quarterly OKR review deck with action titles, KPI cards, value-chain chevrons, and issue-action comparisons (HTML + editable PPTX).`
 - **Clone a corporate `.pptx`**: `Absorb the palette, logo, chrome skeleton, and slide cadence of company-template.pptx, and turn this document into an executive presentation.`
+- **Product pitch**: `Build a 10-slide daylight investor memo deck from this proposal with TAM market sizing, a Harvey-ball competitor matrix, and a Gantt delivery roadmap.`
 
 ## Before you start
 
