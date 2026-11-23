@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { waitForPublishedMetadata } from './npm-registry-verification.mjs'
+import { waitForPublishedTarball } from './npm-registry-verification.mjs'
 
 const config = JSON.parse(readFileSync('.github/npm-release.json', 'utf8'))
 const registry = 'https://registry.npmjs.org'
@@ -83,11 +83,11 @@ async function main() {
     const existing = await metadata(manifest.version)
     if (existing !== null) {
       assert.equal(existing.dist?.integrity, manifest.integrity, 'Version already exists with different contents; use a new version')
-      console.log('Identical version is already published'); return
+    } else {
+      execFileSync('npm', ['publish', file, '--ignore-scripts', '--access', 'public', '--registry', registry, '--provenance'], { stdio: 'inherit' })
     }
-    execFileSync('npm', ['publish', file, '--ignore-scripts', '--access', 'public', '--registry', registry, '--provenance'], { stdio: 'inherit' })
-    await waitForPublishedMetadata(() => metadata(manifest.version), manifest.integrity)
-    console.log('Published registry integrity verified'); return
+    await waitForPublishedTarball(() => metadata(manifest.version), manifest.integrity)
+    console.log('Public npm tarball bytes verified'); return
   }
   throw new Error('Unknown release command')
 }
