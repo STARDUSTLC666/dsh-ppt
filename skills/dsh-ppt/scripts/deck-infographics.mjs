@@ -744,9 +744,12 @@ function renderIsometricStackPptx(slide, model, ctx) {
     shapes.push(renderSurfaceCardPptx(`Iso Info Card ${i + 1}`, cBox, {
       fill: i === 0 ? tk.accentSoft : tk.surface1,
       focal: i === 0,
+      disableTopBar: true,
     }, nextId, chromeCfg, theme))
-    shapes.push(ooxmlShape(nextId(), `Iso Card Rail ${i + 1}`, { x: cBox.x, y: cBox.y, w: 0.06, h: cBox.h }, {
-      preset: 'rect',
+    const railInset = chromeCfg.cardRadiusPx > 0 ? Math.min(0.10, (chromeCfg.cardRadiusPx / 96) * 0.9) : 0
+    shapes.push(ooxmlShape(nextId(), `Iso Card Rail ${i + 1}`, { x: cBox.x + (railInset > 0 ? 0.025 : 0), y: cBox.y + railInset, w: 0.055, h: Math.max(0.2, cBox.h - railInset * 2) }, {
+      preset: railInset > 0 ? 'roundRect' : 'rect',
+      adj: railInset > 0 ? 50000 : undefined,
       fill: col.top,
     }))
 

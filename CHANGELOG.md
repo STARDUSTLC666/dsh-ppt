@@ -1,5 +1,25 @@
 # 更新记录
 
+## 0.37.0 (2026-11-24)
+
+- **三层按需内置「首席艺术总监」提示词体系与 `SLOP-15` 视觉密度门禁（0 非 PPT 对话 Token 开销）**：
+  - **工具描述微提示（`src/tools.ts`）**：在 `ppt_create` / `ppt_templates` 描述中注入默认审美白名单与开放命题直出提示，防模型跳过 Skill 退化成纯文字要点墙或光秃秃默认封面；
+  - **首席艺术总监宪章 + 20 行黄金字段速查（`SKILL.md`）**：明确划分「Mode B 真实调研（严禁编数）」与「开放命题 / 能力演示（允许标明『示意数据 · 概念演示稿』充分展示多图谱视觉实力）」，内联 6 大高频图谱黄金字段速查，消除模型反复翻源码试错；
+  - **场景导演提示词包（`references/art-director.md` + `buildArtDirectorPrompt`）**：`ppt_templates` 自动返回按 `showcase` / `consulting` / `academic` / `editorial` 匹配的高品味导演词 `directorPrompt` 与 `goldenFields`；新增 **`SLOP-15`** 门禁拦截纯字过渡页占比过高（`excessive-filler-slides`）与长稿零视觉锚点（`no-visual-anchors`）。
+- **整卡联动 PPTX 原生动效 + 单页级切换过渡（`deck-core.mjs` / `src/types.ts` / `src/tools.ts`）**：
+  - 升级 `reveal: 'step'` 的 PPTX `<p:timing>` 引擎（`extractStepRevealGroups`）：按卡片包围盒自动将底框、图标、指标名、大数字、徽章与说明归组为同一点击批次（主卡片 `clickEffect` + 同卡子元素 `withEffect` 并行淡入），彻底修复此前「文字悬空、点击只弹底框」的动效割裂问题；
+  - 新增单页 `transition`（`'fade' | 'push' | 'wipe' | 'cover' | 'cut' | 'none'`）与 `motionProfile: 'keynote'` 智能混合过渡编排（封面/章节柔和 `fade`、图表 `wipe`、正文 `push`），HTML 与 PPTX 双端同构。
+- **默认品味升级、空盒版式重构与 5 项实机视觉 Bug 修复**：
+  - **`kpi` 双端兼容 `title || tag || label`**（`deck-layouts.mjs`）：修复仅传 `tag` 时 `kpi[grid]` 与 `kpi[spotlight]` 指标标题在 HTML 与 PPTX 同时丢失的问题，并收紧卡片垂直留白；
+  - **`waterfall` 近零负值防撞轴**（`deck-media.mjs` + `deck-advanced.mjs`）：修复贴近 0 轴的负柱数据标签压穿 X 轴线与分类文字的问题（柱体足够高则内嵌反白，短柱自动上翻至柱顶）；
+  - **圆角高光卡边角精修**（`deck-chrome.mjs` + `deck-infographics.mjs` + `deck-media.mjs`）：收紧圆角卡片顶栏、`isometric[stack]` 侧轨与圆角 `Takeaway` 胶囊左轨的内缩半径，消除边角露尖与顶侧重影；
+  - **工作台内嵌 HTML 预览零白板 + 16:9 等比缩放**（`deck-core.mjs` + `deck-layouts.mjs`）：检测 `iframe` / `?preview=1` 自动挂 `body.is-embedded` 展开 `reveal: 'step'` 防止首屏白板，窄视口（`<1040px` 或内嵌框）自动启用 `body.is-scaled-stage` 按 1280×720 等比缩放，彻底解决窄侧边栏 Mermaid 缩扁、`callout`/`code`/`closing` 纵排溢出的问题；
+  - **重塑 `editorial-forest` 质感与空盒版式**（`deck-themes.mjs` + `deck-covers.mjs` + `deck-layouts.mjs` + `deck-diagrams.mjs`）：升级为 Kinfolk 暖纸白 `#FAF8F3` + 纯白画廊卡片 `#FFFFFF` + 松木绿/暖雪松青铜；默认浅色/社论封面右侧自动绘制无 LibreOffice 半透明方框伪影的同心几何环与版次签；`statement`、`quote`、`process[steps]` 改为按内容长度动态定高消除 70% 死白，`gantt` 左栏胶囊提对比度并统一色系，`closing[cta-cards]` 扩宽并消除 1 字孤字断行；`deck-absorb.mjs` 自动忽略封面装饰图元保持 100% 母版识别精度。
+- **3-Layer Built-in Art-Director Prompts, `SLOP-15` Density Gates, Whole-Card PPTX Animations, Embedded 16:9 HTML Preview & Real-World Rendering Fixes**:
+  - Adds zero-overhead 3-layer built-in art-director prompts (`src/tools.ts` hints, `SKILL.md` Art-Director Constitution + 20-line Golden Field Cheat-Sheet, and `references/art-director.md` + `buildArtDirectorPrompt` auto-returned by `ppt_templates`), clearly distinguishing Mode B strict sourcing from open-ended capability showcases (`Illustrative Data`), plus `SLOP-15` (`excessive-filler-slides`, `no-visual-anchors`).
+  - Upgrades PPTX `reveal: 'step'` to group each card's surface + child text/value/icon shapes via `clickEffect` + `withEffect`, and adds per-slide `transition` (`fade|push|wipe|cover|cut|none`) with smart `keynote` transition choreography across HTML and PPTX.
+  - Fixes 5 real-world visual bugs: `kpi` `title || tag || label` fallback (HTML + PPTX), near-zero negative `waterfall` label collision, rounded card top-bar & `isometric` rail corner bleed, embedded HTML preview `is-embedded` step auto-reveal + `is-scaled-stage` 16:9 proportional scaling, and `editorial-forest` ivory/white facelift + architectural cover rings + compact `statement`/`quote`/`process[steps]`/`gantt`/`closing` proportions.
+
 ## 0.36.1 (2026-11-23)
 
 - **工作台逆向 Office 导出与 4 套高管图谱全链路接线**：

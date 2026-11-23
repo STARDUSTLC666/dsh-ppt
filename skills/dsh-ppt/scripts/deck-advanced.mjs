@@ -12,7 +12,7 @@ import { absorbPptx, CHROME_STYLE_IDS } from './deck-absorb.mjs'
 import { extractPptxSlides } from './deck-import.mjs'
 import { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml, renderSubtitlesSrt, renderSubtitlesVtt } from './deck-delivery.mjs'
 import { REMIX_PRESETS, REMIX_PRESET_IDS, remixSlides, renderSocialCarouselHtml } from './deck-remix.mjs'
-import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, optimizeVisualRhythm, auditSlideAesthetics } from './deck-director.mjs'
+import { SCENARIO_TEMPLATES, findScenarioTemplate, buildScenarioSlides, listScenarioTemplates, inferThemeFromContent, promoteMarkdownSlides, optimizeVisualRhythm, auditSlideAesthetics, buildArtDirectorPrompt } from './deck-director.mjs'
 import {
   CARD_MATERIALS,
   ICON_MODES,
@@ -74,7 +74,7 @@ export { extractPptxSlides } from './deck-import.mjs'
 export { renderHandoutMarkdown, computePaceBudget, renderOnePagerHtml, renderSubtitlesSrt, renderSubtitlesVtt } from './deck-delivery.mjs'
 export { REMIX_PRESETS, REMIX_PRESET_IDS, remixSlides, renderSocialCarouselHtml } from './deck-remix.mjs'
 export { extractOfficeSource, importOfficeDeck, inspectLocalImage, inspectImageBytes, inspectOfficePack } from './deck-office.mjs'
-export { inferThemeFromContent, optimizeVisualRhythm } from './deck-director.mjs'
+export { inferThemeFromContent, optimizeVisualRhythm, buildArtDirectorPrompt } from './deck-director.mjs'
 export { listAllTasteRecipes, listCuratedTasteRecipes, loadWorkspaceTasteRecipes, saveWorkspaceTasteRecipe, resolveTasteRecipe } from './deck-taste.mjs'
 export {
   CURATED_EXEMPLARS,
@@ -489,12 +489,23 @@ function drawNativeWaterfallWithKit(lib, slide, chart, boxIn, theme) {
 
   geom.bars.forEach((b, idx) => {
     const col = b.role === 'total' ? focalColor : b.role === 'positive' ? posColor : negColor
-    const bar = lib.addSlideShape(slide, 'roundRect', { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.max(25400, Math.round(b.h)), name: `Waterfall Bar ${idx + 1}` })
+    const bh = Math.max(25400, Math.round(b.h))
+    const bar = lib.addSlideShape(slide, 'roundRect', { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: bh, name: `Waterfall Bar ${idx + 1}` })
     lib.setShapeFill(bar, col)
     lib.setShapeNoStroke(bar)
-    const labelY = b.value >= 0 || b.isTotal ? Math.round(b.y - 220000) : Math.round(b.y + b.h + 25000)
+    const isNeg = !(b.value >= 0 || b.isTotal)
+    let labelY = isNeg ? Math.round(b.y + bh + 25000) : Math.round(b.y - 220000)
+    let labelColor = b.role === 'total' ? fg : col
+    if (isNeg && labelY + 185000 > plotBottom - 10000) {
+      if (bh >= 230000) {
+        labelY = Math.round(b.y + (bh - 205000) / 2)
+        labelColor = '#FFFFFF'
+      } else {
+        labelY = Math.round(b.y - 220000)
+      }
+    }
     const valBox = lib.addSlideTextBox(slide, { x: Math.round(b.x - 95000), y: labelY, w: Math.round(b.w + 190000), h: 205000, text: b.label, name: `Waterfall Value ${idx + 1}` })
-    lib.setShapeTextFormat(valBox, { size: 11.5, font, color: b.role === 'total' ? fg : col, bold: true })
+    lib.setShapeTextFormat(valBox, { size: 11.5, font, color: labelColor, bold: true })
     lib.setShapeAlignment(valBox, 'center')
     const catBox = lib.addSlideTextBox(slide, { x: Math.round(b.x - 110000), y: plotBottom + 42000, w: Math.round(b.w + 220000), h: 240000, text: b.category, name: `Waterfall Category ${idx + 1}` })
     lib.setShapeTextFormat(catBox, { size: 12, font, color: fg })
@@ -1189,7 +1200,7 @@ export async function editDeck(options = {}) {
   }
   const used = new Set()
   const allowed = new Set([
-    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'reveal', 'coverPattern', 'imageBrief', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
+    'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'reveal', 'transition', 'coverPattern', 'imageBrief', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
     'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'activeIndex', 'tableStyle',
     'bullets', 'items', 'cards', 'metrics', 'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
   ])

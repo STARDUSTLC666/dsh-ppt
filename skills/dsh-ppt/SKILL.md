@@ -13,16 +13,28 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 用户要做 PPT / 幻灯片 / 演示文稿 / deck / keynote / 汇报 / 述职 / 提案 / 路演 / 答辩 / 课件 / 培训材料，或希望融合本地 Word/Excel/PDF/照片、结合外部权威资料对标，或吸收参考 `.pptx` 风格来制作新文稿。
 
-## 核心审美哲学：品味内建（零品味负担）
+## 核心审美哲学：品味内建（零品味负担 · 首席艺术总监宪章）
 
 普通用户无法分辨底层版式栅格、对比度或图表噪音——**你就是首席艺术总监，默认输出必须直接达到麦肯锡咨询 / Apple 发布会 / Nature 学术答辩 / 现代故宫霁蓝政务水准**：
 
-1. **零追问场景定调（Zero-Question Auto-Director）**：用户说“帮我做个汇报 PPT”时，**不要反问一堆设计参数**。直接根据内容语义识别六大画像（商业咨询、政务述职、学术答辩、科技路演、教育讲义、人文品牌），传 `theme: 'auto'` 或显式匹配 **24 套大师主题（16 浅 8 深**，含 `bcg-emerald`、`economist-brief`、`venture-daylight`、`stripe-craft`、`aurora-stage`、`obsidian-amber`、`keynote-light`、`financial-ft`、`medical-clean`、`luxury-noir`）。**明亮投影优先**：会议室汇报、政企述职、学术答辩、教学课件一律优先选用 16 套浅底主题（通用默认 `consulting` 蔚蓝战略），绝不在常规办公场景盲目套用纯黑赛博风 `data`！并按场景自动匹配 **6 套差异化母版骨架（`chromeStyle`：`consulting-classic` / `keynote-spatial` / `editorial-folio` / `saas-bento` / `academic-minimal` / `gov-ceremonial`）**，彻底告别「一套模板换颜色」。
-2. **结论先行（Action Titles）**：除封面、目录与章节页外，每页标题必须是**完整的结论判断句**（如「异步评审将工程师周均例会耗时压缩 75%」），严禁使用「项目背景」「数据分析」「周末到馆人次」等空洞名词标签。
-3. **版式节奏与反要点墙（Anti-Bullet-Wall）**：优先传**结构化 `slides`**（或使用 `:::` 容器指令）充分利用 **41 种原生可编辑版式（36 核心 + 5 媒体，含 53 别名）**。**整套文稿严禁连续超过 2 页使用普通 `bullets` 要点列表**；8 页以上文稿须有节奏地交替视觉密度（拆解战略因果用 **`issue-tree`** MECE 逻辑议题树、预算/营收占比用 **`treemap`** 矩形树图、OKR/实绩达标用 **`gauge`** 水平子弹仪、商业套餐选型用 **`pricing`** 三档报价矩阵、地理分布用 `map`、3D 架构用 `isometric`、指标用 `kpi`、排期用 `gantt`、系统分层用 `architecture`、竞品能力用 `harvey`、市场空间用 `tam`、组织用 `org`、并列支柱用 `cards[pillars/bento]`、痛点整改用 `comparison[issue-action]`、演进闭环用 `process[timeline/steps/flywheel/funnel]`、四象限用 `matrix`/`quadrant`、数据配洞察用 `chart-split`、学术对比用 `table[booktabs]` 三线表）。
+1. **零追问场景定调与默认高品味白名单（Zero-Question Auto-Director）**：用户说“帮我做个汇报 PPT”或“随便做一份 PPT”时，**不要反问一堆设计参数**。直接根据内容语义识别场景，优先选用高完成度**明亮现代白名单**（开放命题/科技展示首选 `stripe-craft` + `taste: 'linear-craft'`，战略汇报首选 `consulting` / `bcg-emerald` + `taste: 'mckinsey-partner'`，发布会首选 `keynote-light` + `apple-keynote-light`，路演首选 `venture-daylight`；需暗黑舞台时再选 `aurora-stage` / `obsidian-amber`），绝不在常规办公场景盲目套用纯黑赛博风 `data`，也不裸用无装饰空块封面——封面必配 `variant`（`keynote-glow` / `architectural` / `editorial-grid` / `split-bleed`）或 `coverPattern`（`waves` / `dots` / `rings` / `editorial-arcs`）。
+2. **开放命题演示 vs 真实调研边界（防“纯文字鸡汤退缩”）**：
+   - **真实外部调研（Mode B）**：严禁编造数据，严格走 3 轮权威检索与 `evidence[]` 账本。
+   - **开放命题 / 能力演示（如「随便做一份 PPT / 做份炫酷炫技的 PPT」）**：**绝不要因回避数据而退缩成 0 图表、0 图标的纯文字鸡汤！**允许构建高张力科技发布会或经营概念稿，在封面副标题与数据页 `source` 统一标明 `示意数据 · 概念演示稿`，充分展示 KPI 聚光灯、瀑布图、2.5D 等轴测、Mermaid、代码窗、雷达/热力图与报价矩阵。
+3. **视觉密度铁律与反空盒/反水页（SLOP-15）**：
+   - 除封面、目录与章节页外，每页标题必须是**完整的结论判断句（Action Title）**；
+   - **纯文字过渡页（`section` / `statement` / `quote`）总占比 ≤ 20%**（禁止 15 页塞 5 页空白字页）；
+   - **8 页以上文稿必须包含至少 3 类原生视觉图谱**（数据图 / `kpi[spotlight]` / `isometric` / `mermaid` / `radar` / `heatmap` / `pricing` / `issue-tree` / `treemap` / `gauge` / `code` / `mockup` / `gantt` 等），严禁连续 > 2 页 `bullets`，卡片与 KPI 默认配 `icon`（或 `iconMode: 'auto'`）。
 4. **出版级图表与三线表**：支持 **13 类出版级原生图表**，单系列图表自动隐藏冗余图例，使用 `spotlight: true` / `highlight: 'max' | 'last'` 突出焦点色柱、其余灰阶退后，按需叠加 `referenceLine` 基准虚线与 `showGrowthCallout: true` 麦肯锡增长飞线批注，左下角附 `source` 数据来源；学术与严谨数据对比使用无竖线的 `booktabs` 三线表。
-5. **20 套标杆范本槽位填空 + 标杆弧线重排（`alignOrder: true`）+ 零模型自检修复闭环**：不要从零发明排版！直接传 `exemplar: 'auto'` 智能匹配或从内置 **20 套标杆范本**（8 套核心场景 + 12 套源自 Apache-2.0 / MIT / CC-BY-4.0 开源 GitHub 优质 `.pptx` 经实机渲染甄选蒸馏的标杆）中择一，先调 `ppt_templates({ exemplarId })` 获取逐页槽位契约与 **Few-Shot JSON 样板**，再按槽位调用 `ppt_create({ exemplar, alignOrder: true, ... })`；引擎内置 **确定性弱模型补偿器 + 落盘前两轮 `checkManifest`/`SLOP-01..14` 零模型自检修复闭环（`autoUpgrade`，默认开启）**，即使输入为乱序粗糙 `bullets` / 碎块饼图 / 超载指标 / 刺眼配色也能以 0 额外模型开销 100% 无损升维修复。用户手头有优质 `.pptx` 目录时，调 `ppt_absorb({ pptxPath: "<目录路径>" })`（或 CLI `--ingest-exemplars <dir>`）批量沉淀至 `.dsh-ppt/exemplars.json` 与 `.dsh-ppt/taste-recipes.json`。
-6. **8 套大师品味配方（Taste Recipes）、61 枚原生矢量图标与单份母版吸收**：可独立选用 `taste: 'mckinsey-partner' | 'apple-keynote-dark' | 'apple-keynote-light' | 'swiss-editorial' | 'linear-craft' | 'ft-data-journal' | 'nature-academic' | 'oriental-zen'` 驱动 4 套海报封面、4 种卡片材质与 **61 枚原生 `<a:custGeom>` 矢量图标**；单份标杆 `.pptx` 用 `ppt_absorb`（`saveTasteAs` / `saveExemplarAs` / `saveBrandKit`）或 `referencePptx` + `cloneStructure: true` 吸收。
+5. **3 步极速出稿（先调 `ppt_templates` 取导演词与黄金字段，切忌翻源码）**：直接调 `ppt_templates` 获取内置 **Art-Director 导演词 + 黄金字段速查**、20 套标杆范本（含 `exemplar: 'auto'` 与 Few-Shot JSON），按槽位一次调用 `ppt_create({ exemplar, alignOrder: true, ... })`；引擎内置 **确定性弱模型补偿器 + 落盘前两轮 `SLOP-01..15` 零模型自检修复闭环（`autoUpgrade`，默认开启）**。
+6. **黄金字段速查卡（Golden Field Cheat-Sheet — 写结构化 `slides[]` 零试错）**：
+   - `kpi`：`{ layout:'kpi', variant:'spotlight|grid', reveal:'step', items:[{ title:'首字延迟', value:'28', unit:'ms', delta:'-72%', status:'positive', icon:'zap', text:'说明' }] }`（同时兼容 `title` / `tag` / `label`）
+   - `waterfall`：`{ layout:'chart', chart:{ kind:'waterfall', unit:'ms', categories:['基线','优化A','最终'], series:[{ name:'延迟', values:[420,-180,240] }], totalIndices:[0,2] } }`
+   - `isometric`：`{ layout:'isometric', variant:'stack|pillars', reveal:'step', items:[{ tag:'L4', title:'调度层', text:'动态拼批' }] }`
+   - `issue-tree`：`{ layout:'issue-tree', items:[{ tag:'分支1', title:'核心因', bullets:['**要点**：说明'] }] }`
+   - `pricing`：`{ layout:'pricing', items:[{ tag:'推荐', title:'Pro', value:'¥1.2', unit:'/百万token', status:'accent', text:'按量计费', bullets:['✓ 99.95% SLA','× 私有部署'] }] }`
+   - `gantt`：`{ layout:'gantt', columns:['Q1','Q2','Q3','Q4'], items:[{ tag:'底座', title:'引擎v2', start:0, span:2, value:'GA' }] }`
+   - 动效与切换：`motionProfile: 'subtle' | 'executive' | 'keynote'` + 单页 `transition: 'fade' | 'push' | 'wipe' | 'cover' | 'cut' | 'none'` + 整卡联动 `reveal: 'step'`（PPTX 原生 `clickEffect` + `withEffect` 同卡同步淡入，工作台内嵌 HTML 预览自动展开防白板并 16:9 等比缩放）。
 
 ## 执行纪律（每次都要遵守）
 
@@ -53,6 +65,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 
 | 何时必读 | 参考文件 | 核心内容 |
 | --- | --- | --- |
+| **开放命题/炫酷发布会/高管/学术/社论内置导演提示词与动效编排** | `references/art-director.md` | 4 大场景首席艺术总监提示词包、开放命题 vs 真实调研边界、黄金字段速查卡与整卡联动动效编排规范 |
 | **本地混合素材包、Mode C 混源深研、逆向导出/拼装/无损翻译/R 键回流** | `references/office-pack.md` | `inspectOnly` 素材档案与 `enrichmentPlan`、需求驱动 Office/照片编排与防裁歪、`exports[]`（`xlsx/docx/qa-prep/memo/i18n`）、Slide Bank + `mergeSources`、无损双语、`reveal: 'step'` 与 `R` 键反馈闭环 |
 | **零资料/混源联网调研、8 域权威检索与 `SLOP-13` 核验** | `references/research-plan.md` | 三模路由（Mode A/B/C）、8 大领域 `site:` + `filetype:pdf` + `-site:` 检索包、`classifySourceAuthority` T1/T2/T3、`SLOP-13` 9 项门禁与 `brand-kit.json` `preferredSources`/`blockedDomains` |
 | 按标杆范本槽位填空或批量投喂 `.pptx` 语料 | `references/exemplars.md` | 20 套标杆范本槽位契约、`ppt_templates(exemplarId)`、批量 `--ingest-exemplars` 与弱模型升维补偿器 |
@@ -78,6 +91,7 @@ allowed-tools: "Bash, Read, Write, Edit"
 - [ ] **SLOP-11/12 卡片材质节奏与图表聚光灯**：长篇文稿避免连续 ≥ 4 页等宽方框卡片；单系列 ≥ 5 项柱状/条形图须通过 `highlight` / `spotlight` / `referenceLine` 聚焦核心主角。
 - [ ] **SLOP-13 事实出处与代码级权威信源门禁（v0.35 升级 9 项）**：严禁空洞假出处（`vague-placeholder-source`）、悬空 `[E#]` 引用（`dangling-evidence-ref`）、未披露口径的 `unverified`/`conflicting`（`unverified-evidence-claim`）与调研模式无出处量化页（`unsourced-research-numbers`）；由 `classifySourceAuthority` 代码级核验 Tier 1/2/3 与工作区 `preferredSources`/`blockedDomains`，同步拦截「名义权威机构 + 自媒体二手转引链接」（`secondary-relay-source`）、把 Tier 3 噪声站/屏蔽域标为 `verified`（`low-authority-source`）、`claimType: 'forecast'` 预测数字未标「预计/预测/E」（`unmarked-forecast-claim`）、外源缺失年份（`missing-external-date`）以及超 3 年过时外部基准（`stale-evidence-date`）。
 - [ ] **SLOP-14 企业品牌宪章与合规门禁**：工作区存在 `.dsh-ppt/brand-kit.json` 时默认自动锁定企业主色、字体、页脚、内容页保密水印（`brand.watermark`）、官方封底与 `preferredSources`/`blockedDomains`；全篇无企业禁用词（`forbidden-brand-term`）与主色漂移（`brand-palette-drift`）；需为高管/董事会/客户压缩精简版本时直接用 `ppt_edit({ remixPreset })` / `--remix` 另存无损归档副本。
+- [ ] **SLOP-15 视觉密度与过渡页占比门禁**：8 页以上文稿纯文字过渡页（`section`/`statement`/`quote`）占比不得过高（`excessive-filler-slides`），且全篇不得零视觉锚点（`no-visual-anchors`）；开放命题演示允许标明 `示意数据` 展现多图谱与整卡动效实力。
 
 ## 跨 harness 安装
 

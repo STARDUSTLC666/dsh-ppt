@@ -2246,5 +2246,129 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
     })
   }
 
+  // SLOP-15: 视觉密度与纯字过渡页占比门禁（防止 15 页里塞 5 页空白字页或长稿零视觉图谱）
+  if (slides.length >= 8) {
+    const bodySlides = slides.filter((s) => !['cover', 'closing'].includes(s.layout || 'bullets'))
+    const fillerSlides = bodySlides.filter((s) => {
+      const lay = s.layout || 'bullets'
+      if (lay === 'statement' || lay === 'quote') return true
+      if (lay === 'section' && String(s.variant || '').toLowerCase() !== 'agenda') return true
+      return false
+    })
+    if (bodySlides.length >= 6 && fillerSlides.length > Math.max(3, Math.floor(bodySlides.length * 0.28))) {
+      push(
+        0,
+        'excessive-filler-slides',
+        '纯文字过渡页（section / statement / quote）共 ' + fillerSlides.length + ' 页，占比偏高，容易稀释整体信息密度（SLOP-15）',
+        '建议将纯字过渡页控制在正文页的 20% 以内，把多余章节页合并进首句 kicker 面包屑，或改用 section[agenda] 进度目录',
+      )
+    }
+    const richVisualLayouts = new Set([
+      'kpi', 'chart', 'chart-split', 'waterfall', 'image', 'image-left', 'image-right', 'gallery',
+      'isometric', 'map', 'mermaid', 'radar', 'quadrant', 'dumbbell', 'heatmap', 'marimekko', 'sankey',
+      'treemap', 'gauge', 'pricing', 'issue-tree', 'gantt', 'architecture', 'harvey', 'tam', 'org',
+      'mockup', 'code', 'value-chain', 'swot',
+    ])
+    const visualCount = bodySlides.filter((s) =>
+      richVisualLayouts.has(s.layout || 'bullets') || Boolean(s.chart || s.image || s.mermaid || s.formula),
+    ).length
+    if (visualCount === 0) {
+      push(
+        0,
+        'no-visual-anchors',
+        '整套长文稿缺少数据图表、KPI、等轴测/流程图或信息图等视觉锚点（SLOP-15）',
+        '建议穿插至少 3 类视觉图谱（如 kpi[spotlight]、waterfall/chart-split、isometric、issue-tree、pricing、gantt 或 code/mockup）提升视觉层次',
+      )
+    }
+  }
+
   return issues
+}
+
+/**
+ * Built-in Art-Director Prompt Pack generator (Layer 3):
+ * Returns a tailored, low-token creative brief + golden field cheat-sheet for ppt_templates / CLI.
+ */
+export function buildArtDirectorPrompt({ topic = '', persona = 'auto', lang = 'zh' } = {}) {
+  const isEn = String(lang || 'zh').toLowerCase().startsWith('en')
+  const hay = `${topic} ${persona}`.toLowerCase()
+  let profile = 'showcase'
+  if (persona === 'academic' || /论文|答辩|学术|实验|医疗|临床|research|defense|paper|academic|clinical/.test(hay)) {
+    profile = 'academic'
+  } else if (persona === 'editorial' || /品牌故事|策展|人文|杂志|esg|文化|lookbook|editorial|story|brand/.test(hay)) {
+    profile = 'editorial'
+  } else if (persona === 'consulting' || persona === 'gov-exec' || /汇报|复盘|战略|咨询|okr|财报|董事会|政务|述职|方案|proposal|strategy|board|quarterly|exec/.test(hay)) {
+    profile = 'consulting'
+  } else if (!topic || /随便|炫酷|炫技|发布会|演示|demo|showcase|keynote|launch|product|ai|saas/.test(hay)) {
+    profile = 'showcase'
+  }
+
+  const presets = {
+    showcase: {
+      recommendedTheme: 'stripe-craft',
+      altDarkTheme: 'aurora-stage',
+      recommendedTaste: 'linear-craft',
+      coverVariant: 'keynote-glow',
+      coverPattern: 'waves',
+      motionProfile: 'keynote',
+      cadence: ['cover[keynote-glow]', 'kpi[spotlight]', 'chart[waterfall]', 'isometric[stack]', 'mermaid', 'code/mockup', 'radar/heatmap', 'pricing', 'closing[cta-cards]'],
+      zh: '【首席艺术总监指令 · 发布会 / 开放命题高品味模式】优先明亮现代主题 `stripe-craft`（需暗黑舞台感再选 `aurora-stage`）+ `taste: "linear-craft"` + `cover[keynote-glow]` + `coverPattern: "waves"` + `motionProfile: "keynote"`。若为开放命题/能力演示（非真实业务调研），允许构造高张力科技产品或战略概念稿，只需在封面副标题与 `source` 明确标注「示意数据 · 概念演示稿」，绝不退化成无图无数据的纯文字鸡汤！全篇过渡纯字页 ≤ 20%，至少组合 4 种原生图谱（KPI 聚光灯 / 瀑布图 / 2.5D 等轴测 / Mermaid / 代码窗 / 雷达 / 热力图 / 三档报价），并给关键 KPI/架构页配 `reveal: "step"` 实现整卡联动点击淡入。',
+      en: '[Art Director Brief · Showcase / Open-Ended Keynote] Default to crisp bright `stripe-craft` (or `aurora-stage` if dark stage requested) + `taste: "linear-craft"` + `cover[keynote-glow]` + `coverPattern: "waves"` + `motionProfile: "keynote"`. For open-ended capability demos, craft an ambitious concept showcase clearly labeled "Illustrative Data" in subtitle & `source` — never retreat to bland text-only platitudes. Keep filler slides <= 20%, mix >= 4 native visual archetypes, and enable `reveal: "step"` on hero KPI/architecture slides.',
+    },
+    consulting: {
+      recommendedTheme: 'consulting',
+      altDarkTheme: 'obsidian-amber',
+      recommendedTaste: 'mckinsey-partner',
+      coverVariant: 'architectural',
+      coverPattern: 'dots',
+      motionProfile: 'executive',
+      cadence: ['cover[architectural]', 'kpi[spotlight]', 'issue-tree', 'chart-split', 'comparison[issue-action]', 'gantt', 'table[booktabs]', 'closing[cta-cards]'],
+      zh: '【首席艺术总监指令 · 战略咨询 / 高管汇报模式】默认明亮投影主题 `consulting` 或 `bcg-emerald` + `taste: "mckinsey-partner"` + `cover[architectural]` + `motionProfile: "executive"`。每页标题必须为结论先行判断句（Action Title）并配底栏 `takeaway`；优先用 `kpi[spotlight]`、`issue-tree` MECE 树、`waterfall` / `chart-split`、`gauge` OKR 子弹仪与 `booktabs` 三线表，严禁连续超过 2 页普通 `bullets`。',
+      en: '[Art Director Brief · Executive Consulting] Use daylight `consulting` or `bcg-emerald` + `taste: "mckinsey-partner"` + `cover[architectural]` + `motionProfile: "executive"`. Every content slide needs an Action Title + `takeaway`; prioritize `kpi[spotlight]`, `issue-tree`, `waterfall`/`chart-split`, `gauge`, and `booktabs` tables; never exceed 2 consecutive bullet slides.',
+    },
+    academic: {
+      recommendedTheme: 'academic',
+      altDarkTheme: 'nordic-slate',
+      recommendedTaste: 'nature-academic',
+      coverVariant: 'editorial-grid',
+      coverPattern: 'grid',
+      motionProfile: 'subtle',
+      cadence: ['cover[editorial-grid]', 'callout[formula]', 'chart-split', 'table[booktabs]', 'comparison', 'closing'],
+      zh: '【首席艺术总监指令 · 学术答辩 / 权威研报模式】默认 `academic` 或 `economist-brief` + `taste: "nature-academic"` + `motionProfile: "subtle"`。量化数据严格走 Mode B/C 一手源证据账本 `[E#]` 与 `evidenceAppendix: true`，严谨对比一律用无竖线 `table[booktabs]` 与原生 LaTeX `formula`。',
+      en: '[Art Director Brief · Academic / Research] Use `academic` or `economist-brief` + `taste: "nature-academic"` + `motionProfile: "subtle"`. Ground all external statistics via Mode B/C Evidence Ledger `[E#]` + `evidenceAppendix: true`, and use borderless `booktabs` tables + native LaTeX `formula`.',
+    },
+    editorial: {
+      recommendedTheme: 'editorial-forest',
+      altDarkTheme: 'luxury-noir',
+      recommendedTaste: 'swiss-editorial',
+      coverVariant: 'editorial-grid',
+      coverPattern: 'editorial-arcs',
+      motionProfile: 'subtle',
+      cadence: ['cover[editorial-grid]', 'cards[bento-hero]', 'kpi[spotlight]', 'image-right', 'process[timeline]', 'quote', 'closing[cta-cards]'],
+      zh: '【首席艺术总监指令 · 人文品牌 / 杂志社论模式】选用升级版 `editorial-forest`（纸白卡片 + 松木青铜）或 `editorial-warm` + `taste: "swiss-editorial"` + `cover[editorial-grid]` + `coverPattern: "editorial-arcs"`。善用 `cards[bento-hero]`、`image-right` 与 `kpi[spotlight]` 制造杂志版面张力，控制纯字页 ≤ 20%，卡片配原生 `icon` 拒绝枯燥灰盒。',
+      en: '[Art Director Brief · Editorial / Brand Story] Use upgraded `editorial-forest` (crisp ivory paper + white cards) or `editorial-warm` + `taste: "swiss-editorial"` + `cover[editorial-grid]` + `coverPattern: "editorial-arcs"`. Combine `cards[bento-hero]`, `image-right`, and `kpi[spotlight]`, keep pure-text slides <= 20%, and add vector `icon` accents.',
+    },
+  }
+  const picked = presets[profile] || presets.showcase
+  const goldenFields = {
+    kpi: '{ layout:"kpi", variant:"spotlight|grid", reveal:"step", items:[{ title:"指标名", value:"28", unit:"ms", delta:"-72%", status:"positive", icon:"zap", text:"一句话解释" }] }',
+    waterfall: '{ layout:"chart", chart:{ kind:"waterfall", unit:"ms", categories:["基线","优化1","优化2","最终"], series:[{ name:"延迟", values:[420,-180,-130,110] }], totalIndices:[0,3] } }',
+    isometric: '{ layout:"isometric", variant:"stack|pillars", reveal:"step", items:[{ tag:"L5", title:"网关层", text:"协议兼容与灰度" }] }',
+    issueTree: '{ layout:"issue-tree", items:[{ tag:"分支1", title:"主因", bullets:["**要点**：说明"] }] }',
+    pricing: '{ layout:"pricing", items:[{ tag:"推荐", title:"Standard", value:"¥1.2", unit:"/百万token", status:"accent", text:"按量计费", bullets:["✓ 99.95% SLA","× 无私有部署"] }] }',
+    gantt: '{ layout:"gantt", columns:["Q1","Q2","Q3","Q4"], items:[{ tag:"核心", title:"里程碑", start:0, span:2, value:"v2.0" }] }',
+    transition: 'slide.transition: "fade"|"push"|"wipe"|"cover"|"cut"|"none" ; deck.motionProfile: "subtle"|"executive"|"keynote"',
+  }
+  return {
+    profile,
+    recommendedTheme: picked.recommendedTheme,
+    altDarkTheme: picked.altDarkTheme,
+    recommendedTaste: picked.recommendedTaste,
+    coverVariant: picked.coverVariant,
+    coverPattern: picked.coverPattern,
+    motionProfile: picked.motionProfile,
+    cadence: picked.cadence,
+    directorPrompt: isEn ? picked.en : picked.zh,
+    goldenFields,
+  }
 }

@@ -5,7 +5,7 @@
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
-import { relativeLuminance, mixHex } from './deck-themes.mjs'
+import { relativeLuminance, mixHex, ensureContrast } from './deck-themes.mjs'
 import {
   CANVAS_IN,
   roundRectAdj,
@@ -13,6 +13,7 @@ import {
   escapeHtml,
   stripInlineMarkdown,
   renderInlineHtml,
+  measureEmWidth,
   computeTextFit,
   resolveEffectiveItems,
   VALID_STATUS,
@@ -1704,7 +1705,11 @@ export function renderDiagramSlideBodyPptx(slide, ctx) {
       shapes.push(ooxmlLine(nextId(), 'Gantt Grid ' + c, { x: lx, y: topY + headH }, { x: lx, y: gridBottomY }, { color: tk.hairline, widthPt: 0.5, dash: c === 0 || c === colCount ? '' : 'dot' }))
     }
 
-    const barPalette = [tk.accentPrimary, tk.accentSecondary, tk.positive, tk.accentPrimary]
+    const secBar = relativeLuminance(tk.accentSecondary || tk.accentPrimary) > 0.45
+      ? mixHex(tk.accentSecondary || tk.accentPrimary, tk.inkPrimary, 0.28)
+      : (tk.accentSecondary || tk.accentPrimary)
+    const barPalette = [tk.accentPrimary, secBar, mixHex(tk.accentPrimary, tk.inkMuted, 0.34), tk.accentPrimary]
+    const ganttTagFg = ensureContrast(tk.accentText, tk.accentSoft, 4.5)
     items.forEach((it, idx) => {
       const ry = topY + headH + 0.06 + idx * (rowH + rowGap)
       const st = statusPalette(it.status, tk)
@@ -1721,9 +1726,11 @@ export function renderDiagramSlideBodyPptx(slide, ctx) {
           preset: cardPreset,
           adj: roundRectAdj(tagW, 0.28, Math.min(6, chromeCfg.cardRadiusPx)),
           fill: tk.accentSoft,
+          stroke: tk.hairline,
+          strokePt: 0.45,
           anchor: 'ctr',
           marginsIn: { l: 0.03, r: 0.03, t: 0.01, b: 0.01 },
-          paragraphs: [ooxmlRichParagraph(it.tag, { sizePt: 9.5, color: tk.accentText, bold: true, lang: langAttr, align: 'ctr', font: theme.fonts.body })],
+          paragraphs: [ooxmlRichParagraph(it.tag, { sizePt: 9.5, color: ganttTagFg, bold: true, lang: langAttr, align: 'ctr', font: theme.fonts.body })],
         }))
         shapes.push(ooxmlShape(nextId(), 'Gantt ' + (idx + 1), { x: 0.72 + tagW + 0.10, y: ry + 0.02, w: labelW - tagW - 0.28, h: rowH - 0.04 }, {
           txBox: true,
@@ -2384,10 +2391,12 @@ export function renderDiagramSlideBodyPptx(slide, ctx) {
         }))
       })
     } else {
-      // steps（带箭头连接的横向步骤卡片）
+      // steps（带箭头连接的横向步骤卡片，按内容密度紧凑定高防大片死白）
       const arrowGap = n <= 4 ? 0.36 : 0.24
       const cardW = (12.09 - arrowGap * (n - 1)) / n
-      const cardH = Math.min(3.55, bodyH - 0.24)
+      const maxStepUnits = Math.max(...items.map((it) => measureEmWidth((it.title || '') + ' ' + (it.text || ''))), 12)
+      const targetCardH = maxStepUnits <= 34 ? 2.58 : maxStepUnits <= 64 ? 3.05 : 3.55
+      const cardH = Math.min(targetCardH, bodyH - 0.24)
       const cardY = bodyTopY + (bodyH - cardH) / 2
 
       items.forEach((it, idx) => {

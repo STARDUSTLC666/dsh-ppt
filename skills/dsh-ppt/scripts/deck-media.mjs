@@ -568,11 +568,22 @@ export function renderChartSvg(chart, theme) {
     const coords = rawBars.map((b, idx) => {
       const bx = left + idx * gw + (gw - bw) / 2
       const yt = y(Math.max(b.start, b.end)), yb = y(Math.min(b.start, b.end))
+      const barH = Math.max(2, yb - yt)
       const col = b.isTotal ? focalColor : b.value >= 0 ? posColor : negColor
-      shapes += rect(bx, yt, bw, Math.max(2, yb - yt), col, 4)
+      shapes += rect(bx, yt, bw, barH, col, 4)
       const lbl = (!b.isTotal && b.value > 0 ? '+' : '') + fmtNum(b.value)
-      const ly = b.value >= 0 || b.isTotal ? yt - 8 : yb + 18
-      shapes += text(bx + bw / 2, ly, lbl, 'middle', b.isTotal ? fg : col, 14, 700)
+      const isNeg = !(b.value >= 0 || b.isTotal)
+      let ly = isNeg ? yb + 18 : yt - 8
+      let lCol = b.isTotal ? fg : col
+      if (isNeg && ly > bottom - 4) {
+        if (barH >= 24) {
+          ly = yt + barH / 2 + 5
+          lCol = '#FFFFFF'
+        } else {
+          ly = yt - 8
+        }
+      }
+      shapes += text(bx + bw / 2, ly, lbl, 'middle', lCol, 14, 700)
       shapes += text(bx + bw / 2, bottom + 28, chart.categories[idx], 'middle', fg, 15)
       return { x: bx, w: bw, yEnd: y(b.end) }
     })
@@ -1440,9 +1451,11 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
         ins: [128000, 76200, 128000, 76200],
       }))
       if (chromeCfg.cardLeftBar) {
-        shapes.push(spRect(`Insight Stripe ${idx + 1}`, boxEmu({ x: cardBox.x, y: cardBox.y, w: 0.04, h: cardBox.h }), accent, null, 0, 0))
+        const railInset = chromeCfg.cardRadiusPx > 0 ? Math.min(0.10, (chromeCfg.cardRadiusPx / 96) * 0.9) : 0
+        shapes.push(spRect(`Insight Stripe ${idx + 1}`, boxEmu({ x: cardBox.x + (railInset > 0 ? 0.02 : 0), y: cardBox.y + railInset, w: 0.04, h: Math.max(0.2, cardBox.h - railInset * 2) }), accent, null, 0, railInset > 0 ? 50000 : 0))
       } else if (chromeCfg.cardTopBar && idx === 0) {
-        shapes.push(spRect(`Insight Top ${idx + 1}`, boxEmu({ x: cardBox.x, y: cardBox.y, w: cardBox.w, h: 0.045 }), accent, null, 0, 0))
+        const topInset = chromeCfg.cardRadiusPx > 0 ? Math.min(0.18, Math.max(0.11, (chromeCfg.cardRadiusPx / 96) * 1.25)) : 0
+        shapes.push(spRect(`Insight Top ${idx + 1}`, boxEmu({ x: cardBox.x + topInset, y: cardBox.y + (topInset > 0 ? 0.008 : 0), w: Math.max(0.2, cardBox.w - topInset * 2), h: 0.042 }), accent, null, 0, topInset > 0 ? 50000 : 0))
       }
     })
   }
@@ -1467,9 +1480,20 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
 
     geom.bars.forEach((b, bIdx) => {
       const col = b.role === 'total' ? focalColor : b.role === 'positive' ? posColor : negColor
-      shapes.push(spRect(`Waterfall Bar ${bIdx + 1}`, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.max(25400, Math.round(b.h)) }, col, null, 0, chromeCfg.cardRadiusPx > 0 ? 3500 : 0))
-      const labelY = b.value >= 0 || b.isTotal ? Math.round(b.y - 220000) : Math.round(b.y + b.h + 25000)
-      shapes.push(spText(`Waterfall Value ${bIdx + 1}`, { x: Math.round(b.x - 95000), y: labelY, w: Math.round(b.w + 190000), h: 205000 }, [paraRich(b.label, { size: 1150, color: b.role === 'total' ? fg : col, bold: true, align: 'ctr' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+      const bh = Math.max(25400, Math.round(b.h))
+      shapes.push(spRect(`Waterfall Bar ${bIdx + 1}`, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: bh }, col, null, 0, chromeCfg.cardRadiusPx > 0 ? 3500 : 0))
+      const isNeg = !(b.value >= 0 || b.isTotal)
+      let labelY = isNeg ? Math.round(b.y + bh + 25000) : Math.round(b.y - 220000)
+      let labelColor = b.role === 'total' ? fg : col
+      if (isNeg && labelY + 185000 > plotBottom - 10000) {
+        if (bh >= 230000) {
+          labelY = Math.round(b.y + (bh - 205000) / 2)
+          labelColor = '#FFFFFF'
+        } else {
+          labelY = Math.round(b.y - 220000)
+        }
+      }
+      shapes.push(spText(`Waterfall Value ${bIdx + 1}`, { x: Math.round(b.x - 95000), y: labelY, w: Math.round(b.w + 190000), h: 205000 }, [paraRich(b.label, { size: 1150, color: labelColor, bold: true, align: 'ctr' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
       shapes.push(spText(`Waterfall Category ${bIdx + 1}`, { x: Math.round(b.x - 110000), y: plotBottom + 42000, w: Math.round(b.w + 220000), h: 240000 }, [paraRich(b.category, { size: 1200, color: fg, align: 'ctr' })], { anchor: 't', ins: [0, 0, 0, 0] }))
     })
 

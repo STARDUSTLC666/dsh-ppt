@@ -23,6 +23,8 @@ export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine
         fewShotSlides?: any[] | undefined;
         researchPlan: Record<string, unknown>;
         planMarkdown: string;
+        artDirector?: Record<string, unknown> | undefined;
+        directorPrompt?: unknown;
         exemplars?: import("./types.js").PptExemplarSummary[] | undefined;
         ok: boolean;
         templates: unknown[];
@@ -30,10 +32,14 @@ export declare function createPptExecutors(config: ResolvedPptConfig, loadEngine
         promptGuide: string;
         fewShotSlides?: Record<string, unknown>[] | undefined;
         exemplar: import("./types.js").PptExemplarSummary;
+        artDirector?: Record<string, unknown> | undefined;
+        directorPrompt?: unknown;
         exemplars?: import("./types.js").PptExemplarSummary[] | undefined;
         ok: boolean;
         templates: unknown[];
     } | {
+        artDirector?: Record<string, unknown> | undefined;
+        directorPrompt?: unknown;
         exemplars?: import("./types.js").PptExemplarSummary[] | undefined;
         ok: boolean;
         templates: unknown[];

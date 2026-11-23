@@ -257,6 +257,7 @@ export interface PptRenderResult { ok: boolean; status: 'unavailable' | 'not-ver
 export interface PptCheckResult extends PptQualityResult { verification: PptVerification; render?: PptRenderResult }
 export type PptExportKind = 'xlsx' | 'docx' | 'qa-prep' | 'memo' | 'social-carousel' | 'subtitles' | 'handout' | 'one-pager' | 'i18n'
 export type PptMotionProfile = 'subtle' | 'executive' | 'keynote'
+export type PptSlideTransition = 'fade' | 'push' | 'wipe' | 'cover' | 'cut' | 'none'
 export interface PptMergeSource { deckPath?: string; slides?: Array<number | string>; bankIds?: string[] }
 
 export interface PptEditArgs {
@@ -307,6 +308,7 @@ export interface PptSlideSpec {
   cardMaterial?: PptCardMaterial
   iconMode?: PptIconMode
   reveal?: 'step' | 'all'
+  transition?: PptSlideTransition
   title?: string
   subtitle?: string
   kicker?: string
@@ -628,6 +630,7 @@ export interface DeckEngine {
   renderExemplarPromptGuide?(exemplar: unknown, lang?: string): string
   getExemplarFewShotSlides?(exemplarId: string, lang?: string): Array<Record<string, unknown>>
   buildResearchPlan?(options?: Record<string, unknown>): Record<string, unknown>
+  buildArtDirectorPrompt?(options?: Record<string, unknown>): Record<string, unknown>
   extractExemplarFromAbsorbed?(absorbed: unknown, options?: Record<string, unknown>): Record<string, unknown>
   importPptxDeck(options: Record<string, unknown>): Promise<PptCreateResult>
   importOfficeDeck?(options: Record<string, unknown>): Promise<PptCreateResult>

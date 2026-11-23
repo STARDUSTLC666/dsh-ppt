@@ -568,6 +568,7 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
         if (lib.isTableShape?.(shape)) hasTable = true
 
         const name = String(lib.getShapeName?.(shape) ?? '').toLowerCase()
+        if (/^cover (?:pattern|editorial|architectural|top accent|vertical hairline|glow|backdrop|monolith|footer rule)/.test(name)) continue
         const phType = String(lib.getShapePlaceholderType?.(shape) ?? '').toLowerCase()
         const preset = String(lib.getShapePreset?.(shape) ?? '').toLowerCase()
         const kind = String(lib.getShapeKind?.(shape) ?? '').toLowerCase()

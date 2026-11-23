@@ -1229,6 +1229,8 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
         if (!slide.coverPattern && coverSlot.coverPattern) {
           slide.coverPattern = coverSlot.coverPattern
         }
+      } else if (slide.layout === 'cover' && !slide.variant && !slide.coverPattern && !slide.image) {
+        slide.coverPattern = persona === 'editorial' ? 'editorial-arcs' : (persona === 'tech-pitch' ? 'waves' : 'dots')
       } else if (slide.layout === 'closing' && closingSlot && !slide.variant && closingSlot.variant) {
         slide.variant = closingSlot.variant
       } else if (slide.layout === 'kpi' && kpiSlot && !slide.variant && kpiSlot.variant) {

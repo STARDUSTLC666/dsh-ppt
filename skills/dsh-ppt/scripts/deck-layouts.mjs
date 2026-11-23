@@ -22,6 +22,7 @@ import {
   POSTER_COVER_VARIANTS,
   renderPosterCoverPptx,
   renderPosterCoverHtml,
+  renderEditorialCoverArtPptx,
   resolveSectionAgendaChapters,
   renderSectionAgendaPptx,
   renderSectionAgendaHtml,
@@ -515,19 +516,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         fill: tk.accentPrimary,
       }))
     } else {
-      // 精致顶栏结构线与右侧微弱几何装饰块
-      shapes.push(ooxmlShape(nextId(), 'Cover top accent', { x: 0, y: 0, w: CANVAS_IN.w, h: 0.08 }, {
-        preset: 'rect',
-        fill: tk.accentPrimary,
-      }))
-      shapes.push(ooxmlShape(nextId(), 'Cover architectural panel', { x: 9.65, y: 0.08, w: 3.6833, h: 7.42 }, {
-        preset: 'rect',
-        fill: tk.surface1,
-      }))
-      shapes.push(ooxmlLine(nextId(), 'Cover vertical hairline', { x: 9.65, y: 0.08 }, { x: 9.65, y: 7.5 }, {
-        color: tk.hairline,
-        widthPt: 0.75,
-      }))
+      shapes.push(renderEditorialCoverArtPptx(theme, nextId, { coverPattern: slide.coverPattern, total, langAttr }))
     }
 
     // 精确对齐标题 + 副标题总高度的左侧结构竖线（彻底修复旧版红条悬空问题）
@@ -681,22 +670,26 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
     if (hasCards) {
       const cols = Math.min(3, items.length)
-      const gap = 0.26
-      const cardW = (10.8 - gap * (cols - 1)) / cols
+      const gap = 0.22
+      const cardW = (11.88 - gap * (cols - 1)) / cols
       const startX = (CANVAS_IN.w - (cardW * cols + gap * (cols - 1))) / 2
       items.slice(0, cols).forEach((it, idx) => {
-        const box = { x: startX + idx * (cardW + gap), y: 4.35, w: cardW, h: 1.75 }
+        const box = { x: startX + idx * (cardW + gap), y: 4.42, w: cardW, h: 1.54 }
+        const textUnits = it.text ? measureEmWidth(it.text) : 0
+        const maxBodyPt = cols >= 3 && textUnits > 15 && textUnits <= 21 ? 12.6 : 13.5
+        const bodyFit = it.text ? computeTextFit(it.text, { w: cardW - 0.24, h: 0.85 }, 'cardBody', { maxPt: maxBodyPt, minPt: 12.0, padXPt: 2, padYPt: 2 }) : { fontPt: 13.5, fontScale: 100000 }
         shapes.push(ooxmlShape(nextId(), 'CTA Card ' + (idx + 1), box, {
           preset: cardPreset,
-          adj: roundRectAdj(box.w, box.h, theme.radiusPx),
+          adj: roundRectAdj(box.w, box.h, chromeCfg.cardRadiusPx),
           fill: inverted ? hexToRgbaSafeHex('#FFFFFF', closeFill, 0.1) : tk.surface1,
           stroke: inverted ? hexToRgbaSafeHex('#FFFFFF', closeFill, 0.22) : tk.hairline,
           strokePt: 0.75,
           anchor: 'ctr',
-          marginsIn: { l: 0.18, r: 0.18, t: 0.12, b: 0.12 },
+          marginsIn: { l: 0.12, r: 0.12, t: 0.12, b: 0.12 },
+          fontScale: bodyFit.fontScale,
           paragraphs: [
-            ...(it.title ? [ooxmlRichParagraph(it.title, { sizePt: 15, color: fg, bold: true, lang: langAttr, align: 'ctr', font: theme.fonts.heading, spaceAfterPt: 4 })] : []),
-            ...(it.text ? [ooxmlRichParagraph(it.text, { sizePt: 13.5, color: inverted ? '#CBD5E1' : tk.inkSecondary, lang: langAttr, align: 'ctr', font: theme.fonts.body })] : []),
+            ...(it.title ? [ooxmlRichParagraph(it.title, { sizePt: 15, color: fg, bold: true, lang: langAttr, align: 'ctr', font: theme.fonts.heading, spaceAfterPt: 5 })] : []),
+            ...(it.text ? [ooxmlRichParagraph(it.text, { sizePt: bodyFit.fontPt, color: inverted ? '#CBD5E1' : tk.inkSecondary, lang: langAttr, align: 'ctr', font: theme.fonts.body, lineHeight: 1.38 })] : []),
           ],
         }))
       })
@@ -787,8 +780,14 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
   }
 
   if (layout === 'statement') {
+    const stmtText = title || slide.text || ''
+    const estLines = Math.max(1, Math.min(4, Math.ceil(measureEmWidth(stmtText, true) / 20)))
+    const cardH = Math.max(1.85, Math.min(3.10, estLines * 0.64 + 0.90))
+    const totalH = (kicker ? 0.54 : 0) + cardH + (subtitle ? 0.92 : 0)
+    const startY = Math.max(1.25, (6.55 - totalH) / 2)
+    let curY = startY
     if (kicker !== '') {
-      shapes.push(ooxmlShape(idBase + 1, 'Kicker', { x: 1.05, y: 1.35, w: 10.5, h: 0.34 }, {
+      shapes.push(ooxmlShape(idBase + 1, 'Kicker', { x: 1.05, y: curY, w: 10.5, h: 0.34 }, {
         txBox: true,
         anchor: 'ctr',
         marginsIn: { l: 0, r: 0, t: 0, b: 0 },
@@ -803,21 +802,23 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
           }),
         ],
       }))
+      curY += 0.54
     }
-    const stmtText = title || slide.text || ''
-    const cardBox = { x: 0.88, y: 1.92, w: 11.57, h: subtitle ? 2.95 : 3.45 }
+    const cardBox = { x: 0.88, y: curY, w: 11.57, h: cardH }
     shapes.push(ooxmlShape(nextId(), 'Statement surface', cardBox, {
       preset: cardPreset,
-      adj: roundRectAdj(cardBox.w, cardBox.h, theme.radiusPx),
+      adj: roundRectAdj(cardBox.w, cardBox.h, chromeCfg.cardRadiusPx),
       fill: tk.surface1,
       stroke: tk.hairline,
       strokePt: 0.75,
     }))
-    shapes.push(ooxmlShape(nextId(), 'Accent bar', { x: 0.88, y: 1.92, w: 0.10, h: cardBox.h }, {
-      preset: 'rect',
+    const sInset = chromeCfg.cardRadiusPx > 0 ? 0.08 : 0
+    shapes.push(ooxmlShape(nextId(), 'Accent bar', { x: 0.88 + (sInset > 0 ? 0.03 : 0), y: curY + sInset, w: 0.09, h: cardBox.h - sInset * 2 }, {
+      preset: sInset > 0 ? 'roundRect' : 'rect',
+      adj: sInset > 0 ? 50000 : undefined,
       fill: tk.accentPrimary,
     }))
-    const sBox = { x: 1.32, y: 2.12, w: 10.8, h: cardBox.h - 0.4 }
+    const sBox = { x: 1.34, y: curY + 0.22, w: 10.76, h: cardBox.h - 0.44 }
     const sFit = computeTextFit(stmtText, sBox, 'statement')
     shapes.push(ooxmlShape(idBase + 2, 'Statement', sBox, {
       txBox: true,
@@ -838,13 +839,13 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       ],
     }))
     if (subtitle !== '') {
-      shapes.push(ooxmlShape(idBase + 3, 'Subtitle', { x: 1.32, y: 5.12, w: 10.5, h: 0.85 }, {
+      shapes.push(ooxmlShape(idBase + 3, 'Subtitle', { x: 1.34, y: curY + cardH + 0.24, w: 10.5, h: 0.68 }, {
         txBox: true,
         anchor: 't',
         marginsIn: { l: 0, r: 0, t: 0, b: 0 },
         paragraphs: [
           ooxmlRichParagraph(subtitle, {
-            sizePt: 17,
+            sizePt: 16.5,
             color: tk.inkSecondary,
             lang: langAttr,
             font: theme.fonts.body,
@@ -858,29 +859,39 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   if (layout === 'quote') {
     const quoteText = title || slide.text || ''
-    shapes.push(ooxmlShape(nextId(), 'Quote card', { x: 0.88, y: 1.25, w: 11.57, h: 4.85 }, {
+    const estLines = Math.max(1, Math.min(5, Math.ceil(measureEmWidth(quoteText, true) / 22)))
+    const qTextH = Math.max(1.05, Math.min(2.25, estLines * 0.56 + 0.36))
+    const cardH = Math.max(2.65, Math.min(4.25, qTextH + (subtitle ? 1.72 : 1.15)))
+    const cardY = Math.max(1.22, (6.65 - cardH) / 2)
+    shapes.push(ooxmlShape(nextId(), 'Quote card', { x: 0.88, y: cardY, w: 11.57, h: cardH }, {
       preset: cardPreset,
-      adj: roundRectAdj(11.57, 4.85, theme.radiusPx),
+      adj: roundRectAdj(11.57, cardH, chromeCfg.cardRadiusPx),
       fill: tk.surface1,
       stroke: tk.hairline,
       strokePt: 0.75,
     }))
-    shapes.push(ooxmlShape(idBase + 1, 'Quote mark', { x: 1.25, y: 1.38, w: 1.5, h: 1.15 }, {
+    const qInset = chromeCfg.cardRadiusPx > 0 ? 0.08 : 0
+    shapes.push(ooxmlShape(nextId(), 'Quote accent rail', { x: 0.88 + (qInset > 0 ? 0.03 : 0), y: cardY + qInset, w: 0.08, h: cardH - qInset * 2 }, {
+      preset: qInset > 0 ? 'roundRect' : 'rect',
+      adj: qInset > 0 ? 50000 : undefined,
+      fill: tk.accentPrimary,
+    }))
+    shapes.push(ooxmlShape(idBase + 1, 'Quote mark', { x: 1.28, y: cardY + 0.14, w: 1.3, h: 0.92 }, {
       txBox: true,
       anchor: 't',
       marginsIn: { l: 0, r: 0, t: 0, b: 0 },
       paragraphs: [
         ooxmlRichParagraph('\u201C', {
-          sizePt: 72,
+          sizePt: 64,
           color: tk.accentPrimary,
           bold: true,
           lang: langAttr,
           font: theme.fonts.heading,
-          lineHeight: 0.9,
+          lineHeight: 0.88,
         }),
       ],
     }))
-    const qBox = { x: 1.38, y: 2.38, w: 10.5, h: 2.45 }
+    const qBox = { x: 1.38, y: cardY + 0.86, w: 10.5, h: qTextH }
     const qFit = computeTextFit(quoteText, qBox, 'quote')
     shapes.push(ooxmlShape(idBase + 2, 'Quote', qBox, {
       txBox: true,
@@ -899,17 +910,18 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       ],
     }))
     if (subtitle !== '') {
-      shapes.push(ooxmlLine(nextId(), 'Quote rule', { x: 1.38, y: 5.08 }, { x: 3.2, y: 5.08 }, {
+      const ruleY = cardY + 0.86 + qTextH + 0.18
+      shapes.push(ooxmlLine(nextId(), 'Quote rule', { x: 1.38, y: ruleY }, { x: 2.85, y: ruleY }, {
         color: tk.accentPrimary,
         widthPt: 1.25,
       }))
-      shapes.push(ooxmlShape(idBase + 3, 'Attribution', { x: 1.38, y: 5.22, w: 9.8, h: 0.55 }, {
+      shapes.push(ooxmlShape(idBase + 3, 'Attribution', { x: 1.38, y: ruleY + 0.10, w: 9.8, h: 0.44 }, {
         txBox: true,
         anchor: 'ctr',
         marginsIn: { l: 0, r: 0, t: 0, b: 0 },
         paragraphs: [
           ooxmlRichParagraph('\u2014\u2014 ' + subtitle, {
-            sizePt: 15,
+            sizePt: 14.5,
             color: tk.inkMuted,
             bold: true,
             lang: langAttr,
@@ -1110,7 +1122,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
     const items = resolveEffectiveItems(slide).slice(0, 4)
     const kpiVariant = variant || taste.recipe?.kpiVariant || ''
     const n = Math.max(1, items.length)
-    const cardH = Math.min(3.75, bodyH - 0.24)
+    const cardH = Math.min(3.38, bodyH - 0.28)
     const cardY = bodyTopY + (bodyH - cardH) / 2
 
     // 非对称 Spotlight 主次聚光灯变体（Hero 50% + 右侧无框细线副指标栈 —— 破除等宽三联框疲劳）
@@ -1133,7 +1145,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         }))
         labelX += 0.56
       }
-      const heroLabel = hero.value ? (hero.title || '') : ''
+      const heroLabel = hero.value ? (hero.title || hero.tag || hero.label || '') : (hero.tag || hero.label || '')
       if (heroLabel) {
         shapes.push(ooxmlShape(nextId(), 'KPI Hero Label', { x: labelX, y: heroBox.y + 0.30, w: heroBox.x + heroBox.w - labelX - 0.26, h: 0.40 }, {
           txBox: true,
@@ -1237,7 +1249,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
           infoX += 0.50
         }
         const valText = (it.value || it.title || '—') + (it.unit ? ' ' + it.unit : '')
-        const lblText = it.value ? (it.title || '') : ''
+        const lblText = it.value ? (it.title || it.tag || it.label || '') : (it.tag || it.label || '')
         const valW = Math.min(2.35, Math.max(1.55, rightW * 0.38))
         const leftW = Math.max(1.8, rightX + rightW - valW - infoX - 0.16)
         shapes.push(ooxmlShape(nextId(), 'Card ' + (si + 2), { x: infoX, y: sy + 0.10, w: leftW, h: satH - 0.18 }, {
@@ -1296,7 +1308,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
       const x = 0.62 + idx * (cardW + gap)
       const st = statusPalette(it.status, tk)
       const valText = (it.value || it.title || '—') + (it.unit ? ' ' + it.unit : '')
-      const labelText = it.value ? (it.title || '') : ''
+      const labelText = it.value ? (it.title || it.tag || it.label || '') : (it.tag || it.label || '')
       const iconName = resolveItemIcon(it, idx)
 
       shapes.push(renderSurfaceCardPptx('KPI Surface ' + (idx + 1), { x, y: cardY, w: cardW, h: cardH }, {
@@ -2310,11 +2322,12 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     if (kpiVariant === 'spotlight' && items.length >= 2) {
       const hero = items[0]
       const heroIcon = resolveItemIcon(hero, 0)
+      const heroLbl = hero.value ? (hero.title || hero.tag || hero.label || '') : (hero.tag || hero.label || '')
       const heroHeadMarkup = heroIcon
         ? '<div class="kpi-head-row">' + renderIconBadgeHtml(heroIcon, { style: taste.iconBadgeStyle, size: 20 }) +
-          (hero.value && hero.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(hero.title) + '</div>' : '') +
+          (heroLbl ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(heroLbl) + '</div>' : '') +
           '</div>'
-        : (hero.value && hero.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(hero.title) + '</div>' : '')
+        : (heroLbl ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(heroLbl) + '</div>' : '')
       const sats = items.slice(1, 4)
       inner =
         renderHeader() +
@@ -2329,11 +2342,12 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
         '<div class="kpi-sat-stack">' +
         sats.map((it, si) => {
           const sIcon = resolveItemIcon(it, si + 1)
+          const satLbl = it.value ? (it.title || it.tag || it.label || '') : (it.tag || it.label || '')
           return (
             '<div class="kpi-sat-row" data-item-index="' + (si + 1) + '">' +
             (sIcon ? renderIconBadgeHtml(sIcon, { style: taste.iconBadgeStyle, size: 18 }) : '') +
             '<div class="kpi-sat-copy">' +
-            (it.value && it.title ? '<div class="card-title" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '') +
+            (satLbl ? '<div class="card-title" data-item-field="title">' + renderInlineHtml(satLbl) + '</div>' : '') +
             (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
             '</div>' +
             '<div class="kpi-sat-metric">' +
@@ -2350,11 +2364,12 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
         '<div class="layout-grid kpi-grid cols-' + Math.max(1, items.length) + '">' +
         items.map((it, idx) => {
           const iconName = resolveItemIcon(it, idx)
+          const kpiLbl = it.value ? (it.title || it.tag || it.label || '') : (it.tag || it.label || '')
           const headMarkup = iconName
             ? '<div class="kpi-head-row">' + renderIconBadgeHtml(iconName, { style: taste.iconBadgeStyle, size: 18 }) +
-              (it.value && it.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '') +
+              (kpiLbl ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(kpiLbl) + '</div>' : '') +
               '</div>'
-            : (it.value && it.title ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(it.title) + '</div>' : '')
+            : (kpiLbl ? '<div class="kpi-label" data-item-field="title">' + renderInlineHtml(kpiLbl) + '</div>' : '')
           return (
             '<div class="surface-card kpi-card' + (idx === 0 ? ' is-focal' : '') + effKpiMatClass + '" data-item-index="' + idx + '">' +
             headMarkup +
@@ -2630,10 +2645,10 @@ math.deck-math.is-inline{font-size:1.06em;vertical-align:middle}
 .callout-hero.is-omath{padding:22px 30px;display:flex;align-items:center;justify-content:center}
 .formula-caption{text-align:center;color:var(--ink-secondary);font-size:clamp(14px,1.35vw,18px);margin-top:-6px}
 @media (max-width:900px){
-  .cols-3,.cols-4,.cols-5,.cols-6,.bento-grid.bento-3,.bento-grid.bento-4,.bento-grid.bento-5,.bento-grid.bento-6,.bento-hero-grid,.kpi-spotlight,.section-agenda-shell,.cover-shell.is-architectural,.ed-main-grid,.ed-meta-strip,.tam-board,.arch-board.has-sidecar,.org-children,.flywheel-stage,.mekko-board,.porter-board,.swot-cross{grid-template-columns:1fr}
-  .bento-grid.bento-3 > :first-child,.bento-grid.bento-4 > *,.bento-hero-grid > :first-child{grid-row:auto;grid-column:auto}
-  .issue-action-row,.gantt-head,.gantt-row,.arch-tier,.porter-support-zone{grid-template-columns:1fr}
-  .flywheel-hub,.swot-anchor{position:static;transform:none;margin:0 auto}
+  body:not(.is-scaled-stage) .cols-3,body:not(.is-scaled-stage) .cols-4,body:not(.is-scaled-stage) .cols-5,body:not(.is-scaled-stage) .cols-6,body:not(.is-scaled-stage) .bento-grid.bento-3,body:not(.is-scaled-stage) .bento-grid.bento-4,body:not(.is-scaled-stage) .bento-grid.bento-5,body:not(.is-scaled-stage) .bento-grid.bento-6,body:not(.is-scaled-stage) .bento-hero-grid,body:not(.is-scaled-stage) .kpi-spotlight,body:not(.is-scaled-stage) .section-agenda-shell,body:not(.is-scaled-stage) .cover-shell.is-architectural,body:not(.is-scaled-stage) .ed-main-grid,body:not(.is-scaled-stage) .ed-meta-strip,body:not(.is-scaled-stage) .tam-board,body:not(.is-scaled-stage) .arch-board.has-sidecar,body:not(.is-scaled-stage) .org-children,body:not(.is-scaled-stage) .flywheel-stage,body:not(.is-scaled-stage) .mekko-board,body:not(.is-scaled-stage) .porter-board,body:not(.is-scaled-stage) .swot-cross{grid-template-columns:1fr}
+  body:not(.is-scaled-stage) .bento-grid.bento-3 > :first-child,body:not(.is-scaled-stage) .bento-grid.bento-4 > *,body:not(.is-scaled-stage) .bento-hero-grid > :first-child{grid-row:auto;grid-column:auto}
+  body:not(.is-scaled-stage) .issue-action-row,body:not(.is-scaled-stage) .gantt-head,body:not(.is-scaled-stage) .gantt-row,body:not(.is-scaled-stage) .arch-tier,body:not(.is-scaled-stage) .porter-support-zone{grid-template-columns:1fr}
+  body:not(.is-scaled-stage) .flywheel-hub,body:not(.is-scaled-stage) .swot-anchor{position:static;transform:none;margin:0 auto}
 }
 `
 

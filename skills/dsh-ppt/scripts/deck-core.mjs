@@ -1169,6 +1169,8 @@ function normalizeSlideContent(raw, index) {
     : undefined
   const rawReveal = String(source.reveal ?? '').trim().toLowerCase()
   const reveal = rawReveal === 'step' || rawReveal === 'all' ? rawReveal : undefined
+  const rawTransition = String(source.transition ?? '').trim().toLowerCase()
+  const transition = ['fade', 'push', 'wipe', 'cover', 'cut', 'none'].includes(rawTransition) ? rawTransition : undefined
 
   const commonExtras = {
     ...(variant !== '' ? { variant } : {}),
@@ -1176,6 +1178,7 @@ function normalizeSlideContent(raw, index) {
     ...(cardMaterial ? { cardMaterial } : {}),
     ...(iconMode ? { iconMode } : {}),
     ...(reveal ? { reveal } : {}),
+    ...(transition ? { transition } : {}),
     ...(formula !== '' ? { formula } : {}),
     ...(mermaid !== '' ? { mermaid } : {}),
     ...(rawCode !== '' ? { code: rawCode } : {}),
@@ -1461,14 +1464,21 @@ export function renderHtml(manifest, themeInput, languageInput, files = {}) {
   const motion = manifest.motion !== false
   const motionCss = motion
     ? `body.motion .slide.is-active{animation:slide-in .45s cubic-bezier(.22,.8,.36,1)}
+body.motion .slide.is-active[data-transition="push"]{animation:slide-push .42s cubic-bezier(.22,.8,.36,1)}
+body.motion .slide.is-active[data-transition="wipe"]{animation:slide-wipe .42s cubic-bezier(.22,.8,.36,1)}
+body.motion .slide.is-active[data-transition="cover"]{animation:slide-cover .42s cubic-bezier(.22,.8,.36,1)}
+body.motion .slide.is-active[data-transition="cut"],body.motion .slide.is-active[data-transition="none"]{animation:none}
 @keyframes slide-in{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes slide-push{from{opacity:.15;transform:translateX(56px)}to{opacity:1;transform:none}}
+@keyframes slide-wipe{from{clip-path:inset(0 100% 0 0);opacity:.6}to{clip-path:inset(0 0 0 0);opacity:1}}
+@keyframes slide-cover{from{opacity:.25;transform:translateY(36px) scale(.985)}to{opacity:1;transform:none}}
 body.motion .bullets li{
   opacity:0;animation:bullet-in .55s cubic-bezier(.22,.8,.36,1) forwards;
   animation-delay:calc(var(--i, 0)*90ms + .12s);
 }
 @keyframes bullet-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 body.motion .slide[data-reveal="step"] [data-reveal-step]{opacity:0;transform:translateY(14px);transition:opacity .38s ease,transform .38s ease}
-body.motion .slide[data-reveal="step"] [data-reveal-step].is-revealed,body.overview .slide[data-reveal="step"] [data-reveal-step]{opacity:1;transform:none}`
+body.motion .slide[data-reveal="step"] [data-reveal-step].is-revealed,body.overview .slide[data-reveal="step"] [data-reveal-step],body.is-embedded .slide[data-reveal="step"] [data-reveal-step]{opacity:1;transform:none}`
     : ''
   const needsMediaCss = Boolean(
     manifest.brand?.logoAssetId ||
@@ -1674,16 +1684,38 @@ body.overview #notes-panel,body.presenting #notes-panel{display:none !important}
 body.presenting #notes-toggle{opacity:.55}
 body.presenting #hud{opacity:0;pointer-events:none;transition:opacity .25s}
 body.presenting #hud:hover{opacity:1;pointer-events:auto}
+body.is-scaled-stage:not(.overview) #stage{display:flex;align-items:center;justify-content:center;overflow:hidden}
+body.is-scaled-stage:not(.overview) .slide-frame{position:relative;inset:auto;width:1280px;height:720px;flex:none;display:none;transform:scale(var(--stage-scale,1));transform-origin:center center}
+body.is-scaled-stage:not(.overview) .slide-frame.is-current{display:block}
+body.is-scaled-stage:not(.overview) .slide{width:1280px;height:720px;padding:42px 52px}
+body.is-scaled-stage:not(.overview) .media-canvas{width:1280px;height:720px}
+body.is-scaled-stage:not(.overview) h1{font-size:58px}
+body.is-scaled-stage:not(.overview) h2{font-size:38px}
+body.is-scaled-stage:not(.overview) .slide-header h2{font-size:33px}
+body.is-scaled-stage:not(.overview) .subtitle{font-size:21px}
+body.is-scaled-stage:not(.overview) .kicker{font-size:13.5px}
+body.is-scaled-stage:not(.overview) .statement-title{font-size:46px}
+body.is-scaled-stage:not(.overview) .quote-text{font-size:36px}
+body.is-scaled-stage:not(.overview) .quote-mark{font-size:96px}
+body.is-scaled-stage:not(.overview) .bullets-list li{font-size:20px}
+body.is-scaled-stage:not(.overview) .card-title{font-size:19px}
+body.is-scaled-stage:not(.overview) .card-body{font-size:16px}
+body.is-scaled-stage:not(.overview) .kpi-value{font-size:50px}
+body.is-scaled-stage:not(.overview) .kpi-label{font-size:14.5px}
+body.is-scaled-stage:not(.overview) .mermaid-board{flex:1 1 auto;min-height:360px}
+body.is-embedded #hud{left:12px;right:12px;bottom:8px;gap:6px;font-size:11.5px}
+body.is-embedded #hud button{padding:5px 10px;min-height:28px}
+body.is-embedded #theme-label{display:none}
 @media (max-width:900px){
-  .slide{padding:clamp(22px,5vw,44px)}
-  h1{font-size:clamp(34px,8.5vw,64px)}
-  h2{font-size:clamp(26px,6.5vw,48px)}
-  .statement-title{font-size:clamp(26px,7vw,54px)}
-  .subtitle{font-size:clamp(16px,3.4vw,24px)}
-  .bullets li{font-size:clamp(16px,3.4vw,24px)}
-  .kicker{font-size:13px}
-  .deck-table{font-size:14px}
-  .deck-table th,.deck-table td{padding:.55em .6em}
+  body:not(.is-scaled-stage) .slide{padding:clamp(22px,5vw,44px)}
+  body:not(.is-scaled-stage) h1{font-size:clamp(34px,8.5vw,64px)}
+  body:not(.is-scaled-stage) h2{font-size:clamp(26px,6.5vw,48px)}
+  body:not(.is-scaled-stage) .statement-title{font-size:clamp(26px,7vw,54px)}
+  body:not(.is-scaled-stage) .subtitle{font-size:clamp(16px,3.4vw,24px)}
+  body:not(.is-scaled-stage) .bullets li{font-size:clamp(16px,3.4vw,24px)}
+  body:not(.is-scaled-stage) .kicker{font-size:13px}
+  body:not(.is-scaled-stage) .deck-table{font-size:14px}
+  body:not(.is-scaled-stage) .deck-table th,body:not(.is-scaled-stage) .deck-table td{padding:.55em .6em}
   #hud{left:10px;right:10px;bottom:10px;gap:6px;font-size:12px}
   #hud button{padding:10px 16px;min-height:44px}
   #notes-panel{bottom:68px;max-height:45vh}
@@ -1820,11 +1852,36 @@ ${slides}
 
   function updatePresenter() { sendState(); }
 
+  const isEmbedded = (function () {
+    try {
+      if (window.self !== window.top) return true;
+      const sp = new URLSearchParams(window.location.search || '');
+      return sp.has('preview') || sp.has('static');
+    } catch (_) { return true; }
+  })();
+  if (isEmbedded) document.body.classList.add('is-embedded');
+
+  function fitStage() {
+    if (document.body.classList.contains('overview')) {
+      document.body.classList.remove('is-scaled-stage');
+      return;
+    }
+    const vw = window.innerWidth || 1280;
+    const vh = window.innerHeight || 720;
+    const shouldScale = isEmbedded || vw < 1040 || vh < 600;
+    document.body.classList.toggle('is-scaled-stage', shouldScale);
+    if (shouldScale) {
+      const s = Math.max(0.2, Math.min(vw / 1280, vh / 720));
+      document.documentElement.style.setProperty('--stage-scale', String(s));
+    }
+  }
+
   function resetStepReveal(slideEl) {
     if (!slideEl || slideEl.dataset.reveal !== 'step') return;
     slideEl.querySelectorAll('[data-reveal-step]').forEach(function (el) { el.classList.remove('is-revealed'); });
   }
   function advanceStep(dir) {
+    if (document.body.classList.contains('is-embedded')) return false;
     const curSlide = slides[index];
     if (!curSlide || curSlide.dataset.reveal !== 'step' || !document.body.classList.contains('motion')) return false;
     const steps = Array.from(curSlide.querySelectorAll('[data-reveal-step]'));
@@ -1883,9 +1940,12 @@ ${slides}
     frames.forEach(function (frame) { frame.tabIndex = on ? 0 : -1; });
     if (on) {
       document.body.classList.remove('notes-open');
+      document.body.classList.remove('is-scaled-stage');
       helpPanel.hidden = true;
       syncNotes();
       updateThumbScale();
+    } else {
+      fitStage();
     }
   }
 
@@ -2141,11 +2201,12 @@ ${slides}
       if (event.key === 'Enter' && document.body.classList.contains('overview')) { go(i); setOverview(false); }
     });
   });
-  window.addEventListener('resize', updateThumbScale);
+  window.addEventListener('resize', function () { updateThumbScale(); fitStage(); });
   window.addEventListener('beforeunload', closePresenter);
 
   ${delivery.script}
   window.addEventListener('dsh-data-change', () => { syncNotes(); if (presenterOpen()) sendInit(); updatePresenter(); });
+  fitStage();
   const start = Number.parseInt(location.hash?.replace('#slide-', ''), 10);
   go(Number.isInteger(start) ? start - 1 : 0);
 })();
@@ -2173,6 +2234,8 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
     })
   }
   const revealAttr = isStepReveal ? ' data-reveal="step"' : ''
+  const resolvedTransition = resolveSlideTransition(slide, manifest.motionProfile)
+  const transitionAttr = resolvedTransition && resolvedTransition !== 'fade' ? ' data-transition="' + escapeHtml(resolvedTransition) + '"' : ''
 
   const notesAttr = typeof slide.notes === 'string' && slide.notes.trim() !== ''
     ? ' data-notes="' + escapeHtml(slide.notes) + '"'
@@ -2192,7 +2255,7 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
     ? '<div class="brand-watermark" aria-label="Watermark">' + escapeHtml(manifest.brand.watermark.trim()) + '</div>'
     : ''
 
-  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + revealAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
+  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + revealAttr + transitionAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
     '<div class="slide-inner">' + inner + '</div>' +
     watermarkHtml +
     (hasLogo ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
@@ -2282,23 +2345,32 @@ function bulletTimingXml(spid, clicks) {
     '<p:bldLst><p:bldP spid="' + spid + '" grpId="0"/></p:bldLst></p:timing>'
 }
 
-function multiShapeTimingXml(spids) {
+function multiShapeTimingXml(groups) {
   let id = 2
   const nextId = () => { id += 1; return String(id) }
-  const clickPars = spids.map((spid, grpIdx) =>
-    '<p:par><p:cTn id="' + nextId() + '" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>' +
-    '<p:par><p:cTn id="' + nextId() + '" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="' + grpIdx + '" nodeType="clickEffect">' +
-    '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
-    '<p:set><p:cBhvr><p:cTn id="' + nextId() + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>' +
-    '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
-    '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>' +
-    '<p:to><p:strVal val="visible"/></p:to></p:set>' +
-    '<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="' + nextId() + '" dur="350"/>' +
-    '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl></p:cBhvr></p:animEffect>' +
-    '</p:childTnLst></p:cTn></p:par>' +
-    '</p:childTnLst></p:cTn></p:par>',
-  )
-  const bldPs = spids.map((spid, grpIdx) => '<p:bldP spid="' + spid + '" grpId="' + grpIdx + '"/>').join('')
+  const normalizedGroups = groups.map((g) => (Array.isArray(g) ? g : [g])).filter((g) => g.length > 0)
+  const allSpids = []
+  const clickPars = normalizedGroups.map((group, grpIdx) => {
+    const memberPars = group.map((spid, mIdx) => {
+      allSpids.push({ spid, grpIdx })
+      const nodeType = mIdx === 0 ? 'clickEffect' : 'withEffect'
+      return '<p:par><p:cTn id="' + nextId() + '" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="' + grpIdx + '" nodeType="' + nodeType + '">' +
+        '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
+        '<p:set><p:cBhvr><p:cTn id="' + nextId() + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>' +
+        '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+        '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>' +
+        '<p:to><p:strVal val="visible"/></p:to></p:set>' +
+        '<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="' + nextId() + '" dur="350"/>' +
+        '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl></p:cBhvr></p:animEffect>' +
+        '</p:childTnLst></p:cTn></p:par>'
+    }).join('')
+    return '<p:par><p:cTn id="' + nextId() + '" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>' +
+      '<p:par><p:cTn id="' + nextId() + '" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
+      memberPars +
+      '</p:childTnLst></p:cTn></p:par>' +
+      '</p:childTnLst></p:cTn></p:par>'
+  })
+  const bldPs = allSpids.map(({ spid, grpIdx }) => '<p:bldP spid="' + spid + '" grpId="' + grpIdx + '"/>').join('')
   return '<p:timing><p:tnLst><p:par>' +
     '<p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>' +
     '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>' +
@@ -2310,26 +2382,84 @@ function multiShapeTimingXml(spids) {
     '<p:bldLst>' + bldPs + '</p:bldLst></p:timing>'
 }
 
-function extractStepRevealSpids(shapesXml) {
-  const spids = []
-  const seen = new Set()
-  const stepNameRe = /<p:cNvPr\s+id="(\d+)"\s+name="((?:KPI Surface|KPI Hero Surface|KPI Sat Val|Card Surface|Card Hero Surface|Comparison Card|Issue Card|Matrix Surface|Matrix Cell|Matrix Quadrant|Step Surface|Timeline Card|Timeline Step|Stage |Layer |Chevron |Iso Info Card|Iso Pillar Cap|Iso Stack Card|IssueTree Branch|Pricing Card|Gauge Row)[^"]*)"/gi
-  for (const m of shapesXml.matchAll(stepNameRe)) {
-    const spid = m[1]
-    const name = m[2]
-    if (/hairline|rule|bar|shadow|top|bottom|accent|editorial|label|tag|badge|head|title|desc|stripe|axis|connector|number|rail|leader|anchor|tick|pill/i.test(name)) continue
-    if (!seen.has(spid)) {
-      seen.add(spid)
-      spids.push(spid)
-    }
+function parseShapeBoxes(shapesXml) {
+  const boxes = []
+  const re = /<p:(sp|cxnSp)\b[^>]*>[\s\S]*?<p:cNvPr\s+id="(\d+)"\s+name="([^"]*)"[\s\S]*?<a:off\s+x="(\d+)"\s+y="(\d+)"\s*\/>\s*<a:ext\s+cx="(\d+)"\s+cy="(\d+)"\s*\/>[\s\S]*?<\/p:\1>/g
+  for (const m of shapesXml.matchAll(re)) {
+    boxes.push({
+      tag: m[1],
+      spid: m[2],
+      name: m[3],
+      x: Number(m[4]),
+      y: Number(m[5]),
+      w: Number(m[6]),
+      h: Number(m[7]),
+    })
   }
-  return spids.slice(0, 8)
+  return boxes
 }
 
-function transitionXmlFor(motionProfile) {
-  if (motionProfile === 'subtle') return '<p:transition spd="fast"><p:fade/></p:transition>'
-  if (motionProfile === 'keynote') return '<p:transition spd="med"><p:push dir="l"/></p:transition>'
-  return '<p:transition spd="med"><p:fade/></p:transition>'
+function extractStepRevealGroups(shapesXml) {
+  const all = parseShapeBoxes(shapesXml)
+  const stepNameRe = /^(?:KPI Surface|KPI Hero Surface|KPI Sat Val|Card Surface|Card Hero Surface|Comparison Card|Issue Card|Matrix Surface|Matrix Cell|Matrix Quadrant|Step Surface|Timeline Card|Timeline Step|Stage |Layer |Chevron |Iso Info Card|Iso Pillar Cap|Iso Stack Card|IssueTree Branch|Pricing Card|Gauge Row)/i
+  const excludeAnchorRe = /hairline|rule|bar|shadow|top|bottom|accent|editorial|label|tag|badge|head|title|desc|stripe|axis|connector|number|rail|leader|anchor|tick|pill/i
+  const excludeChildRe = /^(?:Title|Kicker|Header|Footer|Page number|Brand|Takeaway|Slide |Beamer |Editorial folio|Gov |Watermark)/i
+
+  const anchors = []
+  const anchorSet = new Set()
+  for (const b of all) {
+    if (stepNameRe.test(b.name) && !excludeAnchorRe.test(b.name) && !anchorSet.has(b.spid)) {
+      anchorSet.add(b.spid)
+      anchors.push(b)
+    }
+  }
+  const capped = anchors.slice(0, 8)
+  if (capped.length < 2) return []
+
+  const claimed = new Set(capped.map((a) => a.spid))
+  const pad = 70000 // ~0.076" tolerance for top bars / edge rails
+  return capped.map((anchor) => {
+    const group = [anchor.spid]
+    const minX = anchor.x - pad
+    const maxX = anchor.x + anchor.w + pad
+    const minY = anchor.y - pad
+    const maxY = anchor.y + anchor.h + pad
+    for (const cand of all) {
+      if (claimed.has(cand.spid)) continue
+      if (cand.w > 10000000 || excludeChildRe.test(cand.name)) continue
+      const cx = cand.x + cand.w / 2
+      const cy = cand.y + cand.h / 2
+      if (cx >= minX && cx <= maxX && cy >= minY && cy <= maxY) {
+        claimed.add(cand.spid)
+        group.push(cand.spid)
+      }
+    }
+    return group
+  })
+}
+
+function resolveSlideTransition(slide, motionProfile) {
+  const explicit = String(slide?.transition ?? '').trim().toLowerCase()
+  if (['fade', 'push', 'wipe', 'cover', 'cut', 'none'].includes(explicit)) return explicit
+  if (motionProfile === 'subtle') return 'fade'
+  if (motionProfile === 'keynote') {
+    const layout = String(slide?.layout ?? 'bullets')
+    if (layout === 'cover' || layout === 'section' || layout === 'closing' || layout === 'statement' || layout === 'quote') return 'fade'
+    if (layout === 'chart' || layout === 'chart-split' || layout === 'waterfall' || layout === 'radar' || layout === 'heatmap' || layout === 'treemap' || layout === 'gauge') return 'wipe'
+    return 'push'
+  }
+  return 'fade'
+}
+
+function transitionXmlFor(motionProfile, slide) {
+  const kind = resolveSlideTransition(slide, motionProfile)
+  if (kind === 'none') return ''
+  if (kind === 'cut') return '<p:transition spd="fast"><p:cut/></p:transition>'
+  if (kind === 'push') return '<p:transition spd="med"><p:push dir="l"/></p:transition>'
+  if (kind === 'wipe') return '<p:transition spd="med"><p:wipe dir="l"/></p:transition>'
+  if (kind === 'cover') return '<p:transition spd="med"><p:cover dir="l"/></p:transition>'
+  const spd = motionProfile === 'subtle' ? 'fast' : 'med'
+  return '<p:transition spd="' + spd + '"><p:fade/></p:transition>'
 }
 
 function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
@@ -2337,13 +2467,13 @@ function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
   const shapesXml = slideShapeList(slide, index, total, theme, langId, manifest)
   let motionXml = ''
   if (motion) {
-    motionXml = transitionXmlFor(manifest.motionProfile)
+    motionXml = transitionXmlFor(manifest.motionProfile, slide)
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
     const bodySpid = (index + 1) * 10 + 3
     if (slide.reveal === 'step' && slide.layout !== 'bullets') {
-      const stepSpids = extractStepRevealSpids(shapesXml)
-      if (stepSpids.length >= 2) {
-        motionXml += multiShapeTimingXml(stepSpids)
+      const stepGroups = extractStepRevealGroups(shapesXml)
+      if (stepGroups.length >= 2) {
+        motionXml += multiShapeTimingXml(stepGroups)
       }
     } else if (slide.layout === 'bullets' && bullets.length >= 2 && shapesXml.includes('id="' + bodySpid + '"')) {
       motionXml += bulletTimingXml(bodySpid, bullets.length)

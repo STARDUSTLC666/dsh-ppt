@@ -1,7 +1,7 @@
 {
   "name": "dsh-ppt",
-  "version": "0.36.1",
-  "description": "DeepSeek Harness 大师级演示文稿引擎与工作台：支持三模路由（有资料直出 / 零资料 8 域权威深研 / Mode C 本地多源融合+外源对标）、企业品牌宪章锁（SLOP-13/14）、41 种原生可编辑图谱（MECE 议题树/Treemap/OKR 子弹仪/三档报价/点阵地图/2.5D 等轴测/Mermaid/公式/代码）、24 主题 / 20 标杆范本、逆向导出 Excel/Word/备忘录/答辩预案/无损翻译包、企业金页库拼装与离线 R 键审阅回流。欢迎 PR 与 Issues。",
+  "version": "0.37.0",
+  "description": "DeepSeek Harness 大师级演示文稿引擎与工作台：内置三层首席艺术总监提示词与 SLOP-15 反空盒门禁，支持三模路由（有资料直出 / 零资料 8 域权威深研 / Mode C 本地多源融合+外源对标）、企业品牌宪章锁（SLOP-13/14）、41 种原生可编辑图谱、24 主题 / 20 标杆范本、整卡联动 PPTX 动效与 16:9 自适应内嵌预览、逆向导出 Excel/Word/备忘录/答辩预案/无损翻译包与离线 R 键审阅回流。欢迎 PR 与 Issues。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

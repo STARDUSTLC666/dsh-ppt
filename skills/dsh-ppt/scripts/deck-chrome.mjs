@@ -1020,9 +1020,9 @@ export function getChromeConfig(chromeStyle, theme) {
   if (chrome === 'editorial-folio') {
     return {
       chrome,
-      cardRadiusPx: 0,
+      cardRadiusPx: theme?.radiusPx === 0 ? 0 : Math.min(6, theme?.radiusPx ?? 4),
       cardBorderless: false,
-      cardStrokePt: 0.5,
+      cardStrokePt: 0.6,
       cardTopBar: false,
       cardLeftBar: false,
       headerStyle: 'editorial-folio',
@@ -1085,6 +1085,7 @@ export function renderSurfaceCardPptx(name, box, opts, nextIdFn, chromeCfg, them
     stroke,
     accentBarColor = tk.accentPrimary,
     cardMaterial = 'solid',
+    disableTopBar = false,
     paragraphs = [],
     anchor = 't',
     marginsIn = { l: 0.08, r: 0.08, t: 0.05, b: 0.05 },
@@ -1200,17 +1201,19 @@ export function renderSurfaceCardPptx(name, box, opts, nextIdFn, chromeCfg, them
       paragraphs,
     }),
   ]
-  if (chromeCfg.cardTopBar) {
-    const barInset = radius > 0 ? Math.min(0.12, (radius / 96) * 0.85) : 0
-    out.push(ooxmlShape(nextIdFn(), name + ' top bar', { x: box.x + barInset, y: box.y, w: Math.max(0.2, box.w - barInset * 2), h: 0.045 }, {
+  if (chromeCfg.cardTopBar && !disableTopBar) {
+    const barInset = radius > 0 ? Math.min(0.18, Math.max(0.11, (radius / 96) * 1.25)) : 0
+    out.push(ooxmlShape(nextIdFn(), name + ' top bar', { x: box.x + barInset, y: box.y + (radius > 0 ? 0.008 : 0), w: Math.max(0.2, box.w - barInset * 2), h: 0.042 }, {
       preset: radius > 0 ? 'roundRect' : 'rect',
       adj: radius > 0 ? 50000 : undefined,
       fill: focal ? accentBarColor : tk.hairline,
     }))
   }
   if (chromeCfg.cardLeftBar) {
-    out.push(ooxmlShape(nextIdFn(), name + ' left stripe', { x: box.x, y: box.y, w: 0.04, h: box.h }, {
-      preset: 'rect',
+    const railInset = radius > 0 ? Math.min(0.10, (radius / 96) * 0.9) : 0
+    out.push(ooxmlShape(nextIdFn(), name + ' left stripe', { x: box.x + (railInset > 0 ? 0.02 : 0), y: box.y + railInset, w: 0.04, h: Math.max(0.2, box.h - railInset * 2) }, {
+      preset: railInset > 0 ? 'roundRect' : 'rect',
+      adj: railInset > 0 ? 50000 : undefined,
       fill: focal ? accentBarColor : tk.accentPrimary,
     }))
   }
@@ -1303,8 +1306,10 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
           }),
         ],
       }))
-      shapes.push(ooxmlShape(nextIdFn(), 'Takeaway accent', { x: 0.62, y: 6.26, w: 0.06, h: 0.54 }, {
-        preset: 'rect',
+      const tkInset = chromeCfg.cardRadiusPx > 0 ? 0.065 : 0
+      shapes.push(ooxmlShape(nextIdFn(), 'Takeaway accent', { x: 0.62 + (tkInset > 0 ? 0.025 : 0), y: 6.26 + tkInset, w: 0.055, h: 0.54 - tkInset * 2 }, {
+        preset: tkInset > 0 ? 'roundRect' : 'rect',
+        adj: tkInset > 0 ? 50000 : undefined,
         fill: tk.accentPrimary,
       }))
     }

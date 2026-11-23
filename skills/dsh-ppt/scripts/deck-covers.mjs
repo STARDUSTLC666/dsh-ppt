@@ -34,6 +34,83 @@ export const POSTER_COVER_VARIANTS = new Set([
 export const COVER_PATTERNS = new Set(['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'])
 
 /**
+ * 标准浅色/社论封面右侧建筑感视觉面板（告别光秃秃的空白色块，叠加克制同心弧线、极细坐标线与版次标引）。
+ */
+export function renderEditorialCoverArtPptx(theme, nextId, opts = {}) {
+  const tk = theme.tokens
+  const { coverPattern = '', total = 1, langAttr = 'zh-CN' } = opts
+  const out = []
+  const panelX = 9.55
+  const panelW = CANVAS_IN.w - panelX
+  const panelFill = theme.dark ? tk.surface2 : mixHex(tk.canvas, tk.accentPrimary, 0.045)
+  out.push(ooxmlShape(nextId(), 'Cover top accent', { x: 0, y: 0, w: CANVAS_IN.w, h: 0.08 }, {
+    preset: 'rect',
+    fill: tk.accentPrimary,
+  }))
+  out.push(ooxmlShape(nextId(), 'Cover architectural panel', { x: panelX, y: 0.08, w: panelW, h: CANVAS_IN.h - 0.08 }, {
+    preset: 'rect',
+    fill: panelFill,
+  }))
+  out.push(ooxmlLine(nextId(), 'Cover vertical hairline', { x: panelX, y: 0.08 }, { x: panelX, y: CANVAS_IN.h }, {
+    color: tk.hairline,
+    widthPt: 0.75,
+  }))
+  if (coverPattern && COVER_PATTERNS.has(String(coverPattern).toLowerCase())) {
+    out.push(renderCoverPatternPptx(coverPattern, theme, nextId))
+  } else {
+    // 克制建筑感同心圆弧 + 极细黄金比例十字标线 + 右下角版次签（使用预混不透明色避免 LibreOffice 半透明椭圆方框伪影）
+    const cx = panelX + panelW * 0.56
+    const cy = 3.55
+    const innerFill = mixHex(panelFill, tk.accentPrimary, 0.07)
+    const ringStrokes = [
+      mixHex(panelFill, tk.accentPrimary, 0.28),
+      mixHex(panelFill, tk.accentPrimary, 0.19),
+      mixHex(panelFill, tk.accentPrimary, 0.12),
+    ]
+    ;[1.55, 2.55, 3.55].forEach((d, idx) => {
+      out.push(ooxmlShape(nextId(), `Cover Editorial Ring ${idx + 1}`, { x: cx - d / 2, y: cy - d / 2, w: d, h: d }, {
+        preset: 'ellipse',
+        fill: idx === 0 ? innerFill : '',
+        stroke: ringStrokes[idx],
+        strokePt: idx === 0 ? 1.1 : 0.75,
+      }))
+    })
+    out.push(ooxmlLine(nextId(), 'Cover Editorial Axis V', { x: cx, y: 1.05 }, { x: cx, y: 6.05 }, {
+      color: tk.hairline,
+      widthPt: 0.55,
+      dash: 'dot',
+    }))
+    out.push(ooxmlLine(nextId(), 'Cover Editorial Axis H', { x: panelX + 0.38, y: cy }, { x: CANVAS_IN.w - 0.36, y: cy }, {
+      color: tk.hairline,
+      widthPt: 0.55,
+      dash: 'dot',
+    }))
+    out.push(ooxmlShape(nextId(), 'Cover Editorial Core Dot', { x: cx - 0.09, y: cy - 0.09, w: 0.18, h: 0.18 }, {
+      preset: 'ellipse',
+      fill: tk.accentPrimary,
+    }))
+    const issueLabel = (langAttr === 'en-US' ? 'EDITION  ·  ' : '图谱篇幅  ·  ') + String(total).padStart(2, '0') + (langAttr === 'en-US' ? ' SLIDES' : ' 页')
+    out.push(ooxmlShape(nextId(), 'Cover Editorial Colophon', { x: panelX + 0.35, y: 6.56, w: panelW - 0.65, h: 0.36 }, {
+      txBox: true,
+      anchor: 'ctr',
+      marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+      paragraphs: [
+        ooxmlRichParagraph(issueLabel, {
+          sizePt: 9.5,
+          color: tk.inkMuted,
+          bold: true,
+          align: 'r',
+          lang: langAttr,
+          font: theme.fonts.body,
+          spc: 140,
+        }),
+      ],
+    }))
+  }
+  return out.join('')
+}
+
+/**
  * 封面高定程序化矢量底纹（dots / grid / rings / waves / isometric-mesh / editorial-arcs）—— 零外部依赖，低透明度克制点缀。
  */
 export function renderCoverPatternPptx(pattern, theme, nextId) {
