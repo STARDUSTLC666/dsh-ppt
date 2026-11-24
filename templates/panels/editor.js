@@ -724,7 +724,7 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench .ppt-workflow-steps strong{color:var(--w-text)}
 .ppt-workbench .ppt-workflow-prompts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 :is(.ppt-workbench,.ppt-dialog) .ppt-create-wizard{display:flex;flex-direction:column;gap:10px}
-:is(.ppt-workbench,.ppt-dialog) .ppt-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+:is(.ppt-workbench,.ppt-dialog) .ppt-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:10px}
 :is(.ppt-workbench,.ppt-dialog) .ppt-create-head-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 :is(.ppt-workbench,.ppt-dialog) .ppt-create-refbox{border:1px dashed var(--w-border);border-radius:var(--dsw-radius-sm,8px);padding:10px 12px;background:var(--w-soft);display:flex;flex-direction:column;gap:8px}
 :is(.ppt-workbench,.ppt-dialog) .ppt-create-refmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

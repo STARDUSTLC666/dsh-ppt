@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.0.4 (2026-11-25)
+
+- 修复新建/导入工程弹窗的双列表单排版：为 `.ppt-create-grid` 补充 `align-items: start`，避免下拉选择与数字输入框纵向拉伸错位。
+- Fix two-column form alignment in the create/import wizard dialog by adding `align-items: start` to `.ppt-create-grid`.
+
 ## 1.0.3 (2026-11-24)
 
 - **移入前文件预览 + 被占用一键回退 + 批量整理**：移除弹窗实时扫描并列出将移入系统回收站的 `.pptx` / `.html` / `.json` 文件，同时标明保留不动的 `.handout.md` 与 `.history/`；文件被 PowerPoint / WPS 占用或位于网络共享盘时弹窗保持打开并高亮 **「改用仅移出列表（保留文件）」**；列表页新增 **「批量整理」** 多选勾选模式，支持批量移出列表或批量移入系统回收站（中途遇占用自动保护剩余未移入工程）。
