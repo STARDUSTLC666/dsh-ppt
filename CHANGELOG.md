@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.0.3 (2026-11-24)
+
+- **移入前文件预览 + 被占用一键回退 + 批量整理**：移除弹窗实时扫描并列出将移入系统回收站的 `.pptx` / `.html` / `.json` 文件，同时标明保留不动的 `.handout.md` 与 `.history/`；文件被 PowerPoint / WPS 占用或位于网络共享盘时弹窗保持打开并高亮 **「改用仅移出列表（保留文件）」**；列表页新增 **「批量整理」** 多选勾选模式，支持批量移出列表或批量移入系统回收站（中途遇占用自动保护剩余未移入工程）。
+- **Windows 单进程批量回收站加速与网络盘拦截**：`movePathsToTrash` 在 Windows 下通过单次 `powershell.exe` 进程解析对象列表批量移入回收站（3–6 文件总耗时约 0.7 秒），遇被占用文件立即中止并明确拒绝 `\\server\share` UNC 网络路径；同时修复回退模态框在 `container-type: inline-size` 下宽度塌缩问题。
+- **File preview, locked-file 1-click fallback, and batch cleanup**: the Remove dialog lists exact `.pptx`/`.html`/`.json` files and untouched `.handout.md`/`.history/` extras, promotes a 1-click **Use remove from list only** fallback on Recycle Bin errors, and adds a multi-select **Batch organize** mode (`remove-projects`, `trash-projects`).
+- **Single-process Windows Recycle Bin batching & modal layout fix**: batch multiple paths in one PowerShell invocation with UNC path rejection, and prevent fallback modal `0px` inline-size collapse.
+
 ## 1.0.2 (2026-11-24)
 
 - 解决 Issue #11：项目列表每行新增「移除」弹窗，支持 **「仅移出列表（保留文件）」** 与 **「移入系统回收站」** 双选项；移入回收站采用零依赖跨平台系统原生回收站（Windows / macOS / Linux），拒绝符号链接并按 `.pptx → .html → .json` 安全顺序移入，避免文件被占用时孤立工程记录。

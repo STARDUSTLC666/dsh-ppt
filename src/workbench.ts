@@ -12,7 +12,7 @@ import { PptCoaching } from './coaching.js'
 import type { CoachingModel, ModelRoute } from './coaching-model.js'
 import { PptVisual } from './visual.js'
 import type { VisualModel } from './visual-model.js'
-import { movePathToTrash } from './trash.js'
+import { movePathToTrash, movePathsToTrash } from './trash.js'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
@@ -630,14 +630,61 @@ export class PptWorkbench {
   readonly coaching: PptCoaching
   readonly visual: PptVisual
   private readonly loadEngine: () => Promise<WorkbenchEngine>
-  private readonly trashPath: TrashPathFn
+  private readonly customTrashPath?: TrashPathFn
   private readonly renders = new Map<string, Render>()
   constructor(options: Options = {}) {
     this.catalogPath = options.catalogPath ?? join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'plugins', 'dsh-ppt', 'projects.jsonl')
     this.loadEngine = options.loadEngine ?? (getEngine as () => Promise<WorkbenchEngine>)
-    this.trashPath = options.trashPath ?? movePathToTrash
+    this.customTrashPath = options.trashPath
     this.coaching = new PptCoaching(join(dirname(this.catalogPath), 'rehearsals'), options.coachingModel)
     this.visual = new PptVisual(join(dirname(this.catalogPath), 'visual-reviews'), options.visualModel)
+  }
+  private collectProjectArtifacts(entry: Project): { targets: string[]; existingNames: string[]; keptExtras: string[]; missing: boolean } {
+    const files = pathsFor(entry.path)
+    const targets: string[] = []
+    let jsonExists = false
+    try {
+      const st = lstatSync(entry.path)
+      if (st.isSymbolicLink() || !st.isFile()) throw new Error('拒绝将符号链接移入回收站')
+      if (realpathSync(entry.path) !== entry.path) throw new Error('项目位置已改变，请在对话中重新检查')
+      jsonExists = true
+    } catch (error) {
+      if (!isMissingPath(error)) throw error
+    }
+    if (!jsonExists) {
+      return { targets: [], existingNames: [], keptExtras: [], missing: true }
+    }
+    // Strict order: .pptx -> .html -> .json so if PPTX is open/locked in PowerPoint, the JSON project remains recoverable.
+    for (const candidate of [files.pptx, files.html, files.json]) {
+      try {
+        const st = lstatSync(candidate)
+        if (st.isSymbolicLink()) throw new Error('拒绝将符号链接移入回收站')
+        if (!st.isFile()) continue
+        targets.push(candidate)
+      } catch (error) {
+        if (!isMissingPath(error)) throw error
+      }
+    }
+    const keptExtras: string[] = []
+    const handoutPath = entry.path.slice(0, -5) + '.handout.md'
+    if (existsSync(handoutPath)) keptExtras.push(basename(handoutPath))
+    const historyDir = join(dirname(entry.path), '.history')
+    if (existsSync(historyDir)) keptExtras.push('.history/')
+    return { targets, existingNames: targets.map(p => basename(p)), keptExtras, missing: false }
+  }
+  private async trashTargets(targets: string[], signal?: AbortSignal): Promise<string[]> {
+    if (targets.length === 0) return []
+    if (this.customTrashPath) {
+      const moved: string[] = []
+      for (const file of targets) {
+        signal?.throwIfAborted()
+        const outcome = await this.customTrashPath(file, signal)
+        if (!outcome || outcome.moved !== false) moved.push(basename(file))
+      }
+      return moved
+    }
+    const result = await movePathsToTrash(targets, signal)
+    return result.moved.map(p => basename(p))
   }
   private catalog(): Project[] {
     if (!existsSync(this.catalogPath)) return []
@@ -1164,6 +1211,13 @@ export class PptWorkbench {
   async action(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     signal?.throwIfAborted()
     if (body.operation === 'list') return { ok: true, projects: this.recentProjects() }
+    if (body.operation === 'inspect-project-files') {
+      const id = projectId(body.id)
+      const entry = this.catalog().find(row => row.id === id)
+      if (!entry) return { ok: true, files: [], keptExtras: [], missing: true }
+      const info = this.collectProjectArtifacts(entry)
+      return { ok: true, files: info.existingNames, keptExtras: info.keptExtras, missing: info.missing }
+    }
     if (body.operation === 'remove-project') {
       const id = projectId(body.id)
       const entry = this.catalog().find(row => row.id === id)
@@ -1173,45 +1227,70 @@ export class PptWorkbench {
       }
       return { ok: true, projects: this.recentProjects() }
     }
+    if (body.operation === 'remove-projects') {
+      const rawIds = Array.isArray(body.ids) ? body.ids : []
+      if (!rawIds.length || rawIds.length > 100) throw new Error('请选择 1–100 个项目进行批量操作')
+      const uniqueIds = [...new Set(rawIds.map(v => projectId(v)))]
+      const byId = new Map(this.catalog().map(row => [row.id, row]))
+      let removedCount = 0
+      for (const id of uniqueIds) {
+        const entry = byId.get(id)
+        if (entry) {
+          this.appendCatalog({ id, path: entry.path, removed: true })
+          this.renders.delete(id)
+          removedCount++
+        }
+      }
+      return { ok: true, removedCount, projects: this.recentProjects() }
+    }
     if (body.operation === 'trash-project') {
       if (body.confirmed !== true) throw new Error('请确认后再将工程文件移入系统回收站')
       const id = projectId(body.id)
       const entry = this.catalog().find(row => row.id === id)
       if (!entry) return { ok: true, trashedFiles: [], projects: this.recentProjects() }
-      const files = pathsFor(entry.path)
-      // Validate exact cataloged project artifacts first (never follow symlinks or walk folders).
-      const targets: string[] = []
-      let jsonExists = false
-      try {
-        const st = lstatSync(entry.path)
-        if (st.isSymbolicLink() || !st.isFile()) throw new Error('拒绝将符号链接移入回收站')
-        if (realpathSync(entry.path) !== entry.path) throw new Error('项目位置已改变，请在对话中重新检查')
-        jsonExists = true
-      } catch (error) {
-        if (!isMissingPath(error)) throw error
-      }
-      if (jsonExists) {
-        // Order: .pptx -> .html -> .json so if PPTX is open/locked in PowerPoint, the JSON project remains recoverable.
-        for (const candidate of [files.pptx, files.html, files.json]) {
-          try {
-            const st = lstatSync(candidate)
-            if (st.isSymbolicLink()) throw new Error('拒绝将符号链接移入回收站')
-            if (!st.isFile()) continue
-            targets.push(candidate)
-          } catch (error) {
-            if (!isMissingPath(error)) throw error
-          }
-        }
-      }
-      const trashedFiles: string[] = []
-      for (const file of targets) {
-        signal?.throwIfAborted()
-        const outcome = await this.trashPath(file, signal)
-        if (!outcome || outcome.moved !== false) trashedFiles.push(basename(file))
-      }
+      const { targets } = this.collectProjectArtifacts(entry)
+      const trashedFiles = await this.trashTargets(targets, signal)
       this.appendCatalog({ id, path: entry.path, removed: true })
       this.renders.delete(id)
       return { ok: true, trashedFiles, projects: this.recentProjects() }
+    }
+    if (body.operation === 'trash-projects') {
+      if (body.confirmed !== true) throw new Error('请确认后再将所选工程文件移入系统回收站')
+      const rawIds = Array.isArray(body.ids) ? body.ids : []
+      if (!rawIds.length || rawIds.length > 100) throw new Error('请选择 1–100 个项目进行批量操作')
+      const uniqueIds = [...new Set(rawIds.map(v => projectId(v)))]
+      const byId = new Map(this.catalog().map(row => [row.id, row]))
+      const entries = uniqueIds.map(id => byId.get(id)).filter((row): row is Project => Boolean(row))
+      const allTargets: string[] = []
+      const preMissingIds: Project[] = []
+      const activeEntries: Project[] = []
+      for (const entry of entries) {
+        const info = this.collectProjectArtifacts(entry)
+        if (info.missing) {
+          preMissingIds.push(entry)
+        } else {
+          activeEntries.push(entry)
+          allTargets.push(...info.targets)
+        }
+      }
+      let trashedFiles: string[] = []
+      try {
+        trashedFiles = await this.trashTargets(allTargets, signal)
+      } catch (error) {
+        // Tombstone any projects whose .json was already moved before the locked/failing item stopped the batch.
+        for (const entry of [...preMissingIds, ...activeEntries]) {
+          if (!existsSync(entry.path)) {
+            this.appendCatalog({ id: entry.id, path: entry.path, removed: true })
+            this.renders.delete(entry.id)
+          }
+        }
+        throw error
+      }
+      for (const entry of [...preMissingIds, ...activeEntries]) {
+        this.appendCatalog({ id: entry.id, path: entry.path, removed: true })
+        this.renders.delete(entry.id)
+      }
+      return { ok: true, trashedCount: entries.length, trashedFiles, projects: this.recentProjects() }
     }
     if (body.operation === 'catalog-meta') {
       const engine = await this.loadEngine()

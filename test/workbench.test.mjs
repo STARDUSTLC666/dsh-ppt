@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { buildDeckAsync, editDeck, undoDeck, readDeckProject } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import * as engine from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { PptWorkbench, installPptWorkbench, PPT_WORKBENCH_ROUTE, PPT_DOWNLOAD_ROUTE } from '../lib/workbench.js'
-import { movePathToTrash } from '../lib/trash.js'
+import { movePathToTrash, movePathsToTrash } from '../lib/trash.js'
 import { unzipSync, strFromU8 } from 'fflate'
 import { runInNewContext } from 'node:vm'
 const work = resolve('.test-output'); mkdirSync(work, { recursive: true })
@@ -169,9 +169,58 @@ test('a locked PPTX during trash-project aborts before deleting JSON and keeps p
 
 test('movePathToTrash rejects relative paths and treats already-missing paths as no-op (#11)', async () => {
   await assert.rejects(() => movePathToTrash('relative/file.json'), /绝对路径/)
+  if (process.platform === 'win32') {
+    await assert.rejects(() => movePathsToTrash(['\\\\server\\share\\deck.pptx']), /网络共享路径/)
+  }
   const missing = await movePathToTrash(join(work, 'definitely-missing-' + Date.now() + '.json'))
   assert.deepEqual(missing, { moved: false, missing: true })
+  const batchMissing = await movePathsToTrash([join(work, 'missing-a.json'), join(work, 'missing-b.pptx')])
+  assert.equal(batchMissing.moved.length, 0)
+  assert.equal(batchMissing.missing.length, 2)
 })
+
+test('inspect-project-files, batch remove-projects, and batch trash-projects work safely with partial lock protection', () => fixture(async ({ dir, created }) => {
+  const deck2 = await buildDeckAsync({ title: '第二份工程', slides: [{ layout: 'cover', title: '封面2' }, { layout: 'closing', title: '结束2' }], outputDir: dir })
+  const deck3 = await buildDeckAsync({ title: '被占用工程', slides: [{ layout: 'cover', title: '封面3' }, { layout: 'closing', title: '结束3' }], outputDir: dir })
+  writeFileSync(created.jsonPath.slice(0, -5) + '.handout.md', '# handout')
+  const trashed = []
+  const wb = new PptWorkbench({
+    catalogPath: join(dir, 'catalog.jsonl'),
+    trashPath: async target => {
+      if (target === deck3.pptxPath) throw new Error('文件或目录正被其他程序占用，或所在磁盘不支持系统回收站')
+      trashed.push(target)
+      rmSync(target, { force: true })
+      return { moved: true }
+    },
+  })
+  await wb.remember(created, {})
+  await wb.remember(deck2, {})
+  await wb.remember(deck3, {})
+  const listed = (await wb.action({ operation: 'list' })).projects
+  const id1 = listed.find(p => p.path === created.jsonPath).id
+  const id2 = listed.find(p => p.path === deck2.jsonPath).id
+  const id3 = listed.find(p => p.path === deck3.jsonPath).id
+
+  const inspected = await wb.action({ operation: 'inspect-project-files', id: id1 })
+  assert.equal(inspected.missing, false)
+  assert.equal(inspected.files.length, 3)
+  assert.ok(inspected.files[0].endsWith('.pptx') && inspected.files[2].endsWith('.json'))
+  assert.equal(inspected.keptExtras.some(f => f.endsWith('.handout.md')), true)
+
+  // Batch remove-projects removes from catalog while keeping files on disk
+  const batchRem = await wb.action({ operation: 'remove-projects', ids: [id1] })
+  assert.equal(batchRem.removedCount, 1)
+  assert.equal(existsSync(created.jsonPath), true)
+  assert.equal(batchRem.projects.length, 2)
+
+  // Batch trash-projects with deck2 OK and deck3 PPTX locked: deck2 trashed & tombstoned, deck3 stays intact & listed
+  await assert.rejects(() => wb.action({ operation: 'trash-projects', ids: [id2, id3], confirmed: false }), /请确认/)
+  await assert.rejects(() => wb.action({ operation: 'trash-projects', ids: [id2, id3], confirmed: true }), /占用/)
+  assert.equal(existsSync(deck2.jsonPath), false)
+  assert.equal(existsSync(deck3.jsonPath), true)
+  const remaining = (await wb.action({ operation: 'list' })).projects
+  assert.deepEqual(remaining.map(p => p.id), [id3])
+}))
 test('authenticated carrier only; original Host used across HTTP bridge and origin checked', () => fixture(async ({ wb }) => {
   const registrations = []; installPptWorkbench({ inject(deps, fn) { assert.deepEqual(deps, ['connection']); fn({ connection: { fetch: { register(route) { registrations.push(route) } } } }); } }, wb)
   assert.equal(registrations.length, 2); assert.equal(registrations[0].path, PPT_WORKBENCH_ROUTE)

@@ -29,9 +29,11 @@ export declare class PptWorkbench {
     readonly coaching: PptCoaching;
     readonly visual: PptVisual;
     private readonly loadEngine;
-    private readonly trashPath;
+    private readonly customTrashPath?;
     private readonly renders;
     constructor(options?: Options);
+    private collectProjectArtifacts;
+    private trashTargets;
     private catalog;
     private recentProjects;
     /** Recording a completed tool never turns a successful generation into an error. */

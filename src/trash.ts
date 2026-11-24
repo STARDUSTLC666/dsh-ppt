@@ -71,72 +71,116 @@ function moveToMacTrashFallback(targetPath: string, isDir: boolean): void {
   moveAcrossDevices(targetPath, dest, isDir)
 }
 
-/**
- * Move an existing regular file or directory to the OS Recycle Bin / Trash without external dependencies.
- * Refuses relative paths and symbolic links; treats already-missing paths as a no-op.
- */
-export async function movePathToTrash(targetPath: string, signal?: AbortSignal): Promise<{ moved: boolean; missing?: boolean }> {
-  signal?.throwIfAborted()
-  if (!targetPath || !isAbsolute(targetPath)) throw new Error('移入回收站需要绝对路径')
+function isWindowsNetworkPath(targetPath: string): boolean {
+  return process.platform === 'win32' && /^\\\\(?!\?\\[A-Za-z]:\\)/.test(targetPath)
+}
 
-  let stat
-  try {
-    stat = lstatSync(targetPath)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException)?.code
-    if (code === 'ENOENT' || code === 'ENOTDIR') return { moved: false, missing: true }
-    throw error
+interface ValidatedTarget {
+  path: string
+  isDir: boolean
+}
+
+function validateTargets(targetPaths: string[]): { existing: ValidatedTarget[]; missing: string[] } {
+  const existing: ValidatedTarget[] = []
+  const missing: string[] = []
+  for (const targetPath of targetPaths) {
+    if (!targetPath || !isAbsolute(targetPath)) throw new Error('移入回收站需要绝对路径')
+    if (isWindowsNetworkPath(targetPath)) {
+      throw new Error('网络共享路径不支持系统回收站，请改用「仅移出列表」或手动清理')
+    }
+    let stat
+    try {
+      stat = lstatSync(targetPath)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        missing.push(targetPath)
+        continue
+      }
+      throw error
+    }
+    if (stat.isSymbolicLink()) throw new Error('拒绝将符号链接移入回收站')
+    const isDir = stat.isDirectory()
+    if (!isDir && !stat.isFile()) throw new Error('仅支持将普通文件或目录移入回收站')
+    existing.push({ path: targetPath, isDir })
   }
-  if (stat.isSymbolicLink()) throw new Error('拒绝将符号链接移入回收站')
-  const isDir = stat.isDirectory()
-  if (!isDir && !stat.isFile()) throw new Error('仅支持将普通文件或目录移入回收站')
+  return { existing, missing }
+}
+
+/**
+ * Move multiple regular files or directories to the OS Recycle Bin / Trash in strict order.
+ * On Windows, batches all paths into a single PowerShell process with ErrorActionPreference=Stop
+ * so moving a 3-file project or clearing an archive runs ~3x faster while stopping immediately on any locked file.
+ */
+export async function movePathsToTrash(
+  targetPaths: string[],
+  signal?: AbortSignal,
+): Promise<{ moved: string[]; missing: string[] }> {
+  signal?.throwIfAborted()
+  const { existing, missing } = validateTargets(targetPaths)
+  if (existing.length === 0) return { moved: [], missing }
 
   if (process.platform === 'win32') {
     const psScript = [
+      "$ErrorActionPreference = 'Stop'",
       'Add-Type -AssemblyName Microsoft.VisualBasic',
-      '$p = $env:DSH_TRASH_TARGET',
+      '$parsed = ConvertFrom-Json $env:DSH_TRASH_TARGETS',
+      '$items = @($parsed.paths)',
       '$ui = [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs',
       '$rc = [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin',
-      'if ([System.IO.File]::Exists($p)) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, $ui, $rc) } elseif ([System.IO.Directory]::Exists($p)) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, $ui, $rc) }',
+      'foreach ($p in $items) { if ([System.IO.File]::Exists($p)) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, $ui, $rc) } elseif ([System.IO.Directory]::Exists($p)) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, $ui, $rc) } }',
     ].join('; ')
     try {
       await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-        env: { ...process.env, DSH_TRASH_TARGET: targetPath },
+        env: { ...process.env, DSH_TRASH_TARGETS: JSON.stringify({ paths: existing.map(item => item.path) }) },
         windowsHide: true,
-        timeout: 15_000,
+        timeout: Math.max(15_000, Math.min(90_000, existing.length * 4_000)),
         signal,
       })
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') throw error
-      throw new Error('文件正被其他程序占用或无法移入系统回收站')
+      throw new Error('文件或目录正被其他程序占用，或所在磁盘不支持系统回收站')
     }
-    if (existsSync(targetPath)) throw new Error('文件正被其他程序占用或无法移入系统回收站')
-    return { moved: true }
+    for (const item of existing) {
+      if (existsSync(item.path)) {
+        throw new Error('文件或目录正被其他程序占用，或所在磁盘不支持系统回收站')
+      }
+    }
+    return { moved: existing.map(item => item.path), missing }
   }
 
-  if (process.platform === 'darwin') {
+  const moved: string[] = []
+  for (const item of existing) {
+    signal?.throwIfAborted()
+    if (process.platform === 'darwin') {
+      try {
+        await execFileAsync('/usr/bin/trash', [item.path], { timeout: 15_000, signal })
+        if (existsSync(item.path)) moveToMacTrashFallback(item.path, item.isDir)
+      } catch (error) {
+        if ((error as Error)?.name === 'AbortError') throw error
+        moveToMacTrashFallback(item.path, item.isDir)
+      }
+      moved.push(item.path)
+      continue
+    }
     try {
-      await execFileAsync('/usr/bin/trash', [targetPath], { timeout: 15_000, signal })
-      if (!existsSync(targetPath)) return { moved: true }
+      await execFileAsync('gio', ['trash', '--', item.path], { timeout: 15_000, signal })
+      if (existsSync(item.path)) moveToXdgTrash(item.path, item.isDir)
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') throw error
-      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-        moveToMacTrashFallback(targetPath, isDir)
-        return { moved: true }
-      }
-      moveToMacTrashFallback(targetPath, isDir)
-      return { moved: true }
+      moveToXdgTrash(item.path, item.isDir)
     }
-    return { moved: true }
+    moved.push(item.path)
   }
+  return { moved, missing }
+}
 
-  try {
-    await execFileAsync('gio', ['trash', '--', targetPath], { timeout: 15_000, signal })
-    if (!existsSync(targetPath)) return { moved: true }
-  } catch (error) {
-    if ((error as Error)?.name === 'AbortError') throw error
-    moveToXdgTrash(targetPath, isDir)
-    return { moved: true }
-  }
-  return { moved: true }
+/**
+ * Move a single existing regular file or directory to the OS Recycle Bin / Trash without external dependencies.
+ * Refuses relative paths, Windows UNC network paths, and symbolic links; treats already-missing paths as a no-op.
+ */
+export async function movePathToTrash(targetPath: string, signal?: AbortSignal): Promise<{ moved: boolean; missing?: boolean }> {
+  const result = await movePathsToTrash([targetPath], signal)
+  if (result.moved.length > 0) return { moved: true }
+  return { moved: false, missing: true }
 }
