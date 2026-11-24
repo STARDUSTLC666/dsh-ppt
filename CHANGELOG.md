@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.0.2 (2026-11-24)
+
+- 解决 Issue #11：项目列表每行新增「移除」弹窗，支持 **「仅移出列表（保留文件）」** 与 **「移入系统回收站」** 双选项；移入回收站采用零依赖跨平台系统原生回收站（Windows / macOS / Linux），拒绝符号链接并按 `.pptx → .html → .json` 安全顺序移入，避免文件被占用时孤立工程记录。
+- 外部删除原文件自动同步：列表刷新自动隐藏缺失 `.json` 的记录，窗口切回（`focus` / `visibilitychange`）与列表页 8 秒轻量静默扫描自动让缺失条目消失；未扫到前点击打开返回结构化 `404 project_missing` 并自动移除，未扫到前手动点击移除/移入回收站可 0 报错干净清理。
+- Resolve #11: add a row Remove dialog with two choices — **Remove from list only (keep files)** and **Move to system Recycle Bin / Trash** (zero-dep native OS trash on Windows/macOS/Linux, symlink refusal, safe `.pptx → .html → .json` order).
+- Auto-hide externally deleted projects on refresh, window focus/visibility return, and lightweight 8s background sync; return structured `404 project_missing` on stale open and allow clean zero-error manual removal before the next scan.
+
 ## 1.0.1 (2026-11-24)
 
 - 修复 Mermaid 流程图导出 PPTX 后，绕线的回路与节点脱离的问题。回路线保留绕开节点的路径，两端连接到对应的节点形状。

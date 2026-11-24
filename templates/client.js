@@ -178,6 +178,11 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
 .pptw .ppt-pace-row input{width:92px}
 .pptw .ppt-pace-badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--w-border);background:var(--w-soft);color:var(--w-text)}
 .pptw .ppt-pace-badge[data-over="true"]{color:var(--dsw-alias-state-warn-primary,#b45309);border-color:var(--dsw-alias-state-warn-primary,#b45309);background:color-mix(in oklab,var(--dsw-alias-state-warn-primary,#b45309) 12%,var(--w-bg))}
+  @container dsh-workbench (max-width: 680px) {
+    .pptw:not(.ppt-in-project) > .w-page-header { flex-direction: column; align-items: stretch; }
+    .pptw:not(.ppt-in-project) > .w-page-header > .w-header-actions { flex-wrap: wrap; min-width: 0; }
+    .pptw:not(.ppt-in-project) > .w-page-header > .w-header-actions > .w-button { flex: none; }
+  }
   [role=dialog]:has(.pptw.w-page){width:min(1200px,calc(100dvw - 48px))!important;max-width:1200px!important}
   @media(max-width:700px){.pptw .layout{grid-template-columns:1fr}.pptw .pages{max-height:180px}.pptw .preview{min-height:190px}
     .pptw .coaching-grid,.pptw .coaching .before-after{grid-template-columns:1fr}
@@ -202,6 +207,7 @@ window.__ModuleLoader__.load({ id: 'dsh-ppt', factory: require => {
                 const hint = languageOf() === 'en' ? value.installationHintEn : value.installationHint;
                 const error = new Error((localized || t("操作未完成")) + (hint ? '\n' + hint : ''));
                 error.status = response.status;
+                error.code = value.code;
                 throw error;
             }
             return value;
@@ -838,7 +844,7 @@ __stardustUpdatesGuard(React, "dsh-ppt.data", { busy: busy || readingFile });
             return h('section', { className: 'card data-workbench', 'data-dsh-card': '', 'aria-label': L('数据溯源与现场推演', 'Data lineage and what-if') }, h('style', null, dataCss), h('h3', null, L('数据溯源与现场推演', 'Data lineage and what-if')), h('p', { className: 'muted' }, L('点预览中的数字可追问来源。只有明确声明的假设可调；来源不等于事实已核验。', 'Click numbers in the preview to inspect their lineage. Only declared assumptions are adjustable. Lineage is not factual verification.')), h('details', null, h('summary', null, L('数字来自哪里', 'Where the numbers come from')), h('label', null, L('指标', 'Metric'), h('select', { value: metricId, disabled, onChange: event => setMetricId(event.target.value) }, model.metrics.map(m => h('option', { key: m.id, value: m.id }, m.label + ' [' + m.id + ']')))), metric && h('div', { className: 'data-evidence' }, h('strong', null, metric.label + ' = ' + format(model.values[metric.id], metric)), metric.kind === 'source' ? h(React.Fragment, null, h('p', null, metric.evidence.name + ' · ' + metric.evidence.locator), h('pre', null, metric.evidence.excerpt), h('details', null, h('summary', null, L('来源快照校验值', 'Source snapshot checksum')), h('code', null, metric.evidence.sha256))) : metric.kind === 'input' ? h('p', null, L('用户假设', 'User assumption') + (metric.note ? ' · ' + metric.note : '')) : h(React.Fragment, null, h('pre', null, '= ' + metric.formula), h('div', { className: 'tools' }, metric.dependencies.map(id => h(W.Button, { key: id, disabled, onClick: () => setMetricId(id) }, model.metrics.find(m => m.id === id).label))))), h(W.Button, { icon: 'download', disabled: disabled || changed, onClick: () => onDownload('data') }, L('下载溯源与假设报告', 'Download lineage and assumptions'))), model.metrics.some(m => m.kind === 'input') && h('details', { open: true }, h('summary', null, L('现场推演参数', 'What-if assumptions')), model.metrics.filter(m => m.kind === 'input').map(m => h('div', { key: m.id, className: 'data-input-row' }, h('label', { htmlFor: fieldId + '-ppt-data-' + m.id }, m.label, h('small', { className: 'muted' }, ' · ' + L('假设', 'Assumption') + (m.note ? ' · ' + m.note : ''))), h('div', { className: 'data-input-controls' }, h('input', { type: 'range', min: m.min, max: m.max, step: m.step, value: Number(parameters[m.id]), disabled, 'aria-label': m.label + ' ' + L('滑杆', 'slider'), onChange: event => changeParameter(m.id, event.target.value) }), h(W.Input, { id: fieldId + '-ppt-data-' + m.id, type: 'number', min: m.min, max: m.max, step: m.step, value: parameters[m.id], disabled, onChange: event => changeParameter(m.id, event.target.value) })))), h('label', null, L('导入离线 HTML 保存的推演参数', 'Import scenario parameters saved in offline HTML'), h('input', { type: 'file', accept: '.json,application/json', disabled, onChange: importScenario }))), model.sources.length > 0 && h('details', null, h('summary', null, L('更新来源材料', 'Update source material')), h('p', { className: 'muted' }, L('先导入或粘贴新材料，预览影响后再确认；不会自动监视或修改原文件。表格可从 Excel 导出 CSV。', 'Import or paste new material, then preview the impact before confirming. Original source files are not watched or modified. Export Excel tables as CSV.')), h('label', null, L('替换来源', 'Replace source'), h('select', { value: sourceId, disabled, onChange: event => setSourceId(event.target.value) }, model.sources.map(s => h('option', { key: s.id, value: s.id }, s.name)))), h('label', null, L('导入替换材料', 'Import replacement material'), h('input', { type: 'file', accept: source?.kind === 'table' ? '.csv,.tsv' : '.txt,.md', disabled, onChange: importSource })), source?.kind === 'table' && h('label', null, L('分隔格式', 'Delimiter format'), h('select', { value: replacement?.format || 'csv', disabled, onChange: event => { setUpdates(old => ({ ...old, [sourceId]: { id: sourceId, format: event.target.value, content: replacement?.content || '' } })); setPreview(null); } }, h('option', { value: 'csv' }, 'CSV'), h('option', { value: 'tsv' }, 'TSV'))), h('label', null, L('或粘贴内容', 'Or paste content'), h('textarea', { rows: 4, maxLength: 1048576, value: replacement?.content ?? '', disabled, onChange: event => { setUpdates(old => ({ ...old, [sourceId]: { id: sourceId, format: source.kind === 'table' ? replacement?.format || 'csv' : 'text', content: event.target.value } })); setPreview(null); setError(''); } })), replacement && h(W.Button, { icon: 'close', disabled, onClick: () => { setUpdates(old => { const next = { ...old }; delete next[sourceId]; return next; }); setPreview(null); } }, L('取消此来源更新', 'Cancel this source update'))), changed && h('p', { className: 'dirty', role: 'status' }, L('推演或材料尚未保存，当前 PPTX 仍是已保存版本。先预览差异并确认，或恢复参数后下载。', 'Unsaved scenario or source changes. The PPTX still contains saved values. Preview and confirm, or reset before downloading.')), (!valid || !inputsValid) && h('p', { className: 'notice error', role: 'alert' }, L('参数无法计算，请检查范围、步长或除零，再恢复或修改。', 'Cannot calculate these parameters. Check ranges, steps or division by zero; adjust or reset.')), error && h('p', { className: 'notice error', role: 'alert' }, error), h('div', { className: 'tools' }, h(W.Button, { icon: 'search', disabled: disabled || !changed || !valid || !inputsValid, onClick: inspect }, L('预览差异', 'Preview changes')), h(W.Button, { icon: 'reply', disabled: disabled || !changed, onClick: reset }, L('恢复已保存数据', 'Reset to saved data'))), preview && preview.signature === signature && h('div', { className: 'data-diff' }, h('h4', null, L('确认前核对', 'Review before confirming')), !preview.changed ? h('p', null, L('内容没有变化。', 'No content changes.')) : h(React.Fragment, null, h('ul', null, preview.changes.map(change => h('li', { key: change.id }, h('strong', null, change.label + ': '), change.beforeText + ' → ' + change.afterText, change.before === change.after && ' · ' + L('来源已更新', 'Source updated')))), h('h4', null, L('受影响页面', 'Affected slides')), !preview.affectedSlides.length && h('p', { className: 'muted' }, L('指标尚未绑定到页面，只更新数据模型。', 'Metrics are not bound to slides; only the data model changes.')), preview.affectedSlides.map(slide => h('details', { key: slide.id }, h('summary', null, (slide.page) + '. ' + slide.title), h(W.Button, { icon: 'right', disabled, onClick: () => onChoose(slide.id) }, L('查看页面', 'View slide')), slide.evidenceChanged && h('p', null, L('关联的来源快照有变化。', 'A linked source snapshot changed.')), slide.fields.map(field => h('div', { key: field.field }, h('strong', null, t(fields.find(([key]) => key === field.field)?.[1] || field.field)), h('div', { className: 'data-before-after' }, h('pre', null, L('之前：', 'Before: ') + display(field.before)), h('pre', null, L('之后：', 'After: ') + display(field.after))))))), h(W.Checkbox, { className: 'data-copy', checked: saveAs, disabled, onChange: next => setSaveAs(next), label: L('保存为新副本，保留原稿（推荐）', 'Save a new copy and keep the original (recommended)') }), h('p', { className: 'muted' }, L('PPTX 保存确认后的静态结果，并附公式、来源和假设；HTML 保留交互。JSON 工程包含导入的完整材料，分享前请检查。', 'PPTX saves confirmed static results with formulas, sources and assumptions; HTML retains interaction. The JSON project contains full imported material; review it before sharing.')), h(W.Button, { variant: 'primary', icon: 'check', disabled: disabled || !valid || !inputsValid, onClick: apply }, saveAs ? L('确认并保存推演副本', 'Confirm and save scenario copy') : L('确认并更新当前工程', 'Confirm and update this project')))));
         }
         function Workbench({locale,workbench=false}={}) {
-const [activeTab,setActiveTab]=useState('content'),[editorMode,setEditorMode]=useState('lightbox'),[downloadOpen,setDownloadOpen]=useState(false),[createOpen,setCreateOpen]=useState(false),[createMode,setCreateMode]=useState('create'),[pendingNav,setPendingNav]=useState(null),[deleteOpen,setDeleteOpen]=useState(false);
+const [activeTab,setActiveTab]=useState('content'),[editorMode,setEditorMode]=useState('lightbox'),[downloadOpen,setDownloadOpen]=useState(false),[createOpen,setCreateOpen]=useState(false),[createMode,setCreateMode]=useState('create'),[pendingNav,setPendingNav]=useState(null),[deleteOpen,setDeleteOpen]=useState(false),[removeTarget,setRemoveTarget]=useState(null);
 const controlId=React.useId(),rootElement=useRef(null),syncInputRef=useRef(null),fullscreenBoundary=useRef({was:false,exitedAt:0});
 useEffect(()=>{const changed=()=>{const active=!!document.fullscreenElement;if(fullscreenBoundary.current.was && !active)fullscreenBoundary.current.exitedAt=Date.now();fullscreenBoundary.current.was=active;};document.addEventListener('fullscreenchange',changed);return()=>document.removeEventListener('fullscreenchange',changed);},[]);
 function clearEdits(){imageLoader.current.cancel();setDraft(draftFor(slide));setImage(null);setDirty(false);setError('');setMessage('');setConflict(false);setOverlaps([]);}
@@ -927,6 +933,43 @@ return result;
                 return () => { alive.current = false; abort.abort(); imageLoader.current.cancel(); for (const operation of operations.current)
                     operation.abort(); };
             }, []);
+            useEffect(() => {
+                if (project || removeTarget || createOpen)
+                    return;
+                let inflight = false, cancelled = false, activeAbort = null;
+                function syncList() {
+                    if (cancelled || inflight || !alive.current || (typeof document !== 'undefined' && document.visibilityState === 'hidden'))
+                        return;
+                    inflight = true;
+                    activeAbort = new AbortController();
+                    action({ operation: 'list' }, activeAbort.signal).then(value => {
+                        if (!cancelled && alive.current && Array.isArray(value?.projects)) {
+                            setProjects(value.projects);
+                            setListLoading(false);
+                        }
+                    }).catch(() => { /* silent background sync */ }).finally(() => {
+                        inflight = false;
+                        activeAbort = null;
+                    });
+                }
+                const onFocus = () => syncList();
+                const onVisibility = () => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') syncList(); };
+                if (typeof window !== 'undefined' && window.addEventListener)
+                    window.addEventListener('focus', onFocus);
+                if (typeof document !== 'undefined' && document.addEventListener)
+                    document.addEventListener('visibilitychange', onVisibility);
+                const timer = typeof setInterval === 'function' ? setInterval(syncList, 8000) : null;
+                timer?.unref?.();
+                return () => {
+                    cancelled = true;
+                    activeAbort?.abort();
+                    if (timer != null && typeof clearInterval === 'function') clearInterval(timer);
+                    if (typeof window !== 'undefined' && window.removeEventListener)
+                        window.removeEventListener('focus', onFocus);
+                    if (typeof document !== 'undefined' && document.removeEventListener)
+                        document.removeEventListener('visibilitychange', onVisibility);
+                };
+            }, [!!project, !!removeTarget, createOpen]);
             useEffect(() => {
                 function receive(event) {
                     if (event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce.current || (mode !== 'html' && mode !== 'split'))
@@ -1078,7 +1121,55 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
                     applyChange();
                 }
             }
-            function open(id) { return perform(signal => action({ operation: 'open', id }, signal), value => { adopt(value.project); setEditorMode('lightbox'); setMessage(t("点击预览里的文字，或在下方修改字段。")); }); }
+            function open(id) {
+                return perform(async signal => {
+                    try {
+                        return await action({ operation: 'open', id }, signal);
+                    } catch (error) {
+                        if (error.code === 'project_missing' && alive.current) {
+                            setProjects(current => current.filter(row => row.id !== id));
+                        }
+                        throw error;
+                    }
+                }, value => {
+                    adopt(value.project);
+                    setEditorMode('lightbox');
+                    setMessage(t("点击预览里的文字，或在下方修改字段。"));
+                });
+            }
+            function removeFromProjectList(target) {
+                return perform(signal => action({ operation: 'remove-project', id: target.id }, signal), value => {
+                    setProjects(value.projects);
+                    setRemoveTarget(null);
+                    setMessage(pptText('已移出列表（本地文件已保留）。可在对话中运行 ppt_check 重新加入。', 'Removed from the list (local files kept). Run ppt_check in chat to add it back.'));
+                });
+            }
+            function trashProjectFiles(target) {
+                return perform(signal => action({ operation: 'trash-project', id: target.id, confirmed: true }, signal), value => {
+                    setProjects(value.projects);
+                    setRemoveTarget(null);
+                    const count = Array.isArray(value.trashedFiles) ? value.trashedFiles.length : 0;
+                    setMessage(count > 0
+                        ? pptText('已将 ' + count + ' 个工程文件移入系统回收站并从列表移除，误删可在系统回收站还原。', 'Moved ' + count + ' project file(s) to the system Recycle Bin and removed from the list.')
+                        : pptText('原工程文件已不存在，已清理此列表记录。', 'Source files were already missing; removed the stale entry from the list.'));
+                }, pptText('正在将工程文件移入系统回收站…', 'Moving project files to the Recycle Bin…'));
+            }
+            function renderProjectRow(row) {
+                const openRow = () => { setActiveTab('content'); setEditorMode('lightbox'); return open(row.id); };
+                const revision = row.slideCount === undefined ? null : row.slideCount + t(' 页 · 修订 ') + (row.revision ?? 0);
+                return h(W.Row, {
+                    key: row.id, title: row.title, description: row.path, disabled: busy, onClick: openRow,
+                    meta: [row.theme, revision].filter(Boolean).join(' · ') || undefined,
+                    actions: h(React.Fragment, null,
+                        h(W.Button, { size: 'sm', icon: 'edit', disabled: busy, onClick: openRow }, pptText('编辑', 'Open')),
+                        h(W.Button, { size: 'sm', variant: 'ghost', icon: 'download', disabled: busy, onClick: () => download('pptx', row) }, 'PPTX'),
+                        h(W.Button, {
+                            size: 'sm', variant: 'ghost', icon: 'trash', disabled: busy,
+                            'aria-label': pptText('移除或回收「' + row.title + '」', 'Remove or trash ' + row.title),
+                            onClick: () => { setError(''); setRemoveTarget(row); },
+                        }, pptText('移除', 'Remove'))),
+                });
+            }
             function keepInputsAndReload() {
                 const original = draftFor(slide), keys = fields.filter(([key]) => draft[key] !== original[key]).map(([key]) => key), pending = { ...draft }, pendingImage = image;
                 return perform(signal => action({ operation: 'open', id: project.id }, signal), value => {
@@ -1387,7 +1478,7 @@ if(!rootElement.current?.contains(event.target) || event.target?.closest?.('[rol
  h(W.IconButton,{icon:'refresh','data-tour':'ppt-deliver',label:t('刷新项目'),'aria-busy':busy?'true':undefined,disabled:busy,onClick:refreshList}))},
  h('style',null,css),h('style',null,PPT_WORKBENCH_CSS),error && h(W.Status,{tone:'error',className:'ppt-recovery'},[h('p',{key:'text'},error),h('div',{key:'actions',className:'w-toolbar'},[h(W.Button,{key:'retry',icon:'refresh','aria-busy':busy?'true':undefined,disabled:busy || dataDirty,onClick:() => project ? open(project.id) : refreshList()},t("重试")),conflict && project ? h(W.Button,{key:'reload',icon:'download',disabled:busy || dataDirty,onClick:keepInputsAndReload},t("载入最新版本，保留我的输入")) : null])]),h(W.Status,{tone:'success'},message),busy?h(W.Status,null,job):null,
  dataDirty ? h(W.Status,null,h('div',{className:'ppt-data-warning'},pptText('数据推演或材料尚未保存，成品仍是已保存版本。','Scenario or source changes are unsaved. Output still uses saved values.'),h(W.Button,{variant:'ghost',icon:'right',onClick:()=>setActiveTab('data')},pptText('前往数据与推演','Open data and what-if')))) : null,
- !project ? listLoading && !projects.length && !error ? h('div',{className:'ppt-loading-skeleton'},h(W.Skeleton,{variant:'card',label:pptText('正在读取演示文稿列表…','Loading presentation projects…')}),h(W.Skeleton,{variant:'row'}),h(W.Skeleton,{variant:'row'}),h(W.Skeleton,{variant:'row'})) : projects.length ? h('div',{className:'ppt-library','data-tour':'ppt-library'},h(ProjectLibrary,{items:projects,language:languageOf(),t:pptText,searchHint:pptText('搜索标题或工程路径','Search titles or project paths'),searchText:row=>row.title+' '+row.path+' '+(row.theme||''),updatedAt:row=>row.updatedAt,renderItem:row=>h(W.Row,{key:row.id,title:row.title,meta:[row.theme,row.slideCount!==undefined?row.slideCount+t(' 页 · 修订 ')+(row.revision??0):null].filter(Boolean).join(' · ') || undefined,description:row.path,disabled:busy,actions:h(React.Fragment,null,h(W.Button,{size:'sm',icon:'edit',disabled:busy,onClick:()=>{setActiveTab('content');setEditorMode('lightbox');open(row.id);}},pptText('编辑','Open')),h(W.Button,{size:'sm',variant:'ghost',icon:'download',disabled:busy,onClick:()=>download('pptx',row)},'PPTX')),onClick:()=>{setActiveTab('content');setEditorMode('lightbox');open(row.id);}})})) : h(W.Empty,{icon:'slides',title:t("还没有可以编辑的项目"),action:h(React.Fragment,null,[h(W.Button,{key:'demo',variant:'primary',icon:'sparkles',disabled:busy,onClick:createDemo},pptText('一键体验旗舰示例','Load Flagship Demo')),h(W.Button,{key:'create',icon:'plus',disabled:busy,onClick:()=>{setCreateMode('create');setCreateOpen(true);}},pptText('新建演示文稿','New presentation')),h(W.Button,{key:'office',icon:'file',disabled:busy,onClick:()=>{setCreateMode('office');setCreateOpen(true);}},pptText('导入 Excel / Word','Import Excel / Word')),h(W.Button,{key:'import',icon:'upload',disabled:busy,onClick:()=>{setCreateMode('import');setCreateOpen(true);}},pptText('导入 PPTX 翻新','Import & Modernize .pptx')),h(W.Button,{key:'copy',icon:'copy',onClick:copyExample},t("复制示例")),h(W.Button,{key:'refresh',icon:'refresh','aria-busy':busy?'true':undefined,disabled:busy,onClick:refreshList},t("刷新项目"))])},[h('p',{key:'how'},t("先在对话中让助手生成演示文稿。已有项目可以让助手调用 ppt_check 检查一次，它会出现在这里。")),h('p',{key:'example'},t("示例：请把这份材料制作成可直接交付的演示文稿，生成 HTML、PPTX 和工程文件。"))]) :
+ !project ? listLoading && !projects.length && !error ? h('div',{className:'ppt-loading-skeleton'},h(W.Skeleton,{variant:'card',label:pptText('正在读取演示文稿列表…','Loading presentation projects…')}),h(W.Skeleton,{variant:'row'}),h(W.Skeleton,{variant:'row'}),h(W.Skeleton,{variant:'row'})) : projects.length ? h('div',{className:'ppt-library','data-tour':'ppt-library'},h(ProjectLibrary,{items:projects,language:languageOf(),t:pptText,searchHint:pptText('搜索标题或工程路径','Search titles or project paths'),searchText:row=>row.title+' '+row.path+' '+(row.theme||''),updatedAt:row=>row.updatedAt,renderItem:renderProjectRow})) : h(W.Empty,{icon:'slides',title:t("还没有可以编辑的项目"),action:h(React.Fragment,null,[h(W.Button,{key:'demo',variant:'primary',icon:'sparkles',disabled:busy,onClick:createDemo},pptText('一键体验旗舰示例','Load Flagship Demo')),h(W.Button,{key:'create',icon:'plus',disabled:busy,onClick:()=>{setCreateMode('create');setCreateOpen(true);}},pptText('新建演示文稿','New presentation')),h(W.Button,{key:'office',icon:'file',disabled:busy,onClick:()=>{setCreateMode('office');setCreateOpen(true);}},pptText('导入 Excel / Word','Import Excel / Word')),h(W.Button,{key:'import',icon:'upload',disabled:busy,onClick:()=>{setCreateMode('import');setCreateOpen(true);}},pptText('导入 PPTX 翻新','Import & Modernize .pptx')),h(W.Button,{key:'copy',icon:'copy',onClick:copyExample},t("复制示例")),h(W.Button,{key:'refresh',icon:'refresh','aria-busy':busy?'true':undefined,disabled:busy,onClick:refreshList},t("刷新项目"))])},[h('p',{key:'how'},t("先在对话中让助手生成演示文稿。已有项目可以让助手调用 ppt_check 检查一次，它会出现在这里。")),h('p',{key:'example'},t("示例：请把这份材料制作成可直接交付的演示文稿，生成 HTML、PPTX 和工程文件。"))]) :
  h(React.Fragment,null,
   activeTab === 'content' ? h('div',{className:'ppt-editor-modebar','data-tour':'ppt-mode'},
    h('div',{className:'ppt-editor-modemeta'},
@@ -1514,6 +1605,14 @@ h(W.Button, { icon: 'reply', disabled: busy || dirty || imagePending || dataDirt
  h('div', { className: 'tools' }, h(W.Button, { variant: 'primary', icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('share') }, pptText('下载分享成品包 ZIP','Download share bundle ZIP')),h(W.Button,{icon:'download',disabled:busy || dirty || imagePending || dataDirty,onClick:()=>download('bundle')},pptText('下载完整工程包 ZIP','Download project bundle ZIP')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('pptx') }, t("下载最新 PPTX")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('pdf') }, t("导出高精 PDF (.pdf)")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('png-zip') }, t("导出逐页 PNG 图包 (.zip)")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('html') }, t("下载 HTML")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('xlsx') }, pptText('导出 Excel 数据工作簿 (.xlsx)', 'Export Excel Workbook (.xlsx)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('docx') }, pptText('导出 Word 报告文档 (.docx)', 'Export Word Report (.docx)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('qa-prep') }, pptText('导出高管质询预案 (.qa-prep.md)', 'Export Executive Q&A Prep (.qa-prep.md)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('onepager') }, pptText('下载高管一页纸 (.html)', 'Download Executive One-Pager (.html)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('social-carousel') }, pptText('导出社媒长图卡片 (4:5 .html)', 'Export Social Carousel (4:5 .html)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('subtitles') }, pptText('导出配音时间轴字幕 (.srt)', 'Export Timed Subtitles (.srt)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('remotion') }, pptText('导出 Remotion 视频分镜包 (.zip)', 'Export Remotion Video Bundle (.zip)')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('handout') }, pptText('下载演讲讲义 (.md)', 'Download Handout')), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('notes') }, t("下载讲稿 Markdown")), h(W.Button, { icon: 'download', disabled: busy || dirty || imagePending || dataDirty, onClick: () => download('json') }, t("备份工程"))))) : null,
  pendingNav ? h(W.Dialog,{className:'pptw ppt-dialog',title:pptText('有未保存的修改','Unsaved changes'),closeLabel:pptText('继续编辑','Keep editing'),busy,onClose:()=>setPendingNav(null)},h('p',null,pptText('请选择如何处理当前页的修改。','Choose what to do with the current slide edits.')),h(W.Status,{tone:'error'},error),h('div',{className:'w-toolbar'},h(W.Button,{variant:'primary',icon:'check',disabled:busy || imagePending || dataDirty,onClick:async()=>{const target=pendingNav;const result=await save();if(result?.project && alive.current)finishNavigation(target,result.project);}},pptText('保存后继续','Save and continue')),h(W.Button,{icon:'close',disabled:busy,onClick:()=>finishNavigation(pendingNav)},pptText('放弃修改并继续','Discard and continue')),h(W.Button,{variant:'ghost',disabled:busy,onClick:()=>setPendingNav(null)},pptText('继续编辑','Keep editing')))) : null,
  deleteOpen && project ? h(W.Dialog,{className:'pptw ppt-dialog',title:t('删除本页'),closeLabel:pptText('取消','Cancel'),busy,onClose:()=>setDeleteOpen(false)},h('p',null,pptText('将删除当前页面，之后可以撤销。','Remove the current slide. You can undo this change.')),h(W.Status,{tone:'error'},error),h('div',{className:'w-toolbar'},h(W.Button,{variant:'danger',icon:'trash',disabled:busy,onClick:async()=>{const result=await structure('remove');if(result)setDeleteOpen(false);}},pptText('确认删除本页','Confirm remove slide')),h(W.Button,{disabled:busy,onClick:()=>setDeleteOpen(false)},pptText('取消','Cancel')))) : null,
+ removeTarget && !project ? h(W.Dialog,{className:'pptw ppt-dialog',title:pptText('移除项目：' + removeTarget.title,'Remove project: ' + removeTarget.title),closeLabel:pptText('取消','Cancel'),busy,onClose:()=>setRemoveTarget(null)},
+  h('p',null,pptText('请选择处理方式：「仅移出列表」不会改动本地文件；「移入回收站」会将该工程的 .json / .html / .pptx 文件移入系统回收站（误删可在系统回收站还原）。','Choose how to remove this project: "Remove from list" keeps local files untouched; "Move to Recycle Bin" sends this project’s .json, .html and .pptx files to the system Recycle Bin where they can be restored.')),
+  h('p',{className:'muted',style:{wordBreak:'break-all'}},removeTarget.path),
+  h(W.Status,{tone:'error'},error),
+  h('div',{className:'w-toolbar'},
+   h(W.Button,{disabled:busy,onClick:()=>removeFromProjectList(removeTarget)},pptText('仅移出列表（保留文件）','Remove from list only')),
+   h(W.Button,{variant:'danger',icon:'trash',disabled:busy,onClick:()=>trashProjectFiles(removeTarget)},pptText('移入系统回收站','Move files to Recycle Bin')),
+   h(W.Button,{variant:'ghost',disabled:busy,onClick:()=>setRemoveTarget(null)},pptText('取消','Cancel')))) : null,
  typeof PptCreateDialog === 'function' ? h(PptCreateDialog, { open: createOpen, initialMode: createMode, busy, onClose: () => setCreateOpen(false), onCreate: createDeck, onCreateDemo: createDemo, onImport: importDeck, onImportOffice: importOfficeDeck, onError: setError }) : null);
         }
         function apply(ctx) {

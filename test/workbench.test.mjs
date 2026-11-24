@@ -1,10 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildDeckAsync, editDeck, undoDeck, readDeckProject } from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import * as engine from '../skills/dsh-ppt/scripts/deck-advanced.mjs'
 import { PptWorkbench, installPptWorkbench, PPT_WORKBENCH_ROUTE, PPT_DOWNLOAD_ROUTE } from '../lib/workbench.js'
+import { movePathToTrash } from '../lib/trash.js'
 import { unzipSync, strFromU8 } from 'fflate'
 import { runInNewContext } from 'node:vm'
 const work = resolve('.test-output'); mkdirSync(work, { recursive: true })
@@ -69,6 +70,108 @@ test('an incomplete catalog tail does not swallow a newly registered project', (
   assert.equal(listed.projects[0].path, readDeckProject({ deckPath: created.jsonPath }).path)
   assert.ok(readFileSync(wb.catalogPath, 'utf8').startsWith(broken + '\n'))
 }))
+
+test('a moved project is hidden on refresh and a stale open explains what happened (#11)', () => fixture(async ({ dir, created, wb }) => {
+  await wb.remember(created, {})
+  const [project] = (await wb.action({ operation: 'list' })).projects
+  const originalIndex = readFileSync(wb.catalogPath)
+  const parked = join(dir, 'moved-project.json')
+  renameSync(created.jsonPath, parked)
+
+  assert.deepEqual((await wb.action({ operation: 'list' })).projects, [])
+  const stale = await wb.fetch(request({ operation: 'open', id: project.id }))
+  assert.equal(stale.status, 404)
+  const error = await stale.json()
+  assert.equal(error.code, 'project_missing')
+  assert.match(error.message, /移动或删除/)
+  assert.match(error.messageEn, /moved or deleted/)
+  assert.deepEqual(readFileSync(wb.catalogPath), originalIndex)
+
+  renameSync(parked, created.jsonPath)
+  assert.deepEqual((await wb.action({ operation: 'list' })).projects, [project])
+}))
+
+test('removing a project from the list preserves its files and survives reopening (#11)', () => fixture(async ({ dir, created, wb }) => {
+  await wb.remember(created, {})
+  const [project] = (await wb.action({ operation: 'list' })).projects
+  const other = await buildDeckAsync({ title: '保留工程', slides, outputDir: dir })
+  await wb.remember(other, {})
+  const originalFiles = Object.entries(created.files).map(([, file]) => [file, readFileSync(file)])
+
+  const removed = await wb.fetch(request({ operation: 'remove-project', id: project.id }))
+  assert.equal(removed.status, 200)
+  assert.deepEqual((await removed.json()).projects.map(row => row.title), ['保留工程'])
+  const reopened = new PptWorkbench({ catalogPath: wb.catalogPath })
+  assert.deepEqual((await reopened.action({ operation: 'list' })).projects.map(row => row.title), ['保留工程'])
+  for (const [file, bytes] of originalFiles) assert.deepEqual(readFileSync(file), bytes)
+
+  const indexAfterRemoval = readFileSync(wb.catalogPath)
+  await reopened.action({ operation: 'remove-project', id: project.id })
+  assert.deepEqual(readFileSync(wb.catalogPath), indexAfterRemoval)
+  await reopened.remember(created, {})
+  assert.equal((await reopened.action({ operation: 'list' })).projects[0].id, project.id)
+}))
+
+test('trashing a project requires confirmation, moves only its artifacts in safe order, and leaves siblings intact (#11)', () => fixture(async ({ dir, created }) => {
+  const trashed = []
+  const wb = new PptWorkbench({
+    catalogPath: join(dir, 'catalog.jsonl'),
+    trashPath: async target => {
+      trashed.push(target)
+      rmSync(target, { force: true })
+      return { moved: true }
+    },
+  })
+  const bystander = join(dir, 'keep-me.txt')
+  writeFileSync(bystander, 'do-not-touch')
+  await wb.remember(created, {})
+  const [project] = (await wb.action({ operation: 'list' })).projects
+
+  const unconfirmed = await wb.fetch(request({ operation: 'trash-project', id: project.id }))
+  assert.equal(unconfirmed.status, 400)
+  assert.equal(trashed.length, 0)
+  assert.equal(existsSync(created.jsonPath), true)
+
+  const res = await wb.fetch(request({ operation: 'trash-project', id: project.id, confirmed: true }))
+  assert.equal(res.status, 200)
+  const payload = await res.json()
+  assert.deepEqual(payload.projects, [])
+  assert.equal(payload.trashedFiles.length, 3)
+  // Order guarantees .pptx -> .html -> .json so locked PPTX never orphans the project JSON
+  assert.ok(trashed[0].endsWith('.pptx') && trashed[1].endsWith('.html') && trashed[2].endsWith('.json'))
+  assert.equal(existsSync(created.jsonPath), false)
+  assert.equal(existsSync(created.htmlPath), false)
+  assert.equal(existsSync(created.pptxPath), false)
+  assert.equal(readFileSync(bystander, 'utf8'), 'do-not-touch')
+  const reopened = new PptWorkbench({ catalogPath: wb.catalogPath })
+  assert.deepEqual((await reopened.action({ operation: 'list' })).projects, [])
+}))
+
+test('a locked PPTX during trash-project aborts before deleting JSON and keeps project listed (#11)', () => fixture(async ({ dir, created }) => {
+  const wb = new PptWorkbench({
+    catalogPath: join(dir, 'catalog.jsonl'),
+    trashPath: async target => {
+      if (target.endsWith('.pptx')) throw new Error('文件正被其他程序占用或无法移入系统回收站')
+      rmSync(target, { force: true })
+      return { moved: true }
+    },
+  })
+  await wb.remember(created, {})
+  const [project] = (await wb.action({ operation: 'list' })).projects
+  const res = await wb.fetch(request({ operation: 'trash-project', id: project.id, confirmed: true }))
+  assert.equal(res.status, 400)
+  const body = await res.json()
+  assert.match(body.message, /回收站/)
+  assert.match(body.messageEn, /Recycle Bin/)
+  assert.equal(existsSync(created.jsonPath), true)
+  assert.equal((await wb.action({ operation: 'list' })).projects.length, 1)
+}))
+
+test('movePathToTrash rejects relative paths and treats already-missing paths as no-op (#11)', async () => {
+  await assert.rejects(() => movePathToTrash('relative/file.json'), /绝对路径/)
+  const missing = await movePathToTrash(join(work, 'definitely-missing-' + Date.now() + '.json'))
+  assert.deepEqual(missing, { moved: false, missing: true })
+})
 test('authenticated carrier only; original Host used across HTTP bridge and origin checked', () => fixture(async ({ wb }) => {
   const registrations = []; installPptWorkbench({ inject(deps, fn) { assert.deepEqual(deps, ['connection']); fn({ connection: { fetch: { register(route) { registrations.push(route) } } } }); } }, wb)
   assert.equal(registrations.length, 2); assert.equal(registrations[0].path, PPT_WORKBENCH_ROUTE)

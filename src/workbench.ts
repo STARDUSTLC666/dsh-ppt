@@ -12,6 +12,7 @@ import { PptCoaching } from './coaching.js'
 import type { CoachingModel, ModelRoute } from './coaching-model.js'
 import { PptVisual } from './visual.js'
 import type { VisualModel } from './visual-model.js'
+import { movePathToTrash } from './trash.js'
 
 export const PPT_WORKBENCH_ROUTE = '/api/dsh-ppt/workbench'
 export const PPT_DOWNLOAD_ROUTE = '/api/dsh-ppt/download'
@@ -19,6 +20,7 @@ const REQUEST_LIMIT = 36 * 1024 * 1024
 const ABSORB_PPTX_LIMIT = 24 * 1024 * 1024
 const FILE_LIMIT = 64 * 1024 * 1024
 const BUNDLE_LIMIT = 128 * 1024 * 1024
+const RECENT_PROJECT_LIMIT = 100
 
 const ALLOWED_LAYOUTS = new Set([
   'cover', 'agenda', 'section', 'bullets', 'statement', 'quote',
@@ -55,13 +57,29 @@ function shareHtml(bytes: Buffer): Uint8Array {
   return strToU8(html.slice(0, start) + html.slice(end + 4))
 }
 type Project = { id: string; path: string; title: string; updatedAt: string; theme?: string; slideCount?: number; revision?: number; modelRoute?: ModelRoute }
+type RemovedProject = Pick<Project, 'id' | 'path'> & { removed: true }
 type Render = { revision: number; pngPaths: string[]; pngHashes: string[]; missingFonts?: string[]; sourceSha256: string }
 type WorkbenchEngine = DeckEngine & {
   readDeckProject(options: Record<string, unknown>): { manifest: any; path: string }
   absorbPptx?(options: any): Promise<any>
 }
-type Options = { catalogPath?: string; loadEngine?: () => Promise<WorkbenchEngine>; coachingModel?: CoachingModel; visualModel?: VisualModel }
+type TrashPathFn = (targetPath: string, signal?: AbortSignal) => Promise<{ moved: boolean; missing?: boolean } | void> | void
+type Options = { catalogPath?: string; loadEngine?: () => Promise<WorkbenchEngine>; coachingModel?: CoachingModel; visualModel?: VisualModel; trashPath?: TrashPathFn }
 const digest = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex')
+
+class MissingProjectFile extends Error {
+  constructor() { super('工程文件已移动或删除，已从当前列表隐藏。') }
+}
+
+function isMissingPath(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+function projectId(id: unknown): string {
+  if (typeof id !== 'string' || !/^[0-9a-f]{64}$/.test(id)) throw new Error('请选择已有项目')
+  return id
+}
 
 function ordinaryFile(path: string): Buffer {
   const stat = lstatSync(path)
@@ -530,9 +548,9 @@ function starterSlide(archetype: unknown, language: unknown): Record<string, unk
 function json(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
 }
-function fail(status: number, message: string): Response {
+function fail(status: number, message: string, code?: string): Response {
   const display = /[\u3400-\u9fff]/.test(message) && message.includes(' / ') ? message.slice(0, message.indexOf(' / ')) : message
-  return json(status, { ok: false, message: display, messageEn: englishWorkbenchMessage(message) })
+  return json(status, { ok: false, message: display, messageEn: englishWorkbenchMessage(message), ...(code ? { code } : {}) })
 }
 function originVerdict(request: Request): Response | undefined {
   const site = request.headers.get('sec-fetch-site'), origin = request.headers.get('origin'), desktop = origin === 'dsh-app://app'
@@ -612,10 +630,12 @@ export class PptWorkbench {
   readonly coaching: PptCoaching
   readonly visual: PptVisual
   private readonly loadEngine: () => Promise<WorkbenchEngine>
+  private readonly trashPath: TrashPathFn
   private readonly renders = new Map<string, Render>()
   constructor(options: Options = {}) {
     this.catalogPath = options.catalogPath ?? join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'plugins', 'dsh-ppt', 'projects.jsonl')
     this.loadEngine = options.loadEngine ?? (getEngine as () => Promise<WorkbenchEngine>)
+    this.trashPath = options.trashPath ?? movePathToTrash
     this.coaching = new PptCoaching(join(dirname(this.catalogPath), 'rehearsals'), options.coachingModel)
     this.visual = new PptVisual(join(dirname(this.catalogPath), 'visual-reviews'), options.visualModel)
   }
@@ -626,7 +646,12 @@ export class PptWorkbench {
     for (const line of readFileSync(this.catalogPath, 'utf8').split('\n')) {
       try {
         const row = JSON.parse(line)
-        if (typeof row.path === 'string' && row.path.endsWith('.json') && row.id === digest(row.path) && typeof row.title === 'string' && typeof row.updatedAt === 'string') {
+        if (typeof row.path !== 'string' || !row.path.endsWith('.json') || row.id !== digest(row.path)) continue
+        if (row.removed === true) {
+          rows.delete(row.id)
+          continue
+        }
+        if (typeof row.title === 'string' && typeof row.updatedAt === 'string') {
           const clean: Project = {
             id: row.id,
             path: row.path,
@@ -643,7 +668,20 @@ export class PptWorkbench {
         }
       } catch { /* A crash may leave an incomplete last append; keep older rows. */ }
     }
-    return [...rows.values()].reverse().slice(0, 100)
+    return [...rows.values()].reverse()
+  }
+  private recentProjects(): Project[] {
+    const recent: Project[] = []
+    for (const project of this.catalog()) {
+      try {
+        if (!lstatSync(project.path).isFile()) continue
+      } catch (error) {
+        if (isMissingPath(error)) continue
+      }
+      recent.push(project)
+      if (recent.length === RECENT_PROJECT_LIMIT) break
+    }
+    return recent
   }
   /** Recording a completed tool never turns a successful generation into an error. */
   async remember(result: any, args: unknown, exec?: PptExecution): Promise<void> {
@@ -669,6 +707,9 @@ export class PptWorkbench {
       ...(Number.isInteger(manifest.revision) ? { revision: manifest.revision } : {}),
       ...(modelRoute ? { modelRoute } : {}),
     }
+    this.appendCatalog(row)
+  }
+  private appendCatalog(row: Project | RemovedProject): void {
     mkdirSync(dirname(this.catalogPath), { recursive: true })
     const descriptor = openSync(this.catalogPath, 'a+')
     try {
@@ -681,11 +722,16 @@ export class PptWorkbench {
     } finally { closeSync(descriptor) }
   }
   private async project(id: unknown) {
-    if (typeof id !== 'string' || !/^[0-9a-f]{64}$/.test(id)) throw new Error('请选择已有项目')
-    const entry = this.catalog().find(row => row.id === id)
+    const key = projectId(id)
+    const entry = this.catalog().find(row => row.id === key)
     if (!entry) throw new Error('项目不在本机索引中，请先在对话中创建或检查演示文稿')
-    if (realpathSync(entry.path) !== entry.path) throw new Error('项目位置已改变，请在对话中重新检查')
-    ordinaryFile(entry.path)
+    try {
+      if (realpathSync(entry.path) !== entry.path) throw new Error('项目位置已改变，请在对话中重新检查')
+      ordinaryFile(entry.path)
+    } catch (error) {
+      if (isMissingPath(error)) throw new MissingProjectFile()
+      throw error
+    }
     const engine = await this.loadEngine()
     const { manifest } = engine.readDeckProject({ deckPath: entry.path })
     return { entry, engine, manifest, files: pathsFor(entry.path) }
@@ -1117,7 +1163,56 @@ export class PptWorkbench {
   }
   async action(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     signal?.throwIfAborted()
-    if (body.operation === 'list') return { ok: true, projects: this.catalog() }
+    if (body.operation === 'list') return { ok: true, projects: this.recentProjects() }
+    if (body.operation === 'remove-project') {
+      const id = projectId(body.id)
+      const entry = this.catalog().find(row => row.id === id)
+      if (entry) {
+        this.appendCatalog({ id, path: entry.path, removed: true })
+        this.renders.delete(id)
+      }
+      return { ok: true, projects: this.recentProjects() }
+    }
+    if (body.operation === 'trash-project') {
+      if (body.confirmed !== true) throw new Error('请确认后再将工程文件移入系统回收站')
+      const id = projectId(body.id)
+      const entry = this.catalog().find(row => row.id === id)
+      if (!entry) return { ok: true, trashedFiles: [], projects: this.recentProjects() }
+      const files = pathsFor(entry.path)
+      // Validate exact cataloged project artifacts first (never follow symlinks or walk folders).
+      const targets: string[] = []
+      let jsonExists = false
+      try {
+        const st = lstatSync(entry.path)
+        if (st.isSymbolicLink() || !st.isFile()) throw new Error('拒绝将符号链接移入回收站')
+        if (realpathSync(entry.path) !== entry.path) throw new Error('项目位置已改变，请在对话中重新检查')
+        jsonExists = true
+      } catch (error) {
+        if (!isMissingPath(error)) throw error
+      }
+      if (jsonExists) {
+        // Order: .pptx -> .html -> .json so if PPTX is open/locked in PowerPoint, the JSON project remains recoverable.
+        for (const candidate of [files.pptx, files.html, files.json]) {
+          try {
+            const st = lstatSync(candidate)
+            if (st.isSymbolicLink()) throw new Error('拒绝将符号链接移入回收站')
+            if (!st.isFile()) continue
+            targets.push(candidate)
+          } catch (error) {
+            if (!isMissingPath(error)) throw error
+          }
+        }
+      }
+      const trashedFiles: string[] = []
+      for (const file of targets) {
+        signal?.throwIfAborted()
+        const outcome = await this.trashPath(file, signal)
+        if (!outcome || outcome.moved !== false) trashedFiles.push(basename(file))
+      }
+      this.appendCatalog({ id, path: entry.path, removed: true })
+      this.renders.delete(id)
+      return { ok: true, trashedFiles, projects: this.recentProjects() }
+    }
     if (body.operation === 'catalog-meta') {
       const engine = await this.loadEngine()
       signal?.throwIfAborted()
@@ -1777,7 +1872,10 @@ export class PptWorkbench {
         'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
         'content-disposition': `attachment; filename="presentation.${fallbackExt}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       } })
-    } catch (error) { return fail(400, error instanceof Error ? error.message : String(error)) }
+    } catch (error) {
+      if (error instanceof MissingProjectFile) return fail(404, error.message, 'project_missing')
+      return fail(400, error instanceof Error ? error.message : String(error))
+    }
   }
   async fetch(request: Request): Promise<Response> {
     if (request.method !== 'POST') return fail(405, '请使用 POST')
@@ -1793,6 +1891,7 @@ export class PptWorkbench {
       if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(400, '请求必须是对象')
       return json(200, await this.action(body, request.signal))
     } catch (error) {
+      if (error instanceof MissingProjectFile) return fail(404, error.message, 'project_missing')
       const message = error instanceof Error ? error.message : String(error)
       return fail(/修订号冲突|已被修改|工程已被修改|正在被另一次|其他操作修改/.test(message) ? 409 : 400, message)
     }

@@ -13,22 +13,30 @@ type WorkbenchEngine = DeckEngine & {
     };
     absorbPptx?(options: any): Promise<any>;
 };
+type TrashPathFn = (targetPath: string, signal?: AbortSignal) => Promise<{
+    moved: boolean;
+    missing?: boolean;
+} | void> | void;
 type Options = {
     catalogPath?: string;
     loadEngine?: () => Promise<WorkbenchEngine>;
     coachingModel?: CoachingModel;
     visualModel?: VisualModel;
+    trashPath?: TrashPathFn;
 };
 export declare class PptWorkbench {
     readonly catalogPath: string;
     readonly coaching: PptCoaching;
     readonly visual: PptVisual;
     private readonly loadEngine;
+    private readonly trashPath;
     private readonly renders;
     constructor(options?: Options);
     private catalog;
+    private recentProjects;
     /** Recording a completed tool never turns a successful generation into an error. */
     remember(result: any, args: unknown, exec?: PptExecution): Promise<void>;
+    private appendCatalog;
     private project;
     private view;
     private revision;

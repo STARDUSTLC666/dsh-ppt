@@ -57,3 +57,7 @@ Edit the template sources (`templates/client.js`, `templates/panels/*.js`, `temp
 工程列表可按关键词筛选，并按最近更新、最早更新或自然标题顺序排列；多个词需要同时匹配。PPT 只查目录中的标题和工程路径（目录同时缓存主题、页数与修订号供快速预览）；视频查标题、正文和模板，当前列表与归档列表各自保留筛选条件。清空搜索会恢复完整列表，返回工程库会保留刚才的搜索和排序。筛选只在本机列表中执行，不读取未选工程的完整文件，也不修改工程内容。
 
 Search the local project list and sort by newest update, oldest update or natural title. Multiple terms must all match. PPT searches catalog titles and paths (while caching theme, slide count, and revision metadata in the catalog); video searches titles, text and templates, with separate active/archive filters. Clear restores the full list; returning from editing preserves filters. Filtering does not load unselected project files or change project contents.
+
+PPT 工程行的「移除」提供两种方式：**仅移出列表**（清除工作台记录但保留本地 `.json` / `.html` / `.pptx` 文件，随时可在对话中对原工程运行 `ppt_check` 重新加入）与**移入系统回收站**（经二次确认将本工程的 `.json` / `.html` / `.pptx` 移入系统回收站并从列表移除，误删可在系统回收站还原）。刷新时，列表会自动隐藏源文件已移动或删除的失效条目，不再报错。
+
+Use **Remove** on a PPT project row to either **Remove from list only** (keeps local `.json`, `.html`, and `.pptx` files; run `ppt_check` in chat to add it back) or **Move files to Recycle Bin** (after confirmation, moves the project's `.json`, `.html`, and `.pptx` files to the OS Recycle Bin / Trash where they can be restored). Refreshing the list automatically hides entries whose source files were moved or deleted.
