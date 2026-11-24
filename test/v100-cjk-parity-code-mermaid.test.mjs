@@ -200,3 +200,40 @@ test('v1.0.0: Mermaid flowchart LR & TD back-edges route via outer U-channels wi
   const tdBack = tdModel.edges.find((e) => e.from === 'V' && e.to === 'P')
   assert.ok(tdBack && tdBack.waypoints?.length === 4, 'TD back-edge should route via 4-point side U-channel')
 })
+
+test('routed Mermaid feedback connectors stay attached to their PowerPoint nodes', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ppt-mermaid-anchors-'))
+  try {
+    const built = buildDeck({
+      title: 'Feedback routing',
+      theme: 'stripe-craft',
+      outputDir: dir,
+      slides: ['LR', 'TD'].map(direction => ({
+        layout: 'mermaid',
+        title: direction + ' workflow',
+        mermaid: [
+          'flowchart ' + direction,
+          '  A[Start] --> B[Plan] --> C[Build] --> D[Review] --> E[Release]',
+          '  D -->|Revise| B',
+        ].join('\n'),
+      })),
+    })
+    const pptx = readFileSync(built.files.pptx)
+    for (const page of [1, 2]) {
+      const xml = readZipEntryText(pptx, 'ppt/slides/slide' + page + '.xml')
+      const sourceId = /<p:cNvPr id="(\d+)" name="Mermaid Node D"/.exec(xml)?.[1]
+      const targetId = /<p:cNvPr id="(\d+)" name="Mermaid Node B"/.exec(xml)?.[1]
+      assert.ok(sourceId && targetId)
+      const segments = [...xml.matchAll(/name="Mermaid Edge D-&gt;B Seg [123]"\/>([\s\S]*?)<\/p:cxnSp>/g)]
+      assert.equal(segments.length, 3)
+      assert.match(segments[0][1], new RegExp('<a:stCxn id="' + sourceId + '" idx="[0-3]"/>'))
+      assert.doesNotMatch(segments[0][1], /<a:endCxn\b/)
+      assert.doesNotMatch(segments[1][1], /<a:(?:stCxn|endCxn)\b/)
+      assert.doesNotMatch(segments[2][1], /<a:stCxn\b/)
+      assert.match(segments[2][1], new RegExp('<a:endCxn id="' + targetId + '" idx="[0-3]"/>'))
+      assert.match(segments[2][1], /<a:tailEnd type="triangle"/)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

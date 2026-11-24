@@ -2260,12 +2260,17 @@ function renderFlowchartPptx(model, nextIdFn, chromeCfg, theme, langAttr) {
       for (let wi = 0; wi < edge.waypoints.length - 1; wi += 1) {
         const segFrom = edge.waypoints[wi]
         const segTo = edge.waypoints[wi + 1]
-        shapes.push(ooxmlLine(nextIdFn(), 'Mermaid Edge ' + edge.from + '->' + edge.to + ' Seg ' + (wi + 1), segFrom, segTo, {
+        const first = wi === 0
+        const last = wi === edge.waypoints.length - 2
+        // Attach only the outer ends. The intermediate bends retain the obstacle-avoiding route.
+        shapes.push(ooxmlConnector(nextIdFn(), 'Mermaid Edge ' + edge.from + '->' + edge.to + ' Seg ' + (wi + 1), segFrom, segTo, {
+          stCxn: first ? { id: srcSpid, idx: outOoxmlIdx } : null,
+          endCxn: last ? { id: dstSpid, idx: inOoxmlIdx } : null,
           color: strokeColor,
           widthPt,
           dash: edge.dash,
-          headArrow: wi === 0 && Boolean(edge.headArrow),
-          tailArrow: wi === edge.waypoints.length - 2 && Boolean(edge.tailArrow),
+          headArrow: first && Boolean(edge.headArrow),
+          tailArrow: last && Boolean(edge.tailArrow),
         }))
       }
     } else {
