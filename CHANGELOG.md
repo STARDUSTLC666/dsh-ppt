@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.0.1 (2026-11-24)
+
+- 修复 Mermaid 流程图导出 PPTX 后，绕线的回路与节点脱离的问题。回路线保留绕开节点的路径，两端连接到对应的节点形状。
+- Restore node attachments on routed Mermaid feedback connectors in exported PPTX while preserving the route around intervening nodes.
+
 ## 1.0.0 (2026-11-24)
 
 首个正式稳定大版本发布，整合全部 41 种原生可编辑图谱、24 主题、20 标杆范本、三层内置艺术总监提示词与 `SLOP-15` 视觉门禁、整卡联动 PPTX 动效、16:9 灯箱工作台及全套逆向 Office 导出，并重点补齐实机验证暴露的中西文排版同构与关键渲染精度问题：
