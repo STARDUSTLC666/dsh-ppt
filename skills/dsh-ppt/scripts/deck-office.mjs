@@ -24,6 +24,7 @@ import { inflateRawSync, inflateSync } from 'node:zlib'
 import { promoteMarkdownSlides, inferThemeFromContent } from './deck-director.mjs'
 import { buildHybridEnrichmentPlan, mergeHybridEvidence } from './deck-evidence.mjs'
 import { loadWorkspaceBrandKit } from './deck-brand-kit.mjs'
+import { sanitizeImportedTable } from './deck-import.mjs'
 
 const MAX_OFFICE_BYTES = 32 * 1024 * 1024
 const MAX_ENTRY_BYTES = 32 * 1024 * 1024
@@ -262,11 +263,11 @@ function colRefToIndex(ref) {
 function parseSharedStrings(xml) {
   if (!xml) return []
   const out = []
-  for (const siMatch of xml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)) {
-    const inner = siMatch[1].replace(/<rPh\b[^>]*>[\s\S]*?<\/rPh>/g, '')
+  for (const siMatch of xml.matchAll(/<((?:[A-Za-z_][\w.-]*:)?si)\b[^>]*>([\s\S]*?)<\/\1>/g)) {
+    const inner = siMatch[2].replace(/<((?:[A-Za-z_][\w.-]*:)?rPh)\b[^>]*>[\s\S]*?<\/\1>/g, '')
     const parts = []
-    for (const tMatch of inner.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) {
-      parts.push(decodeXml(tMatch[1]))
+    for (const tMatch of inner.matchAll(/<((?:[A-Za-z_][\w.-]*:)?t)\b[^>]*>([\s\S]*?)<\/\1>/g)) {
+      parts.push(decodeXml(tMatch[2]))
     }
     out.push(parts.join(''))
   }
@@ -286,7 +287,7 @@ function parseDateStyleSet(stylesXml) {
   const dateStyles = new Set()
   if (!stylesXml) return dateStyles
   const customDateFmts = new Set()
-  for (const m of stylesXml.matchAll(/<numFmt\b([^>]*)\/?>/g)) {
+  for (const m of stylesXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?numFmt\b([^>]*)\/?>/g)) {
     const attrs = m[1]
     const id = Number(/\bnumFmtId=["'](\d+)["']/.exec(attrs)?.[1])
     const code = /\bformatCode=["']([^"']*)["']/.exec(attrs)?.[1] || ''
@@ -294,11 +295,11 @@ function parseDateStyleSet(stylesXml) {
       customDateFmts.add(id)
     }
   }
-  const cellXfsBlock = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(stylesXml)?.[1] || ''
+  const cellXfsBlock = /<((?:[A-Za-z_][\w.-]*:)?cellXfs)\b[^>]*>([\s\S]*?)<\/\1>/.exec(stylesXml)?.[2] || ''
   let xfIndex = 0
-  for (const m of cellXfsBlock.matchAll(/<xf\b([^>]*)(?:\/>|>[\s\S]*?<\/xf>)/g)) {
-    const numFmtId = Number(/\bnumFmtId=["'](\d+)["']/.exec(m[1])?.[1])
-    const applyNumFmt = /\bapplyNumberFormat=["']([^"']+)["']/.exec(m[1])?.[1]
+  for (const m of cellXfsBlock.matchAll(/<((?:[A-Za-z_][\w.-]*:)?xf)\b([^>]*)(?:\/>|>[\s\S]*?<\/\1>)/g)) {
+    const numFmtId = Number(/\bnumFmtId=["'](\d+)["']/.exec(m[2])?.[1])
+    const applyNumFmt = /\bapplyNumberFormat=["']([^"']+)["']/.exec(m[2])?.[1]
     if ((applyNumFmt !== '0') && (BUILTIN_DATE_FMT_IDS.has(numFmtId) || customDateFmts.has(numFmtId))) {
       dateStyles.add(xfIndex)
     }
@@ -325,14 +326,14 @@ function parseWorksheetRows(sheetXml, sharedStrings, dateStyles) {
   const rowList = []
   let maxCols = 0
 
-  for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
-    const rowInner = rowMatch[1]
+  for (const rowMatch of sheetXml.matchAll(/<((?:[A-Za-z_][\w.-]*:)?row)\b[^>]*>([\s\S]*?)<\/\1>/g)) {
+    const rowInner = rowMatch[2]
     const cells = []
     let seqCol = 0
 
-    for (const cMatch of rowInner.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      const attrs = cMatch[1]
-      const body = cMatch[2] || ''
+    for (const cMatch of rowInner.matchAll(/<((?:[A-Za-z_][\w.-]*:)?c)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/g)) {
+      const attrs = cMatch[2]
+      const body = cMatch[3] || ''
       const ref = /\br=["']([^"']+)["']/.exec(attrs)?.[1]
       const colIdx = ref ? colRefToIndex(ref) : seqCol
       const targetCol = colIdx >= 0 ? colIdx : seqCol
@@ -343,14 +344,14 @@ function parseWorksheetRows(sheetXml, sharedStrings, dateStyles) {
       let value = ''
 
       if (type === 'inlineStr') {
-        const isBlock = /<is\b[^>]*>([\s\S]*?)<\/is>/.exec(body)?.[1] || body
+        const isBlock = /<((?:[A-Za-z_][\w.-]*:)?is)\b[^>]*>([\s\S]*?)<\/\1>/.exec(body)?.[2] || body
         const parts = []
-        for (const tm of isBlock.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) {
-          parts.push(decodeXml(tm[1]))
+        for (const tm of isBlock.matchAll(/<((?:[A-Za-z_][\w.-]*:)?t)\b[^>]*>([\s\S]*?)<\/\1>/g)) {
+          parts.push(decodeXml(tm[2]))
         }
         value = parts.join('')
       } else {
-        const vRaw = /<v\b[^>]*>([\s\S]*?)<\/v>/.exec(body)?.[1]
+        const vRaw = /<((?:[A-Za-z_][\w.-]*:)?v)\b[^>]*>([\s\S]*?)<\/\1>/.exec(body)?.[2]
         if (vRaw !== undefined) {
           const decoded = decodeXml(vRaw).trim()
           if (type === 's') {
@@ -399,7 +400,7 @@ function parseXlsxArchive(bytes) {
 
   const sheetSpecs = []
   if (workbookXml) {
-    for (const m of workbookXml.matchAll(/<sheet\b([^>]*)\/?>/g)) {
+    for (const m of workbookXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?sheet\b([^>]*)\/?>/g)) {
       const attrs = m[1]
       const name = decodeXml(/\bname=["']([^"']+)["']/.exec(attrs)?.[1] || '')
       const rid = /\b(?:r:)?id=["']([^"']+)["']/.exec(attrs)?.[1] || ''
@@ -478,25 +479,74 @@ function parseDelimitedText(bytes, format) {
   return rect
 }
 
+const SCALE_UNIT_MAP = [
+  { re: /(?:亿元|亿美元|亿)$/, factor: 1e8, label: '亿' },
+  { re: /(?:万元|万美元|万)$/, factor: 1e4, label: '万' },
+  { re: /千$/, factor: 1e3, label: '千' },
+  { re: /[Bb]$/, factor: 1e9, label: 'B' },
+  { re: /[Mm]$/, factor: 1e6, label: 'M' },
+  { re: /[Kk]$/, factor: 1e3, label: 'K' },
+]
+
 function parseCellNumber(raw) {
   const s = cleanLine(raw)
-  if (!s) return { ok: false, num: NaN, isPercent: false, unit: '', raw: '' }
-  const isPercent = /[%％]$/.test(s)
-  const currency = /^[¥$€£]/.exec(s)?.[0] || ''
-  const unitMatch = /([万亿千百kKmMbB]+|亿元|亿美元|万元|美元|元|人|次|家|个|件|ms|s|天|小时)$/.exec(s)
-  let unit = isPercent ? '%' : (unitMatch?.[1] || currency)
-  const cleaned = s
-    .replace(/^[¥$€£]\s*/, '')
+  if (!s) return { ok: false, num: NaN, isPercent: false, unit: '', scaleFactor: 1, scaleUnit: '', raw: '' }
+
+  let body = s
+  let isAccountingNeg = false
+  const parenMatch = /^\((.+)\)$/.exec(body)
+  if (parenMatch) {
+    isAccountingNeg = true
+    body = parenMatch[1].trim()
+  }
+
+  let leadingSign = 1
+  if (/^-\s*/.test(body)) {
+    leadingSign = -1
+    body = body.replace(/^-\s*/, '')
+  } else if (/^\+\s*/.test(body)) {
+    body = body.replace(/^\+\s*/, '')
+  }
+
+  const currency = /^[¥$€£￥]/.exec(body)?.[0] || ''
+  if (currency) body = body.slice(currency.length).trim()
+
+  // Also accept sign after currency symbol, e.g. $-1,200
+  if (/^-\s*/.test(body)) {
+    leadingSign *= -1
+    body = body.replace(/^-\s*/, '')
+  } else if (/^\+\s*/.test(body)) {
+    body = body.replace(/^\+\s*/, '')
+  }
+
+  const isPercent = /[%％]$/.test(body)
+  const unitMatch = /((?:亿元|亿美元|万元|万美元|美元|元|人|次|家|个|件|ms|天|小时|[万亿千百kKmMbB]+|s))$/.exec(body)
+  let scaleFactor = 1
+  let scaleUnit = ''
+  if (!isPercent && unitMatch) {
+    for (const spec of SCALE_UNIT_MAP) {
+      if (spec.re.test(unitMatch[1])) {
+        scaleFactor = spec.factor
+        scaleUnit = spec.label
+        break
+      }
+    }
+  }
+  const normCurrency = currency === '￥' ? '¥' : currency
+  const unit = isPercent ? '%' : (unitMatch?.[1] || normCurrency)
+  const cleaned = body
     .replace(/[%％]$/, '')
-    .replace(/(?:亿元|亿美元|万元|美元|元|[万亿千百kKmMbB]|人|次|家|个|件|ms|s|天|小时)$/i, '')
+    .replace(/(?:亿元|亿美元|万元|万美元|美元|元|[万亿千百kKmMbB]|人|次|家|个|件|ms|s|天|小时)$/i, '')
     .replace(/,/g, '')
     .trim()
-  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(cleaned)) {
-    return { ok: false, num: NaN, isPercent: false, unit: '', raw: s }
+  if (!/^(?:\d+\.?\d*|\.\d+)$/.test(cleaned)) {
+    return { ok: false, num: NaN, isPercent: false, unit: '', scaleFactor: 1, scaleUnit: '', raw: s }
   }
-  const num = Number(cleaned)
-  if (!Number.isFinite(num)) return { ok: false, num: NaN, isPercent: false, unit: '', raw: s }
-  return { ok: true, num, isPercent, unit, raw: s }
+  let num = Number(cleaned)
+  if (!Number.isFinite(num)) return { ok: false, num: NaN, isPercent: false, unit: '', scaleFactor: 1, scaleUnit: '', raw: s }
+  if (isAccountingNeg) num = -Math.abs(num)
+  else num *= leadingSign
+  return { ok: true, num, isPercent, unit, scaleFactor, scaleUnit, raw: s }
 }
 
 function formatNumCompact(num, unit = '') {
@@ -507,7 +557,7 @@ function formatNumCompact(num, unit = '') {
   else if (Number.isInteger(num)) str = String(num)
   else str = Number(num.toFixed(2)).toString()
   if (unit === '%' && !str.endsWith('%')) return str + '%'
-  if (['¥', '$', '€', '£'].includes(unit)) return unit + str
+  if (['¥', '$', '€', '£'].includes(unit)) return num < 0 ? `-${unit}${str.replace(/^-/, '')}` : unit + str
   return unit ? `${str}${unit}` : str
 }
 
@@ -517,11 +567,30 @@ function profileColumns(rows) {
   return headers.map((header, colIdx) => {
     const vals = data.map(r => r[colIdx] ?? '')
     const nonEmpty = vals.filter(v => v !== '')
-    const parsed = vals.map(parseCellNumber)
+    let parsed = vals.map(parseCellNumber)
     const numericHits = parsed.filter(p => p.ok)
     const isNumeric = nonEmpty.length > 0 && (numericHits.length / nonEmpty.length) >= 0.65
     const pctHits = numericHits.filter(p => p.isPercent).length
-    const unit = numericHits.find(p => p.unit)?.unit || ''
+    let unit = numericHits.find(p => p.unit)?.unit || ''
+
+    // Normalize mixed magnitude units within the same column (e.g. 1.2亿 & 8000万 -> [1.2, 0.8] in 亿)
+    if (isNumeric && pctHits === 0) {
+      const distinctScales = new Map()
+      for (const hit of numericHits) {
+        if (!distinctScales.has(hit.scaleFactor)) distinctScales.set(hit.scaleFactor, hit.scaleUnit)
+      }
+      if (distinctScales.size > 1) {
+        const targetFactor = Math.max(...distinctScales.keys())
+        const targetUnit = distinctScales.get(targetFactor) || unit
+        parsed = parsed.map((p) => {
+          if (!p.ok) return p
+          const normalized = Number(((p.num * p.scaleFactor) / targetFactor).toFixed(4))
+          return { ...p, num: normalized, scaleFactor: targetFactor, scaleUnit: targetUnit, unit: targetUnit || p.unit }
+        })
+        if (targetUnit) unit = targetUnit
+      }
+    }
+
     return {
       index: colIdx,
       header: header || `Col ${colIdx + 1}`,
@@ -929,14 +998,18 @@ function buildNumericSheetSlides(sheet, en) {
     })
 
     // Append full data table appendix (capped at 14 rows = max 2 paginated slides)
-    const tableColsCount = Math.min(6, headers.length)
-    const tableRows = [headers.slice(0, tableColsCount), ...dataRows.slice(0, 14).map(r => r.slice(0, tableColsCount))]
+    const rawTableRows = [headers, ...dataRows.slice(0, 14)]
+    const safeTbl = sanitizeImportedTable(rawTableRows, { maxCols: 6, maxCellChars: 60 })
+    const tblNotes = safeTbl.overflowNotes.length > 0
+      ? safeTbl.overflowNotes.map(n => `[Full Table Data] ${n}`).join('\n')
+      : undefined
     out.push({
       layout: 'table',
       tableStyle: 'consulting',
       kicker: en ? `${sheetName} · Appendix` : `${sheetName} · 数据明细`,
       title: en ? `${sheetName}: Complete metric breakdown (${dataRows.length} records)` : `${sheetName}：完整结构化明细数据（共 ${dataRows.length} 条）`,
-      rows: tableRows,
+      rows: safeTbl.rows,
+      ...(tblNotes ? { notes: tblNotes } : {}),
       source: en ? `Source: Sheet "${sheetName}"` : `数据来源：工作表「${sheetName}」`,
     })
 
@@ -953,13 +1026,17 @@ function buildNumericSheetSlides(sheet, en) {
   }
 
   // Fallback for purely textual tables
-  const tableRows = [headers.slice(0, 6), ...dataRows.slice(0, 14).map(r => r.slice(0, 6))]
+  const safeTextTbl = sanitizeImportedTable([headers, ...dataRows.slice(0, 14)], { maxCols: 6, maxCellChars: 60 })
+  const textTblNotes = safeTextTbl.overflowNotes.length > 0
+    ? safeTextTbl.overflowNotes.map(n => `[Full Table Data] ${n}`).join('\n')
+    : undefined
   out.push({
     layout: 'table',
     tableStyle: 'consulting',
     kicker: sheetName,
     title: en ? `${sheetName}: Structured summary (${dataRows.length} entries)` : `${sheetName}：结构化台账总览（共 ${dataRows.length} 条）`,
-    rows: tableRows,
+    rows: safeTextTbl.rows,
+    ...(textTblNotes ? { notes: textTblNotes } : {}),
     source: en ? `Source: Sheet "${sheetName}"` : `数据来源：工作表「${sheetName}」`,
   })
   return { slides: out, kpiSummary: null }
@@ -1056,8 +1133,19 @@ function detectImageMime(bytes) {
 
 function extractParagraphRunsMarkdown(pXml) {
   const runs = []
-  for (const rMatch of pXml.matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)) {
-    const rInner = rMatch[1]
+  const tokenRe = /<m:oMathPara\b[^>]*>([\s\S]*?)<\/m:oMathPara>|<m:oMath\b[^>]*>([\s\S]*?)<\/m:oMath>|<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g
+  for (const tokMatch of pXml.matchAll(tokenRe)) {
+    const mathInner = tokMatch[1] ?? tokMatch[2]
+    if (mathInner !== undefined) {
+      const mParts = []
+      for (const mt of mathInner.matchAll(/<m:t\b[^>]*>([\s\S]*?)<\/m:t>/g)) {
+        mParts.push(decodeXml(mt[1]))
+      }
+      const formulaText = mParts.join('').trim()
+      if (formulaText) runs.push({ text: `$${formulaText}$`, bold: false })
+      continue
+    }
+    const rInner = tokMatch[3] || ''
     const rPr = /<w:rPr\b[^>]*>([\s\S]*?)<\/w:rPr>/.exec(rInner)?.[1] || ''
     const isBold = /<w:b\b(?![^>]*w:val=["'](?:0|false)["'])[^>]*\/?>/.test(rPr)
     const parts = []
@@ -1136,22 +1224,88 @@ function splitBodyTopLevelBlocks(bodyXml) {
   return blocks
 }
 
+function extractDirectXmlChildren(xml, tagName) {
+  const blocks = []
+  const openToken = `<${tagName}`
+  const re = new RegExp(`<${tagName}(?:\\s[^>]*)?\\/?>|<\\/${tagName}>`, 'g')
+  let depth = 0
+  let start = -1
+  let m
+  while ((m = re.exec(xml)) !== null) {
+    const tok = m[0]
+    if (tok.startsWith(`</${tagName}`)) {
+      if (depth > 0) {
+        depth -= 1
+        if (depth === 0 && start >= 0) {
+          blocks.push(xml.slice(start, re.lastIndex))
+          start = -1
+        }
+      }
+    } else if (tok.endsWith('/>')) {
+      if (depth === 0) blocks.push(tok)
+    } else if (tok.startsWith(openToken)) {
+      if (depth === 0) start = m.index
+      depth += 1
+    }
+  }
+  return blocks
+}
+
+function stripNestedTables(cellXml) {
+  let out = ''
+  let i = 0
+  const nested = extractDirectXmlChildren(cellXml, 'w:tbl')
+  if (nested.length === 0) return cellXml
+  for (const tbl of nested) {
+    const idx = cellXml.indexOf(tbl, i)
+    if (idx >= 0) {
+      out += cellXml.slice(i, idx)
+      i = idx + tbl.length
+    }
+  }
+  out += cellXml.slice(i)
+  return out
+}
+
 function parseDocxTable(tblXml) {
+  // Strip outer <w:tbl ...> wrapper so extractDirectXmlChildren only sees direct <w:tr> rows (immune to nested <w:tbl>!)
+  const openEnd = tblXml.indexOf('>')
+  const closeStart = tblXml.lastIndexOf('</w:tbl>')
+  const innerTbl = openEnd >= 0 && closeStart > openEnd ? tblXml.slice(openEnd + 1, closeStart) : tblXml
+  const trBlocks = extractDirectXmlChildren(innerTbl, 'w:tr')
   const rows = []
-  for (const trMatch of tblXml.matchAll(/<w:tr\b[^>]*>([\s\S]*?)<\/w:tr>/g)) {
+  for (const trXml of trBlocks) {
+    const trOpenEnd = trXml.indexOf('>')
+    const trCloseStart = trXml.lastIndexOf('</w:tr>')
+    const innerTr = trOpenEnd >= 0 && trCloseStart > trOpenEnd ? trXml.slice(trOpenEnd + 1, trCloseStart) : trXml
+    const tcBlocks = extractDirectXmlChildren(innerTr, 'w:tc')
     const row = []
-    for (const tcMatch of trMatch[1].matchAll(/<w:tc\b[^>]*>([\s\S]*?)<\/w:tc>/g)) {
+    for (const tcXml of tcBlocks) {
+      const tcOpenEnd = tcXml.indexOf('>')
+      const tcCloseStart = tcXml.lastIndexOf('</w:tc>')
+      const innerTc = tcOpenEnd >= 0 && tcCloseStart > tcOpenEnd ? tcXml.slice(tcOpenEnd + 1, tcCloseStart) : tcXml
+      const tcPr = /<w:tcPr\b[^>]*>([\s\S]*?)<\/w:tcPr>/.exec(innerTc)?.[1] || ''
+      const gridSpan = Math.max(1, Math.min(8, Number(/<w:gridSpan\b[^>]*w:val=["'](\d+)["']/.exec(tcPr)?.[1] || 1)))
+      const ownContent = stripNestedTables(innerTc)
       const cellParas = []
-      for (const pMatch of tcMatch[1].matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)) {
+      for (const pMatch of ownContent.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)) {
         const { markdown } = extractParagraphRunsMarkdown(pMatch[0])
         if (markdown) cellParas.push(markdown)
       }
+      // Include concise nested table summary if outer cell had no direct paragraph text
+      if (cellParas.length === 0 && ownContent !== innerTc) {
+        for (const pMatch of innerTc.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)) {
+          const { markdown } = extractParagraphRunsMarkdown(pMatch[0])
+          if (markdown) cellParas.push(markdown)
+        }
+      }
       row.push(cleanLine(cellParas.join(' ')))
+      for (let g = 1; g < gridSpan; g += 1) row.push('')
     }
     if (row.some(Boolean)) rows.push(row)
   }
   if (rows.length < 2) return null
-  const maxCols = Math.min(6, Math.max(...rows.map(r => r.length)))
+  const maxCols = Math.min(8, Math.max(...rows.map(r => r.length)))
   return rows.map(r => {
     const out = r.slice(0, maxCols)
     while (out.length < maxCols) out.push('')
@@ -1397,12 +1551,17 @@ function parseDocxArchive(bytes, fileName) {
     // Tables -> table slide
     for (const tbl of sec.tables) {
       if (slides.length >= 19) break
+      const safeTbl = sanitizeImportedTable(tbl.slice(0, 8), { maxCols: 6, maxCellChars: 60 })
+      const tblNotes = safeTbl.overflowNotes.length > 0
+        ? safeTbl.overflowNotes.map(n => `[Full Table Data] ${n}`).join('\n')
+        : undefined
       slides.push({
         layout: 'table',
         tableStyle: 'consulting',
         kicker,
         title: sec.title,
-        rows: tbl.slice(0, 8),
+        rows: safeTbl.rows,
+        ...(tblNotes ? { notes: tblNotes } : {}),
       })
     }
   }
@@ -1542,7 +1701,22 @@ function parseToUnicodeCmap(text, cmap) {
     }
   }
   for (const m of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
-    for (const rng of m[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+    const body = m[1]
+    // 1) Array form: <lo> <hi> [<u1> <u2> ...]
+    for (const arr of body.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[([\s\S]*?)\]/g)) {
+      const start = Number.parseInt(arr[1], 16)
+      const end = Number.parseInt(arr[2], 16)
+      const width = arr[1].length
+      const targets = [...arr[3].matchAll(/<([0-9A-Fa-f]+)>/g)].map(t => decodePdfHexString('FEFF' + t[1], null))
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start <= 512) {
+        for (let idx = 0; idx <= end - start && idx < targets.length; idx += 1) {
+          const key = (start + idx).toString(16).toUpperCase().padStart(width, '0')
+          if (targets[idx]) cmap.set(key, targets[idx])
+        }
+      }
+    }
+    // 2) Sequential range form: <lo> <hi> <dstStart>
+    for (const rng of body.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
       const start = Number.parseInt(rng[1], 16)
       const end = Number.parseInt(rng[2], 16)
       const dstStart = Number.parseInt(rng[3], 16)
@@ -1557,9 +1731,24 @@ function parseToUnicodeCmap(text, cmap) {
   }
 }
 
-function extractLinesFromPdfContent(contentStr, cmap) {
+function extractLinesFromPdfContent(contentStr, cmapContext) {
   const lines = []
   let current = ''
+  const defaultCmap = cmapContext instanceof Map ? cmapContext : (cmapContext?.defaultCmap || null)
+  const resolveFontCmap = (fontName) => {
+    if (!cmapContext || cmapContext instanceof Map) return defaultCmap
+    if (fontName && cmapContext.byFontName?.has(fontName)) return cmapContext.byFontName.get(fontName)
+    if (fontName && Array.isArray(cmapContext.orderedCmaps) && cmapContext.orderedCmaps.length > 1) {
+      const numMatch = /(\d+)$/.exec(fontName)
+      if (numMatch) {
+        const idx = Number(numMatch[1]) - 1
+        if (idx >= 0 && idx < cmapContext.orderedCmaps.length) return cmapContext.orderedCmaps[idx]
+      }
+    }
+    return defaultCmap
+  }
+  let activeCmap = defaultCmap
+
   const flush = () => {
     const cleaned = current.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim()
     if (cleaned.length >= 2) lines.push(cleaned)
@@ -1573,7 +1762,15 @@ function extractLinesFromPdfContent(contentStr, cmap) {
     let i = 0
     while (i < block.length) {
       const ch = block[i]
-      if (ch === '(') {
+      if (ch === '/') {
+        const tfMatch = /^\/([A-Za-z0-9._+-]+)\s+[-+]?\d*(?:\.\d+)?\s+Tf\b/.exec(block.slice(i, i + 48))
+        if (tfMatch) {
+          activeCmap = resolveFontCmap(tfMatch[1])
+          i += tfMatch[0].length
+          continue
+        }
+        i += 1
+      } else if (ch === '(') {
         // Parse balanced literal string
         let depth = 1
         let start = i + 1
@@ -1596,7 +1793,7 @@ function extractLinesFromPdfContent(contentStr, cmap) {
           const hex = block.slice(i + 1, end)
           const after = block.slice(end + 1, end + 12)
           if (/^\s*(?:Tj|'|")/.test(after)) {
-            current += decodePdfHexString(hex, cmap)
+            current += decodePdfHexString(hex, activeCmap)
           }
           i = end + 1
           continue
@@ -1621,7 +1818,7 @@ function extractLinesFromPdfContent(contentStr, cmap) {
           } else if (block[j] === '<' && block[j + 1] !== '<') {
             const hEnd = block.indexOf('>', j + 1)
             if (hEnd > j) {
-              chunk += decodePdfHexString(block.slice(j + 1, hEnd), cmap)
+              chunk += decodePdfHexString(block.slice(j + 1, hEnd), activeCmap)
               j = hEnd + 1
             } else j += 1
           } else if (block[j] === '-' || (block[j] >= '0' && block[j] <= '9')) {
@@ -1656,6 +1853,15 @@ function extractLinesFromPdfContent(contentStr, cmap) {
   return lines
 }
 
+function isPdfEncrypted(latin) {
+  // Strip raw stream payloads so literal "/Encrypt" inside document text never false-positives
+  const nonStream = latin.replace(/stream\r?\n[\s\S]*?endstream/g, 'stream endstream')
+  if (/trailer\s*<<[\s\S]*?\/Encrypt\s*(?:\d+\s+\d+\s+R|<<)/.test(nonStream)) return true
+  if (/\/Type\s*\/XRef\b[\s\S]*?\/Encrypt\s*(?:\d+\s+\d+\s+R|<<)/.test(nonStream)) return true
+  if (/\/Filter\s*\/Standard\b[\s\S]*?\/O\s*[<(]/.test(nonStream) && /\/Encrypt\s*(?:\d+\s+\d+\s+R|<<)/.test(nonStream)) return true
+  return false
+}
+
 export function extractPdfText(bytes) {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
   const head = buf.subarray(0, Math.min(1024, buf.length)).toString('latin1')
@@ -1663,7 +1869,7 @@ export function extractPdfText(bytes) {
     fail('无效的 PDF 文件头（缺少 %PDF- 标识）', 'Invalid PDF header')
   }
   const latin = buf.toString('latin1')
-  if (/\/Encrypt\b/.test(latin)) {
+  if (isPdfEncrypted(latin)) {
     fail('当前 PDF 已加密，暂不支持直接解析加密 PDF，请先解除密码保护后重试', 'Encrypted PDF is not supported')
   }
 
@@ -1673,8 +1879,26 @@ export function extractPdfText(bytes) {
   if (titleLit) docTitle = cleanLine(decodePdfLiteralString(titleLit[1]))
   else if (titleHex) docTitle = cleanLine(decodePdfHexString(titleHex[1], null))
 
+  // Parse Font -> ToUnicode object references outside stream payloads
+  const nonStream = latin.replace(/stream\r?\n[\s\S]*?endstream/g, 'stream endstream')
+  const fontObjToUnicodeObj = new Map()
+  for (const om of nonStream.matchAll(/(\d+)\s+\d+\s+obj\b([\s\S]*?)endobj/g)) {
+    const objId = Number(om[1])
+    const body = om[2]
+    const toUni = /\/ToUnicode\s+(\d+)\s+\d+\s+R\b/.exec(body)
+    if (toUni) fontObjToUnicodeObj.set(objId, Number(toUni[1]))
+  }
+  const fontNameToObjId = new Map()
+  for (const fm of nonStream.matchAll(/\/Font\s*<<([\s\S]*?)>>/g)) {
+    for (const ref of fm[1].matchAll(/\/([A-Za-z0-9._+-]+)\s+(\d+)\s+\d+\s+R\b/g)) {
+      if (!fontNameToObjId.has(ref[1])) fontNameToObjId.set(ref[1], Number(ref[2]))
+    }
+  }
+
   const decodedStreams = []
-  const cmap = new Map()
+  const defaultCmap = new Map()
+  const cmapByObjId = new Map()
+  const orderedCmaps = []
   const streamToken = Buffer.from('stream')
   const endstreamToken = Buffer.from('endstream')
 
@@ -1699,6 +1923,8 @@ export function extractPdfText(bytes) {
     while (dataEnd > dataStart && (buf[dataEnd - 1] === 0x0a || buf[dataEnd - 1] === 0x0d)) dataEnd -= 1
 
     const dictWindow = buf.subarray(Math.max(0, sIdx - 420), sIdx).toString('latin1')
+    const objMatches = [...dictWindow.matchAll(/(\d+)\s+\d+\s+obj\b/g)]
+    const streamObjId = objMatches.length > 0 ? Number(objMatches[objMatches.length - 1][1]) : -1
     const isImage = /\/Subtype\s*\/Image\b/.test(dictWindow)
     const isFlate = /\/FlateDecode\b/.test(dictWindow)
     if (!isImage && dataEnd > dataStart && dataEnd - dataStart <= MAX_ENTRY_BYTES) {
@@ -1718,7 +1944,15 @@ export function extractPdfText(bytes) {
       if (outBuf && outBuf.length > 0) {
         const textStr = outBuf.toString('latin1')
         if (textStr.includes('beginbfchar') || textStr.includes('beginbfrange')) {
-          parseToUnicodeCmap(textStr, cmap)
+          const singleCmap = new Map()
+          parseToUnicodeCmap(textStr, singleCmap)
+          if (singleCmap.size > 0) {
+            orderedCmaps.push(singleCmap)
+            if (streamObjId >= 0) cmapByObjId.set(streamObjId, singleCmap)
+            for (const [k, v] of singleCmap) {
+              if (!defaultCmap.has(k)) defaultCmap.set(k, v)
+            }
+          }
         } else if (textStr.includes('BT') || textStr.includes('Tj') || textStr.includes('TJ')) {
           decodedStreams.push(textStr)
         }
@@ -1727,9 +1961,18 @@ export function extractPdfText(bytes) {
     pos = eIdx + 9
   }
 
+  const byFontName = new Map()
+  for (const [fName, fObjId] of fontNameToObjId) {
+    const uniId = fontObjToUnicodeObj.get(fObjId)
+    if (uniId !== undefined && cmapByObjId.has(uniId)) {
+      byFontName.set(fName, cmapByObjId.get(uniId))
+    }
+  }
+  const cmapContext = { defaultCmap, byFontName, orderedCmaps }
+
   const allLines = []
   for (const s of decodedStreams) {
-    allLines.push(...extractLinesFromPdfContent(s, cmap))
+    allLines.push(...extractLinesFromPdfContent(s, cmapContext))
   }
   // Deduplicate adjacent identical lines while preserving reading order
   const deduped = []

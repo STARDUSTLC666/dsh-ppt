@@ -237,6 +237,14 @@ export function renderHandoutMarkdown(manifest, language) {
       lines.push('')
     }
 
+    if (typeof slide?.code === 'string' && slide.code.trim()) {
+      const codeLang = cleanLine(slide.language || '').replace(/[^A-Za-z0-9_+-]/g, '')
+      lines.push('```' + codeLang)
+      lines.push(String(slide.code).trimEnd())
+      lines.push('```')
+      lines.push('')
+    }
+
     if (Array.isArray(slide?.items) && slide.items.length > 0) {
       lines.push(`### ${en ? 'Key Metrics & Structured Items' : '核心指标与结构要素'}`)
       for (const it of slide.items) {
@@ -378,9 +386,20 @@ function renderOnePagerVisualHtml(slide, theme, en) {
       mermaidBody = ''
     }
     return `
-      <div class="op-vis-card">
+      <div class="op-vis-card" data-mermaid-kind="${kind}">
         <div class="op-vis-head"><span class="op-badge">${kind}</span><h4>${escape(stripMd(slide.title))}</h4></div>
         ${mermaidBody ? `<div class="op-mermaid-wrap">${mermaidBody}</div>` : `<pre class="op-mermaid-code">${escape(lines.slice(0, 10).join('\n'))}</pre>`}
+        ${slide.takeaway ? `<p class="op-takeaway">▸ ${escape(stripMd(slide.takeaway))}</p>` : ''}
+      </div>`
+  }
+
+  if (layout === 'code' || (typeof slide.code === 'string' && slide.code.trim())) {
+    const codeText = String(slide.code || '').trimEnd()
+    const langTag = cleanLine(slide.language || 'CODE').toUpperCase()
+    return `
+      <div class="op-vis-card">
+        <div class="op-vis-head"><span class="op-badge">${escape(langTag)}</span><h4>${escape(stripMd(slide.title))}</h4></div>
+        <pre class="op-mermaid-code"><code>${escape(codeText.split(/\r?\n/).slice(0, 18).join('\n'))}</code></pre>
         ${slide.takeaway ? `<p class="op-takeaway">▸ ${escape(stripMd(slide.takeaway))}</p>` : ''}
       </div>`
   }
@@ -466,13 +485,13 @@ export function renderOnePagerHtml(manifest, language) {
   }
   const topKpis = kpis.slice(0, 4)
 
-  // Key Visuals (Charts / Tables / Sankey / Gantt / Mermaid / Formulas)
+  // Key Visuals (Charts / Tables / Sankey / Gantt / Mermaid / Code / Formulas)
   const visualSlides = slides.filter(s =>
-    s.chart || s.mermaid || s.formula ||
-    ['sankey', 'gantt', 'marimekko', 'harvey', 'table', 'mermaid', 'flowchart', 'sequence'].includes(s.layout) ||
+    s.chart || s.mermaid || s.formula || (typeof s.code === 'string' && s.code.trim()) ||
+    ['sankey', 'gantt', 'marimekko', 'harvey', 'table', 'mermaid', 'flowchart', 'sequence', 'code'].includes(s.layout) ||
     (Array.isArray(s.rows) && s.rows.length > 0)
   )
-  const visualsHtml = visualSlides.slice(0, 4).map(s => renderOnePagerVisualHtml(s, theme, en)).filter(Boolean).join('')
+  const visualsHtml = visualSlides.slice(0, 6).map(s => renderOnePagerVisualHtml(s, theme, en)).filter(Boolean).join('')
 
   // Core Pillars
   const pillarSlides = slides.filter(s => !['cover', 'closing', 'section', 'agenda'].includes(s.layout))
@@ -1862,6 +1881,28 @@ function initDelivery(go, setOverview, current, total, cfg) {
     applyLaser(true, nx, ny)
   })
 
+  // Auto-hide top delivery bar & bottom HUD unless pointer approaches edge or control is focused
+  let chromeIdleTimer = null
+  const updateEdgeChrome = event => {
+    const vh = window.innerHeight || 720
+    const nearTop = event.clientY <= 72
+    const nearBottom = event.clientY >= vh - 76
+    document.body.classList.toggle('dsh-chrome-top', nearTop)
+    document.body.classList.toggle('dsh-chrome-bottom', nearBottom)
+    if (chromeIdleTimer) clearTimeout(chromeIdleTimer)
+    if (nearTop || nearBottom) {
+      chromeIdleTimer = setTimeout(() => {
+        if (!document.querySelector('#delivery-bar:hover, #hud:hover, #delivery-bar:focus-within, #hud:focus-within')) {
+          document.body.classList.remove('dsh-chrome-top', 'dsh-chrome-bottom')
+        }
+      }, 2600)
+    }
+  }
+  document.addEventListener('mousemove', updateEdgeChrome, { passive: true })
+  document.addEventListener('mouseleave', () => {
+    document.body.classList.remove('dsh-chrome-top', 'dsh-chrome-bottom')
+  })
+
   return index => {
     number.value = String(index + 1)
     previous.disabled = index === 0
@@ -1874,9 +1915,13 @@ function initDelivery(go, setOverview, current, total, cfg) {
 }
 
 const DELIVERY_CSS = `
+#hud{opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .22s ease,transform .22s ease}
 #hud button:disabled{opacity:.4;cursor:default}
 #page-number{width:56px;padding:7px;border:1px solid var(--muted);border-radius:8px;background:var(--panel);color:var(--fg);font:inherit}
-#delivery-bar{position:fixed;top:18px;left:22px;right:22px;z-index:45;display:flex;align-items:center;gap:12px;font-size:13px}
+#delivery-bar{position:fixed;top:10px;left:18px;right:18px;z-index:45;display:flex;align-items:center;gap:10px;font-size:12.5px;padding:6px 12px;border-radius:999px;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(8px);box-shadow:0 6px 22px rgba(0,0,0,.16);opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity .22s ease,transform .22s ease}
+body.dsh-chrome-top #delivery-bar,#delivery-bar:hover,#delivery-bar:focus-within,body.overview #delivery-bar{opacity:1;transform:translateY(0);pointer-events:auto}
+body.dsh-chrome-bottom #hud,#hud:hover,#hud:focus-within,body.overview #hud,body.notes-open #hud{opacity:1;transform:translateY(0);pointer-events:auto}
+@media(hover:none){#delivery-bar,#hud{opacity:.94;transform:none;pointer-events:auto}}
 #delivery-status{flex:1;color:var(--muted)}
 #delivery-bar a,#delivery-bar button,.review-exports a{display:inline-block;text-decoration:none;border:1px solid var(--muted);border-radius:99px;padding:9px 14px;background:var(--panel);color:var(--fg);font:inherit;cursor:pointer}
 #delivery-bar a:hover,#delivery-bar button:hover,.review-exports a:hover{border-color:var(--accent);color:var(--accent)}

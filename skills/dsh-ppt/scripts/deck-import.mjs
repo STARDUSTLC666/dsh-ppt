@@ -16,6 +16,7 @@ import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { dirname, posix, resolve, join } from 'node:path'
 import { inflateSync } from 'node:zlib'
+import { stripInlineMarkdown } from './deck-chrome.mjs'
 
 const MAX_PPTX_BYTES = 64 * 1024 * 1024
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -23,8 +24,50 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const SUPPORTED_CHART_KINDS = new Set([
   'column', 'bar', 'line', 'area', 'pie', 'doughnut',
   'stacked-column', 'stacked-bar', 'percent-column', 'percent-bar',
-  'radar', 'scatter', 'waterfall',
+  'radar', 'scatter', 'waterfall', 'combo',
 ])
+
+/**
+ * Sanitize imported table rows so they never crash paginateTable (>8 cols or >60-char cells).
+ * Preserves truncated cell details and omitted wide columns in `overflowNotes` for slide speaker notes.
+ */
+export function sanitizeImportedTable(rows, { maxCols = 8, maxCellChars = 60 } = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { rows: [], overflowNotes: [], truncatedCells: 0, droppedCols: 0 }
+  }
+  const rawMaxCols = Math.max(1, ...rows.map((r) => (Array.isArray(r) ? r.length : 1)))
+  const keepCols = Math.max(1, Math.min(maxCols, rawMaxCols))
+  const droppedCols = Math.max(0, rawMaxCols - keepCols)
+  const overflowNotes = []
+  let truncatedCells = 0
+
+  const truncateCell = (raw) => {
+    const str = String(raw ?? '').replace(/\s+/g, ' ').trim()
+    const plain = stripInlineMarkdown(str)
+    const plainChars = [...plain]
+    if (plainChars.length <= maxCellChars) return str
+    truncatedCells += 1
+    // Slice cleanly on plain text so markdown tokens never break mid-delimiter
+    const cut = plainChars.slice(0, Math.max(1, maxCellChars - 1)).join('').trimEnd() + '…'
+    if (overflowNotes.length < 12) {
+      overflowNotes.push(plain)
+    }
+    return cut
+  }
+
+  if (droppedCols > 0) {
+    const headerRow = Array.isArray(rows[0]) ? rows[0] : [rows[0]]
+    const droppedHeaders = headerRow.slice(keepCols).map((c, idx) => String(c ?? '').trim() || `Col ${keepCols + idx + 1}`)
+    overflowNotes.push(`Omitted extra table columns (${droppedCols}): ${droppedHeaders.join(', ')}`)
+  }
+
+  const sanitized = rows.map((row) => {
+    const arr = Array.isArray(row) ? row : [row]
+    return Array.from({ length: keepCols }, (_, c) => truncateCell(arr[c] ?? ''))
+  })
+
+  return { rows: sanitized, overflowNotes, truncatedCells, droppedCols }
+}
 
 const KPI_NUM_RE = /(?:[$¥€£]|\b\d+(?:[.,]\d+)?\s*(?:[%％倍xX万亿千百kKmMbBtT]+|亿元|亿美元|万元|美元|元|家|个|人|次|天|小时|ms|pp|bps)?)/
 
@@ -160,9 +203,12 @@ function extractParagraphsFromTxBody(txBodyXml) {
     const runs = []
     let pDefaultBold = false
     let pDefaultSize = 0
-    const pPrMatch = /<a:pPr\b([^>]*)>([\s\S]*?)<\/a:pPr>/.exec(pInner)
+    let pLevel = 0
+    const pPrMatch = /<a:pPr\b([^>]*?)(?:\/>|>([\s\S]*?)<\/a:pPr>)/.exec(pInner)
     if (pPrMatch) {
-      const defRPr = /<a:defRPr\b([^>]*)>/.exec(pPrMatch[2])
+      const lvlM = /\blvl=["'](\d+)["']/.exec(pPrMatch[1] || '')
+      if (lvlM) pLevel = Math.max(0, Math.min(3, Number(lvlM[1]) || 0))
+      const defRPr = pPrMatch[2] ? /<a:defRPr\b([^>]*)>/.exec(pPrMatch[2]) : null
       if (defRPr) {
         if (/\bb=["']?(?:1|true)["']?/i.test(defRPr[1])) pDefaultBold = true
         const szM = /\bsz=["'](\d+)["']/.exec(defRPr[1])
@@ -198,7 +244,7 @@ function extractParagraphsFromTxBody(txBodyXml) {
     }
     const formatted = formatRunsToMarkdown(runs)
     if (formatted.plain) {
-      paragraphs.push(formatted)
+      paragraphs.push({ ...formatted, level: pLevel })
     }
   }
   return paragraphs
@@ -223,13 +269,15 @@ function extractParagraphsFromShape(lib, shape) {
     for (let p = 0; p < pCount; p += 1) {
       const rCount = lib.getShapeRunCount?.(shape, p) ?? 0
       const runs = []
+      let pLevel = 0
+      try { pLevel = Math.max(0, Math.min(3, Number(lib.getParagraphLevel?.(shape, p) || 0))) } catch { pLevel = 0 }
       for (let r = 0; r < rCount; r += 1) {
         const text = lib.getShapeRunText?.(shape, p, r) ?? ''
         const fmt = lib.getShapeRunFormat?.(shape, p, r) ?? {}
         runs.push({ text, bold: Boolean(fmt.bold), sizePt: Number(fmt.size || 0) })
       }
       const formatted = formatRunsToMarkdown(runs)
-      if (formatted.plain) out.push(formatted)
+      if (formatted.plain) out.push({ ...formatted, level: pLevel })
     }
   } catch { /* ignore */ }
   if (out.length === 0) {
@@ -238,7 +286,7 @@ function extractParagraphsFromShape(lib, shape) {
       if (raw) {
         for (const line of raw.split(/\r?\n/)) {
           const t = line.trim()
-          if (t) out.push({ plain: t, markdown: t, maxSizePt: 0, hasBoldLead: false })
+          if (t) out.push({ plain: t, markdown: t, maxSizePt: 0, hasBoldLead: false, level: 0 })
         }
       }
     } catch { /* ignore */ }
@@ -246,17 +294,47 @@ function extractParagraphsFromShape(lib, shape) {
   return out
 }
 
+function shapeDedupKey(lib, shape) {
+  try {
+    const id = lib.getShapeId?.(shape)
+    if (id !== undefined && id !== null && String(id).trim() !== '') {
+      return `id:${String(id).trim()}`
+    }
+  } catch { /* ignore */ }
+  try {
+    const xml = lib.getShapeXmlString?.(shape)
+    if (typeof xml === 'string' && xml) {
+      const m = /<p:cNvPr\b[^>]*\bid=["']([^"']+)["']/.exec(xml)
+      if (m?.[1]) return `id:${m[1]}`
+    }
+  } catch { /* ignore */ }
+  return shape
+}
+
 function flattenShapes(lib, shapes) {
   const out = []
-  const visit = (list) => {
-    if (!Array.isArray(list)) return
+  const seen = new Set()
+  const visit = (list, depth = 0) => {
+    if (!Array.isArray(list) || depth > 8) return
     for (const s of list) {
       if (!s) continue
-      out.push(s)
+      const key = shapeDedupKey(lib, s)
+      if (seen.has(key)) continue
+      seen.add(key)
+      let children = null
+      let isGroup = false
       try {
-        const children = lib.getGroupChildren?.(s)
-        if (Array.isArray(children) && children.length > 0) visit(children)
+        if (String(lib.getShapeKind?.(s) ?? '').toLowerCase() === 'group') isGroup = true
+      } catch { /* ignore */ }
+      try {
+        children = lib.getGroupChildren?.(s)
       } catch { /* not a group */ }
+      if (Array.isArray(children) && children.length > 0) {
+        visit(children, depth + 1)
+        continue
+      }
+      if (isGroup) continue
+      out.push(s)
     }
   }
   visit(shapes)
@@ -344,9 +422,10 @@ function extractTablesFromXml(slideXml) {
     const rows = []
     for (const tr of tm[1].matchAll(/<a:tr\b[^>]*>([\s\S]*?)<\/a:tr>/g)) {
       const row = []
-      for (const tc of tr[1].matchAll(/<a:tc\b([^>]*)>([\s\S]*?)<\/a:tc>/g)) {
-        const tcAttrs = tc[1]
-        const tcInner = tc[2]
+      for (const tc of tr[1].matchAll(/<a:tc\b([^>]*)(?:\/>|>([\s\S]*?)<\/a:tc>)/g)) {
+        const tcAttrs = tc[1] || ''
+        if (/\bhMerge=["'](?:1|true)["']/i.test(tcAttrs)) continue
+        const tcInner = tc[2] || ''
         const txBody = /<a:txBody\b[^>]*>([\s\S]*?)<\/a:txBody>/.exec(tcInner)?.[1] || ''
         const cellText = extractParagraphsFromTxBody(txBody).map((p) => p.plain).join(' ').trim()
         row.push(cellText)
@@ -441,90 +520,102 @@ function extractPointCache(blockXml, asNumber = false) {
   return arr
 }
 
+function resolvePlotTagKind(tagName, plotInner) {
+  if (tagName === 'barChart' || tagName === 'bar3DChart') {
+    const barDir = /<c:barDir\b[^>]*\bval=["']([^"']+)["']/.exec(plotInner)?.[1] || 'col'
+    const grouping = /<c:grouping\b[^>]*\bval=["']([^"']+)["']/.exec(plotInner)?.[1] || 'clustered'
+    const horiz = barDir === 'bar'
+    if (grouping === 'percentStacked') return horiz ? 'percent-bar' : 'percent-column'
+    if (grouping === 'stacked') return horiz ? 'stacked-bar' : 'stacked-column'
+    return horiz ? 'bar' : 'column'
+  }
+  if (tagName === 'lineChart' || tagName === 'line3DChart') return 'line'
+  if (tagName === 'areaChart' || tagName === 'area3DChart') return 'area'
+  if (tagName === 'doughnutChart') return 'doughnut'
+  if (tagName === 'pieChart' || tagName === 'pie3DChart') return 'pie'
+  if (tagName === 'radarChart') return 'radar'
+  if (tagName === 'scatterChart') return 'scatter'
+  return 'column'
+}
+
 function parseChartXml(chartXml) {
   if (!chartXml || !/<c:chartSpace\b/.test(chartXml)) return null
 
   const titleBlock = /<c:title\b[^>]*>([\s\S]*?)<\/c:title>/.exec(chartXml)?.[1] || ''
   const caption = extractXmlTextTokens(titleBlock).replace(/\s+/g, ' ').trim()
 
-  let kind = 'column'
-  let plotBlock = ''
-
-  const barMatch = /<c:barChart\b[^>]*>([\s\S]*?)<\/c:barChart>/.exec(chartXml)
-  const bar3dMatch = /<c:bar3DChart\b[^>]*>([\s\S]*?)<\/c:bar3DChart>/.exec(chartXml)
-  const lineMatch = /<c:lineChart\b[^>]*>([\s\S]*?)<\/c:lineChart>/.exec(chartXml)
-  const areaMatch = /<c:areaChart\b[^>]*>([\s\S]*?)<\/c:areaChart>/.exec(chartXml)
-  const pieMatch = /<c:pieChart\b[^>]*>([\s\S]*?)<\/c:pieChart>/.exec(chartXml)
-  const doughnutMatch = /<c:doughnutChart\b[^>]*>([\s\S]*?)<\/c:doughnutChart>/.exec(chartXml)
-  const radarMatch = /<c:radarChart\b[^>]*>([\s\S]*?)<\/c:radarChart>/.exec(chartXml)
-  const scatterMatch = /<c:scatterChart\b[^>]*>([\s\S]*?)<\/c:scatterChart>/.exec(chartXml)
-
-  if (barMatch || bar3dMatch) {
-    plotBlock = (barMatch || bar3dMatch)[1]
-    const barDir = /<c:barDir\b[^>]*\bval=["']([^"']+)["']/.exec(plotBlock)?.[1] || 'col'
-    const grouping = /<c:grouping\b[^>]*\bval=["']([^"']+)["']/.exec(plotBlock)?.[1] || 'clustered'
-    const horiz = barDir === 'bar'
-    if (grouping === 'percentStacked') kind = horiz ? 'percent-bar' : 'percent-column'
-    else if (grouping === 'stacked') kind = horiz ? 'stacked-bar' : 'stacked-column'
-    else kind = horiz ? 'bar' : 'column'
-  } else if (lineMatch) {
-    plotBlock = lineMatch[1]
-    kind = 'line'
-  } else if (areaMatch) {
-    plotBlock = areaMatch[1]
-    kind = 'area'
-  } else if (doughnutMatch) {
-    plotBlock = doughnutMatch[1]
-    kind = 'doughnut'
-  } else if (pieMatch) {
-    plotBlock = pieMatch[1]
-    kind = 'pie'
-  } else if (radarMatch) {
-    plotBlock = radarMatch[1]
-    kind = 'radar'
-  } else if (scatterMatch) {
-    plotBlock = scatterMatch[1]
-    kind = 'scatter'
-  } else {
-    plotBlock = chartXml
+  const plotAreaXml = /<c:plotArea\b[^>]*>([\s\S]*?)<\/c:plotArea>/.exec(chartXml)?.[1] || chartXml
+  const plotRe = /<c:(barChart|bar3DChart|lineChart|line3DChart|areaChart|area3DChart|pieChart|pie3DChart|doughnutChart|radarChart|scatterChart)\b[^>]*>([\s\S]*?)<\/c:\1>/g
+  const plotBlocks = []
+  for (const pm of plotAreaXml.matchAll(plotRe)) {
+    const blockKind = resolvePlotTagKind(pm[1], pm[2])
+    const axIds = [...pm[2].matchAll(/<c:axId\b[^>]*\bval=["']([^"']+)["']/g)].map((m) => m[1])
+    plotBlocks.push({ tag: pm[1], kind: blockKind, inner: pm[2], axIds })
   }
+  if (plotBlocks.length === 0) {
+    plotBlocks.push({ tag: 'unknown', kind: 'column', inner: chartXml, axIds: [] })
+  }
+
+  const isCombo = plotBlocks.length >= 2 && new Set(plotBlocks.map((b) => b.kind)).size >= 2
+  const primaryAxIds = new Set(plotBlocks[0].axIds)
+  let kind = isCombo ? 'combo' : plotBlocks[0].kind
 
   let categories = []
   const series = []
   const serRe = /<c:ser\b[^>]*>([\s\S]*?)<\/c:ser>/g
   let serIndex = 0
-  for (const sm of plotBlock.matchAll(serRe)) {
-    serIndex += 1
-    const serInner = sm[1]
-    const txBlock = /<c:tx\b[^>]*>([\s\S]*?)<\/c:tx>/.exec(serInner)?.[1] || ''
-    let name = ''
-    const directV = /<c:v>([\s\S]*?)<\/c:v>/.exec(txBlock)
-    if (directV) name = decodeXml(directV[1]).trim()
-    if (!name) name = 'Series ' + serIndex
+  for (let bIdx = 0; bIdx < plotBlocks.length; bIdx += 1) {
+    const blk = plotBlocks[bIdx]
+    const subChartKind = ['column', 'bar', 'line', 'area'].includes(blk.kind)
+      ? blk.kind
+      : blk.kind.includes('bar')
+        ? 'bar'
+        : 'column'
+    const hasSecondaryAxis = bIdx > 0 && (
+      (blk.axIds.length > 0 && blk.axIds.some((id) => !primaryAxIds.has(id))) ||
+      (subChartKind === 'line' && plotBlocks[0].kind !== 'line')
+    )
+    for (const sm of blk.inner.matchAll(serRe)) {
+      if (series.length >= 6) break
+      serIndex += 1
+      const serInner = sm[1]
+      const txBlock = /<c:tx\b[^>]*>([\s\S]*?)<\/c:tx>/.exec(serInner)?.[1] || ''
+      let name = ''
+      const directV = /<c:v>([\s\S]*?)<\/c:v>/.exec(txBlock)
+      if (directV) name = decodeXml(directV[1]).trim()
+      if (!name) name = 'Series ' + serIndex
 
-    const catBlock = /<c:cat\b[^>]*>([\s\S]*?)<\/c:cat>/.exec(serInner)?.[1] ||
-      /<c:xVal\b[^>]*>([\s\S]*?)<\/c:xVal>/.exec(serInner)?.[1] || ''
-    if (categories.length === 0 && catBlock) {
-      categories = extractPointCache(catBlock, false).map((v, i) => String(v || i + 1))
-    }
+      const catBlock = /<c:cat\b[^>]*>([\s\S]*?)<\/c:cat>/.exec(serInner)?.[1] ||
+        /<c:xVal\b[^>]*>([\s\S]*?)<\/c:xVal>/.exec(serInner)?.[1] || ''
+      if (categories.length === 0 && catBlock) {
+        categories = extractPointCache(catBlock, false).map((v, i) => String(v || i + 1))
+      }
 
-    const valBlock = /<c:val\b[^>]*>([\s\S]*?)<\/c:val>/.exec(serInner)?.[1] ||
-      /<c:yVal\b[^>]*>([\s\S]*?)<\/c:yVal>/.exec(serInner)?.[1] || ''
-    const values = extractPointCache(valBlock, true)
-    if (values.length > 0) {
-      series.push({ name, values })
+      const valBlock = /<c:val\b[^>]*>([\s\S]*?)<\/c:val>/.exec(serInner)?.[1] ||
+        /<c:yVal\b[^>]*>([\s\S]*?)<\/c:yVal>/.exec(serInner)?.[1] || ''
+      const values = extractPointCache(valBlock, true)
+      if (values.length > 0) {
+        series.push({
+          name,
+          values,
+          ...(isCombo ? { chartKind: subChartKind, ...(hasSecondaryAxis ? { secondaryAxis: true } : {}) } : {}),
+        })
+      }
     }
   }
 
   if (series.length === 0) return null
+  if (isCombo && series.length < 2) kind = plotBlocks[0].kind
   const maxLen = Math.max(categories.length, ...series.map((s) => s.values.length))
   if (maxLen === 0) return null
   if (categories.length < maxLen) {
     for (let i = categories.length; i < maxLen; i += 1) categories.push(String(i + 1))
   }
-  const normalizedSeries = series.map((s) => ({
+  const normalizedSeries = series.map((s, idx) => ({
     name: s.name,
-    values: categories.map((_, idx) => (Number.isFinite(s.values[idx]) ? s.values[idx] : 0)),
+    values: categories.map((_, ci) => (Number.isFinite(s.values[ci]) ? s.values[ci] : 0)),
+    ...(kind === 'combo' && s.chartKind ? { chartKind: s.chartKind } : {}),
+    ...(kind === 'combo' && s.secondaryAxis && idx > 0 ? { secondaryAxis: true } : {}),
   }))
 
   return {
@@ -896,7 +987,10 @@ function classifyAndBuildSlide(raw, slideIndex, totalSlides) {
       const card = shapeToCardItem(s)
       if (card) bullets.push(card.markdown)
     } else {
-      for (const p of s.paragraphs) bullets.push(p.markdown)
+      for (const p of s.paragraphs) {
+        const lvl = Number(p.level || 0)
+        bullets.push(lvl > 0 ? `${'↳ '.repeat(Math.min(2, lvl))}${p.markdown}` : p.markdown)
+      }
     }
   }
 
@@ -905,15 +999,21 @@ function classifyAndBuildSlide(raw, slideIndex, totalSlides) {
     ...(kicker ? { kicker } : {}),
     ...(subtitle ? { subtitle } : {}),
     ...(notes ? { notes } : {}),
+    ...(raw.hidden ? { hidden: true } : {}),
   }
 
   // Priority 1: Table
   if (tables.length > 0) {
     const takeaway = bullets.length > 0 ? bullets[0] : undefined
+    const safeTbl = sanitizeImportedTable(tables[0], { maxCols: 8, maxCellChars: 60 })
+    const mergedNotes = [base.notes, ...safeTbl.overflowNotes.map((n) => `[Full Table Data] ${n}`)]
+      .filter(Boolean)
+      .join('\n')
     return {
       ...base,
+      ...(mergedNotes ? { notes: mergedNotes } : {}),
       layout: 'table',
-      rows: tables[0],
+      rows: safeTbl.rows,
       ...(takeaway ? { takeaway } : {}),
     }
   }
@@ -1156,12 +1256,15 @@ export async function extractPptxSlides(options = {}) {
     const charts = extractSlideChartsNormalized(lib, pres, slide, slidePartName, slideRels, slideW, slideH)
     const images = extractSlideImages(lib, pres, slide, idx, slidePartName, slideRels, slideW, slideH, assetOutDir, extractedAssets)
     const notes = extractSlideNotes(lib, pres, slide, slidePartName, slideRels, idx + 1)
+    let hidden = false
+    try { if (lib.isSlideHidden?.(slide) === true) hidden = true } catch { /* ignore */ }
+    if (!hidden && /<p:sld\b[^>]*\bshow=["']0["']/.test(slideXml)) hidden = true
 
     chartCount += charts.length
     tableCount += tables.length
     if (notes) notesCount += 1
 
-    return { textShapes, tables, charts, images, notes }
+    return { textShapes, tables, charts, images, notes, hidden }
   })
 
   const slides = rawContents.map((raw, idx) => classifyAndBuildSlide(raw, idx, rawContents.length))

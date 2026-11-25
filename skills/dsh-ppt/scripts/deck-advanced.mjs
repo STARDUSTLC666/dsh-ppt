@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, openSync, closeSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve, dirname, extname, basename, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { inflateSync } from 'node:zlib'
+import { deflateSync, inflateSync } from 'node:zlib'
 import { buildPptx, renderHtml, normalizeBuildOptions, normalizeSlides, resolveLanguage, resolveDeckFileName, commitDeckArtifacts, DECK_VERSION, buildDeck } from './deck-core.mjs'
 import { listThemes, listMasterPresets, resolveTheme, resolveChromeStyle, buildThemePreview as buildThemePreviewFromThemes, deriveBrandedTheme, pptxEastAsianFont } from './deck-themes.mjs'
 import { CORE_LAYOUTS, LAYOUT_ALIASES, stripInlineMarkdown, computeMockupGeometry, getChromeConfig } from './deck-layouts.mjs'
@@ -516,6 +516,148 @@ function drawNativeWaterfallWithKit(lib, slide, chart, boxIn, theme) {
   lib.setShapeStroke(axis, { color: tokens.inkSecondary || muted, width: 15875 })
 }
 
+let PNG_CRC_TABLE = null
+function pngCrc32(buf) {
+  if (!PNG_CRC_TABLE) {
+    PNG_CRC_TABLE = new Uint32Array(256)
+    for (let n = 0; n < 256; n += 1) {
+      let c = n
+      for (let k = 0; k < 8; k += 1) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1)
+      PNG_CRC_TABLE[n] = c >>> 0
+    }
+  }
+  let c = 0xffffffff
+  for (let i = 0; i < buf.length; i += 1) c = PNG_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+
+function hexToRgbTuple(hexColor, fallback = [226, 232, 240]) {
+  const clean = String(hexColor ?? '').replace('#', '').trim()
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return fallback
+  return [
+    Number.parseInt(clean.slice(0, 2), 16),
+    Number.parseInt(clean.slice(2, 4), 16),
+    Number.parseInt(clean.slice(4, 6), 16),
+  ]
+}
+
+/**
+ * PowerPoint 2016/2019, WPS Office, and LibreOffice cannot decode raw image/webp inside PPTX
+ * (rendering a blank white box). Emit a clean, aspect-preserving theme-tinted PNG fallback frame
+ * while preserving the original WebP data URI in HTML & JSON assets.
+ */
+function buildWebpFallbackPng(srcWidth, srcHeight, theme) {
+  const aspect = srcWidth > 0 && srcHeight > 0 ? srcWidth / srcHeight : 16 / 9
+  const maxDim = 96
+  const w = aspect >= 1 ? maxDim : Math.max(16, Math.round(maxDim * aspect))
+  const h = aspect >= 1 ? Math.max(16, Math.round(maxDim / aspect)) : maxDim
+  const bg = hexToRgbTuple(theme?.tokens?.surface1 || theme?.palette?.panel, [241, 245, 249])
+  const border = hexToRgbTuple(theme?.palette?.accent, [30, 58, 138])
+  const stripe = hexToRgbTuple(theme?.tokens?.hairline || theme?.palette?.muted, [148, 163, 184])
+
+  const rowStride = 1 + w * 4
+  const raw = Buffer.alloc(h * rowStride)
+  for (let y = 0; y < h; y += 1) {
+    raw[y * rowStride] = 0
+    for (let x = 0; x < w; x += 1) {
+      const off = y * rowStride + 1 + x * 4
+      const isBorder = x < 2 || y < 2 || x >= w - 2 || y >= h - 2
+      const isInnerBadge = x >= Math.floor(w * 0.32) && x <= Math.floor(w * 0.68) && y >= Math.floor(h * 0.42) && y <= Math.floor(h * 0.58)
+      const isDiag = Math.abs((x / w) - (y / h)) < 0.025
+      const rgb = isBorder ? border : isInnerBadge ? border : isDiag ? stripe : bg
+      raw[off] = rgb[0]
+      raw[off + 1] = rgb[1]
+      raw[off + 2] = rgb[2]
+      raw[off + 3] = 255
+    }
+  }
+  const chunk = (type, data) => {
+    const t = Buffer.from(type, 'ascii')
+    const len = Buffer.alloc(4)
+    len.writeUInt32BE(data.length, 0)
+    const crc = Buffer.alloc(4)
+    crc.writeUInt32BE(pngCrc32(Buffer.concat([t, data])), 0)
+    return Buffer.concat([len, t, data, crc])
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(w, 0)
+  ihdr.writeUInt32BE(h, 4)
+  ihdr[8] = 8
+  ihdr[9] = 6
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+/**
+ * Deduplicate identical byte-for-byte brand logo media files repeated across slides
+ * by remapping .rels targets to the first canonical ppt/media/<name> part and removing duplicates.
+ */
+async function dedupePptxMedia(pptxBuffer, allowedHashes = null) {
+  if (allowedHashes instanceof Set && allowedHashes.size === 0) return pptxBuffer
+  try {
+    const { unzipSync, zipSync, strFromU8, strToU8 } = await import('fflate')
+    const entries = unzipSync(new Uint8Array(pptxBuffer))
+    const mediaKeys = Object.keys(entries)
+      .filter((k) => /^ppt\/media\/[^/]+$/i.test(k))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    if (mediaKeys.length <= 1) return pptxBuffer
+
+    const canonicalBySig = new Map()
+    const remapNames = new Map() // dupBasename -> canonBasename
+    for (const key of mediaKeys) {
+      const base = key.slice('ppt/media/'.length)
+      const ext = extname(base).toLowerCase()
+      const digest = createHash('sha256').update(entries[key]).digest('hex')
+      if (allowedHashes instanceof Set && !allowedHashes.has(digest)) continue
+      const sig = `${ext}:${digest}`
+      if (canonicalBySig.has(sig)) {
+        remapNames.set(base, canonicalBySig.get(sig))
+      } else {
+        canonicalBySig.set(sig, base)
+      }
+    }
+    if (remapNames.size === 0) return pptxBuffer
+
+    for (const dupBase of remapNames.keys()) {
+      delete entries[`ppt/media/${dupBase}`]
+    }
+    for (const key of Object.keys(entries)) {
+      if (!key.endsWith('.rels')) continue
+      let xml = strFromU8(entries[key])
+      let changed = false
+      for (const [dupBase, canonBase] of remapNames) {
+        const escaped = dupBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const re = new RegExp(`(Target=["'](?:\\.\\.\\/|\\/?ppt\\/)?media\\/)${escaped}(["'])`, 'g')
+        if (re.test(xml)) {
+          xml = xml.replace(re, `$1${canonBase}$2`)
+          changed = true
+        }
+      }
+      if (changed) entries[key] = strToU8(xml)
+    }
+    if (entries['[Content_Types].xml']) {
+      let ct = strFromU8(entries['[Content_Types].xml'])
+      let ctChanged = false
+      for (const dupBase of remapNames.keys()) {
+        const escaped = dupBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const ovRe = new RegExp(`<Override\\b[^>]*PartName=["']\\/ppt\\/media\\/${escaped}["'][^>]*\\/>`, 'g')
+        if (ovRe.test(ct)) {
+          ct = ct.replace(ovRe, '')
+          ctChanged = true
+        }
+      }
+      if (ctChanged) entries['[Content_Types].xml'] = strToU8(ct)
+    }
+    return Buffer.from(zipSync(entries))
+  } catch {
+    return pptxBuffer
+  }
+}
+
 async function exportPptx(manifest, theme, language, signal) {
   const base = buildPptx({ ...manifest, slides: manifest.slides.map(s => ({ ...s, notes: dataNotes(manifest, s) })) }, theme, language)
   const hasWaterfall = manifest.slides.some(s => s.chart?.kind === 'waterfall')
@@ -531,9 +673,16 @@ async function exportPptx(manifest, theme, language, signal) {
   const presentation = await lib.loadPresentation(base), slides = lib.getSlides(presentation)
   const emu = box => Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v * 914400)]))
   const putImage = (slide, id, box, fit, name, alt, focalPoint = 'center', sendToBack = false) => {
-    const asset = manifest.assets[id], bytes = Buffer.from(asset.data.split(',')[1], 'base64')
+    const asset = manifest.assets[id]
+    const isWebp = asset.mime === 'image/webp'
+    const bytes = isWebp
+      ? buildWebpFallbackPng(asset.width, asset.height, theme)
+      : Buffer.from(asset.data.split(',')[1], 'base64')
     const shape = lib.addSlideImage(slide, bytes, { ...emu(box), name, fit: fit === 'contain' ? 'contain' : 'fill' })
-    lib.setShapeDescription(shape, alt || name)
+    const effectiveAlt = isWebp
+      ? `${alt || name} [WebP fallback PNG — convert source image to PNG/JPEG for full PowerPoint/WPS display]`
+      : (alt || name)
+    lib.setShapeDescription(shape, effectiveAlt)
     if (fit === 'cover') {
       const natural = asset.width / asset.height, target = box.w / box.h
       const excess = natural > target ? (1 - target / natural) : (1 - natural / target)
@@ -603,7 +752,15 @@ async function exportPptx(manifest, theme, language, signal) {
   if (invalid.length) fail('PPTX 结构校验失败：' + invalid.map(i => i.message).join('；'))
   const bytes = await lib.savePresentation(presentation)
   abort(signal)
-  return Buffer.from(bytes)
+  const logoDedupHashes = new Set()
+  if (manifest.brand?.logoAssetId && manifest.assets?.[manifest.brand.logoAssetId]) {
+    const logoAsset = manifest.assets[manifest.brand.logoAssetId]
+    const logoBytes = logoAsset.mime === 'image/webp'
+      ? buildWebpFallbackPng(logoAsset.width, logoAsset.height, theme)
+      : Buffer.from(logoAsset.data.split(',')[1], 'base64')
+    logoDedupHashes.add(createHash('sha256').update(logoBytes).digest('hex'))
+  }
+  return dedupePptxMedia(Buffer.from(bytes), logoDedupHashes)
 }
 
 function documentBytes(manifest) {
@@ -930,7 +1087,8 @@ export async function buildDeckAsync(options = {}) {
   if (prepared) normalized.deck.slides = prepared
 
   let upgradeReport = null
-  const shouldPromote = options.smartLayout === true || (options.smartLayout !== false && (rawThemeOpt === 'auto' || Boolean(options.persona) || Boolean(absorbed) || Boolean(resolvedExemplar)))
+  const hasUnfilledDraft = Boolean(scenario && !options.content?.trim() && !options.slides?.length)
+  const shouldPromote = options.smartLayout !== false
   if (fromMarkdown) {
     if (absorbed && options.cloneStructure === true && Array.isArray(absorbed.slideSkeleton) && absorbed.slideSkeleton.length > 0) {
       normalized.deck.slides = mapSlidesToAbsorbedSkeleton(normalized.deck.slides, absorbed.slideSkeleton, langId)
@@ -938,11 +1096,11 @@ export async function buildDeckAsync(options = {}) {
       normalized.deck.slides = promoteMarkdownSlides(normalized.deck.slides, { explicitSmartLayout: options.smartLayout === true })
     }
   }
-  const shouldAutoUpgrade = !dataModel && options.autoUpgrade !== false && options.smartLayout !== false && (
+  const shouldAutoUpgrade = !dataModel && !hasUnfilledDraft && options.autoUpgrade !== false && options.smartLayout !== false && (
     options.autoUpgrade === true ||
     Boolean(resolvedExemplar) ||
-    (fromMarkdown && shouldPromote) ||
-    (Array.isArray(options.slides) && options.slides.length >= 4 && (rawThemeOpt === 'auto' || Boolean(options.persona)))
+    fromMarkdown ||
+    (Array.isArray(options.slides) && options.slides.length >= 4)
   )
   if (shouldAutoUpgrade) {
     const upgraded = upgradeWeakDeck(normalized.deck.slides, {
@@ -1054,13 +1212,7 @@ export async function buildDeckAsync(options = {}) {
     slides: embedSlides(normalized.deck.slides, assets, cwd).map(s => ({ ...s, id: randomUUID() })),
   }
   let activeManifest = manifest
-  const hasUnfilledDraft = Boolean(scenario && !options.content?.trim() && !options.slides?.length)
-  const shouldSelfRepair = !dataModel && !hasUnfilledDraft && options.autoUpgrade !== false && options.selfRepair !== false && options.smartLayout !== false && (
-    options.selfRepair === true ||
-    shouldAutoUpgrade ||
-    Boolean(resolvedExemplar) ||
-    fromMarkdown
-  )
+  const shouldSelfRepair = !dataModel && !hasUnfilledDraft && options.autoUpgrade !== false && options.selfRepair !== false && options.smartLayout !== false
   if (shouldSelfRepair) {
     const repaired = selfRepairDeck(manifest, {
       checkFn: checkManifest,
@@ -1201,8 +1353,13 @@ export async function editDeck(options = {}) {
   const used = new Set()
   const allowed = new Set([
     'layout', 'variant', 'chrome', 'cardMaterial', 'iconMode', 'reveal', 'transition', 'coverPattern', 'imageBrief', 'title', 'subtitle', 'kicker', 'takeaway', 'source', 'evidenceIds',
-    'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'activeIndex', 'tableStyle',
+    'text', 'formula', 'mermaid', 'code', 'language', 'filename', 'url', 'xLabel', 'yLabel', 'start', 'span', 'activeIndex', 'tableStyle',
     'bullets', 'items', 'cards', 'metrics', 'columns', 'steps', 'quadrants', 'rows', 'notes', 'image', 'images', 'chart', 'visual',
+  ])
+  const ITEM_PRIMARY_LAYOUTS = new Set([
+    'agenda', 'kpi', 'cards', 'comparison', 'matrix', 'swot', 'process', 'value-chain',
+    'marimekko', 'sankey', 'gantt', 'architecture', 'tam', 'org', 'quadrant', 'dumbbell',
+    'map', 'isometric', 'issue-tree', 'treemap', 'gauge', 'pricing', 'flywheel', 'chevron',
   ])
   for (const edit of options.edits ?? []) {
     const index = typeof edit.slide === 'number' && Number.isInteger(edit.slide) ? edit.slide - 1 : next.slides.findIndex(s => s.id === edit.slide)
@@ -1215,7 +1372,8 @@ export async function editDeck(options = {}) {
     const changed = { ...next.slides[index], ...next.slides[index].dataTemplate, ...edit.patch }
     delete changed.dataTemplate
     for (const key of Object.keys(changed)) if (changed[key] === null) delete changed[key]
-    if (edit.patch.bullets && !edit.patch.items && !edit.patch.cards && !edit.patch.metrics && !edit.patch.steps && !edit.patch.columns && !edit.patch.quadrants && !next.slides[index].dataTemplate?.items) {
+    const targetEffLayout = effectiveLayout(changed.layout)
+    if (edit.patch.bullets && !edit.patch.items && !edit.patch.cards && !edit.patch.metrics && !edit.patch.steps && !edit.patch.columns && !edit.patch.quadrants && !next.slides[index].dataTemplate?.items && !ITEM_PRIMARY_LAYOUTS.has(targetEffLayout)) {
       delete changed.items
     }
     if (edit.patch.chart) {
@@ -1342,8 +1500,20 @@ export async function editDeck(options = {}) {
   }
 
   if (options.brand !== undefined) {
-    next.brand = normalizeBrand(options.brand === null ? null : { ...next.brand, ...options.brand,
-      ...(options.brand?.logo === null ? { logo: undefined, logoAssetId: undefined } : {}) }, next.assets, cwd)
+    if (options.brand === null) {
+      delete next.brand
+    } else {
+      const mergedBrand = { ...(next.brand || {}) }
+      for (const [bKey, bVal] of Object.entries(options.brand)) {
+        if (bVal === null || bVal === '') {
+          delete mergedBrand[bKey]
+          if (bKey === 'logo') delete mergedBrand.logoAssetId
+        } else {
+          mergedBrand[bKey] = bVal
+        }
+      }
+      next.brand = normalizeBrand(mergedBrand, next.assets, cwd)
+    }
     if (next.brand && Object.keys(next.brand).length === 0) delete next.brand
   }
   if (options.motionProfile !== undefined) {
@@ -1612,18 +1782,49 @@ export async function importPptxDeck(options = {}) {
     if (modernize) {
       syncSlides = promoteMarkdownSlides(syncSlides, { explicitSmartLayout: false })
     }
-    const mergedRaw = syncSlides.map((s, idx) => {
-      const prior = current.slides[idx] || current.slides.find(p => p.title && p.title === s.title)
-      return sanitizeImportedSlideForSync(s, prior)
+    // Two-pass prior slide matching:
+    // Pass 1 locks exact normalized title matches (preferring same layout) so slide insertions/reorders
+    // never transplant IDs/visuals/tableStyle/dataTemplate onto the wrong slide.
+    // Pass 2 falls back to same-index unclaimed prior slides so title edits in Office keep stable IDs.
+    const normTitle = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const matchedPrior = new Array(syncSlides.length).fill(null)
+    const claimedPriorIndices = new Set()
+    syncSlides.forEach((s, idx) => {
+      const nt = normTitle(s.title)
+      if (!nt) return
+      let matchIdx = current.slides.findIndex((p, pIdx) => !claimedPriorIndices.has(pIdx) && normTitle(p.title) === nt && p.layout === s.layout)
+      if (matchIdx < 0) {
+        matchIdx = current.slides.findIndex((p, pIdx) => !claimedPriorIndices.has(pIdx) && normTitle(p.title) === nt)
+      }
+      if (matchIdx >= 0) {
+        matchedPrior[idx] = current.slides[matchIdx]
+        claimedPriorIndices.add(matchIdx)
+      }
     })
+    syncSlides.forEach((s, idx) => {
+      if (matchedPrior[idx]) return
+      if (idx < current.slides.length && !claimedPriorIndices.has(idx)) {
+        matchedPrior[idx] = current.slides[idx]
+        claimedPriorIndices.add(idx)
+      }
+    })
+    const mergedRaw = syncSlides.map((s, idx) => sanitizeImportedSlideForSync(s, matchedPrior[idx]))
     validateRawSlides(mergedRaw)
-    const normalizedSlides = normalizeSlides(mergedRaw, 120, next.language)
+    // Normalize each slide individually so table pagination (>8 rows) never shifts downstream IDs or dataTemplates
+    const normalizedEntries = mergedRaw.flatMap((raw) => {
+      const parts = normalizeSlides([raw], 120, next.language)
+      return parts.map((part, pIdx) => ({
+        slide: part,
+        id: pIdx === 0 ? raw.id : undefined,
+        dataTemplate: pIdx === 0 ? raw.dataTemplate : undefined,
+      }))
+    })
     const usedIds = new Set()
-    const embedded = embedSlides(normalizedSlides, next.assets, cwd).map((s, idx) => {
-      let id = mergedRaw[idx]?.id || randomUUID()
+    const embedded = embedSlides(normalizedEntries.map((e) => e.slide), next.assets, cwd).map((s, idx) => {
+      let id = normalizedEntries[idx]?.id || randomUUID()
       if (usedIds.has(id)) id = randomUUID()
       usedIds.add(id)
-      const dataTemplate = mergedRaw[idx]?.dataTemplate
+      const dataTemplate = normalizedEntries[idx]?.dataTemplate
       return { ...s, id, ...(dataTemplate ? { dataTemplate } : {}) }
     })
     next.slides = embedded

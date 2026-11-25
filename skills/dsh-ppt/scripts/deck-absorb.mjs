@@ -304,18 +304,42 @@ function getBoundsSafe(lib, shape) {
   }
 }
 
-function flattenShapes(lib, shapes, depth = 0) {
-  if (!Array.isArray(shapes) || depth > 4) return []
+function shapeDedupKey(lib, shape) {
+  try {
+    const id = lib.getShapeId?.(shape)
+    if (id !== undefined && id !== null && String(id).trim() !== '') {
+      return `id:${String(id).trim()}`
+    }
+  } catch { /* ignore */ }
+  try {
+    const xml = lib.getShapeXmlString?.(shape)
+    if (typeof xml === 'string' && xml) {
+      const m = /<p:cNvPr\b[^>]*\bid=["']([^"']+)["']/.exec(xml)
+      if (m?.[1]) return `id:${m[1]}`
+    }
+  } catch { /* ignore */ }
+  return shape
+}
+
+function flattenShapes(lib, shapes, depth = 0, seen = new Set()) {
+  if (!Array.isArray(shapes) || depth > 8) return []
   const out = []
   for (const shape of shapes) {
     if (!shape) continue
+    const key = shapeDedupKey(lib, shape)
+    if (seen.has(key)) continue
+    seen.add(key)
+    let isGroup = false
+    try {
+      if (String(lib.getShapeKind?.(shape) ?? '').toLowerCase() === 'group') isGroup = true
+    } catch { /* ignore */ }
     let children = null
     try {
       children = lib.getGroupChildren?.(shape)
     } catch { /* ignore */ }
     if (Array.isArray(children) && children.length > 0) {
-      out.push(...flattenShapes(lib, children, depth + 1))
-    } else {
+      out.push(...flattenShapes(lib, children, depth + 1, seen))
+    } else if (!isGroup) {
       out.push(shape)
     }
   }
@@ -481,18 +505,23 @@ function inspectTableForHarveyAndStyle(lib, tables) {
       let harveyHits = 0
       for (let r = 0; r < Math.min(rows, 15); r += 1) {
         for (let c = 0; c < Math.min(cols, 10); c += 1) {
-          const txt = String(lib.getTableCellText?.(tbl, r, c) ?? '').trim()
-          if (/[●◕◑◔○]/.test(txt)) harveyHits += 1
+          try {
+            const cell = lib.getTableCell?.(tbl, r, c)
+            const txt = cell ? String(lib.getTableCellText?.(cell) ?? '').trim() : ''
+            if (/[●◕◑◔○]/.test(txt)) harveyHits += 1
+          } catch { /* ignore per-cell read failure */ }
         }
       }
       if (harveyHits >= 2) hasHarvey = true
+    } catch { /* ignore table cell inspection error */ }
+    try {
       const flags = lib.getTableStyleFlags?.(tbl)
       if (flags && flags.bandRow === false && flags.bandCol === false && flags.firstRow === true) {
         styleHint ||= 'booktabs'
       } else if (flags?.bandRow === true) {
         styleHint ||= 'banded'
       }
-    } catch { /* ignore table inspection error */ }
+    } catch { /* ignore table style flag error */ }
   }
   return { hasHarvey, styleHint }
 }
@@ -500,8 +529,18 @@ function inspectTableForHarveyAndStyle(lib, tables) {
 function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH) {
   const result = { slideNumber: slideIndex + 1, inferredLayout: 'bullets' }
   try {
-    const slideXmlStr = typeof slide?.xml === 'string' ? slide.xml : ''
-    if (/<p:sld\b[^>]*\bshow="0"/.test(slideXmlStr)) result.hidden = true
+    let isHidden = false
+    try {
+      if (lib.isSlideHidden?.(slide) === true) isHidden = true
+    } catch { /* ignore */ }
+    if (!isHidden) {
+      let slideXmlStr = typeof slide?.xml === 'string' ? slide.xml : ''
+      if (!slideXmlStr) {
+        try { slideXmlStr = String(lib.getSlideXmlString?.(slide) ?? '') } catch { slideXmlStr = '' }
+      }
+      if (/<p:sld\b[^>]*\bshow=["']0["']/.test(slideXmlStr)) isHidden = true
+    }
+    if (isHidden) result.hidden = true
     const rawShapes = lib.getSlideShapes(slide) ?? []
     const shapes = flattenShapes(lib, rawShapes)
     let layoutType = ''
@@ -711,6 +750,8 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
     const hasConcentricCircles = ellipseCircles.length >= 2 && ellipseCircles.some((a, ai) =>
       ellipseCircles.some((b, bi) => bi > ai && Math.hypot(a.cx - b.cx, a.cy - b.cy) <= 0.16 && Math.abs(a.r - b.r) >= 0.04))
 
+    if (tableMeta.styleHint) result.tableStyle = tableMeta.styleHint
+
     // Priority order: rich native charts/tables/diagrams -> media -> framing -> structured layouts
     if (waterfallBars >= 3 || isWaterfallChart) {
       result.inferredLayout = 'waterfall'
@@ -720,7 +761,6 @@ function analyzeSlideLayout(lib, slide, slideIndex, totalSlides, slideW, slideH)
       result.inferredLayout = nonTitleTextShapes >= 1 || largeCardShapes >= 1 ? 'chart-split' : 'chart'
     } else if (hasTable) {
       result.inferredLayout = 'table'
-      if (tableMeta.styleHint) result.tableStyle = tableMeta.styleHint
     } else if (ellipseCircles.length >= 2 && (tamTextHits >= 2 || /市场规模|市场空间|\bTAM\b|\bSAM\b|\bSOM\b/i.test(combinedSignal) || (ellipseCircles.length >= 3 && hasConcentricCircles))) {
       result.inferredLayout = 'tam'
       result.variant = 'concentric'
