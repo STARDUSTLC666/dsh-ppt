@@ -1,5 +1,16 @@
 # 更新记录
 
+## 1.0.5 (2026-11-26)
+
+- **视觉工艺、HTML/PPTX 同构与图表精度**：修复跨主题 WCAG 对比度（深浅色标签与 Mermaid 节点反白可读性）、瀑布图基线对齐与标签避让、中国 7 枢纽地图标注防碰撞、Mermaid 六边形/平行四边形原样渲染、英文版 `gauge` 达标仪本地化、封面/母版 Logo 去重以及 `reveal: 'step'` 分步点击显现编组精度。
+- **AI 生成链路、Auto-Director、`SLOP-15` 与工具瘦身**：修复数值被误改写（如千分位 `3,850` 完整保留）、Prompt/范本边界异常与 `splitLead()` 误截断 `$...$` 公式问题，保护含二维 LaTeX 公式的 `bullets` 页不被误升格；显式主题同步支持 `autoUpgrade`/`smartLayout`/`selfRepair`；精简 `ppt_templates` Schema 与响应体积，并同步校准 `SLOP-15` 门禁、视觉/教练评估及 `SKILL.md`/`references/*` 文档。
+- **工作台 UI/UX、布局自适应与双语补全**：修复切页签卸载丢状态与灯箱未保存直存横幅，补齐 Sankey/KPI `value`/`unit` 等结构化字段与上限控制、品牌色/Logo 清除防复生、单页 `Alt+←/→` 快捷键直达、新建弹窗内联报错、1120px 顶栏标签与设置预览置顶对齐、4 分组下载弹窗（含英文宽版零裁切）及 20+ 项英文翻译与 `' / '` 双语切分。
+- **Office 导入、Mode B 双向同步、Remotion 与逆向 `.docx` 加固**：加固 PPTX/DOCX/XLSX/CSV/PDF 导入与 WebP 兼容，完善 Mode B 分页表格与 `dataModel` 回流同步、Remotion `.tsx` 导出包零语法错编译、逆向 `.docx` `<w:tblGrid>` 列宽网格及放映 HUD 自动隐藏。
+- **Visual Craft & HTML↔PPTX Parity**: improves WCAG contrast across themes and Mermaid shapes (preserving hexagon/parallelogram geometry), waterfall baseline grounding, collision-free China 7-hub map labels, EN `gauge` localization, logo deduplication, and `reveal: 'step'` click-group accuracy.
+- **AI Generation, Auto-Director, `SLOP-15` & Schema Slimming**: prevents numeric corruption (e.g. `3,850`), prompt/exemplar crashes, and `$...$` math-span splitting in `splitLead()` (preserving 2D LaTeX `bullets` slides); enables `autoUpgrade`/`smartLayout`/`selfRepair` with explicit themes; slims `ppt_templates` tool schema/payload; and aligns `SLOP-15`, coaching/visual QA, and `SKILL.md` / `references/*`.
+- **Workbench UI/UX, Layout & i18n**: eliminates tab-switch unmount loss, adds Lightbox dirty-save banner, wires missing archetype `value`/`unit` inputs, fixes brand color/logo clearing, restores immediate `Alt+←/→` navigation, surfaces inline Create modal errors, anchors Settings preview, introduces a 4-section Download dialog (zero EN clipping), and adds 20+ EN translations.
+- **Office Import, Mode B Sync, Remotion & Reverse `.docx`**: hardens PPTX/DOCX/XLSX/CSV/PDF & WebP ingestion, paginated Mode B `dataModel` round-trip sync, clean Remotion `.tsx` bundling, reverse `.docx` `<w:tblGrid>` widths, and presenter HUD auto-hide.
+
 ## 1.0.4 (2026-11-25)
 
 - 修复新建/导入工程弹窗的双列表单排版：为 `.ppt-create-grid` 补充 `align-items: start`，避免下拉选择与数字输入框纵向拉伸错位。
