@@ -255,6 +255,78 @@ function renderRemotion(value: PptRemotionResult): TextBlock[] {
   )
 }
 
+function formatArtDirectorDigest(rec: Record<string, unknown>): string {
+  const ad = (rec.artDirector && typeof rec.artDirector === 'object') ? rec.artDirector as Record<string, unknown> : null
+  if (!ad) return ''
+  const lines: string[] = []
+  if (typeof ad.directorPrompt === 'string' && ad.directorPrompt.trim()) {
+    lines.push('## Art-Director Brief', ad.directorPrompt.trim())
+  }
+  const meta = [
+    ad.recommendedTheme ? `theme: \`${ad.recommendedTheme}\`` : '',
+    ad.altDarkTheme ? `altDark: \`${ad.altDarkTheme}\`` : '',
+    ad.recommendedTaste ? `taste: \`${ad.recommendedTaste}\`` : '',
+    ad.coverVariant ? `cover: \`${ad.coverVariant}\`` : '',
+    ad.coverPattern ? `pattern: \`${ad.coverPattern}\`` : '',
+    ad.motionProfile ? `motionProfile: \`${ad.motionProfile}\`` : '',
+  ].filter(Boolean)
+  if (meta.length) lines.push('Defaults: ' + meta.join(' | '))
+  if (Array.isArray(ad.cadence) && ad.cadence.length) {
+    lines.push('Cadence: ' + ad.cadence.map(String).join(' → '))
+  }
+  const gf = (ad.goldenFields && typeof ad.goldenFields === 'object') ? ad.goldenFields as Record<string, unknown> : null
+  if (gf) {
+    lines.push('### Golden Field Cheat-Sheet')
+    for (const [k, v] of Object.entries(gf)) {
+      lines.push(`- ${k}: \`${String(v)}\``)
+    }
+  }
+  return lines.join('\n')
+}
+
+function renderTemplates(value: unknown): TextBlock[] {
+  const rec = (value && typeof value === 'object') ? value as Record<string, unknown> : {}
+  const adDigest = formatArtDirectorDigest(rec)
+  if (typeof rec.planMarkdown === 'string' && rec.planMarkdown.trim()) {
+    const parts = [rec.planMarkdown.trim()]
+    if (adDigest) parts.push(adDigest)
+    return oneText(parts.join('\n\n'))
+  }
+  if (typeof rec.promptGuide === 'string' && rec.promptGuide.trim()) {
+    const parts = [rec.promptGuide.trim()]
+    if (adDigest) parts.push(adDigest)
+    if (Array.isArray(rec.fewShotSlides) && rec.fewShotSlides.length > 0 && !rec.promptGuide.includes('"layout"')) {
+      parts.push('## Few-Shot Slides (compact)\n```json\n' + JSON.stringify(rec.fewShotSlides.slice(0, 4)) + '\n```')
+    }
+    return oneText(parts.join('\n\n'))
+  }
+  const templates = Array.isArray(rec.templates) ? rec.templates as Array<Record<string, unknown>> : []
+  const exemplars = Array.isArray(rec.exemplars) ? rec.exemplars as Array<Record<string, unknown>> : []
+  const sections: string[] = []
+  if (adDigest) sections.push(adDigest)
+  if (templates.length > 0) {
+    sections.push(
+      `## Industry Blueprints (${templates.length})`,
+      ...templates.map((t) => {
+        const outline = Array.isArray(t.outline) ? t.outline.map(String).join(' → ') : ''
+        return `- \`${String(t.id)}\` (${String(t.name ?? '')}, theme: \`${String(t.theme ?? 'consulting')}\`, persona: \`${String(t.persona ?? 'consulting')}\`): ${outline}`
+      }),
+    )
+  }
+  if (exemplars.length > 0) {
+    sections.push(
+      `## Gold Exemplars (${exemplars.length})`,
+      ...exemplars.map((e) => {
+        const slots = typeof e.slideCount === 'number' ? `${e.slideCount}p` : (Array.isArray(e.slots) ? `${e.slots.length}p` : '')
+        const tasteNote = e.taste && !e.hasStyleRecipe ? `, taste: \`${String(e.taste)}\`` : ''
+        return `- \`${String(e.id)}\` (${String(e.name ?? '')}${e.theme ? `, theme: \`${String(e.theme)}\`` : ''}${tasteNote}${slots ? `, ${slots}` : ''})`
+      }),
+    )
+  }
+  sections.push('Next: call `ppt_templates({ exemplarId: "<id>" })` for a slot-filling contract & few-shot JSON, or `ppt_templates({ topic: "<topic>" })` for Mode B research & storyboard planning.')
+  return oneText(sections.join('\n\n'))
+}
+
 const imageObjectProperties = {
   src: { type: 'string', description: 'Local PNG/JPEG path relative to the session cwd, or image data URI. Embedded into all output files.' },
   alt: { type: 'string' },
@@ -372,7 +444,7 @@ const slideItemSchema = {
   type: 'object',
   properties: {
     tag: { type: 'string' }, badge: { type: 'string' },
-    title: { type: 'string' },
+    title: { type: 'string' }, label: { type: 'string', description: 'Optional alias for title/tag on KPI and card items.' },
     text: { type: 'string' }, body: { type: 'string' },
     bullets: { type: 'array', items: { type: 'string' } },
     value: { type: ['string', 'number'] },
@@ -410,10 +482,10 @@ const slideLayouts = [
   'issue-tree', 'mece', 'logic-tree', 'treemap', 'rect-map', 'budget-map', 'gauge', 'bullet-chart', 'okr-gauge', 'pricing', 'tiers', 'packages',
   'table', 'closing', 'image', 'image-left', 'image-right',
   'chart', 'chart-split', 'gallery', 'waterfall', 'flywheel',
-  'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel', 'chevron', 'value-chain',
+  'bento', 'pillars', 'exec-summary', 'timeline', 'steps', 'layers', 'funnel', 'chevron', 'value-chain', 'porter', 'mekko', 'swot-matrix',
   'issue-action', 'before-after', 'matrix-2x2', 'kpi-grid', 'scorecard',
   'formula-callout', 'takeaways', 'gallery-grid', 'ablation-compare', 'roadmap', 'swimlane', 'team',
-  'mermaid', 'flowchart', 'sequence',
+  'mermaid', 'flowchart', 'sequence', 'sequence-diagram',
 ] as const
 const templateIds = [
   'weekly', 'defense', 'project', 'pitch',
@@ -447,16 +519,12 @@ const slideProperties = {
   xLabel: { type: 'string', description: 'Horizontal axis label for quadrant/bubble-matrix slides.' },
   yLabel: { type: 'string', description: 'Vertical axis label for quadrant/bubble-matrix slides.' },
   notes: { type: 'string' },
-  start: { type: 'number' }, span: { type: 'number' },
   activeIndex: { type: 'integer' },
   tableStyle: { type: 'string', enum: tableStyles },
   bullets: { type: 'array', items: { type: 'string' } },
-  items: { type: 'array', items: slideItemSchema, description: 'Structured sub-elements for kpi, cards, comparison, matrix, process, callout, gantt, architecture, tam, org, mockup, code, quadrant, radar, dumbbell, or chart-split.' },
-  cards: { type: 'array', items: slideItemSchema },
-  metrics: { type: 'array', items: slideItemSchema },
-  columns: { type: 'array', items: { oneOf: [{ type: 'string' }, slideItemSchema] }, description: 'Time-header labels (string[]) for gantt slides, or column items (object[]) as an items alias.' },
-  steps: { type: 'array', items: slideItemSchema },
-  quadrants: { type: 'array', items: { oneOf: [{ type: 'string' }, slideItemSchema] }, description: '4 corner labels (string[4]) for quadrant bubble charts, or 4 item objects for 2x2 matrix.' },
+  items: { type: 'array', items: slideItemSchema, description: 'Structured sub-elements for kpi, cards, comparison, matrix, process, callout, gantt, architecture, tam, org, mockup, code, quadrant, radar, dumbbell, issue-tree, treemap, gauge, pricing, map, isometric, or chart-split.' },
+  columns: { type: 'array', items: { type: 'string' }, description: 'Time-header labels (string[]) for gantt slides (e.g. ["Q1","Q2","Q3","Q4"]).' },
+  quadrants: { type: 'array', items: { type: 'string' }, description: '4 corner labels (string[4]) for quadrant bubble charts.' },
   rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number'] } } },
   image: imageSchema,
   images: { type: 'array', items: { oneOf: [{ type: 'object', properties: imageObjectProperties, additionalProperties: false }, { type: 'string' }] } },
@@ -469,7 +537,6 @@ const slideProperties = {
       chartLabelSize: { type: 'integer' },
       density: { type: 'string', enum: ['compact', 'balanced', 'airy'] },
       tableStyle: { type: 'string', enum: tableStyles },
-      chrome: { type: 'string', enum: ALLOWED_CHROME_STYLES },
     },
     additionalProperties: false,
   },
@@ -617,16 +684,7 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
       }),
       output: {
         schema: { type: 'object', additionalProperties: true },
-        render: (_args, value) => {
-          const rec = (value && typeof value === 'object') ? value as Record<string, unknown> : {}
-          if (typeof rec.planMarkdown === 'string' && rec.planMarkdown.trim()) {
-            return oneText(rec.planMarkdown)
-          }
-          if (typeof rec.promptGuide === 'string' && rec.promptGuide.trim()) {
-            return oneText(rec.promptGuide + '\n\n' + JSON.stringify({ exemplar: rec.exemplar }, null, 2))
-          }
-          return oneText(JSON.stringify(value, null, 2))
-        },
+        render: (_args, value) => renderTemplates(value),
       },
       execute: executors.templates,
     },
@@ -745,6 +803,8 @@ export function buildPptTools(config: ResolvedPptConfig): ToolDefinition[] {
         photoRoles: { type: 'object', additionalProperties: true, description: 'Optional explicit filename-to-role map overriding smart photo choreography (e.g. {"hero.png":"cover","app.png":"mockup-mobile","site1.jpg":"gallery"}).' },
         bindDataModel: { type: 'boolean', description: 'Automatically bind Excel/CSV numeric tables & KPI cards into live dataModel {{metricId}} placeholders so future ppt_data updates refresh the deck live.' },
         evidence: { type: 'array', items: evidenceEntrySchema, description: 'Optional external authoritative web-research evidence[] (origin:"web-research", tier:1|2) merged collision-free after local file evidence [E1..Ek] (Mode C Hybrid).' },
+        evidenceAppendix: { type: 'boolean', description: 'When local/external evidence[] is bound, insert a clean booktabs "Sources & Fact-Verification Ledger" appendix slide before the closing slide (default false).' },
+        motionProfile: { type: 'string', enum: ['subtle', 'executive', 'keynote'], description: 'Optional native PPTX transition profile: subtle (fast fade), executive (med fade), or keynote (push).' },
         exports: { type: 'array', items: { type: 'string', enum: exportKinds }, description: 'Optional extra companion exports: xlsx, docx, qa-prep, memo, i18n, handout, one-pager, social-carousel, subtitles.' },
         outputDir: { type: 'string', description: 'Directory to write the generated files into. Default: session working directory (or the plugin outputDir config).' },
         fileName: { type: 'string', description: 'Base file name for the three artifacts. Default: derived from source file or title.' },

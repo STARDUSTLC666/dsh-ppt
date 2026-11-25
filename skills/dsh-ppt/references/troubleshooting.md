@@ -6,8 +6,8 @@
 | --- | --- |
 | `ppt_create` 等工具不存在 | 当前处于跨 harness 裸技能环境；改用 `node <skill-dir>/scripts/build-deck.mjs` 生成完全一致的 HTML + PPTX + JSON 三件套 |
 | CLI 生成出来默认是黑紫色 `data` 主题 | 裸 CLI 缺省 `--theme` 为兼容旧脚本保留 `data`；**CLI 调用请显式加 `--theme auto` 或具体场景主题（如 `--theme consulting` / `--theme exec-jilan`）** |
-| 会议室/教室投影画面发暗、字迹不清 | 暗底主题在开灯投影下易泛白；用 `ppt_edit` 切换为 12 套浅底主题之一（`consulting`、`exec-jilan`、`academic`、`course-sage`、`cobalt-cream`、`keynote-light`、`financial-ft`、`medical-clean`） |
-| 未知主题报错 | 调 `ppt_themes` 或 `--list-themes` 查看 18 套合法主题 ID（或传 `'auto'`），切勿臆造主题名 |
+| 会议室/教室投影画面发暗、字迹不清 | 暗底主题在开灯投影下易泛白；用 `ppt_edit` 切换为 16 套浅底主题之一（`consulting`、`stripe-craft`、`bcg-emerald`、`venture-daylight`、`economist-brief`、`exec-jilan`、`academic`、`course-sage`、`cobalt-cream`、`keynote-light`、`financial-ft`、`medical-clean`） |
+| 未知主题报错 | 调 `ppt_themes` 或 `--list-themes` 查看 24 套合法主题 ID（或传 `'auto'`），切勿臆造主题名 |
 | 外部参考 `.pptx` 是刺眼大红底或黄字看不清 | 直接传 `ppt_absorb` 或 `referencePptx`；内置 `sanitizeAbsorbedTheme()` 会自动把高饱和红底降级为庄重深红封面 + 宣纸暖白内页，并将低对比文字钳制到 WCAG AA ≥ 4.6:1 |
 | `ppt_check` 提示 `SLOP-01`（弱标题）或 `SLOP-02`（重复 Kicker） | 将「项目背景 / 数据统计」等名词标签改写为结论判断句（Action Title），并把每页 `kicker` 设为 `01 · 章节名` 面包屑 |
 | `ppt_check` 提示 `SLOP-03` / `SLOP-08`（要点墙 / 版式单一） | 禁止连续 > 2 页 `bullets`；用 `ppt_edit` 将并列指标改为 `kpi`、并列模块改为 `cards`（`pillars/bento`）、对比改为 `comparison`、流程改为 `process` |

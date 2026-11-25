@@ -31,7 +31,7 @@
 
 ## 二、6 套差异化母版骨架（`CHROME_STYLES`）
 
-打破「14 套主题同一套卡片布局」，可通过 `brand.chromeStyle` 整套切换，或通过单页 `slide.chrome` 局部覆写：
+打破「24 套主题同一套卡片布局」，可通过 `brand.chromeStyle` 整套切换，或通过单页 `slide.chrome` 局部覆写：
 
 | `chromeStyle` | 默认关联主题 | 几何与页眉页脚签名特征 |
 | --- | --- | --- |

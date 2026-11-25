@@ -13,10 +13,15 @@
 import { stripInlineMarkdown } from './deck-layouts.mjs'
 import { relativeLuminance, hexToHsl } from './deck-themes.mjs'
 
-export const WEAK_GENERIC_TITLE_RE = /^(?:(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s·:-]*)|(?:(?:Part|Section|Step|Q[1-4]|FY\d{2,4}|20\d{2})\s*[\d.:·\-—\s]*))*(?:项目背景|研究背景|背景介绍|现状分析|业务现状|现状与问题|存在问题|问题分析|痛点分析|数据分析|数据概览|核心数据|财务情况|财务数据|经营数据|业绩情况|成本分析|市场分析|行业分析|用户分析|核心指标|关键指标|性能提升|效能提升|技术实现|技术方案|架构实现|架构设计|核心功能|核心功能介绍|产品介绍|产品规划|团队介绍|组织架构|商业模式|未来规划|下一步计划|项目排期|核心优势|核心亮点|主要成果|工作进展|工作汇报|工作总结|年度总结|季度总结|阶段总结|业务复盘|项目复盘|项目进展|阶段进展|竞品分析|竞品对比|解决方案|实施方案|改进措施|行动计划|工作计划|风险分析|总结|总结汇报|概述|目录页|关于我们|Overview|Introduction|Background|Current\s+State|Status|Progress|Metrics|Key\s+Metrics|Financials|Financial\s+Summary|Performance|Implementation|Architecture|Architecture\s+Overview|Product|Product\s+Overview|Team|Organization|Data\s+Analysis|Analysis|Market\s+Analysis|Comparison|Solution|Plan|Roadmap|Next\s+Steps|Risks?(?:\s*(?:&|and)\s*Mitigations?)?|Summary|Executive\s+Summary|Project\s+Update|Results|Highlights|Chart|Slide\s*\d+)$/i
-const BARE_CLOSING_RE = /^(?:谢谢|谢谢观看|谢谢聆听|感谢(?:聆听|观看|大家|指导)?|敬请指正|Thank\s*You|Thanks|Q\s*&\s*A)[!！.。?？\s]*$/i
-const LOWER_IS_BETTER_RE = /耗时|时延|延迟|周期|成本|返工|缺陷|故障|错误|流失|投诉|报错|开销|预算|疼痛|障碍|并发症|复发|住院|latency|cost|time|cycle|rework|defect|error|churn|bug|delay|mttr|pain|disability|complication|mortality/i
-const DUMBBELL_RE = /(?:从|由|from\s+)?(-?\d+(?:\.\d+)?)\s*(%|％|pp|bp|ms|s|分|pts|天|小时|分钟|h|m|x|倍|万|亿|元|例|k|M|B)?\s*(?:提升至|提升到|增长至|增长到|跃升至|上涨至|提高到|升至|升到|降至|降到|压缩至|压缩到|缩短至|缩短到|减少至|减少到|优化至|优化到|变为|→|->|to)\s*(-?\d+(?:\.\d+)?)\s*(%|％|pp|bp|ms|s|分|pts|天|小时|分钟|h|m|x|倍|万|亿|元|例|k|M|B)?/i
+export const WEAK_GENERIC_TITLE_RE = /^(?:(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s·:-]*)|(?:(?:Part|Section|Step|Q[1-4]|FY\d{2,4}|20\d{2})\s*[\d.:·\-—\s]*))*(?:项目背景|研究背景|背景介绍|背景|现状分析|业务现状|现状与问题|存在问题|问题分析|痛点分析|数据分析|图表展示|相关内容|内容介绍|情况说明|数据概览|核心数据|财务情况|财务数据|经营数据|业绩情况|成本分析|市场分析|行业分析|用户分析|核心指标|关键指标|性能提升|效能提升|技术实现|技术方案|架构实现|架构设计|核心功能|核心功能介绍|产品介绍|产品规划|团队介绍|组织架构|商业模式|未来规划|下一步计划|项目排期|核心优势|核心亮点|主要成果|工作进展|工作汇报|工作总结|年度总结|季度总结|阶段总结|业务复盘|项目复盘|项目进展|阶段进展|竞品分析|竞品对比|解决方案|实施方案|改进措施|行动计划|工作计划|风险分析|总结|总结汇报|概述|目录页|关于我们|Overview|Introduction|Background|Current\s+State|Status|Progress|Metrics|Key\s+Metrics|Financials|Financial\s+Summary|Performance|Implementation|Architecture|Architecture\s+Overview|Product|Product\s+Overview|Team|Organization|Data\s+Analysis|Analysis|Market\s+Analysis|Comparison|Solution|Plan|Roadmap|Next\s+Steps|Risks?(?:\s*(?:&|and)\s*Mitigations?)?|Summary|Executive\s+Summary|Project\s+Update|Results|Highlights|Chart|Slide\s*\d+)$/i
+export const BARE_CLOSING_RE = /^(?:(?:谢谢|谢谢观看|谢谢聆听|感谢(?:聆听|观看|大家|指导)?|敬请指正|Thank\s*You|Thanks|Q\s*&\s*A)(?:\s*[·•|/]\s*(?:谢谢|谢谢观看|谢谢聆听|感谢(?:聆听|观看|大家|指导)?|Thank\s*You|Thanks|Q\s*&\s*A))*)[!！.。?？\s]*$/i
+export const GENERIC_CLOSING_SUBTITLE_RE = /^(?:讨论与问答|Discussion\s*&\s*Q\s*&\s*A|讨论与问答\s*[·•|/]\s*Q\s*&\s*A|Q\s*&\s*A)[!！.。?？\s]*$/i
+const LOWER_IS_BETTER_RE = /耗时|时延|延迟|周期|成本|返工|缺陷|故障|错误|流失|投诉|报错|开销|预算|疼痛|障碍|并发症|复发|住院|latency|cost|time|cycle|rework|defect|error|churn|bug|delay|mttr|pain|disability|complication|mortality|failure|ticket|resolution/i
+const DUMBBELL_UNIT_PAT = '(?:%|％|pp|bps?|ms|seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|months?|分|pts?|天|小时|分钟|h|m|s|x|倍|万元|亿元|万美元|亿美元|万|亿|元|例|k|M|B)'
+const DUMBBELL_RE = new RegExp(
+  `(?:从|由|from\\s+)?([$¥€£])?\\s*(-?\\d+(?:\\.\\d+)?)\\s*(${DUMBBELL_UNIT_PAT})?\\s*(?:提升至|提升到|增长至|增长到|跃升至|上涨至|提高到|升至|升到|降至|降到|压缩至|压缩到|缩短至|缩短到|减少至|减少到|优化至|优化到|变为|→|->|to)\\s*([$¥€£])?\\s*(-?\\d+(?:\\.\\d+)?)\\s*(${DUMBBELL_UNIT_PAT})?`,
+  'i',
+)
 const RADAR_TITLE_RE = /雷达|多维|能力评估|能力对比|综合评测|基准评测|权衡|radar|spider|benchmark|capability|trade-?off|multi-?axis/i
 const HEATMAP_TITLE_RE = /热力|达成率|分布矩阵|覆盖率|完成度|矩阵|heatmap|heat\s*map|coverage|regional|fulfillment|sensitivity/i
 const QUADRANT_TITLE_RE = /魔力象限|象限|竞争格局|波士顿|定位矩阵|市场定位|quadrant|positioning|bcg|competitive\s+landscape|magic\s+quadrant/i
@@ -57,13 +62,19 @@ function truncateCleanly(text, maxWidth) {
     }
   }
   let chosen = lastBoundary > 0 ? chars.slice(0, lastBoundary).join('') : chars.slice(0, cutIdx).join('')
-  // 避免末尾停在半截数字/英文单词
+  // 避免末尾停在半截数字/英文单词或数字与其单位/范围之间（如 "从 3.5 | 天压缩至 4 小时"）
   if (lastBoundary <= 0 && cutIdx < chars.length && /[A-Za-z0-9.]/.test(chars[cutIdx - 1] || '') && /[A-Za-z0-9.]/.test(chars[cutIdx] || '')) {
     chosen = chosen.replace(/[A-Za-z0-9.]+$/, '')
   }
-  // 清理截断残留的未闭合括号与悬空介词/动词
+  const remainderHead = chars.slice(cutIdx, cutIdx + 12).join('').trim()
+  if (/\d\s*$/.test(chosen) && /^(?:[%％天小时分钟秒万亿元倍]|ms\b|days?\b|hours?\b|hrs?\b|mins?\b|wks?\b|weeks?\b|months?\b|pts?\b|至|到|→|->|to\b)/i.test(remainderHead)) {
+    chosen = chosen.replace(/(?:(?:从|由|至|到|达|约|为|较|超过|低于|突破|from|to|at|by|of|vs\.?)\s*)?[-+]?[$¥€£]?\d+(?:[.,]\d+)?\s*$/i, '')
+  }
+  // 清理截断残留的未闭合括号、半截数值短语与悬空介词/动词
   chosen = chosen.replace(/[（(][^）)]*$/, '')
-  chosen = chosen.replace(/(?:降至|升至|由|从|较|的)\s*$/, '')
+  chosen = chosen.replace(/(?:从|由|至|到|达|约|为|较|比)\s*[-+]?[$¥€£]?\d+(?:[.,]\d+)?\s*$/, '')
+  chosen = chosen.replace(/\b(?:from|to|at|by|of|under|over|in|with)\s*[-+]?[$¥€£]?\d*(?:\.\d+)?\s*$/i, '')
+  chosen = chosen.replace(/(?:降至|升至|压缩至|缩短至|提升至|增长至|减少至|优化至|由|从|较|的)\s*$/, '')
   return chosen.replace(/[，,。；;、：:\-—\s]+$/, '').trim()
 }
 
@@ -73,28 +84,42 @@ function splitLead(raw) {
   if (boldMatch) return { title: boldMatch[1].trim(), text: stripInlineMarkdown(boldMatch[2]).trim() }
   const sep = /^([^:：—–]{2,26})[:：—–]\s*(.+)$/.exec(clean)
   if (sep) return { title: sep[1].trim(), text: sep[2].trim() }
-  return { title: clean.slice(0, 26), text: clean.length > 26 ? clean : '' }
+  if (clean.length <= 26) return { title: clean, text: '' }
+  // Split cleanly without duplicating the leading 26 characters in both title and text
+  const clause = /^([^，,；;。]{6,24})[，,；;]\s*(.+)$/.exec(clean)
+  if (clause) return { title: clause[1].trim(), text: clause[2].trim() }
+  const chars = [...clean]
+  let cut = Math.min(22, chars.length)
+  while (cut > 10 && cut < chars.length && /[A-Za-z0-9.]/.test(chars[cut - 1]) && /[A-Za-z0-9.]/.test(chars[cut])) {
+    cut -= 1
+  }
+  return { title: chars.slice(0, cut).join('').trim(), text: chars.slice(cut).join('').trim() }
 }
 
 function parseDumbbellBullet(raw) {
   const plain = stripInlineMarkdown(String(raw ?? '')).trim()
   const m = DUMBBELL_RE.exec(plain)
   if (!m) return null
-  const before = Number(m[1])
-  const after = Number(m[3])
+  const currency = m[4] || m[1] || ''
+  const before = Number(m[2])
+  const after = Number(m[5])
   if (!Number.isFinite(before) || !Number.isFinite(after) || before === after) return null
-  const rawUnit = (m[4] || m[2] || '').replace('％', '%')
+  const rawUnit = (m[6] || m[3] || '').replace('％', '%')
+  const currencyUnit = currency === '$' ? ' USD' : currency === '¥' ? ' 元' : currency === '€' ? ' EUR' : currency === '£' ? ' GBP' : ''
+  const unit = rawUnit
+    ? (currency && !/[$¥€£元]/.test(rawUnit) ? `${rawUnit} (${currency})` : rawUnit)
+    : currencyUnit
   const lead = splitLead(raw).title
   const titleCandidate = lead && !DUMBBELL_RE.test(lead)
     ? lead
-    : plain.slice(0, m.index).replace(/[:：—–\-\s]+$/, '').trim() || plain.slice(0, 22)
+    : plain.slice(0, m.index).replace(/(?:reduced|cut|shortened|dropped|increased|grew|rose|improved|fell|from|从|由)?\s*[:：—–\-\s]*$/i, '').trim() || plain.slice(0, 22)
   const lowerBetter = LOWER_IS_BETTER_RE.test(plain)
   const improved = lowerBetter ? after < before : after > before
   return {
     title: titleCandidate.slice(0, 28),
     before,
     after,
-    unit: rawUnit,
+    unit,
     status: improved ? 'positive' : 'negative',
   }
 }
@@ -203,13 +228,173 @@ function isNumericTable(rows) {
   return totalCells > 0 && numericCells / totalCells >= 0.78
 }
 
+function parseTableMetricCell(raw) {
+  const clean = stripInlineMarkdown(String(raw ?? '')).trim()
+  if (!clean) return null
+  const m = /^([$¥€£])?\s*([-+]?\d+(?:,\d{3})*(?:\.\d+)?)\s*(%|％|pp|bps|ms|s|万元|亿元|万美元|亿美元|万|亿|元|k|K|M|B|T|倍|x|天|小时|分钟|次|例|人|家|项)?$/i.exec(clean)
+  if (!m) return null
+  const num = Number(m[2].replace(/,/g, ''))
+  if (!Number.isFinite(num)) return null
+  const currency = m[1] || ''
+  const suffix = (m[3] || '').replace('％', '%')
+  const unit = suffix || currency
+  return { num, unit, raw: clean, isDeltaLike: /^[+-]/.test(m[2]) || suffix === '%' || suffix === 'pp' || suffix === 'bps' }
+}
+
+function promoteNumericTableToChartSplit(slide, langEn) {
+  const rows = slide?.rows
+  if (!Array.isArray(rows) || rows.length < 4 || rows.length > 8) return false
+  const header = Array.isArray(rows[0]) ? rows[0].map((c) => stripInlineMarkdown(String(c ?? '')).trim()) : []
+  if (header.length < 2 || header.length > 3) return false
+  const metaText = `${slide.title || ''} ${slide.kicker || ''} ${header.join(' ')}`
+  if (/(?:评分|打分|能力|对比矩阵|附录|溯源|sources?|ledger|rubric|checklist|harvey|规格|参数|对比表)/i.test(metaText)) return false
+
+  const dataRows = rows.slice(1).filter((r) => Array.isArray(r) && r.length >= 2)
+  if (dataRows.length < 3) return false
+
+  const categories = []
+  const col1Parsed = []
+  const col2Parsed = []
+  const col2Raw = []
+  for (const r of dataRows) {
+    const cat = stripInlineMarkdown(String(r[0] ?? '')).trim()
+    const p1 = parseTableMetricCell(r[1])
+    if (!cat || !p1) return false
+    categories.push(cat)
+    col1Parsed.push(p1)
+    if (header.length === 3) {
+      col2Raw.push(stripInlineMarkdown(String(r[2] ?? '')).trim())
+      col2Parsed.push(parseTableMetricCell(r[2]))
+    }
+  }
+
+  // Require consistent units across col1 rows so mixed-unit summary tables (e.g. "240 min" + "100%") stay tables
+  const col1Units = new Set(col1Parsed.map((p) => p.unit.toLowerCase()))
+  if (col1Units.size > 1) return false
+
+  const headerUnitMatch = /[（(](?:单位[:：]?\s*)?([^)）]{1,10})[)）]/.exec(header[1] || '')
+  const unit = col1Parsed[0].unit || (headerUnitMatch ? headerUnitMatch[1].trim() : '')
+  const values1 = col1Parsed.map((p) => p.num)
+
+  const hasCol2 = header.length === 3 && col2Raw.some(Boolean)
+  const col2AllNumeric = hasCol2 && col2Parsed.every(Boolean)
+  const col2IsDeltaOrShare = hasCol2 && (
+    /(?:同比|环比|增速|增长|变动|占比|份额|yoy|qoq|mom|delta|change|growth|share|%)/i.test(header[2] || '') ||
+    col2Parsed.some((p) => p && (p.isDeltaLike || p.unit === '%'))
+  )
+  const col2Units = col2AllNumeric ? new Set(col2Parsed.map((p) => p.unit.toLowerCase())) : new Set()
+  const canPlotCol2 = col2AllNumeric && !col2IsDeltaOrShare && col2Units.size <= 1 && (col2Parsed[0].unit.toLowerCase() === col1Parsed[0].unit.toLowerCase())
+
+  const isTimeSeries = categories.filter((c) => /(?:^Q[1-4]\b|20\d{2}|^\d{1,2}月$|^第?\d+周$|^FY\d{2,4}|^H[12]\b|^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b)/i.test(c)).length >= Math.ceil(categories.length * 0.6)
+  const maxCatWidth = Math.max(...categories.map((c) => measureWidth(c)))
+  const chartKind = isTimeSeries ? (categories.length >= 6 ? 'line' : 'column') : (maxCatWidth > 7 ? 'bar' : 'column')
+
+  const series = [{ name: header[1] || (langEn ? 'Value' : '数值'), values: values1 }]
+  if (canPlotCol2) {
+    series.push({ name: header[2] || (langEn ? 'Comparison' : '对照'), values: col2Parsed.map((p) => p.num) })
+  }
+
+  let maxIdx = 0
+  let minIdx = 0
+  for (let i = 1; i < values1.length; i += 1) {
+    if (values1[i] > values1[maxIdx]) maxIdx = i
+    if (values1[i] < values1[minIdx]) minIdx = i
+  }
+
+  const items = []
+  if (hasCol2 && !canPlotCol2) {
+    // Preserve every row's col2 delta/share figure in right-side insight cards
+    const leadDelta = col2Raw[maxIdx] ? ` (${header[2] ? `${header[2]} ` : ''}${col2Raw[maxIdx]})` : ''
+    items.push({
+      tag: langEn ? 'Leader' : '领跑项',
+      title: `${categories[maxIdx]} ${col1Parsed[maxIdx].raw}`,
+      text: leadDelta
+        ? (langEn ? `Highest ${header[1] || 'value'}${leadDelta}` : `${header[1] || '核心指标'}居首${leadDelta}`)
+        : (langEn ? `Leads across all ${categories.length} periods/segments` : `在 ${categories.length} 项对比中位列第一`),
+      status: 'positive',
+    })
+    const remainingText = categories
+      .map((cat, idx) => `${cat} ${col1Parsed[idx].raw}${col2Raw[idx] ? ` (${col2Raw[idx]})` : ''}`)
+      .filter((_, idx) => idx !== maxIdx)
+      .slice(0, 4)
+      .join(' · ')
+    items.push({
+      tag: header[2] || (langEn ? 'Breakdown' : '明细对照'),
+      title: langEn ? 'Other Segments & Deltas' : '其余各项实绩与变化',
+      text: remainingText,
+      status: 'accent',
+    })
+    if (isTimeSeries && values1.length >= 2 && Math.abs(values1[0]) > 1e-6) {
+      const pct = Math.round(((values1[values1.length - 1] - values1[0]) / Math.abs(values1[0])) * 100)
+      items.push({
+        tag: langEn ? 'Trajectory' : '周期趋势',
+        title: `${categories[0]} → ${categories[categories.length - 1]} (${pct >= 0 ? '+' : ''}${pct}%)`,
+        text: langEn
+          ? `Moved from ${col1Parsed[0].raw} to ${col1Parsed[col1Parsed.length - 1].raw}`
+          : `由 ${col1Parsed[0].raw} 变化至 ${col1Parsed[col1Parsed.length - 1].raw}`,
+        status: pct >= 0 ? 'positive' : 'warning',
+      })
+    }
+  } else {
+    items.push({
+      tag: langEn ? 'Peak' : '最高项',
+      title: `${categories[maxIdx]} ${col1Parsed[maxIdx].raw}`,
+      text: langEn
+        ? `Leads ${header[1] || 'metric'} vs. ${categories[minIdx]} (${col1Parsed[minIdx].raw})`
+        : `${header[1] || '指标'}位居首位，领先末项 ${categories[minIdx]}（${col1Parsed[minIdx].raw}）`,
+      status: 'positive',
+    })
+    if (isTimeSeries && values1.length >= 2 && Math.abs(values1[0]) > 1e-6) {
+      const pct = Math.round(((values1[values1.length - 1] - values1[0]) / Math.abs(values1[0])) * 100)
+      items.push({
+        tag: langEn ? 'Trend' : '趋势变化',
+        title: `${pct >= 0 ? '+' : ''}${pct}% (${categories[0]} → ${categories[categories.length - 1]})`,
+        text: langEn
+          ? `Progress from ${col1Parsed[0].raw} to ${col1Parsed[col1Parsed.length - 1].raw}`
+          : `从 ${col1Parsed[0].raw} 推进至 ${col1Parsed[col1Parsed.length - 1].raw}`,
+        status: pct >= 0 ? 'positive' : 'warning',
+      })
+    } else {
+      items.push({
+        tag: langEn ? 'Baseline' : '末项对照',
+        title: `${categories[minIdx]} ${col1Parsed[minIdx].raw}`,
+        text: langEn
+          ? `Lowest across ${categories.length} compared items`
+          : `${categories.length} 项对比中的最低基线`,
+        status: 'neutral',
+      })
+    }
+  }
+
+  slide.layout = 'chart-split'
+  slide.variant = 'chart-left'
+  slide.chart = {
+    kind: chartKind,
+    categories,
+    series,
+    ...(unit ? { unit } : {}),
+    ...(series.length === 1 && ['column', 'bar'].includes(chartKind) ? { highlight: 'max', spotlight: true } : {}),
+    showValues: true,
+  }
+  slide.items = items
+  delete slide.rows
+  return true
+}
+
 function autoBoldBullet(raw) {
   const s = String(raw ?? '').trim()
   if (!s || /\*\*[^*]+\*\*/.test(s) || s.length < 18) return s
   const sep = /^([^:：—–，,]{2,18})([:：—–])\s*(.+)$/.exec(s)
   if (sep) return `**${sep[1].trim()}**：${sep[3].trim()}`
-  const comma = /^([^，,。；;]{4,14})[，,]\s*(.{8,})$/.exec(s)
-  if (comma && s.length >= 24) return `**${comma[1].trim()}**：${comma[2].trim()}`
+  // Never split inside thousands separators like "3,850" or after verb+number clauses ("达到 3,850 万元，...")
+  const comma = /^([^，。；;]{4,14})，\s*(.{8,})$/.exec(s)
+    || /^([^，。；;]{4,18}?)(?<!\d),(?!\d)\s+(.{8,})$/.exec(s)
+  if (comma && s.length >= 24) {
+    const lead = comma[1].trim()
+    if (!/\d\s*$/.test(lead) && !/(?:达到|超过|高于|低于|压缩|缩短|降至|升至|增长|提升|减少|同比|环比)/.test(lead)) {
+      return `**${lead}**：${comma[2].trim()}`
+    }
+  }
   return s
 }
 
@@ -332,16 +517,22 @@ export function synthesizeActionTitle(slide, langEn = false) {
   const cleanPrefix = rawTitle
     .replace(/^(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s·:-]*)/, '')
     .trim()
-  const maxTotalWidth = langEn ? 32 : 31
-  const sep = langEn ? ': ' : '：'
+  const isSlideEn = langEn || (!/[\u3400-\u9fff]/.test(rawTitle) && !/[\u3400-\u9fff]/.test(String(slide.takeaway ?? '')))
+  const maxTotalWidth = isSlideEn ? 32 : 31
+  const sep = isSlideEn ? ': ' : '：'
 
   const compose = (claim) => {
     const cleanClaim = String(claim ?? '').replace(/[。.;；]+$/, '').trim()
-    if (!cleanClaim || cleanClaim.toLowerCase() === rawTitle.toLowerCase()) return null
+    if (!cleanClaim || cleanClaim.toLowerCase() === rawTitle.toLowerCase() || BARE_CLOSING_RE.test(cleanClaim)) return null
     const merged = `${cleanPrefix || rawTitle}${sep}${cleanClaim}`
-    if (measureWidth(merged) <= maxTotalWidth) return merged
+    // Avoid awkward double-colon stacking like "解决方案：A：B" when claim already carries a full action structure
+    const hasInnerColon = /[:：]/.test(cleanClaim)
+    if (!hasInnerColon && measureWidth(merged) <= maxTotalWidth) return merged
     const trimmedClaim = truncateCleanly(cleanClaim, maxTotalWidth)
     if (!trimmedClaim) return null
+    if (hasInnerColon && measureWidth(trimmedClaim) >= 8) {
+      return trimmedClaim
+    }
     const mergedShort = `${cleanPrefix || rawTitle}${sep}${truncateCleanly(cleanClaim, Math.max(10, maxTotalWidth - measureWidth(cleanPrefix || rawTitle) - 1.5))}`
     return measureWidth(mergedShort) <= maxTotalWidth && measureWidth(mergedShort) > measureWidth(cleanPrefix || rawTitle) + 4
       ? mergedShort
@@ -962,6 +1153,19 @@ export function selfRepairDeck(manifest, options = {}) {
           changedThisPass = true
           continue
         }
+      } else if (codes.has('wall-of-text') && ['cards', 'kpi', 'process', 'comparison'].includes(lay) && Array.isArray(slide.items) && slide.items.length >= 4 && !bound && allowSplit && nextSlides.length + (working.slides.length - i) < maxSlides) {
+        const mid = Math.ceil(slide.items.length / 2)
+        const partA = slide.items.slice(0, mid)
+        const partB = slide.items.slice(mid)
+        const slideA = { ...slide, items: partA }
+        const slideB = makeSplitSlideCopy(slide, `${slide.title}${langEn ? ' (Cont.)' : '（续）'}`, {
+          items: partB,
+          ...(lay === 'cards' ? { variant: partB.length <= 4 ? 'frameless' : 'pillars' } : {}),
+        })
+        nextSlides.push(slideA, slideB)
+        repairs.push({ pass, slide: i + 1, code: 'wall-of-text', action: 'split-dense-items', detail: `${lay}(${slide.items.length}) → ${partA.length}+${partB.length}` })
+        changedThisPass = true
+        continue
       }
 
       nextSlides.push(slide)
@@ -997,6 +1201,36 @@ export function selfRepairDeck(manifest, options = {}) {
       }
     }
 
+    // 3b. SLOP-08 连续 bullets 单调破冰
+    if (check.issues.some((iss) => iss.code === 'layout-monotony')) {
+      let bRun = 0
+      let toggle = 0
+      for (let i = 0; i < nextSlides.length; i += 1) {
+        const s = nextSlides[i]
+        const lay = s?.layout || 'bullets'
+        if (lay === 'bullets') {
+          bRun += 1
+          if (bRun >= 2 && Array.isArray(s.bullets) && s.bullets.length >= 2 && s.bullets.length <= 6 && !s.image && !s.chart && !slideHasDataBinding(s)) {
+            const nextLay = toggle % 2 === 0 ? 'cards' : 'callout'
+            const nextVar = nextLay === 'cards' ? (s.bullets.length <= 4 ? 'bento-hero' : 'frameless') : 'takeaways'
+            s.layout = nextLay
+            s.variant = nextVar
+            s.items = s.bullets.map((b, bi) => {
+              const { title: t, text: d } = splitLead(b)
+              return { tag: String(bi + 1).padStart(2, '0'), title: t, ...(d ? { text: d } : {}), ...(bi === 0 ? { status: 'accent' } : {}) }
+            })
+            delete s.bullets
+            toggle += 1
+            bRun = 0
+            repairs.push({ pass, slide: i + 1, code: 'layout-monotony', action: 'break-bullet-monotony', detail: `bullets → ${nextLay}[${nextVar}]` })
+            changedThisPass = true
+          }
+        } else if (!['section', 'agenda'].includes(lay)) {
+          bRun = 0
+        }
+      }
+    }
+
     working.slides = nextSlides
     passes = pass
     if (!changedThisPass) break
@@ -1028,6 +1262,7 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
     return { slides: rawSlides || [], report: { applied: false, exemplarId: null, resequenced: false, upgrades: [] } }
   }
   const exemplar = options.exemplar || null
+  const persona = String(options.persona || exemplar?.persona || '').trim().toLowerCase()
   const langEn = String(options.lang || 'zh').toLowerCase() === 'en'
   const allowSplit = options.allowSplit !== false
   const rescueTitles = options.rescueTitles !== false
@@ -1036,7 +1271,7 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
 
   let working = rawSlides.map((s) => (s && typeof s === 'object' ? { ...s } : s))
 
-  // --- PASS 1: 语义自动升格 v2（覆盖 v0.28.0 六大王牌版式 + KPI Spotlight） ---
+  // --- PASS 1: 语义自动升格 v2（覆盖 v0.28.0 六大王牌版式 + KPI Spotlight + 数值表格图谱） ---
   for (let i = 0; i < working.length; i += 1) {
     const slide = working[i]
     if (!slide || typeof slide !== 'object') continue
@@ -1044,16 +1279,22 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
     const title = String(slide.title ?? '').trim()
     const bullets = Array.isArray(slide.bullets) ? slide.bullets.filter((b) => String(b ?? '').trim() !== '') : []
 
-    // 1a. 表格自动升格为 heatmap 或 radar（仅在未显式指定 tableStyle 时触发）
-    if (lay === 'table' && !slide.tableStyle && isNumericTable(slide.rows)) {
-      if (RADAR_TITLE_RE.test(title) && slide.rows.length <= 9 && slide.rows[0].length <= 4) {
-        slide.layout = 'radar'
-        upgrades.push({ slide: i + 1, action: 'promote-layout', from: 'table', to: 'radar', reason: 'multi-axis benchmark numeric table' })
-        continue
+    // 1a. 表格自动升格为 radar / heatmap / chart-split（仅在未显式指定 tableStyle 且无数据绑定时触发）
+    if (lay === 'table' && !slide.tableStyle && !slideHasDataBinding(slide)) {
+      if (isNumericTable(slide.rows)) {
+        if (RADAR_TITLE_RE.test(title) && slide.rows.length <= 9 && slide.rows[0].length <= 4) {
+          slide.layout = 'radar'
+          upgrades.push({ slide: i + 1, action: 'promote-layout', from: 'table', to: 'radar', reason: 'multi-axis benchmark numeric table' })
+          continue
+        }
+        if (HEATMAP_TITLE_RE.test(title) && slide.rows.length >= 4 && slide.rows[0].length >= 4) {
+          slide.layout = 'heatmap'
+          upgrades.push({ slide: i + 1, action: 'promote-layout', from: 'table', to: 'heatmap', reason: 'regional/matrix numeric table' })
+          continue
+        }
       }
-      if (HEATMAP_TITLE_RE.test(title) && slide.rows.length >= 4 && slide.rows[0].length >= 4) {
-        slide.layout = 'heatmap'
-        upgrades.push({ slide: i + 1, action: 'promote-layout', from: 'table', to: 'heatmap', reason: 'regional/matrix numeric table' })
+      if (promoteNumericTableToChartSplit(slide, langEn)) {
+        upgrades.push({ slide: i + 1, action: 'promote-layout', from: 'table', to: `chart-split[${slide.chart.kind}]`, reason: 'compact numeric series table promoted to chart + insight cards' })
         continue
       }
     }
@@ -1381,7 +1622,10 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
     }
 
     if (lay === 'closing' && BARE_CLOSING_RE.test(String(slide.title ?? '').trim())) {
-      const hasDetail = Boolean(String(slide.subtitle ?? '').trim() || (slide.bullets?.length > 0) || (slide.items?.length > 0))
+      const coverTitle = String(finalSlides.find((s) => s?.layout === 'cover')?.title ?? '').trim()
+      const subText = String(slide.subtitle ?? '').trim()
+      const meaningfulSub = Boolean(subText) && subText !== coverTitle && !GENERIC_CLOSING_SUBTITLE_RE.test(subText)
+      const hasDetail = meaningfulSub || (slide.bullets?.length > 0) || (slide.items?.length > 0)
       if (!hasDetail) {
         const seenRoots = new Set()
         const cards = []

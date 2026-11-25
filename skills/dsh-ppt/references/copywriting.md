@@ -26,7 +26,7 @@
 
 ## 二、铁律二：六大用户画像叙事骨架与版式编排
 
-根据用户材料自动套用对应画像的叙事脊梁（亦可调 `ppt_templates` 查看 16 套行业结构蓝图，含 `consulting | gov-report | defense | pitch | keynote | workshop | weekly | project | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook`）：
+根据用户材料自动套用对应画像的叙事脊梁（亦可调 `ppt_templates` 查看 20 套行业结构蓝图，含 `consulting | gov-report | defense | pitch | keynote | workshop | weekly | project | architecture-review | financial-earnings | medical-case | postmortem | marketing-campaign | promotion-review | legal-compliance | creative-lookbook | quarterly-okr | product-prd | vc-daylight | industry-research`）：
 
 ### 1. 商业战略与管理咨询（`consulting` · 推荐主题 `consulting` / `cobalt-cream`）
 - **叙事骨架（SCQA + 金字塔原理）**：封面 → 执行摘要（`cards[exec-summary]`：顶部总论断 + 下方三大 MECE 支柱） → 现状与核心矛盾（`comparison` 或 `chart-split`） → 战略支柱拆解（`matrix[2x2]`、`chart[waterfall]` 利润/增长拆解桥、`cards[pillars]`） → 财务测算与风险控制（`table[consulting]`） → 实施路线图与行动要求（`process[timeline]` + `closing[cta-cards]`）。

@@ -33,7 +33,7 @@ Agent 先提炼真实内容与数据结论，再通过结构化参数生成可�
   "title": "Q4 到馆人次较 Q1 翻倍，社区亲子活动贡献核心跃升",
   "chart": {
     "kind": "column",
-    "subtitle": "单位：人次 · 2026 年第 1–4 周实测",
+    "caption": "单位：人次 · 2026 年第 1–4 周实测",
     "categories": ["第 1 周", "第 2 周", "第 3 周", "第 4 周"],
     "series": [{ "name": "到馆人次", "values": [42, 55, 63, 78] }],
     "unit": "人次",
@@ -101,7 +101,7 @@ Agent 先提炼真实内容与数据结论，再通过结构化参数生成可�
 
 ## 六、渲染核验与双层 AI 视觉/叙事闭环（`ppt_check` & `ppt_render`）
 
-1. **静态与审美门禁（`ppt_check`）**：自动检测字数溢出估算、表格列宽、图片完整性、WCAG 对比度以及 `SLOP-01..10` 审美规范（名词弱标题、版式单一、冗余图例等）。
+1. **静态与审美门禁（`ppt_check`）**：自动检测字数溢出估算、表格列宽、图片完整性、WCAG 对比度以及 `SLOP-01..15` 审美与合规规范（名词弱标题、版式单一、冗余图例、权威信源溯源与视觉密度等）。
 2. **LibreOffice 真实画面渲染（`ppt_render`）**：
    - 调用 `ppt_render { pptxPath: "report.pptx", format: "both" }` 输出逐页 PNG（默认宽 `1440px`）、PDF 与 `render-receipt.json`，不改动源 PPTX，并检查 `missingFonts`（验收要求 `missingFonts: []`）。
    - 将 `receiptPath` 回传给 `ppt_check { deckPath: "report.json", renderReceipt: "..." }` 校验源文件与渲染图哈希一致；任何后续编辑都会使旧收据失效，必须重新渲染。

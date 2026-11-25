@@ -1,12 +1,12 @@
-# dsh-ppt 输入语法与 24 套原生版式参考（结构化 slides · 5 套专业图示 · 扩展 Markdown · 动效）
+# dsh-ppt 输入语法与 41 套原生版式参考（结构化 slides · 专业图示 · 扩展 Markdown · 动效）
 
-`ppt_create` 与 `build-deck.mjs` 支持**结构化 `slides` JSON（大师级精细控制首选）**或**Markdown `content`**（两者二选一，勿混用）。所有版式（含 5 套全新零依赖专业图示）在独立 HTML 与 PPTX 中均编译为 **100% 原生可编辑文本、矢量形状、表格与图表**。
+`ppt_create` 与 `build-deck.mjs` 支持**结构化 `slides` JSON（大师级精细控制首选）**或**Markdown `content`**（两者二选一，勿混用）。所有 **41 套标准原生版式（36 套零依赖核心 + 5 套媒体/图表，另兼容 53 个别名）** 在独立 HTML 与 PPTX 中均编译为 **100% 原生可编辑文本、矢量形状、表格与图表**。
 
 ---
 
-## 一、24 套标准版式（`layout` + `variant`）全景速查
+## 一、41 套标准版式（`layout` + `variant`）全景速查
 
-### A. 19 套零依赖原生版式与专业图示（核心引擎直出）
+### A. 36 套零依赖原生版式与专业图示（核心引擎直出）
 
 | `layout` | 可选 `variant` / `tableStyle` | 核心槽位 | 典型视觉形态与适用场景 |
 | --- | --- | --- | --- |
@@ -35,6 +35,16 @@
 | **`mermaid`** | `flowchart \| sequence`（亦支持顶层别名） | `kicker, title, mermaid`（Mermaid 代码串）, `takeaway` | **原生可编辑 Mermaid 流程图与时序图**：Markdown 中 ```` ```mermaid ```` 自动识别，PPTX 编译为带附着连接点（`stCxn`/`endCxn`）的原生矢量图形与箭头 |
 | **`map`** | `world \| china`（别名 `world-map` / `china-map` / `geo-map`） | `kicker, title, items[]` 或 `rows[][]`（自动匹配全球/中国区域坐标）, `takeaway, source` | **零依赖战略矢量点阵地图**：左侧 Economist 风格全球/中国点阵轮廓 + 枢纽脉冲圈与互联虚线，右侧按数值排行的比例条卡片栏，随 24 主题自动配色 |
 | **`isometric`** | `stack \| pillars`（别名 `iso-stack` / `iso-pillars` / `3d-stack`） | `kicker, title, items[]` 或 `rows[][]`, `takeaway` | **2.5D 等轴测矢量信息图**：`stack` 为 3–5 层立体菱形平台架构堆叠 + 左侧非遮挡层号胶囊 + 右侧引线解析卡；`pillars` 为 3–4 根 3D 立体柱碑对比 + 顶部悬浮指标 |
+| **`mockup`** | `browser \| mobile`（别名 `device` / `browser` / `mobile`） | `kicker, title, url?, filename?, items[], image?` | **高保真设备原型窗**：自带浏览器地址栏 / 手机刘海壳与右侧功能价值解析卡 |
+| **`code`** | `split \| editor \| full`（别名 `snippet`） | `kicker, title, code, language, filename?, items?` | **9 语言语法高亮代码终端**：HTML 与 PPTX 原生等宽 Consolas 多色 Run + 右侧工程要点解析 |
+| **`quadrant`** | —（别名 `bubble-matrix` / `magic-quadrant`） | `kicker, title, xLabel, yLabel, quadrants[4], items[]`（`x, y, size`） | **Gartner 魔力象限 / 战略气泡定位图**：四象限基准虚线 + 气泡大小权重 + 领军象限高亮 |
+| **`radar`** | —（别名 `spider`） | `kicker, title, rows[][]`（首行系列名，后续维度评分） | **多维能力雷达图**：3–8 维矢量多边形网格对比本方案与行业均值/基线 |
+| **`dumbbell`** | —（别名 `slope`） | `kicker, title, items[]`（`title, before, after, unit, status`） | **前后跃迁哑铃图**：直观展示改造前→后量化差值（延迟下降/转化提升）与自动增幅徽标 |
+| **`heatmap`** | —（别名 `heat-matrix`） | `kicker, title, rows[][]`（纯数值矩阵） | **区域/季度达成率热力矩阵**：自动按数值分位映射色阶与 WCAG 文字反色 |
+| **`issue-tree`** | —（别名 `mece` / `logic-tree`） | `kicker, title, items[]`（`tag, title, bullets[]`） | **麦肯锡 MECE 因果议题树**：左侧根节点 + 正交连线展开 3–5 支 MECE 归因分支 |
+| **`treemap`** | —（别名 `rect-map` / `budget-map`） | `kicker, title, items[]`（`tag, title, value, text`） | **Squarified 矩形树图**：按权重比例切分预算/营收结构面积并直标占比 |
+| **`gauge`** | —（别名 `bullet-chart` / `okr-gauge`） | `kicker, title, items[]`（`title, actual, target, max, unit`） | **Stephen Few 子弹仪 / OKR 进度表**：对比实际值、目标刻度线与区间背景带 |
+| **`pricing`** | —（别名 `tiers` / `packages`） | `kicker, title, items[]`（`tag, title, value, unit, status, bullets[]`） | **三档 Good/Better/Best 商业报价矩阵**：自动凸起 `status: 'accent'` 推荐档与 ✓/× 权益对照 |
 | `closing` | `standard \| cta-cards \| inverted` | `kicker, title, subtitle, items / bullets` | 结束与行动号召页（自动隐藏页码；支持下一步行动卡片，拒绝孤立「谢谢」） |
 
 ### B. 5 套媒体与出版级图表版式（`@office-kit/pptx` 增强）
@@ -83,7 +93,7 @@
     "title": "三大产品工程能力构筑下一阶段竞争壁垒",
     "items": [
       { "tag": "引擎 01", "title": "母版智能吸收", "text": "**零手工调色**：秒级提取外部 PPTX 色板与字体并自动完成 WCAG 对比度净化。" },
-      { "tag": "引擎 02", "title": "19 套原生版式", "text": "**100% 可编辑**：所有卡片、矩阵与三线表均为 PowerPoint 原生形状与表格。" },
+      { "tag": "引擎 02", "title": "41 套原生版式", "text": "**100% 可编辑**：所有卡片、矩阵、信息图与三线表均为 PowerPoint 原生形状与表格。" },
       { "tag": "引擎 03", "title": "数字溯源联动", "text": "**一改全改**：CSV 单元格绑定与现场滑块推演同步刷新图表与正文。" }
     ]
   },
@@ -160,7 +170,7 @@
 
 ## 四阶段演进路线图
 ::: process timeline
-- **Q1 筑基**：完成 14 套大师主题与跨平台字体门禁
+- **Q1 筑基**：完成 24 套大师主题与跨平台字体门禁
 - **Q2 扩展**：上线外部 PPTX 风格吸收器与出版级图表
 - **Q3 闭环**：接入 24 页全量视觉检查与叙事教练
 - **Q4 规模化**：覆盖全集团述职、答辩与客户提案

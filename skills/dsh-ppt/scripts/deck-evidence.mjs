@@ -24,7 +24,7 @@ const ORIGIN_SET = new Set(['local-file', 'web-research'])
 const CLAIM_TYPE_SET = new Set(['actual', 'forecast', 'policy', 'benchmark'])
 const INLINE_REF_RE = /\[([Ee]\d{1,3})\]/g
 const VAGUE_SOURCE_RE = /^(?:(?:数据|资料|信息)?来源\s*[:：]\s*|sources?\s*[:：]\s*)?(?:网络(?:整理|搜集|公开资料|资料|收集)?|互联网(?:整理|公开资料|资料)?|公开资料(?:整理)?|网上(?:资料|整理)?|综合整理|内部估算|估算|整理自网络|public\s+internet|online\s+sources?|web\s+search|various\s+sources?|internet|google|baidu|ai\s+generated?)[。.\s]*$/i
-const QUANT_LAYOUTS = new Set(['kpi', 'chart', 'chart-split', 'waterfall', 'marimekko', 'tam', 'dumbbell', 'heatmap', 'treemap', 'gauge'])
+const QUANT_LAYOUTS = new Set(['kpi', 'chart', 'chart-split', 'waterfall', 'marimekko', 'tam', 'dumbbell', 'heatmap', 'treemap', 'gauge', 'table', 'sankey', 'radar', 'quadrant', 'pricing', 'map'])
 const LOCAL_SOURCE_RE = /\.(?:xlsx|xls|csv|tsv|docx|doc|pdf|png|jpe?g|webp|pptx?)(?:\s|$|[）)》」】])/i
 const LOCAL_SOURCE_LABEL_RE = /(?:^|[\s（(])(?:工作表|本地|内部资料|内部报表|原始台账|Sheet\s*["'])/i
 
@@ -815,16 +815,31 @@ export function applyEvidenceLedgerToSlides(slides, ledger, options = {}) {
   return { slides: enriched, citedIds: citedOrder, appendixAdded }
 }
 
-function slideHasNumericClaims(slide) {
+function countNumericClaimTokens(slide) {
   const parts = [
     slide?.title,
     ...(Array.isArray(slide?.bullets) ? slide.bullets : []),
-    ...(Array.isArray(slide?.items) ? slide.items.flatMap((it) => [it?.value, it?.delta, it?.before, it?.after, it?.text]) : []),
+    ...(Array.isArray(slide?.items) ? slide.items.flatMap((it) => [it?.value, it?.delta, it?.before, it?.after, it?.text, it?.body, ...(Array.isArray(it?.bullets) ? it.bullets : [])]) : []),
     ...(Array.isArray(slide?.rows) ? slide.rows.slice(1).flat() : []),
   ]
-  if (slide?.chart?.series?.length) return true
   const text = parts.filter((v) => v !== undefined && v !== null).map((v) => stripInlineMarkdown(String(v))).join(' ')
-  return /\d+(?:\.\d+)?\s*(?:%|％|亿|万|M|B|GWh|GW|TB|ms|倍|x|元|美元|\$|¥)/i.test(text)
+  const matches = text.match(/\d+(?:\.\d+)?\s*(?:%|％|亿|万|M|B|GWh|GW|TB|ms|倍|x|元|美元|\$|¥)/gi)
+  return matches ? matches.length : 0
+}
+
+function slideHasNumericClaims(slide) {
+  if (slide?.chart?.series?.length) return true
+  return countNumericClaimTokens(slide) > 0
+}
+
+function isEvidenceAppendixSlide(slide, byId) {
+  if (!slide || slide.layout !== 'table') return false
+  if (/附录\s*·\s*事实溯源|APPENDIX\s*·\s*SOURCES/i.test(String(slide.kicker || ''))) return true
+  if (Array.isArray(slide.rows) && slide.rows.length > 1 && byId.size > 0) {
+    const dataRows = slide.rows.slice(1)
+    if (dataRows.every((r) => Array.isArray(r) && byId.has(String(r[0] ?? '').trim().toUpperCase()))) return true
+  }
+  return false
 }
 
 function visibleSlideContext(slide) {
@@ -999,7 +1014,10 @@ export function auditEvidenceAndSourcing(manifest) {
     }
 
     // 3. 调研模式（存在 evidence[] 账本时）要求所有高密度量化数据页给出真实出处或绑定 [E#]
-    if (hasLedger && !isFraming && QUANT_LAYOUTS.has(lay) && slideHasNumericClaims(slide)) {
+    const isQuantTarget =
+      (QUANT_LAYOUTS.has(lay) && slideHasNumericClaims(slide)) ||
+      (['cards', 'bullets', 'comparison'].includes(lay) && countNumericClaimTokens(slide) >= 2)
+    if (hasLedger && !isFraming && !isEvidenceAppendixSlide(slide, byId) && isQuantTarget) {
       const hasBoundSource = refs.length > 0 || (rawSource.length > 0 && !VAGUE_SOURCE_RE.test(rawSource))
       const hasDataModel = Boolean(manifest?.dataModel)
       if (!hasBoundSource && !hasDataModel) {

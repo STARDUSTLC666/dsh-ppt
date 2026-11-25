@@ -12,6 +12,7 @@
 
 import { SMART_DEFAULT_THEME, hexToHsl, relativeLuminance } from './deck-themes.mjs'
 import { stripInlineMarkdown } from './deck-layouts.mjs'
+import { WEAK_GENERIC_TITLE_RE, BARE_CLOSING_RE, GENERIC_CLOSING_SUBTITLE_RE } from './deck-upgrader.mjs'
 
 export const PERSONAS = Object.freeze([
   'auto',
@@ -1475,16 +1476,17 @@ export function buildScenarioSlides(scenarioOrId, title, lang = 'zh') {
   ]
 }
 
-export function listScenarioTemplates(lang = 'zh') {
+export function listScenarioTemplates(lang = 'zh', options = {}) {
   const language = lang === 'en' ? 'en' : 'zh'
   const idx = language === 'en' ? 1 : 0
+  const includeSlides = options?.includeSlides !== false
   return SCENARIO_TEMPLATES.map((s) => ({
     id: s.id,
     name: s.name[language],
     theme: s.theme,
     persona: s.persona,
     outline: s.sections.map((sec) => sec.title[idx]),
-    slides: buildScenarioSlides(s, s.name[language], language),
+    ...(includeSlides ? { slides: buildScenarioSlides(s, s.name[language], language) } : {}),
   }))
 }
 
@@ -1547,7 +1549,7 @@ export function inferThemeFromContent(input = {}) {
       const stripeCraftHit = /PRD评审|需求评审|产品需求文档|开发者平台|产品迭代评审|SaaS\s*方案|product\s*review|\bprd\b|developer\s*platform|stripe\s*craft/i.test(corpus)
       const auroraStageHit = /极光发布|算力底座|芯片发布|大模型训练集群|AI基础设施发布|aurora\s*keynote|gpu\s*cluster|ai\s*infra\s*launch/i.test(corpus)
       const stageHit = /路演|融资|商业计划|种子轮|天使轮|[ABC]\s*轮|产品发布|新品发布|发布会|开发者大会|大模型|智能体|算力|keynote|pitch\s*deck|seed\s*round|series\s*[abc]|product\s*launch|developer/i.test(corpus)
-      const b2bHit = /技术方案|架构设计|系统重构|工程效能|云原生|微服务|中台|数字化转型|安全合规|接口规范|运维|选型评审|故障复盘/i.test(corpus)
+      const b2bHit = /技术方案|架构设计|系统重构|工程效能|云原生|微服务|中台|数字化转型|安全合规|接口规范|运维|选型评审|故障复盘|\brfc(?:-\d+)?\b|system\s+architecture|distributed\s+(?:system|inference|tracing)|microservices?|kubernetes|\bk8s\b|api\s+(?:gateway|architecture|design)|inference\s+router|cloud\s+native|devops|\bsre\b|postmortem|engineering\s+(?:design|review|rfc)/i.test(corpus)
       const theme = keynoteLightHit
         ? 'keynote-light'
         : ventureDaylightHit
@@ -1576,11 +1578,11 @@ export function inferThemeFromContent(input = {}) {
     if (bcgEmeraldHit) {
       return { persona: 'consulting', theme: 'bcg-emerald', tableStyle: 'consulting', chartHighlight: 'max' }
     }
-    const financialFtHit = /财报|业绩会|季报业绩|IPO|二级市场|投研|资产配置|宏观经济|金融时报|净值|估值模型|earnings|financial\s*report|investor\s*relations|ebitda|valuation|consensus/i.test(corpus)
+    const financialFtHit = /财报|业绩会|季报业绩|IPO|二级市场|投研|资产配置|宏观经济|金融时报|净值|估值模型|earnings|financial\s+(?:report|results?|performance|review|summary)|gross\s+margin|operating\s+cash\s+flow|quarterly\s+results?|investor\s*relations|ebitda|valuation|consensus|p&l|income\s+statement/i.test(corpus)
     if (financialFtHit) {
       return { persona: 'consulting', theme: 'financial-ft', tableStyle: 'consulting', chartHighlight: 'max' }
     }
-    const techConsultingHit = /技术方案|架构设计|系统重构|工程效能|云原生|微服务|技术选型|API\s*网关|故障复盘/i.test(corpus)
+    const techConsultingHit = /技术方案|架构设计|系统重构|工程效能|云原生|微服务|技术选型|API\s*网关|故障复盘|\brfc(?:-\d+)?\b|system\s+architecture|distributed\s+(?:system|inference|tracing)|microservices?|kubernetes|\bk8s\b|api\s+(?:gateway|architecture|design)|inference\s+router|cloud\s+native|devops|\bsre\b|postmortem|engineering\s+(?:design|review|rfc)/i.test(corpus)
     return {
       persona: 'consulting',
       theme: techConsultingHit ? 'cobalt-cream' : SMART_DEFAULT_THEME,
@@ -1602,17 +1604,22 @@ export function inferThemeFromContent(input = {}) {
     consulting: 0,
   }
 
+  const titleChunk = String(input.title || '').slice(0, 600)
   const addMatches = (persona, regex, weight) => {
-    const matches = corpus.match(regex)
-    if (matches) scores[persona] += Math.min(4, matches.length) * weight
+    const bodyMatches = corpus.match(regex)
+    if (bodyMatches) scores[persona] += Math.min(4, bodyMatches.length) * weight
+    if (titleChunk) {
+      const titleMatches = titleChunk.match(regex)
+      if (titleMatches) scores[persona] += Math.min(2, titleMatches.length) * weight * 1.5
+    }
   }
 
   addMatches('gov-exec', /党建|党政|支部|主题教育|学习贯彻|表彰|庆典|政务|政府|机关|事业单位|国企|央企|述职|专项整治|工作总结|年度工作|督导|巡视|十四五|十五五|实施方案|合规|法务/g, 3.2)
   addMatches('academic', /论文|答辩|综述|实验结果|消融实验|基线模型|定理|假设检验|显著性|参考文献|学位|导师|课题组|自然科学基金|临床|病例|诊疗|病理|患者|thesis|dissertation|ablation|methodology|empirical|et\s+al\.|arxiv|clinical|medical|diagnosis/gi, 3.2)
-  addMatches('education', /课程|教学|培训|讲义|课堂|学习目标|知识点|课后练习|随堂|章节导读|实训|工坊|新员工|onboarding|workshop|syllabus|curriculum|lesson/gi, 3.0)
+  addMatches('education', /课程|教学|培训|讲义|课堂|学习目标|知识点|课后练习|随堂|章节导读|实训|工坊|新员工|employee\s+onboarding|onboarding\s+(?:training|course|workshop|guide|program)|workshop|syllabus|curriculum|lesson/gi, 3.0)
   addMatches('editorial', /品牌故事|人文|策展|可持续发展|碳中和|社会责任|非遗|文化洞察|建筑设计|工业设计|作品集|摄影集|奢侈品|高定|画册|黑金|ESG|sustainability|editorial|monograph|bauhaus|lookbook|luxury|atelier/gi, 2.9)
-  addMatches('tech-pitch', /路演|融资|商业计划|种子轮|天使轮|[ABC]\s*轮|产品发布|新品发布|发布会|开发者大会|大模型|智能体|算力|苹果风|消费电子|创投简报|PRD评审|需求评审|开发者平台|极光发布|keynote|pitch\s*deck|product\s*launch|partner\s*memo|\bprd\b|developer\s*platform/gi, 3.1)
-  addMatches('consulting', /战略|咨询|\bBCG\b|波士顿咨询|双碳战略|绿色转型|低碳转型|经营分析|商业复盘|周报|月报|季报|财报|业绩会|投研|预算|利润率|成本拆解|ROI|同比|环比|项目汇报|矩阵|漏斗|里程碑|OKR\s*复盘|行业研究|宏观洞察|地缘政治|通胀展望|智库报告|并购尽调|量化交易|安全态势|earnings|ebitda|okr\s*review|industry\s*research|macro\s*research/gi, 2.6)
+  addMatches('tech-pitch', /路演|融资|商业计划|种子轮|天使轮|[ABC]\s*轮|产品发布|新品发布|发布会|开发者大会|大模型|智能体|算力|苹果风|消费电子|创投简报|PRD评审|需求评审|开发者平台|极光发布|keynote|pitch\s*deck|product\s*launch|partner\s*memo|\bprd\b|developer\s*platform|\brfc(?:-\d+)?\b|system\s+architecture|distributed\s+(?:system|inference|tracing)|microservices?|kubernetes|\bk8s\b|api\s+(?:gateway|architecture|design)|inference\s+router|cloud\s+native|devops|\bsre\b|postmortem|engineering\s+(?:design|review|rfc)/gi, 3.1)
+  addMatches('consulting', /战略|咨询|\bBCG\b|波士顿咨询|双碳战略|绿色转型|低碳转型|经营分析|商业复盘|周报|月报|季报|财报|业绩会|投研|预算|利润率|成本拆解|ROI|同比|环比|项目汇报|矩阵|漏斗|里程碑|OKR\s*复盘|行业研究|宏观洞察|地缘政治|通胀展望|智库报告|并购尽调|量化交易|安全态势|earnings|ebitda|okr\s*review|industry\s*research|macro\s*research|financial|revenue|margin|gross\s+margin|cash\s+flow|\barr\b|\bnrr\b|quarterly|fy\d{2,4}|strategy|strategic|go-to-market|\bgtm\b|profit|budget|cost\s+efficiency|forecast|performance\s+report|compliance|risk\s+audit|audit\s+report/gi, 2.6)
 
   let bestPersona = 'consulting'
   let bestScore = 0
@@ -1633,7 +1640,8 @@ export function inferThemeFromContent(input = {}) {
 // Markdown 叙事节奏自动升维器（smartLayout）—— 100% 保留原文文字，零删改升维版式
 // ---------------------------------------------------------------------------
 
-const METRIC_BULLET_RE = /(?:^|[^\d])[-+]?\d+(?:,\d{3})*(?:\.\d+)?\s*(?:[%％倍xX万亿千百元美元刀kKmMbB+]|个月|月|天|周|年|小时|分钟|秒|人|家|项|次|分|pp\b|bps\b|ms\b|pts?\b)/i
+const METRIC_BULLET_RE = /(?:^|[^\d])[-+]?[$¥€£]?\d+(?:,\d{3})*(?:\.\d+)?\s*(?:[%％倍xX万亿千百元美元刀kKmMbB+]|个月|月|天|周|小时|分钟|秒|人|家|项|次|分|pp\b|bps\b|ms\b|pts?\b)/i
+const STRUCTURED_KPI_LEAD_RE = /^(?:\*\*[^*]+\*\*|[^:：|｜]{1,18}[:：|｜]|[-+]?[$¥€£]?\d)/
 const STEP_BULLET_RE = /^(?:\*\*)?(?:第[一二三四五六七八1-8][步阶段期周月季年]|阶段\s*[一二三四五六1-6]|步骤\s*[1-8]|Step\s*\d+|Phase\s*\d+|Stage\s*\d+|Q[1-4]\b|20\d{2}\s*[年Q./-]|0?[1-6][\s.、:：-])/i
 const COMPARE_TITLE_RE = /对比|比较|优劣|前后|现状与|问题与(?:对策|整改|方案|措施)|痛点与|挑战与|风险与(?:应对|措施|对策)|vs\.?\b|versus|before\s*(?:&|and)\s*after|pros?\s*(?:&|and)\s*cons?/i
 const MATRIX_TITLE_RE = /矩阵|四象限|象限|优先级评估|SWOT|matrix|quadrant/i
@@ -1745,7 +1753,11 @@ export function promoteMarkdownSlides(slides, options = {}) {
     const plainLengths = bullets.map((b) => stripInlineMarkdown(b).length)
     const maxLen = Math.max(...plainLengths)
     const avgLen = plainLengths.reduce((a, b) => a + b, 0) / n
-    const metricHits = bullets.filter((b) => METRIC_BULLET_RE.test(stripInlineMarkdown(b))).length
+    const metricHits = bullets.filter((b) => {
+      const raw = String(b ?? '').trim()
+      const plain = stripInlineMarkdown(raw)
+      return METRIC_BULLET_RE.test(plain) && STRUCTURED_KPI_LEAD_RE.test(raw)
+    }).length
     const stepHits = bullets.filter((b) => STEP_BULLET_RE.test(String(b).trim())).length
     const titleText = String(slide.title ?? '')
 
@@ -2007,17 +2019,17 @@ export function optimizeVisualRhythm(slides, tasteRecipe = null) {
 }
 
 // ---------------------------------------------------------------------------
-// SLOP-01..12 审美门禁（校准零误报边界，精准拦截平庸排版反模式）
+// SLOP-01..15 审美门禁（校准零误报边界，精准拦截平庸排版反模式）
 // ---------------------------------------------------------------------------
 
-const WEAK_TOPIC_TITLE_RE = /^(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s-]*)?(?:项目背景|研究背景|背景介绍|关于我们|目录页|数据分析|图表展示|相关内容|内容介绍|情况说明|总结汇报|Overview|Introduction|Background|Data\s*Analysis|Chart|Slide\s*\d+)$/i
-const BARE_CLOSING_RE = /^(?:谢谢|感谢(?:聆听|观看|大家|指导)?|Thank\s*You|Thanks|Q\s*&\s*A)[!！.。?？\s]*$/i
 const ACTION_SIGNAL_RE = /\d|提升|增长|下降|降低|突破|领跑|加速|驱动|重构|翻倍|缩减|达成|优于|显著|超预期|关键|核心|原因|差距|拐点|集中|贡献|increase|decrease|grow|drop|drive|outperform|lead|double|cut|key|top|why|how/i
+const META_PROMPT_ECHO_RE = /^(?:请)?(?:帮我|给我)?(?:做|制作|生成|写)(?:一份|一个|份|个).*(?:PPT|幻灯片|演示文稿)|^(?:please\s+)?(?:make|create|build|generate)\s+(?:a|me\s+a)\s+(?:ppt|deck|presentation|slideshow)\b/i
 
 export function auditSlideAesthetics(manifest, theme, textWidthFn) {
   const issues = []
   const slides = Array.isArray(manifest?.slides) ? manifest.slides : []
   if (slides.length === 0) return issues
+  const deckTitle = String(manifest?.title || slides.find((s) => s?.layout === 'cover')?.title || '').trim()
 
   const push = (index, code, message, suggestion, severity = 'warning') => {
     issues.push({
@@ -2055,8 +2067,8 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
     const isFraming = ['cover', 'section', 'closing', 'agenda', 'quote'].includes(layout)
     const title = String(slide.title ?? '').trim()
 
-    // SLOP-01: 空洞目录式标题
-    if (!isFraming && title && WEAK_TOPIC_TITLE_RE.test(title)) {
+    // SLOP-01: 空洞目录式标题（与 deck-upgrader 共享完整中英弱标题词表）
+    if (!isFraming && title && WEAK_GENERIC_TITLE_RE.test(title)) {
       push(
         i,
         'weak-topic-title',
@@ -2065,29 +2077,60 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
       )
     }
 
+    // 极简元指令复读检查（防止直接把「帮我做份 PPT」原文贴进幻灯片正文）
+    if (slides.length <= 4 && ['statement', 'bullets'].includes(layout)) {
+      const samples = [title, String(slide.subtitle ?? '').trim(), ...(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 2) : [])]
+      if (samples.some((s) => META_PROMPT_ECHO_RE.test(stripInlineMarkdown(s).trim()))) {
+        push(
+          i,
+          'meta-prompt-echo',
+          '页面直接复读了用户的元提示指令，缺少实际主题内容与结构化观点',
+          '请围绕用户目标主动拟定完整叙事主题、核心论据与多版式视觉结构（开放命题可标明「示意数据」）',
+        )
+      }
+    }
+
     // SLOP-02: 机械重复页眉 Kicker 统计
     if (!isFraming && /^(?:要点|Key\s*point)(?:\s*\d+)?$/i.test(String(slide.kicker ?? '').trim())) {
       genericKickerCount += 1
       if (firstGenericKickerSlide < 0) firstGenericKickerSlide = i
     }
 
-    // SLOP-03: 整页文字墙（单条过长或单页总字宽过载）
+    // SLOP-03: 整页文字墙（同时覆盖 bullets[] 与 cards/kpi/process/comparison 等 items[]）
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
+    const items = Array.isArray(slide.items) ? slide.items : []
+    let wallTriggered = false
     if (['bullets', 'cards', 'kpi', 'process', 'comparison'].includes(layout) && bullets.length > 0) {
       const widths = bullets.map((b) => textWidthFn(stripInlineMarkdown(b)))
       const totalWidth = widths.reduce((a, b) => a + b, 0)
       if (widths.some((w) => w > 72) || totalWidth > 270) {
-        push(
-          i,
-          'wall-of-text',
-          '单页文字密度过高，存在大段长句堆砌（SLOP-03）',
-          '采用「**加粗核心词**：精炼论据」结构，每条控制在 36 字以内，或拆分为卡片页 / 图表页',
-        )
+        wallTriggered = true
       }
+    }
+    if (!wallTriggered && ['cards', 'kpi', 'process', 'comparison', 'issue-tree', 'pricing', 'matrix', 'swot'].includes(layout) && items.length > 0) {
+      const itemWidths = items.map((it) => {
+        const joined = [it?.title, it?.text, it?.body, ...(Array.isArray(it?.bullets) ? it.bullets : [])]
+          .filter(Boolean)
+          .map((seg) => stripInlineMarkdown(String(seg)))
+          .join(' ')
+        return textWidthFn(joined)
+      })
+      const totalItemWidth = itemWidths.reduce((a, b) => a + b, 0)
+      if (itemWidths.some((w) => w > 68) || totalItemWidth > 270) {
+        wallTriggered = true
+      }
+    }
+    if (wallTriggered) {
+      push(
+        i,
+        'wall-of-text',
+        '单页文字密度过高，存在大段长句堆砌（SLOP-03）',
+        '采用「**加粗核心词**：精炼论据」结构，每条/每卡控制在 36 字以内，或拆分为两页 / 图表页',
+      )
     }
 
     // SLOP-04: 结构化组件数量越界
-    const explicitCount = Array.isArray(slide.items) && slide.items.length > 0 ? slide.items.length : 0
+    const explicitCount = items.length
     if (
       (layout === 'kpi' && explicitCount > 4) ||
       (layout === 'cards' && explicitCount > 6) ||
@@ -2145,10 +2188,12 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
       curConsecutiveBullets = 0
     }
 
-    // SLOP-09: 空洞收尾页
+    // SLOP-09: 空洞收尾页（识别双语致谢与仅复读封面标题/讨论问答的伪副标题）
     if (layout === 'closing') {
+      const subText = String(slide.subtitle ?? '').trim()
+      const meaningfulSub = Boolean(subText) && subText !== deckTitle && !GENERIC_CLOSING_SUBTITLE_RE.test(subText)
       const hasDetail =
-        Boolean(String(slide.subtitle ?? '').trim()) ||
+        meaningfulSub ||
         (Array.isArray(slide.bullets) && slide.bullets.length > 0) ||
         (Array.isArray(slide.items) && slide.items.length > 0) ||
         Boolean(String(slide.takeaway ?? '').trim())
@@ -2185,16 +2230,20 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
     )
   }
 
-  if (slides.length >= 8) {
+  if (slides.length >= 6) {
     const distinctLayouts = new Set(slides.map((s) => s.layout || 'bullets')).size
-    if (maxConsecutiveBullets >= 4 || distinctLayouts < 3) {
+    const lowDiversity = (slides.length >= 8 && distinctLayouts < 4) || distinctLayouts < 3
+    if (maxConsecutiveBullets >= 3 || lowDiversity) {
       push(
-        maxConsecutiveBullets >= 4 ? streakSlideIndex : 1,
+        maxConsecutiveBullets >= 3 ? streakSlideIndex : 1,
         'layout-monotony',
         '长篇演示版式单一（连续 ' + maxConsecutiveBullets + ' 页纯列表，全篇仅 ' + distinctLayouts + ' 种版式）（SLOP-08）',
         '穿插使用 kpi 指标页、cards 卡片页、process 流程页、comparison 对比页或 chart-split 图文解读页打破单调',
       )
     }
+  }
+
+  if (slides.length >= 8) {
     // SLOP-11: 连续等宽方框卡片视觉疲劳检查
     let boxedRun = 0
     let maxBoxedRun = 0
@@ -2246,7 +2295,7 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
     })
   }
 
-  // SLOP-15: 视觉密度与纯字过渡页占比门禁（防止 15 页里塞 5 页空白字页或长稿零视觉图谱）
+  // SLOP-15: 视觉密度与纯字过渡页占比门禁（防止过度灌水字页或长稿缺乏视觉图谱多样性）
   if (slides.length >= 8) {
     const bodySlides = slides.filter((s) => !['cover', 'closing'].includes(s.layout || 'bullets'))
     const fillerSlides = bodySlides.filter((s) => {
@@ -2255,11 +2304,11 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
       if (lay === 'section' && String(s.variant || '').toLowerCase() !== 'agenda') return true
       return false
     })
-    if (bodySlides.length >= 6 && fillerSlides.length > Math.max(3, Math.floor(bodySlides.length * 0.28))) {
+    if (bodySlides.length >= 6 && fillerSlides.length >= 3 && fillerSlides.length / bodySlides.length > 0.25) {
       push(
         0,
         'excessive-filler-slides',
-        '纯文字过渡页（section / statement / quote）共 ' + fillerSlides.length + ' 页，占比偏高，容易稀释整体信息密度（SLOP-15）',
+        '纯文字过渡页（section / statement / quote）共 ' + fillerSlides.length + ' 页（占比 ' + Math.round((fillerSlides.length / bodySlides.length) * 100) + '%），容易稀释整体信息密度（SLOP-15）',
         '建议将纯字过渡页控制在正文页的 20% 以内，把多余章节页合并进首句 kicker 面包屑，或改用 section[agenda] 进度目录',
       )
     }
@@ -2269,15 +2318,40 @@ export function auditSlideAesthetics(manifest, theme, textWidthFn) {
       'treemap', 'gauge', 'pricing', 'issue-tree', 'gantt', 'architecture', 'harvey', 'tam', 'org',
       'mockup', 'code', 'value-chain', 'swot',
     ])
-    const visualCount = bodySlides.filter((s) =>
-      richVisualLayouts.has(s.layout || 'bullets') || Boolean(s.chart || s.image || s.mermaid || s.formula),
-    ).length
+    const visualTypes = new Set()
+    let visualCount = 0
+    for (const s of bodySlides) {
+      const lay = s.layout || 'bullets'
+      if (richVisualLayouts.has(lay)) {
+        visualCount += 1
+        visualTypes.add(lay === 'chart-split' || lay === 'waterfall' ? 'chart' : lay)
+      } else if (s.chart) {
+        visualCount += 1
+        visualTypes.add('chart')
+      } else if (s.image) {
+        visualCount += 1
+        visualTypes.add('image')
+      } else if (s.mermaid) {
+        visualCount += 1
+        visualTypes.add('mermaid')
+      } else if (s.formula) {
+        visualCount += 1
+        visualTypes.add('formula')
+      }
+    }
     if (visualCount === 0) {
       push(
         0,
         'no-visual-anchors',
         '整套长文稿缺少数据图表、KPI、等轴测/流程图或信息图等视觉锚点（SLOP-15）',
         '建议穿插至少 3 类视觉图谱（如 kpi[spotlight]、waterfall/chart-split、isometric、issue-tree、pricing、gantt 或 code/mockup）提升视觉层次',
+      )
+    } else if (slides.length >= 9 && visualTypes.size < 2) {
+      push(
+        0,
+        'low-visual-diversity',
+        '长篇文稿仅包含 ' + visualTypes.size + ' 类视觉图谱（' + [...visualTypes].join('、') + '），整体视觉锚点偏单薄（SLOP-15）',
+        '建议 9 页以上文稿至少搭配 2–3 类不同视觉图谱（如 KPI + 图表 + 架构/流程/表格或信息图）建立叙事张力',
       )
     }
   }
@@ -2328,7 +2402,7 @@ export function buildArtDirectorPrompt({ topic = '', persona = 'auto', lang = 'z
     },
     academic: {
       recommendedTheme: 'academic',
-      altDarkTheme: 'nordic-slate',
+      altDarkTheme: 'linear-dark',
       recommendedTaste: 'nature-academic',
       coverVariant: 'editorial-grid',
       coverPattern: 'grid',
@@ -2345,8 +2419,8 @@ export function buildArtDirectorPrompt({ topic = '', persona = 'auto', lang = 'z
       coverPattern: 'editorial-arcs',
       motionProfile: 'subtle',
       cadence: ['cover[editorial-grid]', 'cards[bento-hero]', 'kpi[spotlight]', 'image-right', 'process[timeline]', 'quote', 'closing[cta-cards]'],
-      zh: '【首席艺术总监指令 · 人文品牌 / 杂志社论模式】选用升级版 `editorial-forest`（纸白卡片 + 松木青铜）或 `editorial-warm` + `taste: "swiss-editorial"` + `cover[editorial-grid]` + `coverPattern: "editorial-arcs"`。善用 `cards[bento-hero]`、`image-right` 与 `kpi[spotlight]` 制造杂志版面张力，控制纯字页 ≤ 20%，卡片配原生 `icon` 拒绝枯燥灰盒。',
-      en: '[Art Director Brief · Editorial / Brand Story] Use upgraded `editorial-forest` (crisp ivory paper + white cards) or `editorial-warm` + `taste: "swiss-editorial"` + `cover[editorial-grid]` + `coverPattern: "editorial-arcs"`. Combine `cards[bento-hero]`, `image-right`, and `kpi[spotlight]`, keep pure-text slides <= 20%, and add vector `icon` accents.',
+      zh: '【首席艺术总监指令 · 人文品牌 / 杂志社论模式】选用升级版 `editorial-forest`（纸白卡片 + 松木青铜）或 `cartesian` + `taste: "swiss-editorial"` + `cover[editorial-grid]` + `coverPattern: "editorial-arcs"`。善用 `cards[bento-hero]`、`image-right` 与 `kpi[spotlight]` 制造杂志版面张力，控制纯字页 ≤ 20%，卡片配原生 `icon` 拒绝枯燥灰盒。',
+      en: '[Art Director Brief · Editorial / Brand Story] Use upgraded `editorial-forest` (crisp ivory paper + white cards) or `cartesian` + `taste: "swiss-editorial"` + `cover[editorial-grid]` + `coverPattern: "editorial-arcs"`. Combine `cards[bento-hero]`, `image-right`, and `kpi[spotlight]`, keep pure-text slides <= 20%, and add vector `icon` accents.',
     },
   }
   const picked = presets[profile] || presets.showcase

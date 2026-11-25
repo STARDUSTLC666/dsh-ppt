@@ -556,9 +556,12 @@ export function renderExemplarPromptGuide(exemplar, lang = 'zh') {
         ? `Distilled from OSS benchmark: ${exemplar.provenance.repo} (${exemplar.provenance.license})\n`
         : `开源标杆溯源：${exemplar.provenance.repo}（${exemplar.provenance.license}）\n`)
     : ''
+  const tasteParam = exemplar.styleRecipe
+    ? (en ? ' (custom palette & taste DNA auto-inherited from exemplar; do not pass taste unless overriding)' : '（自定义色板与品味 DNA 已由 exemplar 自动继承，无需额外传 taste）')
+    : (exemplar.taste ? `, taste: "${exemplar.taste}"` : '')
   const header = en
-    ? `Exemplar: ${exemplar.enName || exemplar.name} (id: "${exemplar.id}")\n${provLine}Recommended params: exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${exemplar.taste ? `, taste: "${exemplar.taste}"` : ''}\nRule: Fill each slot below with a crisp Action Title (complete claim with fact/number) and structured items/rows. Do NOT collapse slots back into long bullet walls.\n`
-    : `标杆范本：${exemplar.name}（id: "${exemplar.id}"）\n${provLine}推荐参数：exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${exemplar.taste ? `, taste: "${exemplar.taste}"` : ''}\n填空铁律：严格按以下逐页槽位输出结构化 slides，每页标题必须为带结论/数字的 Action Title，严禁退化为连续 bullets 长文本墙。\n`
+    ? `Exemplar: ${exemplar.enName || exemplar.name} (id: "${exemplar.id}")\n${provLine}Recommended params: exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${tasteParam}\nRule: Fill each slot below with a crisp Action Title (complete claim with fact/number) and structured items/rows. Do NOT collapse slots back into long bullet walls.\n`
+    : `标杆范本：${exemplar.name}（id: "${exemplar.id}"）\n${provLine}推荐参数：exemplar: "${exemplar.id}", theme: "${exemplar.theme}"${tasteParam}\n填空铁律：严格按以下逐页槽位输出结构化 slides，每页标题必须为带结论/数字的 Action Title，严禁退化为连续 bullets 长文本墙。\n`
 
   const rows = (exemplar.slots || []).map((s) => {
     const lay = s.variant ? `${s.layout}[${s.variant}]` : s.layout

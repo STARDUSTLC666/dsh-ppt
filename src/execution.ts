@@ -47,7 +47,10 @@ function resolveImportTarget(rawProjectId: string, cwd: string): { targetProject
       for (const line of readFileSync(catalogPath, 'utf8').split('\n')) {
         try {
           const row = JSON.parse(line)
-          if (row?.id === value && typeof row?.path === 'string' && row.path.endsWith('.json')) matchedPath = row.path
+          if (row?.id === value) {
+            if (row.removed === true) matchedPath = undefined
+            else if (typeof row.path === 'string' && row.path.endsWith('.json')) matchedPath = row.path
+          }
         } catch { /* ignore malformed trailing line */ }
       }
       if (matchedPath) return { targetProjectDir: dirname(matchedPath), targetDeckPath: matchedPath }
@@ -104,11 +107,15 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         ...(args.taste ? { taste: args.taste } : {}),
         ...(typeof args.exemplar === 'string' && args.exemplar.trim() !== '' ? { exemplar: args.exemplar.trim() } : {}),
         ...(typeof args.alignOrder === 'boolean' ? { alignOrder: args.alignOrder } : {}),
-        ...(typeof args.autoUpgrade === 'boolean' ? { autoUpgrade: args.autoUpgrade } : {}),
+        ...(typeof args.autoUpgrade === 'boolean'
+          ? { autoUpgrade: args.autoUpgrade }
+          : (args.taste && !args.theme && !args.dataModel ? { autoUpgrade: true } : {})),
         persona: typeof args.persona === 'string' && args.persona.trim() !== '' ? args.persona.trim() : undefined,
         referencePptx: typeof args.referencePptx === 'string' && args.referencePptx.trim() !== '' ? args.referencePptx.trim() : undefined,
         cloneStructure: typeof args.cloneStructure === 'boolean' ? args.cloneStructure : undefined,
-        smartLayout: typeof args.smartLayout === 'boolean' ? args.smartLayout : undefined,
+        smartLayout: typeof args.smartLayout === 'boolean'
+          ? args.smartLayout
+          : (args.taste && !args.theme && hasContent && !hasSlides ? true : undefined),
         lang: typeof args.lang === 'string' && args.lang.trim() !== '' ? args.lang.trim() : (config.defaultLang || undefined),
         motion: args.motion,
         ...(typeof args.motionProfile === 'string' && args.motionProfile.trim() ? { motionProfile: args.motionProfile.trim() } : {}),
@@ -316,6 +323,7 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
         ...(args.photoRoles && typeof args.photoRoles === 'object' && !Array.isArray(args.photoRoles) ? { photoRoles: args.photoRoles } : {}),
         ...(args.bindDataModel === true ? { bindDataModel: true } : {}),
         ...(Array.isArray(args.evidence) ? { evidence: args.evidence } : {}),
+        ...(args.evidenceAppendix === true ? { evidenceAppendix: true } : {}),
         ...(Array.isArray(args.exports) && args.exports.length > 0 ? { exports: args.exports } : {}),
         ...(typeof args.motionProfile === 'string' && args.motionProfile.trim() ? { motionProfile: args.motionProfile.trim() } : {}),
         cwd,

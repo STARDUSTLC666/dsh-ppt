@@ -32,7 +32,7 @@
 - **推荐节奏**：`cover` → `callout[formula]`（原生 `<m:oMath>`）→ `chart-split` → `table[booktabs]`（无竖线三线表）→ `comparison` → `booktabs` 混合证据附录（`evidenceAppendix: true`）→ `closing`。
 
 ### 4. 人文品牌 / 杂志社论（`editorial`）
-- **默认推荐**：升级版 `theme: "editorial-forest"`（纸白卡片 + 松木青铜）或 `"editorial-warm"` + `taste: "swiss-editorial"` + `motionProfile: "subtle"`。
+- **默认推荐**：升级版 `theme: "editorial-forest"`（纸白卡片 + 松木青铜）或 `"cartesian"` + `taste: "swiss-editorial"` + `motionProfile: "subtle"`。
 - **封面铁律**：`variant: "editorial-grid"` + `coverPattern: "editorial-arcs"`（或高分辨率全出血照片 `split-bleed`）。
 - **视觉底线**：善用 `cards[bento-hero]`、`kpi[spotlight]`、`image-right`、`process[timeline]` 营造杂志留白张力，拒绝满屏同款矩形纯文字框与超过 2 页的空白章节页。
 

@@ -144,7 +144,7 @@ export class PptVisual {
           const size=range&&Number.isInteger(a.value)&&a.value>=range[0]&&a.value<=range[1]&&(a.type!=='chart-label-size'||!!slide.chart)&&slide.visual?.[field[a.type]]!==a.value
           const count=a.type==='split-bullets'?(['bullets','image-left','image-right'].includes(slide.layout)?slide.bullets?.length:0):a.type==='split-table'&&slide.layout==='table'?slide.rows?.length-1:0
           const split=count&&Number.isInteger(a.value)&&a.value>=1&&a.value<count
-          const simple=a.value===undefined&&(a.type==='chart-horizontal'&&slide.chart?.kind==='column'||a.type==='image-contain'&&slide.image?.fit==='cover'||a.type==='swap-image-side'&&['image-left','image-right'].includes(slide.layout))
+          const simple=a.value===undefined&&(a.type==='chart-horizontal'&&slide.chart?.kind==='column'||a.type==='image-contain'&&Boolean(slide.image&&slide.image.fit!=='contain')||a.type==='swap-image-side'&&['image-left','image-right'].includes(slide.layout))
           const density=a.type==='density-mode'&&typeof a.value==='string'&&['compact','balanced','airy'].includes(a.value)&&slide.visual?.density!==a.value
           const tableStyle=a.type==='table-style'&&slide.layout==='table'&&typeof a.value==='string'&&['consulting','booktabs','minimal'].includes(a.value)&&(slide.tableStyle??slide.visual?.tableStyle)!==a.value
           const highlight=a.type==='chart-highlight'&&!!slide.chart&&typeof a.value==='string'&&['max','last','none'].includes(a.value)&&(slide.chart.highlight??'none')!==a.value
@@ -180,7 +180,7 @@ export class PptVisual {
         const slides=batch.map(id=>{const page=state.manifest.slides.findIndex((s:any)=>s.id===id);return {...state.manifest.slides[page],page:page+1}})
         const images=slides.map(s=>({data:bytes(rendered.pngPaths![s.page-1],4*1024*1024),name:'slide-'+s.page+'.png'}))
         if(run.usedCalls>=run.maxCalls)throw new Error('已达到视觉模型调用上限 / Visual model call limit reached')
-        const input=JSON.stringify({language:run.language,round:run.rounds.length-1,slides:slides.map(s=>Object.fromEntries(['id','page','layout','variant','chrome','tableStyle','title','subtitle','kicker','takeaway','bullets','items','columns','rows','chart','visual'].filter(k=>s[k]!==undefined).map(k=>[k,s[k]]))),
+        const input=JSON.stringify({language:run.language,round:run.rounds.length-1,slides:slides.map(s=>Object.fromEntries(['id','page','layout','variant','chrome','tableStyle','title','subtitle','kicker','takeaway','source','formula','mermaid','code','bullets','items','columns','rows','chart','visual'].filter(k=>s[k]!==undefined).map(k=>[k,s[k]]))),
           previousFindings:run.rounds.at(-2)?.findings.filter(f=>batch.includes(f.slideId))||[],imageFits:slides.map(s=>({slideId:s.id,fit:s.image?.fit}))})
         if(input.length>60000)throw new Error('所选页面内容过长 / Selected slide content is too long')
         run.usedCalls++;this.locked(run.id,()=>this.write(run))
