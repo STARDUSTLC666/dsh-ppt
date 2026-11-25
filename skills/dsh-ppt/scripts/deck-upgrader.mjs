@@ -11,6 +11,7 @@
  */
 
 import { stripInlineMarkdown } from './deck-layouts.mjs'
+import { containsLatexMath, splitMathSegments, parseLatexMath, has2dMathConstruct } from './deck-math.mjs'
 import { relativeLuminance, hexToHsl } from './deck-themes.mjs'
 
 export const WEAK_GENERIC_TITLE_RE = /^(?:(?:第?[一二三四五六七八九十\d]+[章节部分页、.\s·:-]*)|(?:(?:Part|Section|Step|Q[1-4]|FY\d{2,4}|20\d{2})\s*[\d.:·\-—\s]*))*(?:项目背景|研究背景|背景介绍|背景|现状分析|业务现状|现状与问题|存在问题|问题分析|痛点分析|数据分析|图表展示|相关内容|内容介绍|情况说明|数据概览|核心数据|财务情况|财务数据|经营数据|业绩情况|成本分析|市场分析|行业分析|用户分析|核心指标|关键指标|性能提升|效能提升|技术实现|技术方案|架构实现|架构设计|核心功能|核心功能介绍|产品介绍|产品规划|团队介绍|组织架构|商业模式|未来规划|下一步计划|项目排期|核心优势|核心亮点|主要成果|工作进展|工作汇报|工作总结|年度总结|季度总结|阶段总结|业务复盘|项目复盘|项目进展|阶段进展|竞品分析|竞品对比|解决方案|实施方案|改进措施|行动计划|工作计划|风险分析|总结|总结汇报|概述|目录页|关于我们|Overview|Introduction|Background|Current\s+State|Status|Progress|Metrics|Key\s+Metrics|Financials|Financial\s+Summary|Performance|Implementation|Architecture|Architecture\s+Overview|Product|Product\s+Overview|Team|Organization|Data\s+Analysis|Analysis|Market\s+Analysis|Comparison|Solution|Plan|Roadmap|Next\s+Steps|Risks?(?:\s*(?:&|and)\s*Mitigations?)?|Summary|Executive\s+Summary|Project\s+Update|Results|Highlights|Chart|Slide\s*\d+)$/i
@@ -42,11 +43,77 @@ function slideHasDataBinding(slide) {
   }
 }
 
+function findMathSpans(str) {
+  const spans = []
+  const s = String(str ?? '')
+  if (!s.includes('$') && !s.includes('\\[') && !s.includes('\\(')) return spans
+  const segs = splitMathSegments(s)
+  let cursor = 0
+  for (const seg of segs) {
+    if (seg.type === 'text') {
+      cursor += seg.value.length
+      continue
+    }
+    const open = s.startsWith('$$', cursor)
+      ? '$$'
+      : s.startsWith('\\[', cursor)
+        ? '\\['
+        : s.startsWith('\\(', cursor)
+          ? '\\('
+          : (s[cursor] === '$' ? '$' : '')
+    if (!open) continue
+    let endIdx = -1
+    if (open === '$') {
+      let p = cursor + 1
+      while (p < s.length) {
+        if (s[p] === '\\') { p += 2; continue }
+        if (s[p] === '$') { endIdx = p + 1; break }
+        p += 1
+      }
+    } else {
+      const close = open === '$$' ? '$$' : open === '\\[' ? '\\]' : '\\)'
+      const idx = s.indexOf(close, cursor + open.length)
+      if (idx >= 0) endIdx = idx + close.length
+    }
+    if (endIdx > cursor) {
+      spans.push([cursor, endIdx])
+      cursor = endIdx
+    }
+  }
+  return spans
+}
+
+function findContainingSpan(pos, spans) {
+  for (const span of spans) {
+    if (pos > span[0] && pos < span[1]) return span
+  }
+  return null
+}
+
+function bulletHas2dMath(text) {
+  const raw = String(text ?? '')
+  if (!containsLatexMath(raw)) return false
+  return splitMathSegments(raw).some((seg) => seg.type === 'math' && has2dMathConstruct(parseLatexMath(seg.latex)))
+}
+
+function slideHas2dMathBullets(slide) {
+  return Array.isArray(slide?.bullets) && slide.bullets.some(bulletHas2dMath)
+}
+
 function truncateCleanly(text, maxWidth) {
   const s = String(text ?? '').trim()
   if (!s || measureWidth(s) <= maxWidth) return s
-  // 优先在自然句读/标点/空格边界截断，绝不在数字或英文单词中间腰斩
+  const mathSpans = findMathSpans(s)
+  // 优先在自然句读/标点/空格边界截断，绝不在数字、英文单词或 $...$ 公式中间腰斩
   const chars = [...s]
+  const offsets = []
+  let byteOff = 0
+  for (const ch of chars) {
+    offsets.push(byteOff)
+    byteOff += ch.length
+  }
+  offsets.push(byteOff)
+
   let acc = 0
   let cutIdx = chars.length
   let lastBoundary = -1
@@ -57,16 +124,20 @@ function truncateCleanly(text, maxWidth) {
       cutIdx = i
       break
     }
-    if (/[，,。；;、：:\s)）]/.test(ch) && acc >= maxWidth * 0.48) {
+    if (/[，,。；;、：:\s)）]/.test(ch) && acc >= maxWidth * 0.48 && !findContainingSpan(offsets[i], mathSpans)) {
       lastBoundary = i
     }
   }
   let chosen = lastBoundary > 0 ? chars.slice(0, lastBoundary).join('') : chars.slice(0, cutIdx).join('')
+  const chosenSpan = findContainingSpan(chosen.length, mathSpans)
+  if (chosenSpan) {
+    chosen = s.slice(0, chosenSpan[0])
+  }
   // 避免末尾停在半截数字/英文单词或数字与其单位/范围之间（如 "从 3.5 | 天压缩至 4 小时"）
-  if (lastBoundary <= 0 && cutIdx < chars.length && /[A-Za-z0-9.]/.test(chars[cutIdx - 1] || '') && /[A-Za-z0-9.]/.test(chars[cutIdx] || '')) {
+  if (lastBoundary <= 0 && !chosenSpan && cutIdx < chars.length && /[A-Za-z0-9.]/.test(chars[cutIdx - 1] || '') && /[A-Za-z0-9.]/.test(chars[cutIdx] || '')) {
     chosen = chosen.replace(/[A-Za-z0-9.]+$/, '')
   }
-  const remainderHead = chars.slice(cutIdx, cutIdx + 12).join('').trim()
+  const remainderHead = s.slice(chosen.length, chosen.length + 12).trim()
   if (/\d\s*$/.test(chosen) && /^(?:[%％天小时分钟秒万亿元倍]|ms\b|days?\b|hours?\b|hrs?\b|mins?\b|wks?\b|weeks?\b|months?\b|pts?\b|至|到|→|->|to\b)/i.test(remainderHead)) {
     chosen = chosen.replace(/(?:(?:从|由|至|到|达|约|为|较|超过|低于|突破|from|to|at|by|of|vs\.?)\s*)?[-+]?[$¥€£]?\d+(?:[.,]\d+)?\s*$/i, '')
   }
@@ -78,22 +149,56 @@ function truncateCleanly(text, maxWidth) {
   return chosen.replace(/[，,。；;、：:\-—\s]+$/, '').trim()
 }
 
-function splitLead(raw) {
-  const clean = stripInlineMarkdown(String(raw ?? '')).trim()
-  const boldMatch = /^\*\*([^*]{1,28})\*\*\s*[:：—–-]?\s*(.*)$/.exec(String(raw ?? '').trim())
-  if (boldMatch) return { title: boldMatch[1].trim(), text: stripInlineMarkdown(boldMatch[2]).trim() }
-  const sep = /^([^:：—–]{2,26})[:：—–]\s*(.+)$/.exec(clean)
-  if (sep) return { title: sep[1].trim(), text: sep[2].trim() }
-  if (clean.length <= 26) return { title: clean, text: '' }
-  // Split cleanly without duplicating the leading 26 characters in both title and text
-  const clause = /^([^，,；;。]{6,24})[，,；;]\s*(.+)$/.exec(clean)
-  if (clause) return { title: clause[1].trim(), text: clause[2].trim() }
-  const chars = [...clean]
-  let cut = Math.min(22, chars.length)
-  while (cut > 10 && cut < chars.length && /[A-Za-z0-9.]/.test(chars[cut - 1]) && /[A-Za-z0-9.]/.test(chars[cut])) {
-    cut -= 1
+export function splitLead(raw) {
+  const rawTrim = String(raw ?? '').trim()
+  const clean = stripInlineMarkdown(rawTrim).trim()
+  const rawSpans = findMathSpans(rawTrim)
+  const boldMatch = /^\*\*([^*]{1,28})\*\*\s*[:：—–-]?\s*(.*)$/.exec(rawTrim)
+  if (boldMatch) {
+    const splitPos = rawTrim.length - boldMatch[2].length
+    if (!findContainingSpan(splitPos, rawSpans) && !findContainingSpan(boldMatch[1].length + 2, rawSpans)) {
+      return { title: boldMatch[1].trim(), text: stripInlineMarkdown(boldMatch[2]).trim() }
+    }
   }
-  return { title: chars.slice(0, cut).join('').trim(), text: chars.slice(cut).join('').trim() }
+  const spans = findMathSpans(clean)
+  const sep = /^([^:：—–]{2,26})[:：—–]\s*(.+)$/.exec(clean)
+  if (sep && !findContainingSpan(sep[1].length, spans)) {
+    return { title: sep[1].trim(), text: sep[2].trim() }
+  }
+  if (clean.length <= 26) return { title: clean, text: '' }
+  // Split cleanly without duplicating the leading 26 characters or shattering $...$ math spans
+  const clause = /^([^，,；;。]{6,24})[，,；;]\s*(.+)$/.exec(clean)
+  if (clause && !findContainingSpan(clause[1].length, spans)) {
+    return { title: clause[1].trim(), text: clause[2].trim() }
+  }
+  const chars = [...clean]
+  const cutCp = Math.min(22, chars.length)
+  let cutOff = chars.slice(0, cutCp).join('').length
+  const hitSpan = findContainingSpan(cutOff, spans)
+  if (hitSpan) {
+    const before = clean.slice(0, hitSpan[0]).trim()
+    const after = clean.slice(hitSpan[1]).trim()
+    if (before.length >= 6) {
+      return { title: before, text: clean.slice(hitSpan[0]).trim() }
+    }
+    if (after.length > 0) {
+      return { title: clean.slice(0, hitSpan[1]).trim(), text: after }
+    }
+    return { title: clean, text: '' }
+  }
+  let safeCp = cutCp
+  while (safeCp > 10 && safeCp < chars.length && /[A-Za-z0-9.]/.test(chars[safeCp - 1]) && /[A-Za-z0-9.]/.test(chars[safeCp])) {
+    safeCp -= 1
+  }
+  const safeOff = chars.slice(0, safeCp).join('').length
+  if (findContainingSpan(safeOff, spans)) {
+    const span = findContainingSpan(safeOff, spans)
+    const before = clean.slice(0, span[0]).trim()
+    return before.length >= 6
+      ? { title: before, text: clean.slice(span[0]).trim() }
+      : { title: clean, text: '' }
+  }
+  return { title: clean.slice(0, safeOff).trim(), text: clean.slice(safeOff).trim() }
 }
 
 function parseDumbbellBullet(raw) {
@@ -384,12 +489,13 @@ function promoteNumericTableToChartSplit(slide, langEn) {
 function autoBoldBullet(raw) {
   const s = String(raw ?? '').trim()
   if (!s || /\*\*[^*]+\*\*/.test(s) || s.length < 18) return s
+  const mathSpans = findMathSpans(s)
   const sep = /^([^:：—–，,]{2,18})([:：—–])\s*(.+)$/.exec(s)
-  if (sep) return `**${sep[1].trim()}**：${sep[3].trim()}`
-  // Never split inside thousands separators like "3,850" or after verb+number clauses ("达到 3,850 万元，...")
+  if (sep && !findContainingSpan(sep[1].length, mathSpans)) return `**${sep[1].trim()}**：${sep[3].trim()}`
+  // Never split inside thousands separators like "3,850", math spans, or verb+number clauses ("达到 3,850 万元，...")
   const comma = /^([^，。；;]{4,14})，\s*(.{8,})$/.exec(s)
     || /^([^，。；;]{4,18}?)(?<!\d),(?!\d)\s+(.{8,})$/.exec(s)
-  if (comma && s.length >= 24) {
+  if (comma && s.length >= 24 && !findContainingSpan(comma[1].length, mathSpans)) {
     const lead = comma[1].trim()
     if (!/\d\s*$/.test(lead) && !/(?:达到|超过|高于|低于|压缩|缩短|降至|升至|增长|提升|减少|同比|环比)/.test(lead)) {
       return `**${lead}**：${comma[2].trim()}`
@@ -1131,15 +1237,24 @@ export function selfRepairDeck(manifest, options = {}) {
 
       // 2k. SLOP-03 文字墙 / dense-bullets / body-overflow 自动无损拆页并结构化
       if ((codes.has('wall-of-text') || codes.has('dense-bullets') || codes.has('body-overflow')) && Array.isArray(slide.bullets) && slide.bullets.length > 0 && !slide.image && !slide.chart && !bound) {
-        const expanded = splitLongBulletStrings(slide.bullets)
+        const has2dMath = slideHas2dMathBullets(slide)
+        const expanded = has2dMath ? slide.bullets : splitLongBulletStrings(slide.bullets)
         if (expanded.length >= 2 && allowSplit && nextSlides.length + (working.slides.length - i) < maxSlides) {
           const mid = Math.ceil(expanded.length / 2)
+          const partA = expanded.slice(0, mid)
+          const partB = expanded.slice(mid)
+          if (has2dMath) {
+            const slideA = { ...slide, bullets: partA }
+            const slideB = makeSplitSlideCopy(slide, `${slide.title}${langEn ? ' (Cont.)' : '（续）'}`, { layout: 'bullets', bullets: partB })
+            nextSlides.push(slideA, slideB)
+            repairs.push({ pass, slide: i + 1, code: codes.has('wall-of-text') ? 'wall-of-text' : 'body-overflow', action: 'split-math-bullets', detail: `bullets(${slide.bullets.length}) → bullets(${partA.length})+bullets(${partB.length})` })
+            changedThisPass = true
+            continue
+          }
           const toItems = (arr, offset) => arr.map((b, bi) => {
             const { title: t, text: d } = splitLead(b)
             return { tag: String(offset + bi + 1).padStart(2, '0'), title: t, ...(d ? { text: d } : {}), ...(bi === 0 ? { status: 'accent' } : {}) }
           })
-          const partA = expanded.slice(0, mid)
-          const partB = expanded.slice(mid)
           const slideA = { ...slide, layout: 'cards', variant: partA.length <= 4 ? 'bento-hero' : 'frameless', items: toItems(partA, 0) }
           delete slideA.bullets
           const slideB = makeSplitSlideCopy(slide, `${slide.title}${langEn ? ' (Cont.)' : '（续）'}`, {
@@ -1201,29 +1316,53 @@ export function selfRepairDeck(manifest, options = {}) {
       }
     }
 
-    // 3b. SLOP-08 连续 bullets 单调破冰
+    // 3b. SLOP-08 连续 bullets 单调破冰（跳过含行内 2D LaTeX 公式的 bullets 页以保留原生 <m:oMath>）
     if (check.issues.some((iss) => iss.code === 'layout-monotony')) {
       let bRun = 0
       let toggle = 0
+      const canConvertBullets = (s) =>
+        Boolean(s) &&
+        (s.layout || 'bullets') === 'bullets' &&
+        Array.isArray(s.bullets) &&
+        s.bullets.length >= 2 &&
+        s.bullets.length <= 6 &&
+        !s.image &&
+        !s.chart &&
+        !slideHasDataBinding(s) &&
+        !slideHas2dMathBullets(s)
+      const convertBulletSlide = (s, idx) => {
+        const nextLay = toggle % 2 === 0 ? 'cards' : 'callout'
+        const nextVar = nextLay === 'cards' ? (s.bullets.length <= 4 ? 'bento-hero' : 'frameless') : 'takeaways'
+        s.layout = nextLay
+        s.variant = nextVar
+        s.items = s.bullets.map((b, bi) => {
+          const { title: t, text: d } = splitLead(b)
+          return { tag: String(bi + 1).padStart(2, '0'), title: t, ...(d ? { text: d } : {}), ...(bi === 0 ? { status: 'accent' } : {}) }
+        })
+        delete s.bullets
+        toggle += 1
+        repairs.push({ pass, slide: idx + 1, code: 'layout-monotony', action: 'break-bullet-monotony', detail: `bullets → ${nextLay}[${nextVar}]` })
+        changedThisPass = true
+      }
       for (let i = 0; i < nextSlides.length; i += 1) {
         const s = nextSlides[i]
         const lay = s?.layout || 'bullets'
         if (lay === 'bullets') {
           bRun += 1
-          if (bRun >= 2 && Array.isArray(s.bullets) && s.bullets.length >= 2 && s.bullets.length <= 6 && !s.image && !s.chart && !slideHasDataBinding(s)) {
-            const nextLay = toggle % 2 === 0 ? 'cards' : 'callout'
-            const nextVar = nextLay === 'cards' ? (s.bullets.length <= 4 ? 'bento-hero' : 'frameless') : 'takeaways'
-            s.layout = nextLay
-            s.variant = nextVar
-            s.items = s.bullets.map((b, bi) => {
-              const { title: t, text: d } = splitLead(b)
-              return { tag: String(bi + 1).padStart(2, '0'), title: t, ...(d ? { text: d } : {}), ...(bi === 0 ? { status: 'accent' } : {}) }
-            })
-            delete s.bullets
-            toggle += 1
-            bRun = 0
-            repairs.push({ pass, slide: i + 1, code: 'layout-monotony', action: 'break-bullet-monotony', detail: `bullets → ${nextLay}[${nextVar}]` })
-            changedThisPass = true
+          if (bRun >= 2) {
+            if (canConvertBullets(s)) {
+              convertBulletSlide(s, i)
+              bRun = 0
+            } else if (bRun >= 3) {
+              // If current slide holds 2D math, break the streak on an earlier non-math bullets slide
+              for (let j = i - 1; j >= Math.max(0, i - bRun + 1); j -= 1) {
+                if (canConvertBullets(nextSlides[j])) {
+                  convertBulletSlide(nextSlides[j], j)
+                  bRun = i - j
+                  break
+                }
+              }
+            }
           }
         } else if (!['section', 'agenda'].includes(lay)) {
           bRun = 0
@@ -1299,7 +1438,7 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
       }
     }
 
-    const isPlainBullets = lay === 'bullets' && !slide.image && !slide.images && !slide.chart && !slide.mermaid && !slide.formula && !(Array.isArray(slide.items) && slide.items.length > 0)
+    const isPlainBullets = lay === 'bullets' && !slide.image && !slide.images && !slide.chart && !slide.mermaid && !slide.formula && !slideHas2dMathBullets(slide) && !(Array.isArray(slide.items) && slide.items.length > 0)
     if (!isPlainBullets) continue
 
     // 1b. 嵌入式代码块自动晋升为 code[split]
@@ -1478,7 +1617,7 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
         slide.variant = kpiSlot.variant
       } else if (slide.layout === 'table' && tableSlot && !slide.tableStyle && tableSlot.tableStyle) {
         slide.tableStyle = tableSlot.tableStyle
-      } else if (slide.layout === 'bullets' && Array.isArray(slide.bullets) && slide.bullets.length >= 2 && slide.bullets.length <= 6 && !slide.image && !slide.chart) {
+      } else if (slide.layout === 'bullets' && Array.isArray(slide.bullets) && slide.bullets.length >= 2 && slide.bullets.length <= 6 && !slide.image && !slide.chart && !slideHas2dMathBullets(slide)) {
         const aligned = exemplar.slots[Math.min(idx, exemplar.slots.length - 1)]
         let pick = aligned && ['cards', 'comparison', 'process', 'callout'].includes(aligned.layout)
           ? { layout: aligned.layout, variant: aligned.variant || '' }
@@ -1539,6 +1678,15 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
         const mid = Math.ceil(slide.bullets.length / 2)
         const partA = slide.bullets.slice(0, mid)
         const partB = slide.bullets.slice(mid)
+        if (slideHas2dMathBullets(slide)) {
+          finalSlides.push(
+            { ...slide, bullets: partA },
+            { ...slide, title: `${slide.title}${langEn ? ' (Cont.)' : '（续）'}`, bullets: partB },
+          )
+          upgrades.push({ slide: i + 1, action: 'auto-split', from: `bullets(${slide.bullets.length})`, to: 'bullets+bullets', reason: 'split >6 bullet math slide while preserving native 2D OMML' })
+          bulletStreak = 0
+          continue
+        }
         const slideA = {
           ...slide,
           layout: 'cards',
@@ -1567,7 +1715,7 @@ export function upgradeWeakDeck(rawSlides, options = {}) {
       }
 
       bulletStreak += 1
-      if (bulletStreak >= 2 && slide.bullets.length >= 2 && slide.bullets.length <= 6) {
+      if (bulletStreak >= 2 && slide.bullets.length >= 2 && slide.bullets.length <= 6 && !slideHas2dMathBullets(slide)) {
         const nextLayout = diversityToggle % 2 === 0 ? 'cards' : 'callout'
         const nextVariant = nextLayout === 'cards'
           ? (slide.bullets.length <= 4 ? 'bento-hero' : 'frameless')

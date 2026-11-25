@@ -12,7 +12,7 @@ import { THEME_IDS } from '../skills/dsh-ppt/scripts/deck-themes.mjs'
 import { TASTE_RECIPE_IDS } from '../skills/dsh-ppt/scripts/deck-taste.mjs'
 import { CORE_LAYOUTS, LAYOUT_ALIASES, measureEmWidth } from '../skills/dsh-ppt/scripts/deck-layouts.mjs'
 import { CURATED_EXEMPLARS, renderExemplarPromptGuide } from '../skills/dsh-ppt/scripts/deck-exemplars.mjs'
-import { upgradeWeakDeck, selfRepairDeck, synthesizeActionTitle } from '../skills/dsh-ppt/scripts/deck-upgrader.mjs'
+import { upgradeWeakDeck, selfRepairDeck, synthesizeActionTitle, splitLead } from '../skills/dsh-ppt/scripts/deck-upgrader.mjs'
 import {
   inferThemeFromContent,
   promoteMarkdownSlides,
@@ -519,4 +519,53 @@ test('P2-9: visual.ts 在 image.fit 省略（默认 cover）时允许 image-cont
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('Cross-module Math Guard: splitLead 不撕裂 $...$ 公式，且含行内 2D LaTeX 的 bullets 页在升维与自修中保持 bullets', () => {
+  const mathBullet = 'Expected batch cost $\\frac{1}{N}\\sum_{i=1}^{N} L_i(\\theta)$ stays below 18ms across all 64 tensor shards'
+  const lead = splitLead(mathBullet)
+  assert.equal(lead.title, 'Expected batch cost', 'splitLead 必须在 $...$ 边界前切分，绝不把 $ 留在 title 中')
+  assert.ok(lead.text.startsWith('$\\frac{1}{N}\\sum_{i=1}^{N} L_i(\\theta)$'), '完整 $...$ 公式必须无损保留在 text 中')
+
+  const leadingMath = '$\\frac{1}{N}\\sum_{i=1}^{N} L_i(\\theta)$ stays below 18ms across all 64 tensor shards'
+  const lead2 = splitLead(leadingMath)
+  assert.equal(lead2.title, '$\\frac{1}{N}\\sum_{i=1}^{N} L_i(\\theta)$', '以公式开头的要点应在闭合 $ 后切分')
+  assert.equal(lead2.text, 'stays below 18ms across all 64 tensor shards')
+
+  const colonMath = 'Mapping $f: X \\to Y$ preserves convexity across all 12 training epochs'
+  const lead3 = splitLead(colonMath)
+  assert.ok(!lead3.title.includes('$') || (lead3.title.match(/\$/g) || []).length % 2 === 0, '公式内部的冒号绝不能撕裂 $...$')
+
+  // 1. upgradeWeakDeck (break-bullet-streak & exemplar-slot) must keep 2D-math bullets slide as bullets while breaking non-math streaks
+  const { slides } = upgradeWeakDeck([
+    { layout: 'cover', title: 'Stripe Craft Math Test' },
+    { layout: 'bullets', title: 'First plain bullet slide achieves 3,850 ops/s', bullets: ['Throughput reaches 3,850 req/s on single GPU', 'Tail p99 stays under 18ms'] },
+    { layout: 'bullets', title: 'Batch loss bound stays below 18ms', bullets: [mathBullet, 'Gradient norm stays bounded under $\\sqrt{\\sigma^2 + \\epsilon}$'] },
+    { layout: 'bullets', title: 'Third plain bullet slide breaks streak', bullets: ['**Canary**: 5% traffic shift first', '**Rollback**: Automatic revert in 30s'] },
+    { layout: 'closing', title: 'Next Steps', subtitle: 'Confirm Q3 benchmark owners' },
+  ], { lang: 'en', exemplar: CURATED_EXEMPLARS['stripe-product-launch'] })
+
+  assert.equal(slides[2].layout, 'bullets', '含 2D 行内 LaTeX 的 bullets 页在 exemplar-slot 与 break-bullet-streak 中必须保持 layout=bullets')
+  assert.ok(slides[2].bullets[0].includes('$\\frac{1}{N}\\sum_{i=1}^{N} L_i(\\theta)$'), '公式原文必须完整保留')
+  assert.notEqual(slides[3].layout, 'bullets', '后续非公式 bullets 页仍应正常升格以打破单调')
+
+  // 2. selfRepairDeck break-bullet-monotony must keep 2D-math bullets slide as bullets and break monotony on non-math neighbors
+  const repaired = selfRepairDeck({
+    title: 'Math Monotony Test',
+    slides: [
+      { id: 'm1', layout: 'cover', title: 'Math Monotony Test' },
+      { id: 'm2', layout: 'bullets', title: 'First plain bullet slide achieves 38%', bullets: ['**Alpha**: Gain 38%', '**Beta**: Cut 24%'] },
+      { id: 'm3', layout: 'bullets', title: 'Expected batch loss stays bounded', bullets: [mathBullet, 'Secondary bound stays under 12ms'] },
+      { id: 'm4', layout: 'bullets', title: 'Third plain bullet slide scales 4x', bullets: ['**Gamma**: 4x scale', '**Delta**: Zero downtime'] },
+      { id: 'm5', layout: 'kpi', title: 'Core Metrics', items: [{ title: 'P99', value: '18ms' }, { title: 'Gain', value: '+38%' }] },
+      { id: 'm6', layout: 'closing', title: 'Next Steps', subtitle: 'Confirm rollout plan' },
+    ],
+  }, {
+    checkFn: (m) => {
+      const iss = auditSlideAesthetics(m, { palette: { bg: '#FFFFFF' } }, measureEmWidth)
+      return { issues: iss, warningCount: iss.length }
+    },
+  })
+  assert.equal(repaired.manifest.slides[2].layout, 'bullets', 'selfRepairDeck 必须保留含 2D LaTeX 的 bullets 版式')
+  assert.equal(repaired.report.finalWarnings, 0, '非公式相邻页被打破后 SLOP-08 应归零')
 })
