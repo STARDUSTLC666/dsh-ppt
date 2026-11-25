@@ -10,7 +10,7 @@
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
-import { relativeLuminance, resolveChromeStyle, mixHex } from './deck-themes.mjs'
+import { relativeLuminance, resolveChromeStyle, mixHex, bestContrastInk } from './deck-themes.mjs'
 import {
   normalizeIconName,
   resolveSemanticIcon,
@@ -22,6 +22,7 @@ import {
   POSTER_COVER_VARIANTS,
   renderPosterCoverPptx,
   renderPosterCoverHtml,
+  renderCoverPatternSvgHtml,
   renderEditorialCoverArtPptx,
   resolveSectionAgendaChapters,
   renderSectionAgendaPptx,
@@ -79,6 +80,8 @@ import {
   renderStandardHeaderPptx,
   renderSlideHeaderHtml,
   renderSlideChromeHtml,
+  resolveDoDontPolarity,
+  renderBullet2dMathRowPptx,
   CHROME_CSS,
 } from './deck-chrome.mjs'
 import {
@@ -1714,22 +1717,24 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
           ]
       const colW = 5.86
       const gap = 0.37
+      const isDoDont = variant === 'do-dont'
+      const doFirst = isDoDont && resolveDoDontPolarity(twoSides)
       ;[0, 1].forEach((side) => {
         const it = twoSides[side] ?? { title: side === 0 ? '对照项' : '推荐项', text: '' }
         const x = 0.62 + side * (colW + gap)
-        const isDoDont = variant === 'do-dont'
-        const headerFill = isDoDont
-          ? (side === 0 ? tk.negative : tk.positive)
-          : (side === 0 ? tk.surface2 : tk.accentPrimary)
-        const headerFg = isDoDont || side === 1 ? '#FFFFFF' : tk.inkPrimary
+        const isPosSide = isDoDont ? (doFirst ? side === 0 : side === 1) : side === 1
+        const headerFill = isDoDont ? (isPosSide ? tk.positive : tk.negative) : (side === 0 ? tk.surface2 : tk.accentPrimary)
+        const headerFg = isDoDont || side === 1 ? bestContrastInk(headerFill) : tk.inkPrimary
         const box = { x, y: bodyTopY, w: colW, h: bodyH }
+        const rawHeadTitle = it.title || (side === 0 ? '现状 / 对照' : '方案 / 目标')
+        const glyphPrefix = isDoDont && !/^[✓✔✗✘]\s*/.test(stripInlineMarkdown(rawHeadTitle).trim()) ? (isPosSide ? '✓  ' : '✗  ') : ''
 
         shapes.push(ooxmlShape(nextId(), 'Comparison Card ' + (side + 1), box, {
           preset: cardPreset,
           adj: roundRectAdj(box.w, box.h, chromeCfg.cardRadiusPx),
           fill: side === 1 && !isDoDont ? tk.accentSoft : tk.surface1,
-          stroke: chromeCfg.cardBorderless ? '' : (side === 1 ? tk.accentPrimary : tk.hairline),
-          strokePt: side === 1 ? 1.0 : 0.75,
+          stroke: chromeCfg.cardBorderless ? '' : (isPosSide ? (isDoDont ? tk.positive : tk.accentPrimary) : tk.hairline),
+          strokePt: isPosSide ? 1.0 : 0.75,
         }))
         shapes.push(ooxmlShape(nextId(), 'Comparison Header ' + (side + 1), { x, y: bodyTopY, w: colW, h: 0.62 }, {
           preset: 'rect',
@@ -1737,7 +1742,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
           anchor: 'ctr',
           marginsIn: { l: 0.24, r: 0.24, t: 0.04, b: 0.04 },
           paragraphs: [
-            ooxmlRichParagraph((isDoDont ? (side === 0 ? '✗  ' : '✓  ') : '') + (it.title || (side === 0 ? '现状 / 对照' : '方案 / 目标')), {
+            ooxmlRichParagraph(glyphPrefix + rawHeadTitle, {
               sizePt: 16.5,
               color: headerFg,
               bold: true,
@@ -2011,49 +2016,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
             align: 'ctr',
           }))
         } else {
-          const labelStr = [prefixText, suffixText].filter(Boolean).join(' ')
-          const labelW = Math.min(4.6, Math.max(2.4, measureEmWidth(labelStr, true) * 0.24 + 0.45))
-          shapes.push(ooxmlShape(nextId(), 'Bullet Math Label ' + (bIdx + 1), { x: 0.94, y: ry, w: labelW, h: rowH }, {
-            txBox: true,
-            anchor: 'ctr',
-            marginsIn: { l: 0.04, r: 0.06, t: 0.02, b: 0.02 },
-            paragraphs: [
-              ooxmlRichParagraph(prefixText || labelStr, {
-                sizePt: 14.5,
-                color: tk.inkPrimary,
-                secondaryColor: tk.inkSecondary,
-                bullet: true,
-                bulletChar: '▪',
-                bulletColor: tk.accentPrimary,
-                lang: langAttr,
-                font: theme.fonts.body,
-                autoLeadBold: true,
-              }),
-            ],
-          }))
-          const eqBox = { x: 0.94 + labelW + 0.12, y: ry, w: Math.max(2.4, 12.42 - (0.94 + labelW + 0.12)), h: rowH }
-          if (theme.dark) {
-            const astPreview = parseLatexMath(mathSeg.latex)
-            const fittedEq = fitFormulaBoxIn(astPreview, eqBox, {
-              padXIn: 0.24,
-              padYIn: 0.10,
-              emIn: Math.min(0.27, rowH * 0.34),
-              align: 'l',
-            })
-            const plateW = Math.min(eqBox.w, Math.max(2.2, fittedEq.w + 0.48))
-            shapes.push(ooxmlShape(nextId(), 'Bullet Math Plate ' + (bIdx + 1), { x: eqBox.x, y: ry + 0.04, w: plateW, h: rowH - 0.08 }, {
-              preset: cardPreset,
-              adj: roundRectAdj(plateW, rowH - 0.08, Math.min(8, chromeCfg.cardRadiusPx)),
-              fill: '#F8FAFC',
-              stroke: tk.accentPrimary,
-              strokePt: 0.75,
-            }))
-          }
-          shapes.push(ooxmlMathShape(nextId(), 'Bullet Equation ' + (bIdx + 1), eqBox, mathSeg.latex, {
-            emIn: Math.min(0.27, rowH * 0.34),
-            sizePt: 18,
-            align: 'l',
-          }))
+          shapes.push(...renderBullet2dMathRowPptx({ prefixText, suffixText, mathLatex: mathSeg.latex, ry, rowH, bIdx, tk, theme, langAttr, chromeCfg, cardPreset, nextId }))
         }
       } else {
         shapes.push(ooxmlShape(nextId(), 'Bullet Row ' + (bIdx + 1), { x: 0.94, y: ry, w: 11.46, h: rowH }, {
@@ -2211,8 +2174,12 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     if (posterHtml !== null) {
       inner = posterHtml
     } else {
+      const defPatKey = String(slide?.coverPattern || '').trim().toLowerCase()
+      const defPatClass = ['grid', 'dots', 'rings'].includes(defPatKey) ? ' cover-pat-' + defPatKey : ''
+      const defPatSvg = renderCoverPatternSvgHtml(slide?.coverPattern, theme)
       inner =
-        '<div class="cover-shell' + (inverted ? ' is-inverted' : '') + '">' +
+        '<div class="cover-shell' + (inverted ? ' is-inverted' : '') + defPatClass + '">' +
+        defPatSvg +
         '<div class="cover-lockup">' +
         (kicker !== '' ? '<div class="kicker">' + escapeHtml(kicker) + '</div>' : '') +
         '<h1>' + renderInlineHtml(title) + '</h1>' +
@@ -2291,12 +2258,16 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     const rows = Array.isArray(slide.rows) ? slide.rows : []
     const head = rows[0] ?? []
     const body = rows.slice(1)
+    const colCount = Math.max(head.length, ...body.map((r) => r.length), 0)
+    const numericCols = Array.from({ length: colCount }, (_, cIdx) =>
+      body.length > 0 && body.some((r) => String(r[cIdx] ?? '').trim() !== '') && body.every((r) => !String(r[cIdx] ?? '').trim() || isNumericCell(r[cIdx])),
+    )
     inner =
       renderHeader(ui.tableKicker) +
       '<table class="deck-table"><thead><tr>' +
-      head.map((cell) => '<th' + (isNumericCell(cell) ? ' class="num"' : '') + '>' + renderInlineHtml(cell) + '</th>').join('') +
+      head.map((cell, cIdx) => '<th' + (numericCols[cIdx] || isNumericCell(cell) ? ' class="num"' : '') + '>' + renderInlineHtml(cell) + '</th>').join('') +
       '</tr></thead><tbody>' +
-      body.map((row) => '<tr>' + row.map((cell) => '<td' + (isNumericCell(cell) ? ' class="num"' : '') + '>' + renderInlineHtml(cell) + '</td>').join('') + '</tr>').join('') +
+      body.map((row) => '<tr>' + row.map((cell, cIdx) => '<td' + (numericCols[cIdx] || isNumericCell(cell) ? ' class="num"' : '') + '>' + renderInlineHtml(cell) + '</td>').join('') + '</tr>').join('') +
       '</tbody></table>'
   } else if (layout === 'agenda') {
     const items = resolveEffectiveItems(slide)
@@ -2443,14 +2414,17 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
             { title: items[Math.ceil(items.length / 2)]?.title || '方案 B', bullets: items.slice(Math.ceil(items.length / 2)).map((x) => [x.title, x.text].filter(Boolean).join('：')) },
           ]
       const isDoDont = variant === 'do-dont'
+      const doFirst = isDoDont && resolveDoDontPolarity(twoSides)
       inner =
         renderHeader() +
         '<div class="layout-grid cols-2 comparison-grid">' +
         [0, 1].map((side) => {
           const it = twoSides[side] ?? { title: side === 0 ? '对照项' : '推荐项' }
-          const headPrefix = isDoDont ? (side === 0 ? '✗ ' : '✓ ') : ''
+          const isPosSide = isDoDont ? (doFirst ? side === 0 : side === 1) : side === 1
+          const headPrefix = isDoDont && !/^[✓✔✗✘]\s*/.test(stripInlineMarkdown(it.title || '').trim()) ? (isPosSide ? '✓ ' : '✗ ') : ''
+          const polarityCls = isDoDont ? (isPosSide ? ' is-dodont is-pos' : ' is-dodont is-neg') : ''
           return (
-            '<div class="surface-card comp-card side-' + side + (isDoDont ? ' is-dodont' : '') + '" data-item-index="' + side + '">' +
+            '<div class="surface-card comp-card side-' + side + polarityCls + '" data-item-index="' + side + '">' +
             '<div class="comp-head" data-item-field="title">' + escapeHtml(headPrefix) + renderInlineHtml(it.title || '') + '</div>' +
             '<div class="comp-body">' +
             (it.text ? '<p class="card-body" data-item-field="text">' + renderInlineHtml(it.text, { autoLeadBold: true }) + '</p>' : '') +
@@ -2462,20 +2436,30 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     }
   } else if (layout === 'matrix') {
     const items = resolveEffectiveItems(slide).slice(0, 4)
+    const xLbl = stripInlineMarkdown(slide.xLabel || '')
+    const yLbl = stripInlineMarkdown(slide.yLabel || '')
     inner =
       renderHeader() +
+      '<div class="matrix-stage' + (yLbl ? ' has-y-axis' : '') + '">' +
+      (yLbl ? '<div class="matrix-axis-label is-y">' + escapeHtml(yLbl) + '</div>' : '') +
+      '<div class="matrix-core">' +
       '<div class="layout-grid cols-2 matrix-grid">' +
+      '<div class="matrix-cross-h" aria-hidden="true"></div>' +
+      '<div class="matrix-cross-v" aria-hidden="true"></div>' +
       Array.from({ length: 4 }, (_, idx) => {
         const it = items[idx] ?? { title: '象限 ' + (idx + 1) }
         return (
-          '<div class="surface-card matrix-cell' + (idx === 1 ? ' is-target' : '') + '" data-item-index="' + idx + '">' +
+          '<div class="surface-card matrix-cell' + (idx === 1 || it.status === 'accent' ? ' is-target' : '') + '" data-item-index="' + idx + '">' +
           (it.tag ? '<div class="kicker matrix-tag">' + escapeHtml(it.tag) + '</div>' : '') +
           '<div class="card-title" data-item-field="title">' + renderInlineHtml(it.title || '') + '</div>' +
           (it.text ? '<div class="card-body" data-item-field="text">' + renderInlineHtml(it.text) + '</div>' : '') +
+          (it.bullets?.length ? '<ul class="card-bullets">' + it.bullets.map((b) => '<li>' + renderInlineHtml(b, { autoLeadBold: true }) + '</li>').join('') + '</ul>' : '') +
           '</div>'
         )
       }).join('') +
-      '</div>'
+      '</div>' +
+      (xLbl ? '<div class="matrix-axis-label is-x">' + escapeHtml(xLbl) + '</div>' : '') +
+      '</div></div>'
   } else if (layout === 'callout') {
     const heroText = slide.text || subtitle || ''
     const explicitFormula = typeof slide.formula === 'string' ? slide.formula.trim() : ''
@@ -2532,7 +2516,8 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
 }
 
 const BASE_LAYOUT_CSS = `
-.slide-inner{display:flex;flex-direction:column;justify-content:center;width:100%;max-width:1560px;margin:0 auto;height:100%;gap:clamp(16px,2vw,28px)}
+.slide-inner{display:flex;flex-direction:column;justify-content:center;width:100%;max-width:1560px;margin:0 auto;height:100%;gap:clamp(12px,1.5vw,22px)}
+.slide--cards .cards-grid.cols-3 .surface-card,.slide--cards .cards-grid.cols-4 .surface-card{padding:clamp(12px,1.35vw,18px);gap:6px}
 .slide--cover .slide-inner,.slide--closing .slide-inner,.slide--section .slide-inner,.slide--statement .slide-inner,.slide--quote .slide-inner{justify-content:center}
 .slide-header{border-bottom:1px solid var(--hairline);padding-bottom:clamp(12px,1.5vw,20px)}
 .slide-header .kicker{margin-bottom:8px}
@@ -2622,14 +2607,13 @@ const BASE_LAYOUT_CSS = `
 .comp-card{padding:0;overflow:hidden}
 .comp-head{padding:14px 22px;font-family:var(--font-heading);font-weight:700;font-size:clamp(16px,1.55vw,22px);background:var(--surface2);color:var(--fg)}
 .comp-card.side-1 .comp-head{background:var(--accent);color:var(--ink-on-accent)}
-.comp-card.is-dodont.side-0 .comp-head{background:var(--negative);color:#FFF}
-.comp-card.is-dodont.side-1 .comp-head{background:var(--positive);color:#FFF}
+.comp-card.is-dodont.is-neg .comp-head,.comp-card.is-dodont.side-0:not(.is-pos) .comp-head{background:var(--negative);color:var(--ink-on-negative,#FFF)}
+.comp-card.is-dodont.is-pos .comp-head,.comp-card.is-dodont.side-1:not(.is-neg) .comp-head{background:var(--positive);color:var(--ink-on-positive,#FFF)}
 .comp-body{padding:18px 22px;display:flex;flex-direction:column;gap:8px}
 .issue-action-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px}
 .issue-box{border-left:4px solid var(--negative)}
 .action-box{background:var(--accent-soft);border-color:var(--accent)}
 .bridge-arrow{color:var(--accent-text);font-weight:800;font-size:22px}
-.matrix-grid{position:relative}
 .callout-hero{background:var(--surface2);border:1px solid var(--accent);border-left:5px solid var(--accent);border-radius:var(--radius);padding:20px 26px;font-size:clamp(17px,1.8vw,26px);font-weight:700;line-height:1.4}
 .callout-hero.is-formula{font-family:Georgia,"Times New Roman",serif;text-align:center}
 .callout-row{flex-direction:row;align-items:center;padding:12px 18px}

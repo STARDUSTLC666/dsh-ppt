@@ -5,7 +5,7 @@
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
-import { relativeLuminance, mixHex, ensureContrast } from './deck-themes.mjs'
+import { relativeLuminance, mixHex, ensureContrast, bestContrastInk } from './deck-themes.mjs'
 import {
   CANVAS_IN,
   roundRectAdj,
@@ -1783,7 +1783,7 @@ export function renderDiagramSlideBodyPptx(slide, ctx) {
           anchor: 'ctr',
           marginsIn: { l: 0.08, r: 0.08, t: 0.01, b: 0.01 },
           paragraphs: barText
-            ? [ooxmlRichParagraph(barText, { sizePt: 11, color: '#FFFFFF', bold: true, lang: langAttr, align: 'ctr', font: theme.fonts.body })]
+            ? [ooxmlRichParagraph(barText, { sizePt: 11, color: bestContrastInk(barFill), bold: true, lang: langAttr, align: 'ctr', font: theme.fonts.body })]
             : [],
         }))
         if (hasEndMilestone) {
@@ -2724,6 +2724,13 @@ export function renderDiagramSlideBodyHtml(slide, ctx) {
 }
 
 export const DIAGRAMS_CSS = `
+.process-grid.is-timeline{position:relative;padding-top:28px;align-items:stretch}
+.process-grid.is-timeline::before{content:"";position:absolute;left:4%;right:4%;top:11px;height:3px;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.process-grid.is-timeline .process-step{position:relative;overflow:visible}
+.process-grid.is-timeline .process-step::before{content:"";position:absolute;left:50%;top:-23px;width:13px;height:13px;border-radius:50%;background:var(--accent);border:3px solid var(--bg);box-shadow:0 0 0 2px var(--accent);transform:translateX(-50%);z-index:2}
+.process-grid.is-steps{gap:24px;align-items:stretch}
+.process-grid.is-steps .process-step{position:relative;overflow:visible}
+.process-grid.is-steps .process-step:not(:last-child)::after{content:"→";position:absolute;right:-20px;top:50%;transform:translateY(-50%);font-family:var(--font-heading);font-weight:800;font-size:18px;color:var(--accent-text);pointer-events:none;z-index:2}
 .process-grid.is-layers,.process-grid.is-funnel{grid-template-columns:1fr;gap:10px}
 .process-grid.is-layers .process-step,.process-grid.is-funnel .process-step{flex-direction:row;align-items:center;padding:12px 20px}
 .process-grid.is-funnel .process-step{width:calc(100% - var(--step, 0) * 8%);margin:0 auto;justify-content:center}
@@ -2735,7 +2742,7 @@ export const DIAGRAMS_CSS = `
 .chevron-col{display:flex;flex-direction:column;gap:12px;min-width:0;list-style:none}
 .chevron-arrow{min-height:68px;padding:12px 24px 12px 28px;background:var(--surface2);color:var(--fg);font-family:var(--font-heading);font-weight:700;font-size:clamp(13px,1.2vw,16px);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:3px;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%,16px 50%)}
 .chevron-arrow.is-first{padding-left:16px;background:var(--accent);color:var(--ink-on-accent);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%)}
-.chevron-arrow.is-last{background:var(--accent2);color:#FFF}
+.chevron-arrow.is-last{background:var(--accent2);color:var(--ink-on-accent2,#FFF)}
 .chevron-tag{font-size:11px;opacity:.86;letter-spacing:.06em}
 .chevron-detail{flex:1;padding:14px 16px;gap:8px}
 .chevron-metric{margin-left:0;align-self:flex-start}
@@ -2751,8 +2758,8 @@ export const DIAGRAMS_CSS = `
 .gantt-tag{background:var(--accent-soft);color:var(--accent-text);font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap}
 .gantt-task{font-weight:600;font-size:14px}
 .gantt-track{position:relative;height:38px;background:var(--surface1);border:1px solid var(--hairline);overflow:visible;background-image:repeating-linear-gradient(to right,transparent,transparent calc(100% / var(--gantt-cols,4) - 1px),var(--hairline) calc(100% / var(--gantt-cols,4) - 1px),var(--hairline) calc(100% / var(--gantt-cols,4)))}
-.gantt-bar{position:absolute;top:6px;bottom:6px;border-radius:calc(var(--radius) * .6);background:var(--accent);color:#FFF;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 8px}
-.gantt-bar.tone-positive{background:var(--positive)}.gantt-bar.tone-warning{background:var(--warning)}.gantt-bar.tone-negative{background:var(--negative)}
+.gantt-bar{position:absolute;top:6px;bottom:6px;border-radius:calc(var(--radius) * .6);background:var(--accent);color:var(--ink-on-accent,#FFF);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 8px}
+.gantt-bar.tone-positive{background:var(--positive);color:var(--ink-on-positive,#FFF)}.gantt-bar.tone-warning{background:var(--warning);color:var(--ink-on-warning,#0F172A)}.gantt-bar.tone-negative{background:var(--negative);color:var(--ink-on-negative,#FFF)}
 .gantt-milestone{position:absolute;top:50%;width:16px;height:16px;background:var(--accent);border:2px solid var(--bg);transform:translate(-50%,-50%) rotate(45deg)}
 .gantt-bar-milestone{position:absolute;right:-7px;top:50%;width:14px;height:14px;background:var(--accent);border:2px solid var(--bg);transform:translateY(-50%) rotate(45deg);z-index:2}
 .gantt-m-label{position:absolute;top:50%;transform:translate(14px,-50%);font-size:12px;font-weight:700;color:var(--accent-text);white-space:nowrap}
@@ -2777,7 +2784,7 @@ export const DIAGRAMS_CSS = `
 .harvey-25{background:conic-gradient(var(--fg) 0 90deg,transparent 90deg 360deg)}.harvey-table td.is-ours .harvey-25{background:conic-gradient(var(--accent) 0 90deg,transparent 90deg 360deg)}
 .harvey-0{background:transparent;border-color:var(--muted)}
 .harvey-check{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-weight:800;font-size:13px}
-.harvey-check.is-yes{background:var(--positive);color:#FFF}
+.harvey-check.is-yes{background:var(--positive);color:var(--ink-on-positive,#FFF)}
 .harvey-check.is-no{background:var(--surface2);color:var(--muted)}
 .tam-board{display:grid;grid-template-columns:minmax(280px,43%) 1fr;gap:28px;align-items:center;width:100%}
 .tam-circles{position:relative;width:100%;aspect-ratio:1/1;max-height:380px;margin:0 auto}
@@ -2834,18 +2841,19 @@ export const DIAGRAMS_CSS = `
 .porter-beam strong{font-family:var(--font-heading);font-size:14px;white-space:nowrap}
 .porter-beam span{font-size:13px;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis}
 .porter-margin-wedge{background:var(--accent);color:var(--ink-on-accent);font-family:var(--font-heading);font-weight:800;font-size:clamp(15px,1.5vw,21px);display:flex;align-items:center;justify-content:center;text-align:center;padding:16px 24px 16px 12px;clip-path:polygon(0 0,74% 0,100% 50%,74% 100%,0 100%,14% 50%)}
-.swot-board{display:flex;flex-direction:column;gap:14px;width:100%}
-.swot-cross{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%}
+.swot-board{display:flex;flex-direction:column;gap:10px;width:100%}
+.swot-cross{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%}
 .swot-quad{padding:0;overflow:hidden;gap:0}
-.swot-quad-head{padding:9px 18px;font-family:var(--font-heading);font-weight:800;font-size:14px;color:#FFF;background:var(--accent)}
-.swot-quad.tone-positive .swot-quad-head{background:var(--positive)}
-.swot-quad.tone-warning .swot-quad-head{background:var(--warning);color:#0F172A}
-.swot-quad.tone-negative .swot-quad-head{background:var(--negative)}
+.swot-quad-head{padding:8px 16px;font-family:var(--font-heading);font-weight:800;font-size:14px;color:var(--ink-on-accent,#FFF);background:var(--accent)}
+.swot-quad.tone-positive .swot-quad-head{background:var(--positive);color:var(--ink-on-positive,#FFF)}
+.swot-quad.tone-warning .swot-quad-head{background:var(--warning);color:var(--ink-on-warning,#0F172A)}
+.swot-quad.tone-negative .swot-quad-head{background:var(--negative);color:var(--ink-on-negative,#FFF)}
 .swot-quad.swot-o .swot-quad-head{padding-right:108px}
 .swot-quad.swot-t .swot-quad-head{padding-left:108px}
-.swot-quad-body{padding:14px 18px;display:flex;flex-direction:column;gap:6px}
-.swot-anchor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;background:var(--accent);color:var(--ink-on-accent);border:4px solid var(--bg);border-radius:999px;padding:10px 24px;min-width:168px;font-family:var(--font-heading);font-weight:800;font-size:14px;line-height:1.25;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.16)}
-.swot-tows-strip{gap:12px}
-.swot-tows-pill{flex-direction:row;align-items:center;gap:10px;padding:10px 14px}
-.swot-tows-text{font-size:13px;color:var(--fg);font-weight:600}
+.swot-quad-body{padding:11px 16px;display:flex;flex-direction:column;gap:4px}
+.swot-anchor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;background:var(--accent);color:var(--ink-on-accent);border:4px solid var(--bg);border-radius:999px;padding:7px 18px;min-width:136px;font-family:var(--font-heading);font-weight:800;font-size:13px;line-height:1.25;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.16)}
+.swot-tows-strip{gap:10px}
+.swot-tows-pill{flex-direction:row;align-items:center;gap:10px;padding:8px 12px}
+.swot-tows-pill .item-badge{white-space:nowrap;flex-shrink:0;min-width:34px;text-align:center}
+.swot-tows-text{font-size:12.5px;color:var(--fg);font-weight:600;line-height:1.35}
 `

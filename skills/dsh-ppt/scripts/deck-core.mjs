@@ -893,7 +893,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     if (coverSubtitle !== '') {
       slides.push({ layout: 'statement', kicker: ui.statementKicker, title: coverSubtitle, subtitle: coverTitle })
     }
-    slides.push({ layout: 'closing', title: ui.closingTitle, subtitle: coverTitle || 'Untitled' })
+    slides.push({ layout: 'closing', title: ui.closingTitle })
     return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
   }
 
@@ -936,7 +936,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
     } else {
       slides.push(...bodySlides)
     }
-    slides.push({ layout: 'closing', title: ui.closingTitle, subtitle: coverTitle || 'Untitled' })
+    slides.push({ layout: 'closing', title: ui.closingTitle })
     return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
   }
 
@@ -1057,7 +1057,7 @@ export function parseMarkdownDeck(titleInput, content, lang = 'zh') {
       slides.push(slide)
     }
   }
-  slides.push({ layout: 'closing', title: ui.closingTitle, subtitle: coverTitle || 'Untitled' })
+  slides.push({ layout: 'closing', title: ui.closingTitle })
   return { title: coverTitle || 'Untitled', subtitle: coverSubtitle, slides }
 }
 
@@ -1523,6 +1523,10 @@ body.motion .slide[data-reveal="step"] [data-reveal-step].is-revealed,body.overv
   --hairline:${tk.hairline};
   --ink-secondary:${tk.inkSecondary};
   --ink-on-accent:${tk.inkOnAccent};
+  --ink-on-accent2:${tk.inkOnAccent2 || '#FFFFFF'};
+  --ink-on-positive:${tk.inkOnPositive || '#FFFFFF'};
+  --ink-on-negative:${tk.inkOnNegative || '#FFFFFF'};
+  --ink-on-warning:${tk.inkOnWarning || '#0F172A'};
   --accent-text:${tk.accentText};
   --accent-soft:${tk.accentSoft};
   --positive:${tk.positive};
@@ -2266,11 +2270,17 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
     ? '<div class="brand-watermark" aria-label="Watermark">' + escapeHtml(manifest.brand.watermark.trim()) + '</div>'
     : ''
 
+  const showStandaloneBrandFooter = Boolean(
+    manifest.brand?.footer &&
+    !isFramingSlide &&
+    chromeStyle !== 'academic-minimal' &&
+    !inner.includes('class="brand-footer"')
+  )
   return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + revealAttr + transitionAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
     '<div class="slide-inner">' + inner + '</div>' +
     watermarkHtml +
     (hasLogo ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
-    (manifest.brand?.footer ? '<div class="brand-footer">' + escapeHtml(manifest.brand.footer) + '</div>' : '') + '</section>'
+    (showStandaloneBrandFooter ? '<div class="brand-footer">' + escapeHtml(manifest.brand.footer) + '</div>' : '') + '</section>'
 }
 
 // ---------------------------------------------------------------------------
@@ -2338,7 +2348,7 @@ function bulletTimingXml(spid, clicks) {
       '<p:par><p:cTn id="' + nextId() + '" presetID="1" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect">' +
       '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
       '<p:set><p:cBhvr><p:cTn id="' + nextId() + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>' +
-      '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+      '<p:tgtEl><p:spTgt spid="' + spid + '"><p:txEl><p:pRg st="' + i + '" end="' + i + '"/></p:txEl></p:spTgt></p:tgtEl>' +
       '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>' +
       '<p:to><p:strVal val="visible"/></p:to></p:set>' +
       '</p:childTnLst></p:cTn></p:par>' +
@@ -2486,8 +2496,23 @@ function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
       if (stepGroups.length >= 2) {
         motionXml += multiShapeTimingXml(stepGroups)
       }
-    } else if (slide.layout === 'bullets' && bullets.length >= 2 && shapesXml.includes('id="' + bodySpid + '"')) {
-      motionXml += bulletTimingXml(bodySpid, bullets.length)
+    } else if (slide.layout === 'bullets' && bullets.length >= 2) {
+      if (shapesXml.includes('id="' + bodySpid + '"')) {
+        motionXml += bulletTimingXml(bodySpid, bullets.length)
+      } else {
+        const rowMap = new Map()
+        for (const box of parseShapeBoxes(shapesXml)) {
+          const m = /^Bullet (?:Row|Math Label|Math Plate|Equation|Math Suffix)\s+(\d+)$/i.exec(box.name)
+          if (!m) continue
+          const rowNum = Number(m[1])
+          if (!rowMap.has(rowNum)) rowMap.set(rowNum, [])
+          rowMap.get(rowNum).push(box.spid)
+        }
+        const splitGroups = [...rowMap.entries()].sort((a, b) => a[0] - b[0]).map(([, spids]) => spids)
+        if (splitGroups.length >= 2) {
+          motionXml += multiShapeTimingXml(splitGroups)
+        }
+      }
     }
   }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +

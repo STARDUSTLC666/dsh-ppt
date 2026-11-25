@@ -442,8 +442,8 @@ export function renderProChartSlideBodyPptx(slide, ctx) {
     const n = model.axes.length
     const legendY = bodyTopY + 0.02
     const cx = 6.6667
-    const cy = bodyTopY + 0.38 + (bodyH - 0.48) / 2
-    const maxR = Math.min(2.02, (bodyH - 1.18) / 2)
+    const cy = bodyTopY + 0.54 + (bodyH - 0.64) / 2
+    const maxR = Math.min(1.94, (bodyH - 1.52) / 2)
     const seriesColors = [tk.accentPrimary, tk.accentSecondary, tk.positive]
 
     // 顶部图例胶囊

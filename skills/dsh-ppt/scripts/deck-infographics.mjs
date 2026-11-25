@@ -7,7 +7,7 @@
  *   3. generateVisualBrief / normalizeImageBrief（主题自适应智能配图协作 Brief 与视觉蓝图占位卡）
  */
 
-import { relativeLuminance, mixHex } from './deck-themes.mjs'
+import { relativeLuminance, mixHex, bestContrastInk } from './deck-themes.mjs'
 import {
   roundRectAdj,
   escapeXml,
@@ -38,7 +38,7 @@ function clamp(v, lo, hi) {
 }
 
 function contrastInk(bgHex, lightInk = '#FFFFFF', darkInk = '#0F172A') {
-  return relativeLuminance(bgHex) < 0.36 ? lightInk : darkInk
+  return bestContrastInk(bgHex, lightInk, darkInk)
 }
 
 function buildPolygonPathXml(pts, pathW, pathH) {
@@ -132,14 +132,21 @@ const WORLD_HUBS = [
 ]
 
 const CHINA_HUBS = [
-  { re: /华北|京津冀|北京|天津|河北|north\s*china|beijing|tianjin/i, x: 70, y: 33 },
-  { re: /华东|长三角|上海|杭州|南京|苏州|浙江|江苏|east\s*china|shanghai|hangzhou/i, x: 84, y: 55 },
-  { re: /华南|粤港澳|大湾区|深圳|广州|广东|福建|south\s*china|shenzhen|guangzhou|\bgba\b/i, x: 71, y: 81 },
+  { re: /北京|京津冀|beijing/i, x: 70, y: 31 },
+  { re: /天津|河北|华北|tianjin|north\s*china/i, x: 73, y: 37 },
+  { re: /上海|shanghai/i, x: 87, y: 56 },
+  { re: /苏州|suzhou/i, x: 84, y: 55 },
+  { re: /南京|江苏|nanjing/i, x: 78, y: 51 },
+  { re: /杭州|浙江|hangzhou/i, x: 83, y: 63 },
+  { re: /华东|长三角|east\s*china/i, x: 84, y: 57 },
+  { re: /深圳|shenzhen/i, x: 75, y: 83 },
+  { re: /香港|澳门|港澳台|hong\s*kong/i, x: 82, y: 85 },
+  { re: /台湾|台北|taipei|taiwan/i, x: 87, y: 78 },
+  { re: /广州|广东|粤港澳|大湾区|华南|福建|guangzhou|south\s*china|\bgba\b/i, x: 70, y: 80 },
   { re: /西南|成渝|成都|重庆|四川|云南|贵州|southwest|chengdu|chongqing/i, x: 46, y: 63 },
   { re: /华中|武汉|长沙|郑州|湖北|湖南|河南|central\s*china|wuhan|changsha/i, x: 64, y: 58 },
   { re: /东北|沈阳|大连|哈尔滨|长春|辽宁|吉林|黑龙江|northeast|shenyang|dalian/i, x: 82, y: 19 },
   { re: /西北|西安|陕西|新疆|甘肃|青海|northwest|xian|xi'an|xinjiang/i, x: 41, y: 45 },
-  { re: /港澳台|香港|澳门|台湾|台北|hong\s*kong|taipei|taiwan/i, x: 83, y: 82 },
 ]
 
 function detectMapMode(slide, items) {
@@ -251,41 +258,75 @@ function placeMapBadges(regions, mapBox) {
     cy: mapBox.y + (r.y / 100) * mapBox.h,
     rad: (0.28 + 0.30 * r.radiusNorm) / 2 + 0.04,
   }))
+  const hitsPlaced = (bx, by, bw, bh) =>
+    placed.some((p) => !(bx + bw + 0.06 < p.bx || bx > p.bx + p.bw + 0.06 || by + bh + 0.05 < p.by || by > p.by + p.bh + 0.05))
+  const hitsAnyHub = (bx, by, bw, bh) =>
+    hubCenters.some((h) => !(bx + bw + 0.02 < h.cx - h.rad || bx - 0.02 > h.cx + h.rad || by + bh + 0.02 < h.cy - h.rad || by - 0.02 > h.cy + h.rad))
+
   return regions.map((r, idx) => {
     const { cx, cy } = hubCenters[idx]
     const labelText = r.value ? `${r.title} · ${r.value}` : r.title
     const bw = computeBadgePillWidth(labelText, 9.5, 2.05, 0.95)
     const bh = 0.25
+    const minBx = mapBox.x + 0.08
+    const maxBx = mapBox.x + mapBox.w - bw - 0.08
+    const minBy = mapBox.y + 0.08
+    const maxBy = mapBox.y + mapBox.h - bh - 0.08
     const candidates = [
       { bx: cx - bw / 2, by: cy - 0.50 },
       { bx: cx - bw / 2, by: cy + 0.28 },
-      { bx: cx + 0.30, by: cy - bh / 2 },
-      { bx: cx - bw - 0.30, by: cy - bh / 2 },
-      { bx: cx + 0.26, by: cy - 0.48 },
+      { bx: cx + 0.32, by: cy - bh / 2 },
+      { bx: cx - bw - 0.32, by: cy - bh / 2 },
+      { bx: cx + 0.26, by: cy - 0.50 },
       { bx: cx - bw - 0.26, by: cy + 0.28 },
-      { bx: cx - bw - 0.26, by: cy - 0.48 },
+      { bx: cx - bw - 0.26, by: cy - 0.50 },
       { bx: cx + 0.26, by: cy + 0.28 },
+      // Extended radial ring for dense clusters (YRD / GBA / East Asia)
+      { bx: cx - bw / 2, by: cy - 0.84 },
+      { bx: cx - bw / 2, by: cy + 0.62 },
+      { bx: cx - bw - 0.62, by: cy - 0.34 },
+      { bx: cx - bw - 0.62, by: cy + 0.16 },
+      { bx: cx + 0.52, by: cy - 0.72 },
+      { bx: cx + 0.52, by: cy + 0.48 },
+      { bx: cx - bw - 0.52, by: cy - 0.72 },
+      { bx: cx - bw - 0.52, by: cy + 0.48 },
     ]
     let chosen = null
+    let fallbackNoBadge = null
     for (const c of candidates) {
-      const bx = clamp(c.bx, mapBox.x + 0.08, mapBox.x + mapBox.w - bw - 0.08)
-      const by = clamp(c.by, mapBox.y + 0.08, mapBox.y + mapBox.h - bh - 0.08)
-      const hitBadge = placed.some((p) => !(bx + bw + 0.06 < p.bx || bx > p.bx + p.bw + 0.06 || by + bh + 0.05 < p.by || by > p.by + p.bh + 0.05))
-      const hitHub = hubCenters.some((h) => !(bx + bw + 0.02 < h.cx - h.rad || bx - 0.02 > h.cx + h.rad || by + bh + 0.02 < h.cy - h.rad || by - 0.02 > h.cy + h.rad))
+      const bx = clamp(c.bx, minBx, maxBx)
+      const by = clamp(c.by, minBy, maxBy)
+      const hitBadge = hitsPlaced(bx, by, bw, bh)
+      const hitHub = hitsAnyHub(bx, by, bw, bh)
       if (!hitBadge && !hitHub) {
         chosen = { bx, by }
         break
       }
-      if (!chosen && !hitBadge) chosen = { bx, by }
+      if (!fallbackNoBadge && !hitBadge) fallbackNoBadge = { bx, by }
     }
+    if (!chosen && fallbackNoBadge) chosen = fallbackNoBadge
     if (!chosen) {
-      chosen = {
-        bx: clamp(cx - bw / 2, mapBox.x + 0.08, mapBox.x + mapBox.w - bw - 0.08),
-        by: clamp(cy - 0.50, mapBox.y + 0.08, mapBox.y + mapBox.h - bh - 0.08),
+      // Deterministic grid scan for a non-overlapping slot nearest to (cx, cy)
+      let bestSlot = null
+      let bestDist = Infinity
+      for (let gy = minBy; gy <= maxBy; gy += 0.30) {
+        for (let gx = minBx; gx <= maxBx; gx += 0.45) {
+          if (hitsPlaced(gx, gy, bw, bh)) continue
+          const d = Math.hypot(gx + bw / 2 - cx, gy + bh / 2 - cy) + (hitsAnyHub(gx, gy, bw, bh) ? 1.5 : 0)
+          if (d < bestDist) {
+            bestDist = d
+            bestSlot = { bx: gx, by: gy }
+          }
+        }
+      }
+      chosen = bestSlot || {
+        bx: clamp(cx - bw / 2, minBx, maxBx),
+        by: clamp(cy - 0.50, minBy, maxBy),
       }
     }
+    const dist = Math.hypot(chosen.bx + bw / 2 - cx, chosen.by + bh / 2 - cy)
     placed.push({ bx: chosen.bx, by: chosen.by, bw, bh })
-    return { ...r, cx, cy, bx: chosen.bx, by: chosen.by, bw, bh, labelText }
+    return { ...r, cx, cy, bx: chosen.bx, by: chosen.by, bw, bh, labelText, needsLeader: dist > 0.55 }
   })
 }
 
@@ -366,6 +407,12 @@ function renderMapPptx(slide, ctx) {
       stroke: theme.dark ? tk.canvas : '#FFFFFF',
       strokePt: 1.25,
     }))
+    if (p.needsLeader) {
+      shapes.push(ooxmlLine(nextId(), `Map Leader ${idx + 1}`, { x: p.cx, y: p.cy }, { x: p.bx + p.bw / 2, y: p.by + p.bh / 2 }, {
+        color: col,
+        widthPt: 0.75,
+      }))
+    }
     shapes.push(ooxmlShape(nextId(), `Map Tag ${idx + 1}`, { x: p.bx, y: p.by, w: p.bw, h: p.bh }, {
       preset: 'roundRect',
       adj: 50000,
@@ -486,25 +533,45 @@ function renderMapHtml(slide, ctx) {
     return `<line x1="${fx.toFixed(1)}" y1="${fy.toFixed(1)}" x2="${rx.toFixed(1)}" y2="${ry.toFixed(1)}" stroke="${tk.accentPrimary}" stroke-width="1.3" stroke-dasharray="5 4" opacity="0.55"/>`
   }).join('')
 
-  const hubsSvg = model.regions.map((r, idx) => {
+  const placedRegions = placeMapBadges(model.regions, {
+    x: padX / 100,
+    y: padTop / 100,
+    w: pw / 100,
+    h: ph / 100,
+  })
+
+  const circlesSvg = placedRegions.map((r, idx) => {
     const col = colors[idx]
-    const rx = padX + (r.x / 100) * pw
-    const ry = padTop + (r.y / 100) * ph
+    const rx = r.cx * 100
+    const ry = r.cy * 100
     const outerR = 14 + 15 * r.radiusNorm
     const innerR = 6.5 + 5 * r.radiusNorm
-    const lbl = r.value ? `${r.title} · ${r.value}` : r.title
-    const pillW = Math.min(188, Math.max(76, lbl.length * 10.5 + 22))
-    const px = clamp(rx - pillW / 2, 10, vw - pillW - 10)
-    const py = clamp(ry - outerR - 26, 26, vh - 30)
-    const pillFill = r.isFocal ? col : (theme.dark ? tk.surface2 : '#FFFFFF')
-    const pillInk = r.isFocal ? contrastInk(col) : tk.inkPrimary
     return (
       `<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="${outerR.toFixed(1)}" fill="${col}" fill-opacity="0.22" stroke="${col}" stroke-opacity="0.48" stroke-width="1.4"/>` +
-      `<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="${innerR.toFixed(1)}" fill="${col}" stroke="${theme.dark ? tk.canvas : '#FFFFFF'}" stroke-width="2.2"/>` +
-      `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pillW.toFixed(1)}" height="23" rx="11.5" fill="${pillFill}" stroke="${col}" stroke-width="${r.isFocal ? 0 : 1.2}"/>` +
-      `<text x="${(px + pillW / 2).toFixed(1)}" y="${(py + 15.5).toFixed(1)}" text-anchor="middle" font-size="11.5" font-weight="700" fill="${pillInk}">${escapeHtml(lbl)}</text>`
+      `<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="${innerR.toFixed(1)}" fill="${col}" stroke="${theme.dark ? tk.canvas : '#FFFFFF'}" stroke-width="2.2"/>`
     )
   }).join('')
+
+  const badgesSvg = placedRegions.map((r, idx) => {
+    const col = colors[idx]
+    const rx = r.cx * 100
+    const ry = r.cy * 100
+    const px = r.bx * 100
+    const py = r.by * 100
+    const pillW = r.bw * 100
+    const pillH = Math.max(23, r.bh * 100)
+    const pillFill = r.isFocal ? col : (theme.dark ? tk.surface2 : '#FFFFFF')
+    const pillInk = r.isFocal ? contrastInk(col) : tk.inkPrimary
+    const leaderSvg = r.needsLeader
+      ? `<line x1="${rx.toFixed(1)}" y1="${ry.toFixed(1)}" x2="${(px + pillW / 2).toFixed(1)}" y2="${(py + pillH / 2).toFixed(1)}" stroke="${col}" stroke-opacity="0.55" stroke-width="1.1"/>`
+      : ''
+    return (
+      leaderSvg +
+      `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH.toFixed(1)}" rx="${(pillH / 2).toFixed(1)}" fill="${pillFill}" stroke="${col}" stroke-width="${r.isFocal ? 0 : 1.2}"/>` +
+      `<text x="${(px + pillW / 2).toFixed(1)}" y="${(py + pillH * 0.67).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="${pillInk}">${escapeHtml(r.labelText)}</text>`
+    )
+  }).join('')
+  const hubsSvg = circlesSvg + badgesSvg
 
   const modeTag = model.mode === 'china'
     ? (langEn ? 'CHINA REGIONAL HUBS' : '中国区域经济枢纽分布')
@@ -1185,9 +1252,9 @@ export const INFOGRAPHICS_CSS = `
 .info-map-board{display:grid;grid-template-columns:1.78fr 1fr;gap:clamp(14px,1.6vw,22px);align-items:stretch;width:100%}
 .info-map-canvas{position:relative;padding:12px 14px;display:flex;flex-direction:column;justify-content:center}
 .info-map-mode{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.info-map-svg{width:100%;height:auto;max-height:56vh;display:block}
-.info-map-side{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:0}
-.map-rank-card{padding:11px 14px;gap:6px}
+.info-map-svg{width:100%;height:auto;max-height:50vh;display:block}
+.info-map-side{display:flex;flex-direction:column;justify-content:center;gap:7px;min-width:0}
+.map-rank-card{padding:8px 12px;gap:4px}
 .map-rank-head{display:flex;align-items:center;gap:8px}
 .map-rank-num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:20px;border-radius:4px;font-size:11px;font-weight:800;background:var(--surface2);color:var(--muted);flex-shrink:0}
 .map-rank-name{font-size:14px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
@@ -1195,11 +1262,11 @@ export const INFOGRAPHICS_CSS = `
 .map-bar-track{width:100%;height:6px;border-radius:99px;background:var(--hairline);overflow:hidden}
 .map-bar-fill{height:100%;border-radius:99px}
 .map-rank-note{font-size:12px;color:var(--ink-secondary);line-height:1.35}
-.iso-stack-board{display:grid;grid-template-columns:1.08fr 1fr;gap:clamp(16px,2vw,28px);align-items:center;width:100%}
+.iso-stack-board{display:grid;grid-template-columns:1.08fr 1fr;gap:clamp(14px,1.8vw,24px);align-items:center;width:100%}
 .iso-stack-stage{display:flex;align-items:center;justify-content:center}
-.iso-stack-svg{width:100%;max-height:58vh;height:auto;display:block}
-.iso-stack-cards{display:flex;flex-direction:column;gap:10px;min-width:0}
-.iso-stack-card{padding:12px 16px;gap:4px}
+.iso-stack-svg{width:100%;max-height:52vh;height:auto;display:block}
+.iso-stack-cards{display:flex;flex-direction:column;gap:7px;min-width:0}
+.iso-stack-card{padding:9px 14px;gap:3px}
 .iso-pillars-wrap{display:flex;flex-direction:column;gap:14px;width:100%}
 .iso-pillars-svg{width:100%;max-height:36vh;height:auto;display:block}
 .iso-pillar-cap{text-align:center;padding:12px 14px;gap:4px}

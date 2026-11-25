@@ -397,8 +397,7 @@ export function computeWaterfallGeometry(chart, bounds = { left: 86, right: 1088
     explicitTotals.add(0)
     if (n >= 3) {
       const priorSum = values.slice(0, -1).reduce((a, b) => a + b, 0)
-      const lastLabel = String(categories[n - 1] ?? '')
-      if (/(?:^(?:合计|总计|总和|期末|净\S*|最终|Total|Sum|Net|End|Ending|Final|Target)|(?:合计|总计|净额|净值|净利|利润|总和)$)/i.test(lastLabel) && Math.abs(values[n - 1] - priorSum) <= Math.max(1e-6, Math.abs(priorSum) * 1e-4)) {
+      if (Math.abs(priorSum) > 1e-9 && Math.abs(values[n - 1] - priorSum) <= Math.max(1e-6, Math.abs(priorSum) * 1e-4)) {
         explicitTotals.add(n - 1)
       }
     }
@@ -544,7 +543,7 @@ export function renderChartSvg(chart, theme) {
       explicit.add(0)
       if (n >= 3) {
         const prior = vals.slice(0, -1).reduce((a, b) => a + b, 0)
-        if (/(?:^(?:合计|总计|总和|期末|净\S*|最终|Total|Sum|Net|End|Ending|Final|Target)|(?:合计|总计|净额|净值|净利|利润|总和)$)/i.test(String(chart.categories[n - 1] ?? '')) && Math.abs(vals[n - 1] - prior) <= Math.max(1e-6, Math.abs(prior) * 1e-4)) {
+        if (Math.abs(prior) > 1e-9 && Math.abs(vals[n - 1] - prior) <= Math.max(1e-6, Math.abs(prior) * 1e-4)) {
           explicit.add(n - 1)
         }
       }
@@ -621,27 +620,26 @@ export function renderChartSvg(chart, theme) {
     const left = isHoriz ? 186 : 86, right = kind === 'combo' && chart.series.some(s => s.secondaryAxis) ? 1028 : 1088
     const top = showLegend ? 50 : 28, bottom = 348
 
-    let min = 0, max = 1
+    let min = 0, max = 1, ticks = [0, 0.25, 0.5, 0.75, 1]
     if (isPercent) {
-      min = 0; max = 100
+      min = 0; max = 100; ticks = [0, 25, 50, 75, 100]
     } else if (isStacked) {
       const posSums = chart.categories.map((_, i) => chart.series.reduce((acc, s) => acc + Math.max(0, s.values[i]), 0))
       const negSums = chart.categories.map((_, i) => chart.series.reduce((acc, s) => acc + Math.min(0, s.values[i]), 0))
-      min = Math.min(0, ...negSums)
-      max = Math.max(0, ...posSums) * 1.1 || 1
+      const nb = niceBounds(Math.min(0, ...negSums), Math.max(0, ...posSums))
+      min = nb.min; max = nb.max; ticks = nb.ticks
     } else {
       const primarySeries = kind === 'combo' ? chart.series.filter(s => !s.secondaryAxis) : chart.series
       const values = (primarySeries.length ? primarySeries : chart.series).flatMap(s => s.values)
       const rMin = Math.min(0, ...values), rMax = Math.max(0, ...values)
-      min = rMin < 0 ? rMin * 1.12 : 0
-      max = rMax > 0 ? rMax * 1.14 : (rMin === 0 ? 1 : 0)
+      const nb = niceBounds(rMin, rMax)
+      min = nb.min; max = nb.max; ticks = nb.ticks
     }
     const span = max - min || 1
     const y = value => bottom - ((value - min) / span) * (bottom - top)
     const x = value => left + ((value - min) / span) * (right - left)
 
-    for (let tick = 0; tick <= 4; tick++) {
-      const value = min + (span * tick) / 4
+    for (const value of ticks) {
       const label = isPercent ? `${Math.round(value)}%` : fmtNum(value)
       if (isHoriz) shapes += line(x(value), top, x(value), bottom, gridColor, 1) + text(x(value), bottom + 26, label, 'middle', muted, 14)
       else shapes += line(left, y(value), right, y(value), gridColor, 1) + text(left - 12, y(value) + 5, label, 'end', muted, 14)
@@ -686,13 +684,12 @@ export function renderChartSvg(chart, theme) {
       // Secondary axis scale for combo charts if needed
       const secSeries = chart.series.filter(s => s.secondaryAxis)
       const secVals = secSeries.flatMap(s => s.values)
-      const secMin = secVals.length ? Math.min(0, ...secVals) : 0
-      const secMax = secVals.length ? (Math.max(0, ...secVals) * 1.15 || 1) : 1
-      const secSpan = secMax - secMin || 1
+      const secNb = secVals.length ? niceBounds(Math.min(0, ...secVals), Math.max(0, ...secVals)) : { min: 0, max: 1, span: 1, ticks: [0, 0.25, 0.5, 0.75, 1] }
+      const secMin = secNb.min
+      const secSpan = secNb.span
       const ySec = v => bottom - ((v - secMin) / secSpan) * (bottom - top)
       if (secSeries.length) {
-        for (let t = 0; t <= 4; t++) {
-          const sv = secMin + (secSpan * t) / 4
+        for (const sv of secNb.ticks) {
           shapes += text(right + 10, ySec(sv) + 5, fmtNum(sv), 'start', colors[chart.series.indexOf(secSeries[0]) % colors.length], 13)
         }
       }
@@ -721,7 +718,10 @@ export function renderChartSvg(chart, theme) {
                 const secYAtI = lineSeries[0] ? (lineSeries[0].secondaryAxis ? ySec : y)(lineSeries[0].values[i]) : -999
                 const topLabelY = by + 18
                 const safeBarY = Math.abs(secYAtI - topLabelY) < 28 && bh >= 48 ? by + bh - 12 : topLabelY
-                shapes += text(bx + (w - 3) / 2, safeBarY, fmtNum(v), 'middle', tokens.inkOnAccent || '#FFFFFF', 13, 700)
+                const h6 = String(color || '#0057B8').replace('#', '')
+                const barLum = h6.length === 6 ? (0.2126 * ((parseInt(h6.slice(0, 2), 16) / 255) ** 2.2) + 0.7152 * ((parseInt(h6.slice(2, 4), 16) / 255) ** 2.2) + 0.0722 * ((parseInt(h6.slice(4, 6), 16) / 255) ** 2.2)) : 0
+                const barInk = barLum > 0.22 ? '#0F172A' : '#FFFFFF'
+                shapes += text(bx + (w - 3) / 2, safeBarY, fmtNum(v), 'middle', barInk, 13, 700)
               } else {
                 shapes += text(bx + (w - 3) / 2, v >= 0 ? by - 8 : by + bh + 16, fmtNum(v), 'middle', isFocal ? fg : muted, 14, isFocal && singleHighlights ? 700 : 500)
               }
@@ -801,9 +801,23 @@ export function renderChartSvg(chart, theme) {
   }
 
   if (showLegend) {
+    const estW = (str, fs) => {
+      let acc = 0
+      for (const ch of String(str || '')) acc += /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(ch) ? fs * 1.02 : fs * 0.58
+      return acc
+    }
+    const unitW = chart.unit ? estW(chart.unit, 14) + 24 : 0
+    const maxRight = 1088 - unitW
+    const rawTotal = chart.series.reduce((sum, s) => sum + 20 + estW(s.name, 14.5) + 22, 0)
+    const legFs = rawTotal > (maxRight - 86) ? 12.5 : 14.5
+    let lx = 86
     chart.series.forEach((s, i) => {
-      const lx = 86 + i * 172
-      shapes += rect(lx, 8, 12, 12, colors[i % colors.length], 3) + text(lx + 19, 19, s.name, 'start', fg, 15, 600)
+      const rem = maxRight - lx - 22
+      if (rem < 42) return
+      let lbl = String(s.name || '')
+      while (lbl.length > 3 && estW(lbl, legFs) > rem) lbl = lbl.slice(0, -2) + '…'
+      shapes += rect(lx, 9, 12, 12, colors[i % colors.length], 3) + text(lx + 18, 20, lbl, 'start', fg, legFs, 600)
+      lx += 18 + estW(lbl, legFs) + 22
     })
   }
   if (chart.unit) shapes += text(1088, showLegend ? 20 : 18, `${chart.unit}`, 'end', muted, 14, 500)
@@ -892,10 +906,13 @@ export function renderMediaHtml(slide, manifest, theme) {
       const kickerCls = chromeStyle === 'keynote-spatial' ? 'kicker media-kicker media-kicker--pill' : 'kicker media-kicker'
       body += `<div class="${kickerCls}" style="${position(boxes.kicker)}">${esc(slide.kicker)}</div>`
     }
-    const titleCls = variant === 'full-bleed'
-      ? 'media-title media-title--bleed'
-      : (chromeStyle === 'keynote-spatial' ? 'media-title' : 'media-title media-title--ruled')
-    body += `<h2 class="${titleCls}" style="${position(boxes.title)}">${esc(slide.title)}</h2>`
+    if (variant === 'full-bleed') {
+      const subHtml = slide.subtitle ? `<p class="media-subtitle--bleed">${formatInlineHtml(slide.subtitle)}</p>` : ''
+      body += `<div class="media-bleed-copy" style="${position(boxes.title)}"><h2 class="media-title media-title--bleed">${esc(slide.title)}</h2>${subHtml}</div>`
+    } else {
+      const titleCls = chromeStyle === 'keynote-spatial' ? 'media-title' : 'media-title media-title--ruled'
+      body += `<h2 class="${titleCls}" style="${position(boxes.title)}">${esc(slide.title)}</h2>`
+    }
   }
 
   if (slide.layout === 'chart' || slide.layout === 'chart-split') {
@@ -943,7 +960,8 @@ export function renderMediaHtml(slide, manifest, theme) {
       const list = slide.bullets?.length ? `<ul class="media-list">${slide.bullets.map(b => `<li>${formatInlineHtml(b)}</li>`).join('')}</ul>` : ''
       body += `<div class="media-body" style="${position(boxes.body)}">${lead}${list}</div>`
     }
-    if (slide.image?.caption) {
+    const isGallery = Array.isArray(boxes.gallery) && Array.isArray(slide.images) && slide.images.length > 1
+    if (!isGallery && slide.image?.caption) {
       body += `<div class="media-caption" style="${position(boxes.caption)}">${esc(slide.image.caption)}</div>`
     }
   }
@@ -955,15 +973,26 @@ export function renderMediaHtml(slide, manifest, theme) {
       : ''
     body += `<div class="media-takeaway takeaway-bar" style="${position(boxes.takeaway)}"><span class="takeaway-arrow" aria-hidden="true">${arrowChar}</span>${prefix}<span class="takeaway-text">${formatInlineHtml(slide.takeaway)}</span></div>`
   }
-  const srcText = slide.source || slide.chart?.source
+  const rawSrc = slide.source || slide.chart?.source || ''
+  const formattedSrc = rawSrc
+    ? (/^(?:数据来源|来源|出处|测算口径|实验环境|统计口径|Source|Note)\s*[:：]/i.test(rawSrc.trim())
+        ? rawSrc.trim()
+        : (langEn ? 'Source: ' : '数据来源：') + rawSrc.trim())
+    : ''
+  const brandFooter = typeof manifest?.brand?.footer === 'string' ? manifest.brand.footer.trim() : ''
   if (chromeStyle === 'academic-minimal') {
-    const zLeft = srcText || manifest?.brand?.footer || manifest?.title || ''
+    const zLeft = formattedSrc || brandFooter || manifest?.title || ''
     const zMid = (slide.kicker || slide.title || '').trim()
     body += `<footer class="media-beamer-status"><span class="media-beamer-left">${esc(zLeft)}</span><span class="media-beamer-mid">${esc(zMid)}</span><span class="media-beamer-right">${folioText}</span></footer>`
-  } else if (srcText) {
-    body += `<div class="media-source">${esc(srcText)}</div>`
+  } else {
+    const brandSpan = brandFooter ? `<span class="brand-footer">${esc(brandFooter)}</span>` : ''
+    const srcSpan = formattedSrc ? `<span class="media-source">${esc(formattedSrc)}</span>` : ''
+    const folioSpan = chromeStyle !== 'editorial-folio' ? `<span class="slide-folio">${folioText}</span>` : ''
+    if (brandSpan || srcSpan || folioSpan) {
+      body += `<footer class="media-footer-bar">${brandSpan}${srcSpan}${folioSpan}</footer>`
+    }
   }
-  return `<div class="media-canvas">${body}</div>`
+  return `<div class="media-canvas${variant === 'full-bleed' ? ' is-bleed' : ''}">${body}</div>`
 }
 
 /**
@@ -1385,7 +1414,11 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
       )
     }
     const titleColor = variant === 'full-bleed' ? '#F8FAFC' : fg
-    shapes.push(spText('Title', boxes.title, [paraRich(slide.title || '', { size: titlePt * 100, color: titleColor, bold: true, latin: headingFont, ea: headingEa, linePct: 118000 })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+    const titleParas = [paraRich(slide.title || '', { size: titlePt * 100, color: titleColor, bold: true, latin: headingFont, ea: headingEa, linePct: 118000 })]
+    if (variant === 'full-bleed' && slide.subtitle) {
+      titleParas.push(paraRich(slide.subtitle, { size: 1500, color: '#E2E8F0', bold: false, latin: bodyFont, ea: bodyEa, spaceBefore: 360, linePct: 132000 }))
+    }
+    shapes.push(spText('Title', boxes.title, titleParas, { anchor: 'ctr', ins: [0, 0, 0, 0] }))
     if (!isBleed) {
       shapes.push(spLine('Header rule', toEmu(0.65), toEmu(1.56), toEmu(12.68), toEmu(1.56), hairline, 9525, 'solid'))
     }
@@ -1551,7 +1584,8 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
   }
 
   // Caption + Chrome-aware Takeaway coexistence
-  const caption = slide.chart?.caption || slide.image?.caption
+  const isGalleryPptx = Array.isArray(boxes.gallery) && Array.isArray(slide.images) && slide.images.length > 1
+  const caption = slide.chart?.caption || (!isGalleryPptx ? slide.image?.caption : '')
   if (caption) {
     shapes.push(spText('Caption', boxes.caption, [paraRich(caption, { size: 1150, color: muted })], { ins: [0, 0, 0, 0] }))
   }
@@ -1650,7 +1684,9 @@ export const MEDIA_CSS = `
 .media-kicker,.media-title,.media-image,.media-body,.media-chart,.media-caption,.media-takeaway{position:absolute;margin:0;max-width:none;box-sizing:border-box}
 .media-kicker{font-size:1.05cqw;line-height:1.2;margin:0}
 .media-title{font-size:2.95cqw;font-weight:750;line-height:1.18;letter-spacing:-.015em;display:flex;align-items:center;overflow-wrap:anywhere}
-.media-title--bleed{color:#F8FAFC;text-shadow:0 2px 14px rgba(0,0,0,.45);padding:.4cqw 0;z-index:3}
+.media-title--bleed{position:static;color:#F8FAFC;text-shadow:0 2px 14px rgba(0,0,0,.45);padding:0;z-index:3}
+.media-bleed-copy{position:absolute;z-index:3;display:flex;flex-direction:column;justify-content:flex-end;gap:.5cqw;margin:0;box-sizing:border-box}
+.media-subtitle--bleed{margin:0;font-size:1.52cqw;line-height:1.38;color:rgba(248,250,252,.86);text-shadow:0 1px 10px rgba(0,0,0,.48)}
 .media-bleed-scrim{position:absolute;left:0;right:0;bottom:0;height:48%;background:linear-gradient(180deg,rgba(6,11,22,0) 0%,rgba(6,11,22,.62) 48%,rgba(6,11,22,.88) 100%);pointer-events:none;z-index:2}
 .media-image--brief{overflow:visible;padding:0;border:0;background:transparent}
 .media-image{overflow:hidden}
@@ -1676,8 +1712,15 @@ export const MEDIA_CSS = `
 .media-takeaway{display:flex;align-items:center;gap:.65cqw;padding:.45cqw 1.15cqw;border-radius:var(--radius-sm,8px);background:var(--accent-soft,var(--surface1,var(--panel)));border:1px solid var(--hairline,color-mix(in srgb, var(--muted) 28%, transparent));border-left:5px solid var(--accent);font-size:1.28cqw;font-weight:700;color:var(--fg)}
 .media-takeaway .takeaway-arrow{color:var(--accent-text,var(--accent));font-size:1.1em;line-height:1}
 .media-source{position:absolute;left:4.65%;bottom:2.6%;max-width:65%;font-size:clamp(10px,.95cqw,13px);color:var(--muted)}
+.media-footer-bar{position:absolute;left:4.875%;right:4.875%;bottom:2.3%;z-index:4;display:flex;align-items:center;gap:16px;font-size:clamp(10px,.95cqw,13px);color:var(--muted);font-variant-numeric:tabular-nums;min-width:0}
+.media-footer-bar .brand-footer,.media-footer-bar .media-source{position:static;left:auto;bottom:auto;max-width:none;font-size:inherit;color:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-footer-bar .brand-footer{max-width:44%;flex-shrink:1}
+.media-footer-bar .brand-footer + .media-source{margin-left:auto;text-align:right}
+.media-footer-bar .slide-folio{margin-left:auto;white-space:nowrap;flex-shrink:0}
+.media-footer-bar .brand-footer + .media-source + .slide-folio{margin-left:16px}
+.media-canvas.is-bleed .media-footer-bar{color:rgba(248,250,252,.82)}
 .native-chart{width:100%;height:100%;font-family:var(--font-body);font-variant-numeric:tabular-nums}
-.chart-data{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.chart-data{position:absolute;top:0;left:0;width:1px;height:1px;margin:0;padding:0;border:0;overflow:hidden;clip-path:inset(50%)}
 .brand-logo{position:absolute;right:5.2%;top:2.2%;width:7.1%;height:5.4%;object-fit:contain;pointer-events:none;z-index:4}
 .brand-footer{position:absolute;left:4.875%;bottom:2.8%;max-width:65%;font-size:clamp(10px,.95cqw,14px);color:var(--muted)}
 body.printing .brand-footer,body.printing .media-source{display:block}
@@ -1688,7 +1731,7 @@ body.printing .brand-footer,body.printing .media-source{display:block}
 .media-consulting-tracker{position:absolute;right:4.875%;top:5.4%;background:var(--accent-soft);border:1px solid var(--accent);padding:.28cqw .9cqw;font-size:.92cqw;margin:0}
 .media-editorial-bar{position:absolute;left:4.875%;right:4.875%;top:2.8%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--hairline);padding-bottom:.35cqw;font-size:.95cqw;color:var(--muted)}
 .media-kicker-inline{margin:0!important;font-size:.95cqw}
-.media-beamer-band{position:absolute;left:0;right:0;top:0;height:17%;background:var(--surface1,var(--panel));border-bottom:2.5px solid var(--accent);padding:1.2cqw 4.875%;display:flex;flex-direction:column;justify-content:center;gap:.3cqw;box-sizing:border-box}
+.media-beamer-band{position:absolute;left:0;right:0;top:0;min-height:17%;height:auto;background:var(--surface1,var(--panel));border-bottom:2.5px solid var(--accent);padding:1cqw 4.875%;display:flex;flex-direction:column;justify-content:center;gap:.25cqw;box-sizing:border-box;z-index:3}
 .media-kicker-band{margin:0!important;font-size:.92cqw}
 .media-title-band{margin:0;font-size:2.45cqw;font-weight:750;line-height:1.15;color:var(--fg)}
 .media-beamer-status{position:absolute;left:0;right:0;bottom:0;height:6%;background:var(--surface1,var(--panel));border-top:1px solid var(--hairline);padding:0 4.875%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;font-size:.92cqw;color:var(--muted);font-variant-numeric:tabular-nums}

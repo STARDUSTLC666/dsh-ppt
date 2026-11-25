@@ -99,6 +99,8 @@ export function escapeHtml(value) {
     .replace(/"/g, '&quot;')
 }
 
+const HTML_TAG_STRIP_RE = /<!--[\s\S]*?-->|<\/?(?:a|abbr|address|article|aside|b|bdi|bdo|blockquote|br|button|canvas|caption|cite|code|col|colgroup|data|dd|del|details|dfn|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|math|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|small|source|span|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)(?=\s|\/?>)[^>]*>/gi
+
 export function stripInlineMarkdown(value) {
   const { masked, stash } = maskMathSpans(String(value ?? ''))
   const stripped = masked
@@ -109,7 +111,7 @@ export function stripInlineMarkdown(value) {
     .replace(/__([^_]+)__/g, '$1')
     .replace(/\*([^*\n]+)\*/g, '$1')
     .replace(/_([^_\n]+)_/g, '$1')
-    .replace(/<[^>]+>/g, '')
+    .replace(HTML_TAG_STRIP_RE, '')
     .replace(/\s+/g, ' ')
     .trim()
   return unmaskMathSpans(stripped, stash).replace(/`([^`]*)`/g, '$1')
@@ -124,7 +126,7 @@ export function cleanRichText(value) {
   const cleaned = masked
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/<[^>]+>/g, '')
+    .replace(HTML_TAG_STRIP_RE, '')
     .replace(/__([^_]+)__/g, '**$1**')
     .replace(/\s+/g, ' ')
     .trim()
@@ -382,7 +384,7 @@ function parseBulletToItem(rawBullet, index, layout) {
         ...(deltaMatch ? { delta: deltaMatch[1], status: deltaMatch[1].startsWith('-') ? 'negative' : 'positive' } : {}),
       }
     }
-    const metricMatch = /^((?:[¥$€]\s*)?[+-]?\d[\d,.]*\s*(?:[%％倍xX]|万|亿|元|万元|亿元|美元|万美元|亿美元|家|个|人|次|台|套|条|项|席|秒|ms|s|h|天|小时|分钟|k|M|B|\+)?)\s*[:：\-—]?\s*(.*)$/i.exec(plain)
+    const metricMatch = /^((?:[¥$€]\s*)?[+-]?\d[\d,.]*\s*(?:[%％倍xX]|万|亿|元|万元|亿元|美元|万美元|亿美元|家|个|人|次|台|套|条|项|席|年|月|周|秒|ms|s|h|天|小时|分钟|k|M|B|\+)?)\s*[:：\-—]?\s*(.*)$/i.exec(plain)
     if (metricMatch) {
       const rest = metricMatch[2] || ''
       const colon = rest.search(/[：:]/)
@@ -392,7 +394,7 @@ function parseBulletToItem(rawBullet, index, layout) {
         ...(colon > 0 ? { text: rest.slice(colon + 1).trim() } : {}),
       }
     }
-    const inlineMetric = /((?:[¥$€]\s*[+-]?\d[\d,.]*(?:\s*(?:[%％倍xX]|万|亿|万元|亿元|美元|万美元|亿美元|家|个|人|次|台|套|条|项|席|秒|ms|天|小时|分钟|k|M|B|\+))?|[+-]?\d[\d,.]*\s*(?:[%％倍xX]|万|亿|万元|亿元|美元|万美元|亿美元|家|个|人|次|台|套|条|项|席|秒|ms|天|小时|分钟|\+)))/.exec(plain)
+    const inlineMetric = /((?:[¥$€]\s*[+-]?\d[\d,.]*(?:\s*(?:[%％倍xX]|万|亿|元|万元|亿元|美元|万美元|亿美元|家|个|人|次|台|套|条|项|席|年|月|周|秒|ms|天|小时|分钟|k|M|B|\+))?|[+-]?\d[\d,.]*\s*(?:[%％倍xX]|万|亿|元|万元|亿元|美元|万美元|亿美元|家|个|人|次|台|套|条|项|席|年|月|周|秒|ms|天|小时|分钟|\+)))/.exec(plain)
     if (inlineMetric) {
       const colon = plain.search(/[：:]/)
       return {
@@ -582,7 +584,7 @@ export function statusPalette(status, tk) {
 
 export function isNumericCell(cell) {
   const plain = stripInlineMarkdown(cell)
-  return /^\s*[+-]?[$¥€£]?\s*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:[%％xX倍]|万|亿|元|万元|亿元|次|页|个|人|天|小时|分钟|ms|s)?\s*$/.test(plain)
+  return /^\s*[+-]?[$¥€£]?\s*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:[%％xX倍]|万|亿|元|万元|亿元|次|页|个|人|年|月|周|天|小时|分钟|ms|s)?\s*$/.test(plain)
 }
 
 // ---------------------------------------------------------------------------
@@ -1827,8 +1829,10 @@ export function renderSlideChromeHtml(slide, chromeStyle, folioText, langId, man
   let footerStrip = ''
   if (!isFraming) {
     const sourceText = slide.source ? formatSourceLine(slide.source, langId) : ''
+    const brandFooterText = typeof manifest.brand?.footer === 'string' ? manifest.brand.footer.trim() : ''
+    const brandHtml = brandFooterText ? '<span class="brand-footer">' + escapeHtml(brandFooterText) + '</span>' : ''
     if (chromeStyle === 'academic-minimal') {
-      const zLeft = sourceText || manifest.brand?.footer || manifest.title || ''
+      const zLeft = sourceText || brandFooterText || manifest.title || ''
       const zMid = (slide.kicker || slide.title || '').trim()
       footerStrip =
         '<footer class="beamer-status-bar">' +
@@ -1837,17 +1841,82 @@ export function renderSlideChromeHtml(slide, chromeStyle, folioText, langId, man
         '<span class="slide-folio beamer-zone-right">' + folioText + '</span>' +
         '</footer>'
     } else if (chromeStyle === 'editorial-folio') {
-      footerStrip = sourceText
-        ? '<footer class="slide-footer-strip"><span class="slide-source">' + escapeHtml(sourceText) + '</span></footer>'
+      const srcHtml = sourceText ? '<span class="slide-source">' + escapeHtml(sourceText) + '</span>' : ''
+      footerStrip = (brandHtml || srcHtml)
+        ? '<footer class="slide-footer-strip">' + brandHtml + srcHtml + '</footer>'
         : ''
     } else {
       const folioLeft = sourceText ? '<span class="slide-source">' + escapeHtml(sourceText) + '</span>' : ''
       const folioRight = '<span class="slide-folio">' + folioText + '</span>'
-      footerStrip = '<footer class="slide-footer-strip">' + folioLeft + folioRight + '</footer>'
+      footerStrip = '<footer class="slide-footer-strip">' + brandHtml + folioLeft + folioRight + '</footer>'
     }
   }
 
   return takeawayHtml + footerStrip
+}
+
+export function resolveDoDontPolarity(twoSides) {
+  const posRe = /^(?:do\b|✓|✔|推荐|建议|应该|正确|优|正面|最佳实践)/i
+  const negRe = /^(?:don['’]?t\b|✗|✘|避免|禁止|错误|不要|误区|反面|痛点|旧)/i
+  const t0 = stripInlineMarkdown(twoSides[0]?.title || '').trim()
+  const t1 = stripInlineMarkdown(twoSides[1]?.title || '').trim()
+  return Boolean(
+    twoSides[0]?.status === 'positive' ||
+    twoSides[1]?.status === 'negative' ||
+    (posRe.test(t0) && !posRe.test(t1)) ||
+    (negRe.test(t1) && !negRe.test(t0)),
+  )
+}
+
+export function renderBullet2dMathRowPptx({ prefixText, suffixText, mathLatex, ry, rowH, bIdx, tk, theme, langAttr, chromeCfg, cardPreset, nextId }) {
+  const shapes = []
+  const totalRowW = 11.48
+  const emIn = Math.min(0.26, rowH * 0.34)
+  const astPreview = parseLatexMath(mathLatex)
+  const hasPrefix = prefixText !== ''
+  const hasSuffix = suffixText !== ''
+  const prefixW = hasPrefix
+    ? (hasSuffix
+        ? Math.min(3.9, Math.max(1.75, measureEmWidth(prefixText, true) * 0.21 + 0.42))
+        : Math.min(4.8, Math.max(2.2, measureEmWidth(prefixText, true) * 0.23 + 0.45)))
+    : 0
+  const suffixEstW = hasSuffix ? Math.min(4.2, Math.max(1.85, measureEmWidth(suffixText, false) * 0.19 + 0.32)) : 0
+  const maxEqW = Math.max(2.2, totalRowW - (hasPrefix ? prefixW + 0.10 : 0) - (hasSuffix ? suffixEstW + 0.10 : 0))
+  const fittedEq = fitFormulaBoxIn(astPreview, { x: 0, y: ry, w: maxEqW, h: rowH }, { padXIn: 0.20, padYIn: 0.08, emIn, align: 'l' })
+  const eqW = hasSuffix ? Math.min(maxEqW, Math.max(1.85, fittedEq.w + 0.44)) : Math.max(2.4, totalRowW - (hasPrefix ? prefixW + 0.10 : 0))
+
+  let cursorX = 0.94
+  if (hasPrefix) {
+    shapes.push(ooxmlShape(nextId(), 'Bullet Math Label ' + (bIdx + 1), { x: cursorX, y: ry, w: prefixW, h: rowH }, {
+      txBox: true,
+      anchor: 'ctr',
+      marginsIn: { l: 0.04, r: 0.06, t: 0.02, b: 0.02 },
+      paragraphs: [ooxmlRichParagraph(prefixText, { sizePt: 14.5, color: tk.inkPrimary, secondaryColor: tk.inkSecondary, bullet: true, bulletChar: '▪', bulletColor: tk.accentPrimary, lang: langAttr, font: theme.fonts.body, autoLeadBold: true })],
+    }))
+    cursorX += prefixW + 0.10
+  }
+  const eqBox = { x: cursorX, y: ry, w: eqW, h: rowH }
+  if (theme.dark) {
+    const plateW = Math.min(eqBox.w, Math.max(1.75, fittedEq.w + 0.40))
+    shapes.push(ooxmlShape(nextId(), 'Bullet Math Plate ' + (bIdx + 1), { x: eqBox.x, y: ry + 0.04, w: plateW, h: rowH - 0.08 }, {
+      preset: cardPreset,
+      adj: roundRectAdj(plateW, rowH - 0.08, Math.min(8, chromeCfg.cardRadiusPx)),
+      fill: '#F8FAFC',
+      stroke: tk.accentPrimary,
+      strokePt: 0.75,
+    }))
+  }
+  shapes.push(ooxmlMathShape(nextId(), 'Bullet Equation ' + (bIdx + 1), eqBox, mathLatex, { emIn, sizePt: 18, align: 'l' }))
+  if (hasSuffix) {
+    const sufX = eqBox.x + eqBox.w + 0.10
+    shapes.push(ooxmlShape(nextId(), 'Bullet Math Suffix ' + (bIdx + 1), { x: sufX, y: ry, w: Math.max(1.6, 12.42 - sufX), h: rowH }, {
+      txBox: true,
+      anchor: 'ctr',
+      marginsIn: { l: 0.04, r: 0.04, t: 0.02, b: 0.02 },
+      paragraphs: [ooxmlRichParagraph(suffixText, { sizePt: 14.5, color: tk.inkPrimary, secondaryColor: tk.inkSecondary, bullet: !hasPrefix, bulletChar: '▪', bulletColor: tk.accentPrimary, lang: langAttr, font: theme.fonts.body })],
+    }))
+  }
+  return shapes
 }
 
 export const CHROME_CSS = `
@@ -1857,8 +1926,12 @@ export const CHROME_CSS = `
   font-size:clamp(13px,1.25vw,17px);font-weight:600;color:var(--fg);
 }
 .takeaway-arrow,.takeaway-prefix{color:var(--accent-text)}
-.slide-footer-strip{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:12px;color:var(--muted);padding-top:4px;font-variant-numeric:tabular-nums}
-.slide-folio{margin-left:auto}
+.slide-footer-strip{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:12px;color:var(--muted);padding-top:4px;font-variant-numeric:tabular-nums;min-width:0}
+.slide-footer-strip .brand-footer{position:static;left:auto;bottom:auto;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;font-size:inherit;color:inherit}
+.slide-footer-strip .slide-source{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.slide-footer-strip .brand-footer + .slide-source{margin-left:auto;text-align:right}
+.slide-folio{margin-left:auto;white-space:nowrap;flex-shrink:0}
+.slide-footer-strip .brand-footer + .slide-source + .slide-folio{margin-left:16px}
 /* 6 Chrome Skeleton Differentiation */
 .slide[data-chrome="consulting-classic"] .consulting-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
 .slide[data-chrome="consulting-classic"] .consulting-tracker{border:1px solid var(--accent);background:var(--accent-soft);padding:5px 14px;border-radius:0;margin:0;white-space:nowrap}
@@ -1875,7 +1948,7 @@ export const CHROME_CSS = `
 .slide[data-chrome="editorial-folio"] .slide-takeaway{background:transparent;border:0;border-top:1px solid var(--hairline);border-radius:0;padding:10px 0 2px}
 .slide[data-chrome="saas-bento"] .surface-card{border-radius:13px}
 .slide[data-chrome="saas-bento"] .surface-card.is-hero,.slide[data-chrome="saas-bento"] .surface-card.is-focal,.slide[data-chrome="saas-bento"] .surface-card.is-active{border-top:3px solid var(--accent)}
-.slide[data-chrome="academic-minimal"]:not(.slide--cover):not(.slide--closing):not(.slide--section){padding-top:clamp(108px,13vw,148px);padding-bottom:clamp(46px,5.5vw,66px)}
+.slide[data-chrome="academic-minimal"]:not(.slide--cover):not(.slide--closing):not(.slide--section):not(.slide--image):not(.slide--image-left):not(.slide--image-right):not(.slide--chart):not(.slide--chart-split){padding-top:clamp(108px,13vw,148px);padding-bottom:clamp(46px,5.5vw,66px)}
 .slide[data-chrome="academic-minimal"] .beamer-header-band{position:absolute;top:0;left:0;right:0;background:var(--surface1);border-bottom:2.5px solid var(--accent);padding:clamp(14px,1.8vw,22px) clamp(36px,5.4vw,88px)}
 .slide[data-chrome="academic-minimal"] .beamer-status-bar{position:absolute;bottom:0;left:0;right:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;background:var(--surface1);border-top:1px solid var(--hairline);padding:8px clamp(36px,5.4vw,88px);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .slide[data-chrome="academic-minimal"] .beamer-zone-mid{text-align:center;font-weight:600;color:var(--ink-secondary)}
@@ -1887,4 +1960,17 @@ export const CHROME_CSS = `
 .slide.has-brand-logo .brand-watermark{right:14.2%}
 .slide[data-chrome="editorial-folio"] .brand-watermark{top:3.1%;right:14.8%}
 .slide[data-chrome="editorial-folio"].has-brand-logo .brand-watermark{right:21.5%}
+.matrix-stage{display:grid;grid-template-columns:1fr;gap:10px;width:100%;align-items:center}
+.matrix-stage.has-y-axis{grid-template-columns:28px 1fr}
+.matrix-core{display:flex;flex-direction:column;gap:8px;min-width:0}
+.matrix-grid{position:relative;gap:22px}
+.matrix-cross-h{position:absolute;left:-4px;right:-4px;top:50%;height:2px;background:var(--accent);opacity:.55;transform:translateY(-50%);pointer-events:none;z-index:2}
+.matrix-cross-h::after{content:"";position:absolute;right:-2px;top:50%;transform:translateY(-50%);border-left:8px solid var(--accent);border-top:5px solid transparent;border-bottom:5px solid transparent}
+.matrix-cross-v{position:absolute;top:-4px;bottom:-4px;left:50%;width:2px;background:var(--accent);opacity:.55;transform:translateX(-50%);pointer-events:none;z-index:2}
+.matrix-cross-v::before{content:"";position:absolute;top:-2px;left:50%;transform:translateX(-50%);border-bottom:8px solid var(--accent);border-left:5px solid transparent;border-right:5px solid transparent}
+.matrix-axis-label{font-size:12px;font-weight:700;color:var(--ink-secondary);letter-spacing:.04em;text-align:center}
+.matrix-axis-label.is-y{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;align-self:center}
+.slide[data-table-style="banded"] .deck-table th{background:var(--accent);color:var(--ink-on-accent,#FFF);border-top:0;border-bottom:0}
+.slide[data-table-style="banded"] .deck-table tbody tr:nth-child(odd) td{background:var(--surface1)}
+.slide[data-table-style="banded"] .deck-table tbody tr:nth-child(even) td{background:var(--surface2)}
 `

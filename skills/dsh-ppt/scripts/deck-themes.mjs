@@ -125,6 +125,11 @@ export function contrastRatio(hexA, hexB) {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
+export function bestContrastInk(bgHex, lightInk = '#FFFFFF', darkInk = '#0F172A') {
+  const bg = normalizeHex(bgHex, '#FFFFFF')
+  return contrastRatio(bg, lightInk) >= contrastRatio(bg, darkInk) ? lightInk : darkInk
+}
+
 export function mixHex(hexA, hexB, weightB = 0.5) {
   const t = Math.max(0, Math.min(1, weightB))
   const a = hexToRgb(hexA)
@@ -221,7 +226,7 @@ export function pptxFontName(value, platform = process.platform) {
     if (NOVELTY_FONT_RE.test(single) || /^(?:微软雅黑|黑体)$/i.test(single)) {
       return platform === 'win32' ? 'Microsoft YaHei' : platform === 'darwin' ? 'PingFang SC' : 'Noto Sans CJK SC'
     }
-    if (platform === 'win32' && /^Songti SC$/i.test(single)) return 'Microsoft YaHei'
+    if (platform === 'win32' && /^(?:Songti SC|PingFang SC|Heiti SC|Kaiti SC)$/i.test(single)) return 'Microsoft YaHei'
     if (platform === 'linux' && /^(Microsoft YaHei|PingFang SC|Songti SC|Segoe UI|Helvetica Neue|Avenir Next)$/i.test(single)) {
       return /Songti|Serif/i.test(single) ? 'Liberation Serif' : 'Liberation Sans'
     }
@@ -323,11 +328,15 @@ function makeTheme(spec) {
   const accentText = ensureContrast(tokens.accentText ?? accentPrimary, surface1, 4.6)
   const accentSecondary = normalizeHex(tokens.accentSecondary ?? palette.accent2)
   const accent2Text = ensureContrast(tokens.accent2Text ?? accentSecondary, surface1, 4.6)
-  const inkOnAccent = normalizeHex(tokens.inkOnAccent ?? (relativeLuminance(accentPrimary) > 0.36 ? '#0F172A' : '#FFFFFF'))
+  const inkOnAccent = normalizeHex(tokens.inkOnAccent ?? bestContrastInk(accentPrimary))
+  const inkOnAccent2 = normalizeHex(tokens.inkOnAccent2 ?? bestContrastInk(accentSecondary))
   const accentSoft = normalizeHex(tokens.accentSoft ?? mixHex(canvas, accentPrimary, dark ? 0.18 : 0.10))
   const positive = normalizeHex(tokens.positive ?? ensureContrast(dark ? '#34D399' : '#0D7A4E', surface1, 4.5))
   const negative = normalizeHex(tokens.negative ?? ensureContrast(dark ? '#F87171' : '#C81E1E', surface1, 4.5))
   const warning = normalizeHex(tokens.warning ?? ensureContrast(dark ? '#FBBF24' : '#B45309', surface1, 4.5))
+  const inkOnPositive = normalizeHex(tokens.inkOnPositive ?? bestContrastInk(positive))
+  const inkOnNegative = normalizeHex(tokens.inkOnNegative ?? bestContrastInk(negative))
+  const inkOnWarning = normalizeHex(tokens.inkOnWarning ?? bestContrastInk(warning))
   const chartFocal = normalizeHex(tokens.chartFocal ?? accentPrimary)
   const chartNeutral = normalizeHex(tokens.chartNeutral ?? (dark ? '#2B354D' : '#CBD5E1'))
   const chartSeries = (tokens.chartSeries ?? [accentPrimary, accentSecondary, '#0E7490', '#4F46E5', '#0D7A4E', '#64748B']).map((c) => normalizeHex(c))
@@ -362,6 +371,10 @@ function makeTheme(spec) {
       inkSecondary,
       inkMuted,
       inkOnAccent,
+      inkOnAccent2,
+      inkOnPositive,
+      inkOnNegative,
+      inkOnWarning,
       accentPrimary,
       accentText,
       accentSecondary,
@@ -1461,7 +1474,7 @@ export function sanitizeAbsorbedTheme(raw = {}) {
 
   const accentPrimary = ensureContrast(accentSeed, canvas, 3.2, 0.82)
   const accentText = ensureContrast(accentPrimary, surface1, 4.6, 0.82)
-  const inkOnAccent = relativeLuminance(accentPrimary) > 0.36 ? '#0F172A' : '#FFFFFF'
+  const inkOnAccent = bestContrastInk(accentPrimary)
 
   const secondaryPool = [
     raw.brandSecondary,
@@ -1560,6 +1573,10 @@ export function sanitizeAbsorbedTheme(raw = {}) {
     inkSecondary,
     inkMuted,
     inkOnAccent,
+    inkOnAccent2: bestContrastInk(accentSecondary),
+    inkOnPositive: bestContrastInk(positive),
+    inkOnNegative: bestContrastInk(negative),
+    inkOnWarning: bestContrastInk(warning),
     accentPrimary,
     accentText,
     accentSecondary,
@@ -1673,6 +1690,9 @@ export function deriveBrandedTheme(themeOrId, brand) {
       accent: nextAccent,
       accent2: nextAccent2,
     }
+    const nextPositive = ensureContrast(nextDark ? '#34D399' : '#0D7A4E', nextSurface1, 4.5)
+    const nextNegative = ensureContrast(nextDark ? '#F87171' : '#C81E1E', nextSurface1, 4.5)
+    const nextWarning = ensureContrast(nextDark ? '#FBBF24' : '#B45309', nextSurface1, 4.5)
     cloned.tokens = {
       ...cloned.tokens,
       canvas: nextBg,
@@ -1682,15 +1702,19 @@ export function deriveBrandedTheme(themeOrId, brand) {
       inkPrimary: nextFg,
       inkSecondary: nextInkSecondary,
       inkMuted: nextMuted,
-      inkOnAccent: relativeLuminance(nextAccent) > 0.36 ? '#0F172A' : '#FFFFFF',
+      inkOnAccent: bestContrastInk(nextAccent),
+      inkOnAccent2: bestContrastInk(nextAccent2),
+      inkOnPositive: bestContrastInk(nextPositive),
+      inkOnNegative: bestContrastInk(nextNegative),
+      inkOnWarning: bestContrastInk(nextWarning),
       accentPrimary: nextAccent,
       accentText: nextAccentText,
       accentSecondary: nextAccent2,
       accent2Text: nextAccent2Text,
       accentSoft: mixHex(nextBg, nextAccent, nextDark ? 0.18 : 0.10),
-      positive: ensureContrast(nextDark ? '#34D399' : '#0D7A4E', nextSurface1, 4.5),
-      negative: ensureContrast(nextDark ? '#F87171' : '#C81E1E', nextSurface1, 4.5),
-      warning: ensureContrast(nextDark ? '#FBBF24' : '#B45309', nextSurface1, 4.5),
+      positive: nextPositive,
+      negative: nextNegative,
+      warning: nextWarning,
       chartFocal: nextAccent,
       chartNeutral: nextChartNeutral,
       chartSeries: nextSeries,

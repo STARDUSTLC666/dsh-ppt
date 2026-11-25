@@ -10,7 +10,7 @@
  * 零外部运行时依赖，仅使用 Node 内置模块。
  */
 
-import { mixHex, relativeLuminance } from './deck-themes.mjs'
+import { mixHex, relativeLuminance, bestContrastInk } from './deck-themes.mjs'
 import {
   roundRectAdj,
   escapeXml,
@@ -1869,10 +1869,10 @@ export function layoutMermaidSequence(astInput, areaBox = { x: 0.62, y: 1.86, w:
   const bandH = Math.max(0.8, bandBottom - bandTop)
 
   const weights = ast.events.map((ev) => {
-    if (ev.type === 'frame-start') return 0.78
-    if (ev.type === 'frame-divider') return 0.64
+    if (ev.type === 'frame-start') return 1.15
+    if (ev.type === 'frame-divider') return 1.02
     if (ev.type === 'note') return 1.32
-    if (ev.type === 'message' && ev.from === ev.to) return 1.12
+    if (ev.type === 'message' && ev.from === ev.to) return 1.38
     return 0.88
   })
   const totalWeight = weights.reduce((a, b) => a + b, 0) || 1
@@ -1897,7 +1897,7 @@ export function layoutMermaidSequence(astInput, areaBox = { x: 0.62, y: 1.86, w:
 
   // 布局组合片段框（loop / alt / opt / par）
   const positionedFrames = ast.frames.map((f, fIdx) => {
-    const y1 = Math.max(topY + headH + 0.06, (stepYs[f.startStep] ?? bandTop) - unitH * 0.20)
+    const y1 = Math.max(topY + headH + 0.06, (stepYs[f.startStep] ?? bandTop) - unitH * 0.42)
     const y2 = Math.min(botY - 0.06, (stepYs[f.endStep] ?? bandBottom) + unitH * 0.44)
     const inset = f.depth * 0.14
     const minCx = Math.min(...participants.map((p) => p.topBox.x))
@@ -1915,7 +1915,7 @@ export function layoutMermaidSequence(astInput, areaBox = { x: 0.62, y: 1.86, w:
       dividers: f.dividers.map((d) => ({
         kind: d.kind,
         label: d.label,
-        y: +((stepYs[d.step] ?? (y1 + y2) / 2) - unitH * 0.06).toFixed(4),
+        y: +((stepYs[d.step] ?? (y1 + y2) / 2) - unitH * 0.34).toFixed(4),
       })),
     }
   })
@@ -2046,6 +2046,18 @@ export function layoutMermaidSequence(astInput, areaBox = { x: 0.62, y: 1.86, w:
         h: +noteH.toFixed(4),
         fontPt: Math.max(8.5, noteFit.fontPt),
       })
+    }
+  })
+
+  // Expand frame bounds horizontally to enclose any notes that fall inside the frame's vertical span
+  positionedFrames.forEach((f) => {
+    for (const note of positionedNotes) {
+      if (note.y >= f.y - 0.05 && note.y + note.h <= f.y + f.h + 0.08) {
+        const leftEdge = Math.max(areaBox.x + 0.02, Math.min(f.x, note.x - 0.10))
+        const rightEdge = Math.min(areaBox.x + areaBox.w - 0.02, Math.max(f.x + f.w, note.x + note.w + 0.10))
+        f.x = +leftEdge.toFixed(4)
+        f.w = +Math.max(1.6, rightEdge - leftEdge).toFixed(4)
+      }
     }
   })
 
@@ -2587,6 +2599,16 @@ function svgFlowShapeMarkup(node, px) {
     const pts = `${(x + w / 2).toFixed(1)},${y.toFixed(1)} ${(x + w).toFixed(1)},${(y + h / 2).toFixed(1)} ${(x + w / 2).toFixed(1)},${(y + h).toFixed(1)} ${x.toFixed(1)},${(y + h / 2).toFixed(1)}`
     return `<polygon class="${cls}" points="${pts}"${styleAttr}/>`
   }
+  if (node.shape === 'hexagon') {
+    const d = Math.min(20, w * 0.16)
+    const pts = `${(x + d).toFixed(1)},${y.toFixed(1)} ${(x + w - d).toFixed(1)},${y.toFixed(1)} ${(x + w).toFixed(1)},${(y + h / 2).toFixed(1)} ${(x + w - d).toFixed(1)},${(y + h).toFixed(1)} ${(x + d).toFixed(1)},${(y + h).toFixed(1)} ${x.toFixed(1)},${(y + h / 2).toFixed(1)}`
+    return `<polygon class="${cls}" points="${pts}"${styleAttr}/>`
+  }
+  if (node.shape === 'parallelogram') {
+    const skew = Math.min(20, w * 0.14)
+    const pts = `${(x + skew).toFixed(1)},${y.toFixed(1)} ${(x + w).toFixed(1)},${y.toFixed(1)} ${(x + w - skew).toFixed(1)},${(y + h).toFixed(1)} ${x.toFixed(1)},${(y + h).toFixed(1)}`
+    return `<polygon class="${cls}" points="${pts}"${styleAttr}/>`
+  }
   if (node.shape === 'circle') {
     return `<ellipse class="${cls}" cx="${(x + w / 2).toFixed(1)}" cy="${(y + h / 2).toFixed(1)}" rx="${(w / 2).toFixed(1)}" ry="${(h / 2).toFixed(1)}"${styleAttr}/>`
   }
@@ -2826,13 +2848,15 @@ export function renderMermaidHtml(slide, index = 0) {
     const lineStep = fontSize * 1.24
     const startY = cy - ((n.lines.length - 1) * lineStep) / 2 + fontSize * 0.35
     const textCls = 'mm-node-txt' + ((n.shape === 'stadium' || (n.isRoot && n.shape !== 'diamond')) && !n.customStyle?.fill ? ' is-on-accent' : '')
+    const customInk = n.customStyle?.color || (n.customStyle?.fill ? bestContrastInk(n.customStyle.fill) : '')
+    const textStyleAttr = customInk ? ` style="fill:${escapeHtml(customInk)}"` : ''
     const tspans = n.lines.map((ln, i) =>
       `<tspan x="${cx.toFixed(1)}" y="${(startY + i * lineStep).toFixed(1)}">${escapeHtml(ln)}</tspan>`,
     ).join('')
     return (
       `<g class="mm-node-grp" data-node="${escapeHtml(n.id)}">` +
       svgFlowShapeMarkup(n, px) +
-      `<text class="${textCls}" font-size="${fontSize.toFixed(1)}" text-anchor="middle">${tspans}</text>` +
+      `<text class="${textCls}" font-size="${fontSize.toFixed(1)}" text-anchor="middle"${textStyleAttr}>${tspans}</text>` +
       `</g>`
     )
   }).join('')

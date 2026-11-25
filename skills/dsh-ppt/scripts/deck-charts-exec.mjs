@@ -8,7 +8,7 @@
  * 100% HTML/SVG 与 PPTX 原生可编辑 OOXML 双端同构渲染。
  */
 
-import { relativeLuminance, mixHex } from './deck-themes.mjs'
+import { relativeLuminance, mixHex, bestContrastInk } from './deck-themes.mjs'
 import {
   escapeHtml,
   stripInlineMarkdown,
@@ -50,7 +50,7 @@ function fmtCompact(num, unit = '') {
 }
 
 function contrastInkOn(bgHex) {
-  return relativeLuminance(bgHex) > 0.36 ? '#0F172A' : '#FFFFFF'
+  return bestContrastInk(bgHex)
 }
 
 // ---------------------------------------------------------------------------
@@ -414,41 +414,70 @@ function renderTreemapHtml(slide, theme) {
   const model = computeTreemapModel(slide, { x: 0, y: 0, w: vw, h: vh })
   const fills = treemapPalette(theme)
   const pad = 4
+  const clipPrefix = 'tm-' + Math.abs(String(slide.id || slide.title || 't').split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)).toString(36)
+  const estPx = (s, fs) => {
+    let acc = 0
+    for (const ch of String(s || '')) acc += /[\u2E80-\u9FFF\uF900-\uFAFF]/.test(ch) ? fs * 1.02 : fs * 0.58
+    return acc
+  }
+  const fitText = (s, maxW, fs) => {
+    let out = String(s || '')
+    if (estPx(out, fs) <= maxW) return out
+    while (out.length > 2 && estPx(out + '…', fs) > maxW) out = out.slice(0, -1)
+    return out.length >= 2 ? out + '…' : ''
+  }
+  const defs = []
   const rectsSvg = model.rects.map((t, idx) => {
     const fill = fills[idx % fills.length]
     const ink = contrastInkOn(fill)
     const x = t.x + pad / 2, y = t.y + pad / 2
     const w = Math.max(8, t.w - pad), h = Math.max(8, t.h - pad)
+    const clipId = `${clipPrefix}-${idx}`
+    defs.push(`<clipPath id="${clipId}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="8"/></clipPath>`)
     const isLarge = w >= 190 && h >= 105
     const isMed = w >= 115 && h >= 64
     let labels = ''
     if (isLarge) {
+      const l1 = fitText(t.label, w - 24, 16)
+      const l2 = fitText(`${t.displayValue} (${t.sharePct}%)`, w - 24, 22)
       labels =
-        `<text x="${(x + 14).toFixed(1)}" y="${(y + 28).toFixed(1)}" fill="${ink}" font-size="16" font-weight="700">${escapeHtml(t.label)}</text>` +
-        `<text x="${(x + 14).toFixed(1)}" y="${(y + 58).toFixed(1)}" fill="${ink}" font-size="22" font-weight="800">${escapeHtml(t.displayValue)} (${t.sharePct}%)</text>`
+        `<text x="${(x + 14).toFixed(1)}" y="${(y + 28).toFixed(1)}" fill="${ink}" font-size="16" font-weight="700">${escapeHtml(l1)}</text>` +
+        `<text x="${(x + 14).toFixed(1)}" y="${(y + 58).toFixed(1)}" fill="${ink}" font-size="22" font-weight="800">${escapeHtml(l2)}</text>`
     } else if (isMed) {
+      const l1 = fitText(t.label, w - 18, 13.5)
+      const l2 = fitText(`${t.displayValue} · ${t.sharePct}%`, w - 18, 13)
       labels =
-        `<text x="${(x + 10).toFixed(1)}" y="${(y + 24).toFixed(1)}" fill="${ink}" font-size="13.5" font-weight="700">${escapeHtml(t.label)}</text>` +
-        `<text x="${(x + 10).toFixed(1)}" y="${(y + 46).toFixed(1)}" fill="${ink}" opacity="0.9" font-size="13" font-weight="600">${escapeHtml(t.displayValue)} · ${t.sharePct}%</text>`
-    } else {
-      labels = `<text x="${(x + 8).toFixed(1)}" y="${(y + h / 2 + 4).toFixed(1)}" fill="${ink}" font-size="11" font-weight="700">${escapeHtml(t.label)} ${t.sharePct}%</text>`
+        `<text x="${(x + 10).toFixed(1)}" y="${(y + 24).toFixed(1)}" fill="${ink}" font-size="13.5" font-weight="700">${escapeHtml(l1)}</text>` +
+        `<text x="${(x + 10).toFixed(1)}" y="${(y + 46).toFixed(1)}" fill="${ink}" opacity="0.9" font-size="13" font-weight="600">${escapeHtml(l2)}</text>`
+    } else if (w >= 46 && h >= 24) {
+      const full = `${t.label} ${t.sharePct}%`
+      const compact = fitText(full, w - 14, 11) || fitText(`${t.sharePct}%`, w - 10, 10.5)
+      if (compact) {
+        labels = `<text x="${(x + 7).toFixed(1)}" y="${(y + h / 2 + 4).toFixed(1)}" fill="${ink}" font-size="11" font-weight="700">${escapeHtml(compact)}</text>`
+      }
     }
-    return `<g data-item-index="${idx}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="8" fill="${fill}"/>${labels}</g>`
+    return `<g data-item-index="${idx}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="8" fill="${fill}"/>${labels ? `<g clip-path="url(#${clipId})">${labels}</g>` : ''}</g>`
   }).join('')
-  return `<div class="treemap-wrap"><svg class="treemap-svg" viewBox="0 0 ${vw} ${vh}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(stripInlineMarkdown(slide.title || 'Treemap'))}">${rectsSvg}</svg></div>`
+  return `<div class="treemap-wrap"><svg class="treemap-svg" viewBox="0 0 ${vw} ${vh}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(stripInlineMarkdown(slide.title || 'Treemap'))}"><defs>${defs.join('')}</defs>${rectsSvg}</svg></div>`
 }
 
 // ---------------------------------------------------------------------------
 // 3. gauge (Stephen Few Horizontal Bullet / OKR Attainment Dashboard)
 // ---------------------------------------------------------------------------
 
-export function computeGaugeModel(slide) {
+export function computeGaugeModel(slide, langEn = false) {
   const items = resolveEffectiveItems(slide).slice(0, 5)
-  const list = items.length > 0 ? items : [
-    { title: '年度 ARR 营收达成', value: 86, target: 80, max: 100, unit: '%', text: '大客户续约超预期' },
-    { title: '毛利率水平', value: 74, target: 75, max: 100, unit: '%', text: '算力优化持续推进' },
-    { title: '交付周期达标率', value: 92, target: 90, max: 100, unit: '%', text: '全自动化部署落地' },
-  ]
+  const list = items.length > 0 ? items : (langEn
+    ? [
+        { title: 'Annual ARR Attainment', value: 86, target: 80, max: 100, unit: '%', text: 'Enterprise renewals ahead of plan' },
+        { title: 'Gross Margin', value: 74, target: 75, max: 100, unit: '%', text: 'Inference optimization underway' },
+        { title: 'On-Time Delivery Rate', value: 92, target: 90, max: 100, unit: '%', text: 'Automated deployment live' },
+      ]
+    : [
+        { title: '年度 ARR 营收达成', value: 86, target: 80, max: 100, unit: '%', text: '大客户续约超预期' },
+        { title: '毛利率水平', value: 74, target: 75, max: 100, unit: '%', text: '算力优化持续推进' },
+        { title: '交付周期达标率', value: 92, target: 90, max: 100, unit: '%', text: '全自动化部署落地' },
+      ])
   return list.map((it, idx) => {
     const actual = Math.max(0, parseNumericVal(it.actual ?? it.value ?? it.after, 75))
     const rawTarget = it.target ?? it.before
@@ -472,7 +501,7 @@ export function computeGaugeModel(slide) {
       attainmentPct,
       displayActual: fmtCompact(actual, unit),
       displayTarget: fmtCompact(target, unit),
-      delta: stripInlineMarkdown(it.delta || `${attainmentPct}% 达标`),
+      delta: stripInlineMarkdown(it.delta || (langEn ? `${attainmentPct}% of goal` : `${attainmentPct}% 达标`)),
       status,
     }
   })
@@ -489,7 +518,8 @@ function gaugeStatusColor(status, theme) {
 function renderGaugePptx(slide, ctx) {
   const { theme, langAttr, chromeCfg, nextId, bodyTopY, bodyH, cardMaterial = 'solid' } = ctx
   const tk = theme.tokens
-  const rows = computeGaugeModel(slide)
+  const langEn = langAttr === 'en-US'
+  const rows = computeGaugeModel(slide, langEn)
   const count = rows.length
   const gap = 0.16
   const rowH = Math.min(1.04, (bodyH - gap * Math.max(0, count - 1)) / Math.max(1, count))
@@ -543,7 +573,7 @@ function renderGaugePptx(slide, ctx) {
     xml += ooxmlShape(nextId(), `Gauge TgtLabel ${idx + 1}`, { x: Math.max(trackX, Math.min(trackX + trackW - 1.25, tgtX - 0.55)), y: trY + trH + 0.03, w: 1.25, h: 0.2 }, {
       txBox: true,
       marginsIn: { l: 0, r: 0, t: 0, b: 0 },
-      paragraphs: [ooxmlRichParagraph(`目标 ${r.displayTarget}`, { sizePt: 8.5, color: tk.inkMuted, align: 'ctr', lang: langAttr, font: theme.fonts.body })],
+      paragraphs: [ooxmlRichParagraph(`${langEn ? 'Target ' : '目标 '}${r.displayTarget}`, { sizePt: 8.5, color: tk.inkMuted, align: 'ctr', lang: langAttr, font: theme.fonts.body })],
     })
 
     xml += ooxmlShape(nextId(), `Gauge Value ${idx + 1}`, { x: rightX, y: ry + 0.06, w: rightW - 0.14, h: rowH - 0.12 }, {
@@ -560,27 +590,32 @@ function renderGaugePptx(slide, ctx) {
   return xml
 }
 
-function renderGaugeHtml(slide) {
-  const rows = computeGaugeModel(slide)
+function renderGaugeHtml(slide, langEn = false) {
+  const rows = computeGaugeModel(slide, langEn)
+  const tgtPrefix = langEn ? 'Target ' : '目标 '
   return (
     '<div class="gauge-board">' +
-    rows.map((r) =>
-      '<div class="surface-card gauge-row" data-item-index="' + r.index + '">' +
-      '<div class="gauge-label"><div class="card-title">' + renderInlineHtml(r.title) + '</div>' +
-      (r.subtitle ? '<div class="gauge-sub">' + renderInlineHtml(r.subtitle) + '</div>' : '') +
-      '</div>' +
-      '<div class="gauge-track-wrap">' +
-      '<div class="gauge-track">' +
-      '<div class="gauge-band b1" style="width:60%"></div>' +
-      '<div class="gauge-band b2" style="width:85%"></div>' +
-      '<div class="gauge-actual tone-' + escapeHtml(r.status) + '" style="width:' + (r.actualRatio * 100).toFixed(1) + '%"></div>' +
-      '<div class="gauge-target" style="left:' + (r.targetRatio * 100).toFixed(1) + '%" title="Target ' + escapeHtml(r.displayTarget) + '"></div>' +
-      '</div>' +
-      '<span class="gauge-tgt-lbl" style="left:' + (r.targetRatio * 100).toFixed(1) + '%">目标 ' + escapeHtml(r.displayTarget) + '</span>' +
-      '</div>' +
-      '<div class="gauge-readout"><strong class="tone-' + escapeHtml(r.status) + '">' + escapeHtml(r.displayActual) + '</strong><span>' + escapeHtml(r.delta) + '</span></div>' +
-      '</div>',
-    ).join('') +
+    rows.map((r) => {
+      const tgtPct = r.targetRatio * 100
+      const clampedLblPct = Math.max(6, Math.min(93, tgtPct))
+      return (
+        '<div class="surface-card gauge-row" data-item-index="' + r.index + '">' +
+        '<div class="gauge-label"><div class="card-title">' + renderInlineHtml(r.title) + '</div>' +
+        (r.subtitle ? '<div class="gauge-sub">' + renderInlineHtml(r.subtitle) + '</div>' : '') +
+        '</div>' +
+        '<div class="gauge-track-wrap">' +
+        '<div class="gauge-track">' +
+        '<div class="gauge-band b1" style="width:60%"></div>' +
+        '<div class="gauge-band b2" style="width:85%"></div>' +
+        '<div class="gauge-actual tone-' + escapeHtml(r.status) + '" style="width:' + (r.actualRatio * 100).toFixed(1) + '%"></div>' +
+        '<div class="gauge-target" style="left:' + tgtPct.toFixed(1) + '%" title="Target ' + escapeHtml(r.displayTarget) + '"></div>' +
+        '</div>' +
+        '<span class="gauge-tgt-lbl" style="left:' + clampedLblPct.toFixed(1) + '%">' + tgtPrefix + escapeHtml(r.displayTarget) + '</span>' +
+        '</div>' +
+        '<div class="gauge-readout"><strong class="tone-' + escapeHtml(r.status) + '">' + escapeHtml(r.displayActual) + '</strong><span>' + escapeHtml(r.delta) + '</span></div>' +
+        '</div>'
+      )
+    }).join('') +
     '</div>'
   )
 }
@@ -751,7 +786,7 @@ export function renderExecChartSlideBodyHtml(slide, ctx) {
   const layout = slide.layout
   if (layout === 'issue-tree') return renderIssueTreeHtml(slide)
   if (layout === 'treemap') return renderTreemapHtml(slide, ctx?.theme)
-  if (layout === 'gauge') return renderGaugeHtml(slide)
+  if (layout === 'gauge') return renderGaugeHtml(slide, ctx?.langId === 'en')
   if (layout === 'pricing') return renderPricingHtml(slide)
   return null
 }
@@ -774,8 +809,8 @@ export const EXEC_CHARTS_CSS = `
 .gauge-row{display:grid;grid-template-columns:27% 1fr 16%;gap:clamp(12px,1.6vw,22px);align-items:center;padding:clamp(12px,1.5vw,20px)}
 .gauge-sub{font-size:clamp(12px,1.05vw,14px);color:var(--muted);margin-top:2px}
 .gauge-track-wrap{position:relative;padding:8px 0 18px}
-.gauge-track{position:relative;height:26px;border-radius:6px;background:color-mix(in srgb,var(--hairline) 32%,var(--bg));overflow:hidden;border:1px solid var(--hairline)}
-.gauge-band{position:absolute;top:0;bottom:0;left:0}
+.gauge-track{position:relative;height:26px;border-radius:6px;background:color-mix(in srgb,var(--hairline) 32%,var(--bg));overflow:visible;border:1px solid var(--hairline)}
+.gauge-band{position:absolute;top:0;bottom:0;left:0;border-radius:5px 0 0 5px}
 .gauge-band.b1{background:color-mix(in srgb,var(--hairline) 75%,var(--bg))}
 .gauge-band.b2{background:color-mix(in srgb,var(--hairline) 48%,var(--bg))}
 .gauge-actual{position:absolute;top:6px;bottom:6px;left:0;border-radius:3px;background:var(--accent);z-index:2}

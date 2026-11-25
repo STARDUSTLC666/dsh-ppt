@@ -199,12 +199,18 @@ export function renderCoverPatternPptx(pattern, theme, nextId) {
   return out.join('')
 }
 
-function renderCoverPatternSvgHtml(pattern, theme) {
+export function renderCoverPatternSvgHtml(pattern, theme) {
   const p = String(pattern || '').trim().toLowerCase()
-  if (!['waves', 'isometric-mesh', 'editorial-arcs'].includes(p)) return ''
+  if (!['waves', 'isometric-mesh', 'editorial-arcs', 'rings'].includes(p)) return ''
   const tk = theme?.tokens || {}
   const col = theme?.dark ? '#FFFFFF' : (tk.accentPrimary || '#0057B8')
   const col2 = theme?.dark ? (tk.accentPrimary || '#60A5FA') : (tk.accentSecondary || col)
+  if (p === 'rings') {
+    const rings = [170, 255, 340].map((r, ri) =>
+      `<circle cx="1018" cy="360" r="${r}" fill="none" stroke="${ri === 0 ? col2 : col}" stroke-opacity="${(theme?.dark ? 0.14 - ri * 0.025 : 0.15 - ri * 0.025).toFixed(3)}" stroke-width="${ri === 0 ? 1.5 : 1}"/>`
+    ).join('')
+    return `<svg class="cover-pat-svg" viewBox="0 0 1280 720" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">${rings}</svg>`
+  }
   if (p === 'waves') {
     const paths = [0, 1, 2, 3].map((wi) => {
       const y0 = 260 + wi * 38
@@ -605,15 +611,6 @@ export function renderPosterCoverPptx(slide, ctx) {
     fill: '#FFFFFF',
     fillAlpha: 0.35,
   }))
-  shapes.push(ooxmlShape(nextId(), 'Wing Geo Block', { x: wingX + 0.42, y: 4.85, w: wingW - 0.84, h: 1.95 }, {
-    preset: 'roundRect',
-    adj: roundRectAdj(wingW - 0.84, 1.95, 10),
-    fill: '#FFFFFF',
-    fillAlpha: 0.09,
-    stroke: '#FFFFFF',
-    strokeAlpha: 0.22,
-    strokePt: 0.75,
-  }))
   const yearWing = /\b(20\d{2})\b/.exec([kicker, title, subtitle, metaText].join(' '))?.[1] || String(total).padStart(2, '0')
   shapes.push(ooxmlShape(nextId(), 'Wing Watermark', { x: wingX + 0.35, y: 1.65, w: wingW - 0.70, h: 2.3 }, {
     txBox: true,
@@ -631,6 +628,15 @@ export function renderPosterCoverPptx(slide, ctx) {
     ],
   }))
   if (metaText) {
+    shapes.push(ooxmlShape(nextId(), 'Wing Geo Block', { x: wingX + 0.42, y: 4.85, w: wingW - 0.84, h: 1.95 }, {
+      preset: 'roundRect',
+      adj: roundRectAdj(wingW - 0.84, 1.95, 10),
+      fill: '#FFFFFF',
+      fillAlpha: 0.09,
+      stroke: '#FFFFFF',
+      strokeAlpha: 0.22,
+      strokePt: 0.75,
+    }))
     shapes.push(ooxmlShape(nextId(), 'Wing Meta', { x: wingX + 0.62, y: 5.15, w: wingW - 1.24, h: 1.35 }, {
       txBox: true,
       anchor: 'ctr',
@@ -801,7 +807,8 @@ export function renderPosterCoverHtml(slide, ctx) {
       })()
     : ''
   return (
-    '<div class="cover-shell is-architectural' + (coverVariant === 'split-bleed' ? ' is-split-bleed' : '') + '">' +
+    '<div class="cover-shell is-architectural' + (coverVariant === 'split-bleed' ? ' is-split-bleed' : '') + patClass + '">' +
+    patSvg +
     '<div class="arch-left">' +
     (kicker !== '' ? '<div class="kicker">' + escapeHtml(kicker) + '</div>' : '') +
     '<h1>' + renderInlineHtml(title) + '</h1>' +
@@ -1115,7 +1122,8 @@ export const AESTHETIC_STUDIO_CSS = `
 .photo-cover-right img{width:100%;height:100%;object-fit:cover;display:block}
 .cover-pat-grid{background-image:linear-gradient(to right,color-mix(in srgb,var(--hairline) 42%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--hairline) 42%,transparent) 1px,transparent 1px);background-size:48px 48px}
 .cover-pat-dots{background-image:radial-gradient(color-mix(in srgb,var(--accent) 26%,transparent) 1.5px,transparent 1.5px);background-size:24px 24px}
-.cover-shell.is-editorial-grid,.cover-shell.is-architectural{position:relative}
+.cover-pat-rings{background-image:radial-gradient(circle at 80% 50%,transparent 18%,color-mix(in srgb,var(--accent) 16%,transparent) 18.4%,transparent 18.8%,transparent 30%,color-mix(in srgb,var(--accent) 12%,transparent) 30.4%,transparent 30.8%,transparent 42%,color-mix(in srgb,var(--accent) 9%,transparent) 42.4%,transparent 42.8%)}
+.cover-shell.is-editorial-grid,.cover-shell.is-architectural,.cover-shell.is-keynote-glow,.cover-shell.is-inverted{position:relative}
 .cover-pat-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
-.cover-shell.is-editorial-grid > :not(.cover-pat-svg){position:relative;z-index:1}
+.cover-shell.is-editorial-grid > :not(.cover-pat-svg),.cover-shell.is-architectural > :not(.cover-pat-svg),.cover-shell.is-keynote-glow > :not(.cover-pat-svg):not(.cover-glow-orb),.cover-shell.is-inverted > :not(.cover-pat-svg){position:relative;z-index:1}
 `
