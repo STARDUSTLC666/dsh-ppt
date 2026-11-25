@@ -25,30 +25,30 @@ const PPT_LAYOUT_CATALOG = Object.freeze([
   { id: 'kpi', zh: '大数字指标 KPI', en: 'KPI metrics', group: 'structured', quick: true, variants: [['spotlight', '主次聚光灯', 'Spotlight'], ['frameless', '无框大数字', 'Frameless'], ['grid', '指标矩阵', 'Grid'], ['hero-left', '主指标左置', 'Hero left'], ['banner', '通栏指标', 'Banner']] },
   { id: 'comparison', zh: '双栏 / 痛点对比', en: 'Comparison', group: 'structured', quick: true, variants: [['versus', 'A/B 对比', 'Versus'], ['before-after', '前后对比', 'Before / after'], ['do-dont', '推荐 vs 避免', 'Do / don’t'], ['issue-action', '痛点 → 举措', 'Issue → action']] },
   { id: 'process', zh: '流程 / 价值链 / 飞轮', en: 'Process & value chain', group: 'structured', quick: true, variants: [['steps', '推进步骤', 'Steps'], ['chevron', '价值链箭头', 'Value-chain chevrons'], ['timeline', '里程碑时间轴', 'Timeline'], ['layers', '架构分层', 'Layers'], ['funnel', '转化漏斗', 'Funnel'], ['flywheel', '增长飞轮', 'Flywheel']] },
-  { id: 'matrix', zh: '2×2 四象限矩阵', en: '2×2 Matrix', group: 'structured', quick: true, variants: [['2x2', '四象限坐标轴', '2×2 quadrant'], ['grid', '四宫格', 'Grid']] },
+  { id: 'matrix', zh: '2×2 四象限矩阵', en: '2×2 Matrix', group: 'structured', variants: [['2x2', '四象限坐标轴', '2×2 quadrant'], ['grid', '四宫格', 'Grid']] },
   { id: 'callout', zh: '结论清单 / 定理框', en: 'Callout & checklist', group: 'structured', variants: [['takeaways', '行动清单', 'Takeaways'], ['definition', '核心定义框', 'Definition'], ['formula', '公式定理框', 'Formula']] },
-  { id: 'gantt', zh: '甘特图路线图', en: 'Gantt roadmap', group: 'data', quick: true, variants: [['quarters', '按季度', 'Quarters'], ['months', '按月份', 'Months'], ['weeks', '按周次', 'Weeks'], ['swimlane', '泳道甘特', 'Swimlane']] },
-  { id: 'architecture', zh: '分层系统架构图', en: 'Architecture diagram', group: 'structured', quick: true, variants: [['layered', '分层架构', 'Layered'], ['platform', '平台中台', 'Platform']] },
-  { id: 'harvey', zh: '哈维球竞品矩阵', en: 'Harvey-ball matrix', group: 'data', quick: true, variants: [] },
+  { id: 'gantt', zh: '甘特图路线图', en: 'Gantt roadmap', group: 'data', variants: [['quarters', '按季度', 'Quarters'], ['months', '按月份', 'Months'], ['weeks', '按周次', 'Weeks'], ['swimlane', '泳道甘特', 'Swimlane']] },
+  { id: 'architecture', zh: '分层系统架构图', en: 'Architecture diagram', group: 'structured', variants: [['layered', '分层架构', 'Layered'], ['platform', '平台中台', 'Platform']] },
+  { id: 'harvey', zh: '哈维球竞品矩阵', en: 'Harvey-ball matrix', group: 'data', variants: [] },
   { id: 'tam', zh: 'TAM/SAM/SOM 同心圆', en: 'TAM/SAM/SOM', group: 'data', variants: [['concentric', '同心圆', 'Concentric']] },
   { id: 'org', zh: '组织架构 / 团队图谱', en: 'Org & team', group: 'structured', variants: [['tree', '汇报树状图', 'Org tree'], ['team', '核心团队卡', 'Team bios']] },
-  { id: 'marimekko', zh: '不等宽市场图', en: 'Marimekko market map', group: 'data', quick: true, variants: [] },
-  { id: 'sankey', zh: '桑基流向图', en: 'Sankey flow diagram', group: 'data', quick: true, variants: [] },
-  { id: 'swot', zh: 'SWOT 十字矩阵', en: 'SWOT matrix', group: 'structured', quick: true, variants: [] },
-  { id: 'value-chain', zh: '波特价值链', en: 'Porter value chain', group: 'structured', quick: true, variants: [] },
-  { id: 'mermaid', zh: 'Mermaid 流程图/时序图', en: 'Mermaid Diagram', group: 'data', quick: true, variants: [['flowchart', '流程图', 'Flowchart'], ['sequence', '时序图', 'Sequence']] },
-  { id: 'mockup', zh: '设备原型 / 界面展示', en: 'Device mockup', group: 'media', quick: true, variants: [['browser', '浏览器窗口', 'Browser window'], ['mobile', '移动端真机', 'Mobile device'], ['split', '双端协同对比', 'Desktop + mobile']] },
-  { id: 'code', zh: '语法高亮代码展示', en: 'Code showcase', group: 'structured', quick: true, variants: [['full', '全宽终端窗口', 'Full terminal'], ['split', '左代码右批注', 'Split annotations']] },
-  { id: 'quadrant', zh: '魔力象限 / 战略气泡', en: 'Magic Quadrant', group: 'data', quick: true, variants: [] },
-  { id: 'radar', zh: '多维雷达图', en: 'Radar chart', group: 'data', quick: true, variants: [] },
-  { id: 'dumbbell', zh: '哑铃 / 前后跃迁图', en: 'Dumbbell slope', group: 'data', quick: true, variants: [] },
-  { id: 'heatmap', zh: '矩阵热力图', en: 'Heatmap matrix', group: 'data', quick: true, variants: [] },
-  { id: 'map', zh: '全球 / 中国点阵地图', en: 'World / China Map', group: 'data', quick: true, variants: [['world', '全球地图', 'World map'], ['china', '中国版图', 'China map']] },
-  { id: 'isometric', zh: '2.5D 等轴测立体图', en: '2.5D Isometric', group: 'structured', quick: true, variants: [['stack', '立体分层堆叠', '3D layer stack'], ['pillars', '立体柱碑阶梯', '3D pillars']] },
-  { id: 'issue-tree', zh: 'MECE 逻辑议题树', en: 'MECE Issue Tree', group: 'structured', quick: true, variants: [] },
-  { id: 'treemap', zh: '比例矩形树图', en: 'Proportional Treemap', group: 'data', quick: true, variants: [] },
-  { id: 'gauge', zh: 'OKR 达标仪 / 子弹图', en: 'OKR Bullet Gauge', group: 'data', quick: true, variants: [] },
-  { id: 'pricing', zh: '商业报价 / 方案矩阵', en: 'Pricing Tiers', group: 'structured', quick: true, variants: [] },
+  { id: 'marimekko', zh: '不等宽市场图', en: 'Marimekko market map', group: 'data', variants: [] },
+  { id: 'sankey', zh: '桑基流向图', en: 'Sankey flow diagram', group: 'data', variants: [] },
+  { id: 'swot', zh: 'SWOT 十字矩阵', en: 'SWOT matrix', group: 'structured', variants: [] },
+  { id: 'value-chain', zh: '波特价值链', en: 'Porter value chain', group: 'structured', variants: [] },
+  { id: 'mermaid', zh: 'Mermaid 流程图/时序图', en: 'Mermaid Diagram', group: 'data', variants: [['flowchart', '流程图', 'Flowchart'], ['sequence', '时序图', 'Sequence']] },
+  { id: 'mockup', zh: '设备原型 / 界面展示', en: 'Device mockup', group: 'media', variants: [['browser', '浏览器窗口', 'Browser window'], ['mobile', '移动端真机', 'Mobile device'], ['split', '双端协同对比', 'Desktop + mobile']] },
+  { id: 'code', zh: '语法高亮代码展示', en: 'Code showcase', group: 'structured', variants: [['full', '全宽终端窗口', 'Full terminal'], ['split', '左代码右批注', 'Split annotations']] },
+  { id: 'quadrant', zh: '魔力象限 / 战略气泡', en: 'Magic Quadrant', group: 'data', variants: [] },
+  { id: 'radar', zh: '多维雷达图', en: 'Radar chart', group: 'data', variants: [] },
+  { id: 'dumbbell', zh: '哑铃 / 前后跃迁图', en: 'Dumbbell slope', group: 'data', variants: [] },
+  { id: 'heatmap', zh: '矩阵热力图', en: 'Heatmap matrix', group: 'data', variants: [] },
+  { id: 'map', zh: '全球 / 中国点阵地图', en: 'World / China Map', group: 'data', variants: [['world', '全球地图', 'World map'], ['china', '中国版图', 'China map']] },
+  { id: 'isometric', zh: '2.5D 等轴测立体图', en: '2.5D Isometric', group: 'structured', variants: [['stack', '立体分层堆叠', '3D layer stack'], ['pillars', '立体柱碑阶梯', '3D pillars']] },
+  { id: 'issue-tree', zh: 'MECE 逻辑议题树', en: 'MECE Issue Tree', group: 'structured', variants: [] },
+  { id: 'treemap', zh: '比例矩形树图', en: 'Proportional Treemap', group: 'data', variants: [] },
+  { id: 'gauge', zh: 'OKR 达标仪 / 子弹图', en: 'OKR Bullet Gauge', group: 'data', variants: [] },
+  { id: 'pricing', zh: '商业报价 / 方案矩阵', en: 'Pricing Tiers', group: 'structured', variants: [] },
   { id: 'table', zh: '表格 / 学术三线表', en: 'Table', group: 'data', quick: true, variants: [] },
   { id: 'chart', zh: '原生数据图表', en: 'Chart', group: 'data', variants: [] },
   { id: 'chart-split', zh: '图表 + 洞察分栏', en: 'Chart + insights', group: 'data', variants: [['chart-left', '左图右洞察', 'Chart left'], ['chart-right', '左洞察右图', 'Chart right']] },
@@ -73,7 +73,7 @@ function pptLayoutLabel(layout) {
 
 function normalizeSlideItems(slide) {
   const raw = Array.isArray(slide?.items) ? slide.items : Array.isArray(slide?.cards) ? slide.cards : [];
-  return raw.slice(0, 12).map(entry => ({
+  return raw.slice(0, 8).map(entry => ({
     tag: String(entry?.tag ?? entry?.badge ?? ''),
     title: String(entry?.title ?? ''),
     text: String(entry?.text ?? entry?.body ?? ''),
@@ -421,7 +421,7 @@ function projectDraftToLayout(draft, nextLayout) {
   return next;
 }
 
-function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
+function SlideArchetypeEditor({ slide, draft, hasImage = false, disabled, controlId, onChange }) {
   const L = (zh, en) => languageOf() === 'en' ? en : zh;
   const currentLayout = draft.layout || slide?.layout || 'bullets';
   const meta = pptLayoutMeta(currentLayout);
@@ -429,23 +429,39 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
   const items = Array.isArray(draft.items) ? draft.items : [];
   const showItemsEditor = PPT_ITEM_LAYOUTS.has(currentLayout) || (currentLayout === 'code' && draft.variant === 'split') || items.length > 0;
   const showTableEditor = currentLayout === 'table' || currentLayout === 'harvey' || currentLayout === 'marimekko' || currentLayout === 'heatmap' || currentLayout === 'radar' || Boolean(draft.rowsText?.trim());
+  const isSankey = currentLayout === 'sankey';
+  const isKpi = currentLayout === 'kpi';
+  const showValueUnitRow = ['sankey', 'tam', 'map', 'mockup', 'issue-tree', 'treemap', 'pricing'].includes(currentLayout);
+  const showDeltaField = ['map', 'mockup', 'treemap', 'dumbbell'].includes(currentLayout);
 
   function updateItem(idx, key, val) {
-    const nextItems = items.map((entry, i) => i === idx ? { ...entry, [key]: val } : entry);
+    const nextItems = items.map((entry, i) => {
+      if (i !== idx) return entry;
+      const updated = { ...entry, [key]: val };
+      if (currentLayout === 'gantt' && key === 'span') {
+        const num = Number(val);
+        if (val !== '' && Number.isFinite(num)) updated.milestone = num === 0;
+      }
+      if (currentLayout === 'gantt' && key === 'milestone') {
+        if (val === true) updated.span = '0';
+        else if (String(updated.span ?? '') === '0') updated.span = '1';
+      }
+      return updated;
+    });
     onChange({ ...draft, items: nextItems });
   }
   function addItem() {
-    if (items.length >= 12) return;
+    if (items.length >= 8) return;
     onChange({
       ...draft,
       items: [...items, {
-        tag: currentLayout === 'kpi' ? '' : currentLayout === 'tam' ? ['TAM', 'SAM', 'SOM'][items.length] || 'SOM' : String(items.length + 1).padStart(2, '0'),
-        title: L('卡片标题', 'Card title'),
-        text: currentLayout === 'kpi' ? '' : L('补充关键论据或举措', 'Supporting point or action'),
-        value: currentLayout === 'kpi' ? '95%' : currentLayout === 'tam' ? '$1B' : currentLayout === 'treemap' ? '20' : currentLayout === 'pricing' ? '¥19,800' : '',
-        unit: currentLayout === 'gauge' ? '%' : currentLayout === 'pricing' ? L('/年', '/yr') : '',
-        delta: '',
-        status: currentLayout === 'kpi' ? 'accent' : '',
+        tag: isKpi ? '' : isSankey ? L('来源节点', 'Source') : currentLayout === 'tam' ? ['TAM', 'SAM', 'SOM'][items.length] || 'SOM' : currentLayout === 'map' ? L('大区', 'REG') : String(items.length + 1).padStart(2, '0'),
+        title: isSankey ? L('目标节点', 'Target') : L('卡片标题', 'Card title'),
+        text: (isKpi || isSankey) ? '' : L('补充关键论据或举措', 'Supporting point or action'),
+        value: isKpi ? '95%' : isSankey ? '20' : currentLayout === 'tam' ? '$1B' : currentLayout === 'map' ? '$12M' : currentLayout === 'mockup' ? '99.9%' : currentLayout === 'issue-tree' ? '+1.5 pts' : currentLayout === 'treemap' ? '20' : currentLayout === 'pricing' ? '¥19,800' : '',
+        unit: currentLayout === 'gauge' ? '%' : currentLayout === 'pricing' ? L('/年', '/yr') : isSankey ? L('百万', 'M') : '',
+        delta: (currentLayout === 'map' || currentLayout === 'mockup' || currentLayout === 'treemap') ? '+15%' : '',
+        status: (isKpi || isSankey) ? 'accent' : '',
         icon: '',
         avatar: '',
         start: currentLayout === 'gantt' ? String(Math.min(items.length, 3)) : '',
@@ -477,7 +493,12 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
         value: currentLayout,
         disabled,
         onChange: e => onChange(projectDraftToLayout(draft, e.target.value)),
-      }, PPT_LAYOUT_CATALOG.map(row => h('option', { key: row.id, value: row.id }, languageOf() === 'en' ? row.en : row.zh)))),
+      }, PPT_LAYOUT_CATALOG.map(row => {
+        const needsChart = (row.id === 'chart' || row.id === 'chart-split') && !slide?.chart && currentLayout !== row.id;
+        const needsImage = (row.id === 'image' || row.id === 'image-left' || row.id === 'image-right') && !hasImage && !slide?.image && currentLayout !== row.id;
+        const label = (languageOf() === 'en' ? row.en : row.zh) + (needsChart ? L('（需图表数据）', ' (needs chart)') : needsImage ? L('（需先上传图片）', ' (needs image)') : '');
+        return h('option', { key: row.id, value: row.id, disabled: needsChart || needsImage }, label);
+      }))),
     canQuickSwitch ? h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('常用高质感版式', 'Recommended archetypes') },
       PPT_LAYOUT_CATALOG.filter(row => row.quick).map(row => h('button', {
         type: 'button',
@@ -591,9 +612,9 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
         onChange: e => onChange({ ...draft, rowsText: e.target.value }),
       })) : null,
     showItemsEditor ? h('details', { className: 'ppt-structured-section', open: PPT_ITEM_LAYOUTS.has(currentLayout) },
-      h('summary', null, L('结构化卡片 / 指标项（', 'Structured cards / metrics (') + items.length + L(' 项）', ')')),
+      h('summary', null, L('结构化卡片 / 指标项（', 'Structured cards / metrics (') + items.length + L('/8 项）', '/8)')),
       h('div', { className: 'tools' },
-        h('button', { type: 'button', disabled: disabled || items.length >= 12, onClick: addItem }, L('+ 添加卡片项', '+ Add card item')),
+        h('button', { type: 'button', disabled: disabled || items.length >= 8, onClick: addItem }, L('+ 添加卡片项', '+ Add card item')),
         draft.bullets?.trim() ? h('button', { type: 'button', disabled, onClick: () => onChange({ ...draft, items: itemsFromBulletsText(draft.bullets, currentLayout) }) }, L('从要点文本自动生成卡片', 'Convert bullets to cards')) : null),
       items.map((entry, idx) => h('div', { key: idx, className: 'ppt-item-editor' },
         h('div', { className: 'ppt-item-head' },
@@ -601,17 +622,17 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
           h('button', { type: 'button', disabled, onClick: () => removeItem(idx) }, L('移除', 'Remove'))),
         h('div', { className: 'ppt-archetype-subgrid' },
           h('div', null,
-            h('label', null, currentLayout === 'kpi' ? L('核心数值', 'Metric value') : L('角标 / 序号', 'Badge / step')),
+            h('label', null, isKpi ? L('核心数值', 'Metric value') : isSankey ? L('来源节点 (Source)', 'Source node') : L('角标 / 序号', 'Badge / step')),
             h('input', {
-              value: currentLayout === 'kpi' ? entry.value : entry.tag,
+              value: isKpi ? entry.value : entry.tag,
               disabled,
               maxLength: 120,
-              placeholder: currentLayout === 'kpi' ? '98.5%' : '01',
-              onChange: e => updateItem(idx, currentLayout === 'kpi' ? 'value' : 'tag', e.target.value),
+              placeholder: isKpi ? '98.5%' : isSankey ? L('总营收', 'Total Revenue') : '01',
+              onChange: e => updateItem(idx, isKpi ? 'value' : 'tag', e.target.value),
             })),
           h('div', null,
-            h('label', null, currentLayout === 'kpi' ? L('涨跌 / 标签', 'Delta / note') : L('状态强调', 'Semantic tone')),
-            currentLayout === 'kpi'
+            h('label', null, isKpi ? L('涨跌 / 标签', 'Delta / note') : L('状态强调', 'Semantic tone')),
+            isKpi
               ? h('input', { value: entry.delta, disabled, maxLength: 120, placeholder: '+12% YoY', onChange: e => updateItem(idx, 'delta', e.target.value) })
               : h('select', { value: entry.status || '', disabled, onChange: e => updateItem(idx, 'status', e.target.value) },
                   h('option', { value: '' }, L('默认表面', 'Default')),
@@ -619,13 +640,27 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
                   h('option', { value: 'positive' }, L('正向达成', 'Positive')),
                   h('option', { value: 'warning' }, L('风险关注', 'Warning')),
                   h('option', { value: 'negative' }, L('负向警示', 'Negative'))))),
-        currentLayout === 'gantt' ? h('div', { className: 'ppt-archetype-subgrid' },
+        isKpi ? h('div', { className: 'ppt-archetype-subgrid' },
           h('div', null,
-            h('label', null, L('起始列 (0-based)', 'Start slot (0-based)')),
-            h('input', { type: 'number', min: 0, max: 52, step: 0.5, value: entry.start ?? '', disabled, placeholder: '0', onChange: e => updateItem(idx, 'start', e.target.value) })),
+            h('label', null, L('角标 (Tag)', 'Badge (Tag)')),
+            h('input', { value: entry.tag || '', disabled, maxLength: 120, placeholder: 'ARR', onChange: e => updateItem(idx, 'tag', e.target.value) })),
           h('div', null,
-            h('label', null, L('跨度列数 (0=里程碑)', 'Span (0=milestone)')),
-            h('input', { type: 'number', min: 0, max: 52, step: 0.5, value: entry.span ?? '', disabled, placeholder: '1', onChange: e => updateItem(idx, 'span', e.target.value) }))) : null,
+            h('label', null, L('单位 (Unit)', 'Unit')),
+            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: L('亿 / 天 / %', 'B / days / %'), onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
+        currentLayout === 'gantt' ? h('div', null,
+          h('div', { className: 'ppt-archetype-subgrid' },
+            h('div', null,
+              h('label', null, L('起始列 (0-based)', 'Start slot (0-based)')),
+              h('input', { type: 'number', min: 0, max: 52, step: 0.5, value: entry.start ?? '', disabled, placeholder: '0', onChange: e => updateItem(idx, 'start', e.target.value) })),
+            h('div', null,
+              h('label', null, L('跨度列数 (0=里程碑)', 'Span (0=milestone)')),
+              h('input', { type: 'number', min: 0, max: 52, step: 0.5, value: entry.span ?? '', disabled, placeholder: '1', onChange: e => updateItem(idx, 'span', e.target.value) }))),
+          h(W.Checkbox, {
+            checked: entry.milestone === true,
+            disabled,
+            onChange: next => updateItem(idx, 'milestone', next),
+            label: L('里程碑节点 (Milestone)', 'Milestone diamond'),
+          })) : null,
         currentLayout === 'org' ? h('div', null,
           h('label', null, L('角色 / 职级标签', 'Role / title badge')),
           h('input', { value: entry.role || '', disabled, maxLength: 120, placeholder: L('例如：技术负责人', 'e.g. VP Engineering'), onChange: e => updateItem(idx, 'role', e.target.value) })) : null,
@@ -651,7 +686,10 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
             h('input', { type: 'number', step: 'any', value: entry.after ?? '', disabled, placeholder: '88', onChange: e => updateItem(idx, 'after', e.target.value) })),
           h('div', null,
             h('label', null, L('单位', 'Unit')),
-            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: '%', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
+            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: '%', onChange: e => updateItem(idx, 'unit', e.target.value) })),
+          h('div', null,
+            h('label', null, L('变化标签 (Delta)', 'Delta label')),
+            h('input', { value: entry.delta || '', disabled, maxLength: 120, placeholder: '+46pp', onChange: e => updateItem(idx, 'delta', e.target.value) }))) : null,
         currentLayout === 'gauge' ? h('div', { className: 'ppt-archetype-subgrid' },
           h('div', null,
             h('label', null, L('当前实绩 (Actual)', 'Actual value')),
@@ -665,17 +703,21 @@ function SlideArchetypeEditor({ slide, draft, disabled, controlId, onChange }) {
           h('div', null,
             h('label', null, L('单位', 'Unit')),
             h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: '%', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
-        (currentLayout === 'treemap' || currentLayout === 'pricing') ? h('div', { className: 'ppt-archetype-subgrid' },
+        showValueUnitRow ? h('div', { className: 'ppt-archetype-subgrid' },
           h('div', null,
-            h('label', null, currentLayout === 'pricing' ? L('价格锚点', 'Price') : L('数值权重', 'Numeric value')),
-            h('input', { value: entry.value ?? '', disabled, maxLength: 120, placeholder: currentLayout === 'pricing' ? '¥29,800' : '42', onChange: e => updateItem(idx, 'value', e.target.value) })),
+            h('label', null, currentLayout === 'pricing' ? L('价格锚点', 'Price') : isSankey ? L('流量数值 (Value)', 'Flow value') : currentLayout === 'tam' ? L('市场规模 (Value)', 'Market size') : currentLayout === 'issue-tree' ? L('量化影响 (Value)', 'Impact value') : L('数值权重 (Value)', 'Numeric value')),
+            h('input', { value: entry.value ?? '', disabled, maxLength: 120, placeholder: currentLayout === 'pricing' ? '¥29,800' : isSankey ? '68.5' : currentLayout === 'tam' ? '$18B' : '42', onChange: e => updateItem(idx, 'value', e.target.value) })),
           h('div', null,
             h('label', null, L('单位', 'Unit')),
-            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: currentLayout === 'pricing' ? L('/年', '/yr') : 'M', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
-        h('label', null, L('卡片标题', 'Card title')),
+            h('input', { value: entry.unit || '', disabled, maxLength: 24, placeholder: currentLayout === 'pricing' ? L('/年', '/yr') : isSankey ? L('百万 / 亿', 'M / B') : 'M', onChange: e => updateItem(idx, 'unit', e.target.value) }))) : null,
+        (showDeltaField && currentLayout !== 'dumbbell') ? h('div', null,
+          h('label', null, L('涨跌 / 变化标签 (Delta)', 'Delta / change badge')),
+          h('input', { value: entry.delta || '', disabled, maxLength: 120, placeholder: '+28%', onChange: e => updateItem(idx, 'delta', e.target.value) })) : null,
+        h('label', null, isSankey ? L('目标节点 (Target)', 'Target node') : L('卡片标题', 'Card title')),
         h('input', { value: entry.title, disabled, maxLength: 300, onChange: e => updateItem(idx, 'title', e.target.value) }),
-        h('label', null, L('说明正文', 'Card description')),
-        h('textarea', { rows: 2, value: entry.text, disabled, maxLength: 1500, onChange: e => updateItem(idx, 'text', e.target.value) }),
+        !isSankey ? h(React.Fragment, null,
+          h('label', null, L('说明正文', 'Card description')),
+          h('textarea', { rows: 2, value: entry.text, disabled, maxLength: 1500, onChange: e => updateItem(idx, 'text', e.target.value) })) : null,
         ['architecture', 'issue-tree', 'pricing', 'swot'].includes(currentLayout) || (Array.isArray(entry.bullets) && entry.bullets.length > 0) ? h('div', null,
           h('label', null, L('子模块 / 要点（每行一项）', 'Sub-modules / bullets (one per line)')),
           h('textarea', {
@@ -729,6 +771,8 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   const lightThemes = themes.filter(item => !item.dark);
   const darkThemes = themes.filter(item => item.dark);
   const savedBrand = project?.brand || {};
+  const savedLogoData = savedBrand.logo || (savedBrand.logoAssetId && project?.assets?.[savedBrand.logoAssetId]?.data) || '';
+  const hasSavedLogo = Boolean(savedBrand.logo || savedBrand.logoAssetId);
   const activeThemeMeta = themes.find(item => item.id === project?.theme);
   const activeChromeStyle = savedBrand.chromeStyle || activeThemeMeta?.chromeStyle || '';
   const activeCardMaterial = savedBrand.cardMaterial || 'solid';
@@ -743,7 +787,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     headingFont: savedBrand.headingFont || '',
     footer: savedBrand.footer || '',
     watermark: savedBrand.watermark || '',
-    logo: savedBrand.logo || '',
+    logo: savedLogoData,
     chromeStyle: savedBrand.chromeStyle || '',
   }));
   const [absorbing, setAbsorbing] = React.useState(false);
@@ -753,6 +797,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
 
   React.useEffect(() => {
     const next = project?.brand || {};
+    const nextLogo = next.logo || (next.logoAssetId && project?.assets?.[next.logoAssetId]?.data) || '';
     setBrandDraft({
       name: next.name || '',
       primaryColor: next.primaryColor || '',
@@ -763,7 +808,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
       headingFont: next.headingFont || '',
       footer: next.footer || '',
       watermark: next.watermark || '',
-      logo: next.logo || '',
+      logo: nextLogo,
       chromeStyle: next.chromeStyle || '',
     });
   }, [project?.id, project?.revision]);
@@ -898,14 +943,14 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
       name: brandDraft.name.trim(),
       footer: brandDraft.footer.trim(),
       watermark: brandDraft.watermark.trim(),
-      ...(brandDraft.primaryColor.trim() ? { primaryColor: brandDraft.primaryColor.trim() } : {}),
-      ...(brandDraft.secondaryColor.trim() ? { secondaryColor: brandDraft.secondaryColor.trim() } : {}),
-      ...(brandDraft.backgroundColor.trim() ? { backgroundColor: brandDraft.backgroundColor.trim() } : {}),
-      ...(brandDraft.textColor.trim() ? { textColor: brandDraft.textColor.trim() } : {}),
-      ...(brandDraft.fontFamily.trim() ? { fontFamily: brandDraft.fontFamily.trim() } : {}),
-      ...(brandDraft.headingFont.trim() ? { headingFont: brandDraft.headingFont.trim() } : {}),
+      ...(brandDraft.primaryColor.trim() ? { primaryColor: brandDraft.primaryColor.trim() } : savedBrand.primaryColor ? { primaryColor: null } : {}),
+      ...(brandDraft.secondaryColor.trim() ? { secondaryColor: brandDraft.secondaryColor.trim() } : savedBrand.secondaryColor ? { secondaryColor: null } : {}),
+      ...(brandDraft.backgroundColor.trim() ? { backgroundColor: brandDraft.backgroundColor.trim() } : savedBrand.backgroundColor ? { backgroundColor: null } : {}),
+      ...(brandDraft.textColor.trim() ? { textColor: brandDraft.textColor.trim() } : savedBrand.textColor ? { textColor: null } : {}),
+      ...(brandDraft.fontFamily.trim() ? { fontFamily: brandDraft.fontFamily.trim() } : savedBrand.fontFamily ? { fontFamily: null } : {}),
+      ...(brandDraft.headingFont.trim() ? { headingFont: brandDraft.headingFont.trim() } : savedBrand.headingFont ? { headingFont: null } : {}),
       ...(brandDraft.chromeStyle ? { chromeStyle: brandDraft.chromeStyle } : savedBrand.chromeStyle ? { chromeStyle: null } : {}),
-      ...(brandDraft.logo ? { logo: brandDraft.logo } : savedBrand.logo ? { logo: null } : {}),
+      ...(brandDraft.logo ? (brandDraft.logo !== savedLogoData ? { logo: brandDraft.logo } : {}) : hasSavedLogo ? { logo: null } : {}),
     };
     onApplyBrand(payload);
   }
@@ -1119,7 +1164,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
         onDragOver: e => { e.preventDefault(); },
         onDrop: e => { e.preventDefault(); if (!disabled) handleSyncFile(e.dataTransfer?.files?.[0]); },
       },
-        h('label', { htmlFor: controlId + '-sync-pptx' }, L('导入 Office 修改稿 / Sync Edited .pptx', 'Sync Edited .pptx')),
+        h('label', { htmlFor: controlId + '-sync-pptx' }, L('导入 Office 修改稿', 'Sync Edited .pptx')),
         h('input', {
           id: controlId + '-sync-pptx',
           type: 'file',
@@ -1167,7 +1212,7 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
         h('option', { value: '' }, L('跟随主题默认', 'Theme default')),
         PPT_CHROME_SKELETONS.map(sk => h('option', { key: sk.id, value: sk.id }, L(sk.zh, sk.en)))),
       h('label', { htmlFor: controlId + '-brand-footer' }, L('统一页脚文字', 'Shared footer')),
-      h('input', { id: controlId + '-brand-footer', value: brandDraft.footer, disabled, maxLength: 200, placeholder: L('例如：战略发展部 · 2026 Q4', 'e.g. Strategy Team · 2026'), onChange: e => setBrandDraft({ ...brandDraft, footer: e.target.value }) }),
+      h('input', { id: controlId + '-brand-footer', value: brandDraft.footer, disabled, maxLength: 100, placeholder: L('例如：战略发展部 · 2026 Q4', 'e.g. Strategy Team · 2026'), onChange: e => setBrandDraft({ ...brandDraft, footer: e.target.value }) }),
       h('label', { htmlFor: controlId + '-brand-watermark' }, L('企业保密水印（内容页右上角）', 'Confidential watermark (content slides)')),
       h('input', { id: controlId + '-brand-watermark', value: brandDraft.watermark, disabled, maxLength: 48, placeholder: L('例如：CONFIDENTIAL · 内部资料', 'e.g. CONFIDENTIAL · INTERNAL'), onChange: e => setBrandDraft({ ...brandDraft, watermark: e.target.value }) }),
       h('label', { htmlFor: controlId + '-brand-logo' }, L('上传品牌 Logo（PNG / JPEG）', 'Upload brand logo (PNG / JPEG)')),
@@ -1204,6 +1249,6 @@ const PPT_STYLE_STUDIO_CSS = `
 .ppt-workbench .ppt-dropzone{border:1px dashed var(--w-border);border-radius:10px;padding:12px;margin-top:8px;background:var(--w-soft)}
 .ppt-workbench .ppt-absorbed-card{border:1px solid var(--w-border);border-radius:10px;padding:12px;margin-top:10px;background:var(--w-bg);display:flex;flex-direction:column;gap:8px}
 .ppt-workbench .ppt-color-pair{display:grid;grid-template-columns:34px minmax(0,1fr);gap:6px;align-items:center}
-.ppt-workbench .ppt-color-pair input[type=color]{width:34px;height:34px;padding:2px;border:1px solid var(--w-border);border-radius:8px;background:var(--w-bg);cursor:pointer}
+.ppt-workbench.pptw .ppt-color-pair input[type=color]{width:34px;height:34px;padding:2px!important;border:1px solid var(--w-border);border-radius:8px;background:var(--w-bg);cursor:pointer}
 @container dsh-workbench (max-width:760px){.ppt-workbench .ppt-theme-grid,.ppt-workbench .ppt-archetype-subgrid{grid-template-columns:1fr}}
 `;

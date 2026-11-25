@@ -6,7 +6,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path'
 import { getEngine, type PptExecution } from './execution.js'
 import { buildRemotionBundleFiles, computePaceBudgetFallback, renderOnePagerHtmlFallback } from './ecosystem.js'
 import type { DeckEngine } from './types.js'
-import { bilingualQuality, englishWorkbenchMessage } from './workbench-language.js'
+import { bilingualQuality, englishWorkbenchMessage, splitBilingualMessage } from './workbench-language.js'
 import { zipSync, strToU8 } from 'fflate'
 import { PptCoaching } from './coaching.js'
 import type { CoachingModel, ModelRoute } from './coaching-model.js'
@@ -47,14 +47,38 @@ const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'un
 const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'watermark', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste'])
 const VISUAL_KEYS = new Set(['titleSize', 'bodySize', 'chartLabelSize', 'density', 'tableStyle', 'chrome'])
 
-/** Sharing keeps the offline deck, but omits the control for a project not in the ZIP. */
-function shareHtml(bytes: Buffer): Uint8Array {
-  const html = bytes.toString('utf8'), marker = '<a id="download-project"'
-  const start = html.indexOf(marker)
-  if (start < 0) return bytes
-  const end = html.indexOf('</a>', start + marker.length)
-  if (end < 0 || end - start > 4096 || html.indexOf(marker, end + 4) >= 0) throw new Error('HTML 工程下载入口异常，请保存副本后重试')
-  return strToU8(html.slice(0, start) + html.slice(end + 4))
+/** Sharing omits the project download control; ZIP packaging rewrites any missing sibling export links to inline Blob fallbacks. */
+function packageZipHtml(bytes: Buffer, stripProjectLink: boolean): Uint8Array {
+  let html = bytes.toString('utf8')
+  let changed = false
+  if (stripProjectLink) {
+    const marker = '<a id="download-project"'
+    const start = html.indexOf(marker)
+    if (start >= 0) {
+      const end = html.indexOf('</a>', start + marker.length)
+      if (end < 0 || end - start > 4096 || html.indexOf(marker, end + 4) >= 0) throw new Error('HTML 工程下载入口异常，请保存副本后重试')
+      html = html.slice(0, start) + html.slice(end + 4)
+      changed = true
+    }
+  }
+  const siblingExports: ReadonlyArray<[string, string, string]> = [
+    ['hasSiblingHandout', 'download-handout', '#handout'],
+    ['hasSiblingOnePager', 'download-onepager', '#onepager'],
+    ['hasSiblingCarousel', 'download-carousel', '#carousel'],
+    ['hasSiblingSubtitles', 'download-subtitles', '#subtitles'],
+  ]
+  for (const [flag, anchorId, hashHref] of siblingExports) {
+    const flagNeedle = `"${flag}":true`
+    if (html.includes(flagNeedle)) {
+      html = html.replaceAll(flagNeedle, `"${flag}":false`)
+      html = html.replace(
+        new RegExp(`(<a\\s+id="${anchorId}"\\s+href=")([^"]*)("[^>]*>)`),
+        `$1${hashHref}$3`,
+      )
+      changed = true
+    }
+  }
+  return changed ? strToU8(html) : bytes
 }
 type Project = { id: string; path: string; title: string; updatedAt: string; theme?: string; slideCount?: number; revision?: number; modelRoute?: ModelRoute }
 type RemovedProject = Pick<Project, 'id' | 'path'> & { removed: true }
@@ -549,7 +573,8 @@ function json(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
 }
 function fail(status: number, message: string, code?: string): Response {
-  const display = /[\u3400-\u9fff]/.test(message) && message.includes(' / ') ? message.slice(0, message.indexOf(' / ')) : message
+  const bilingual = splitBilingualMessage(message)
+  const display = bilingual ? bilingual.zh : message
   return json(status, { ok: false, message: display, messageEn: englishWorkbenchMessage(message), ...(code ? { code } : {}) })
 }
 function originVerdict(request: Request): Response | undefined {
@@ -841,19 +866,20 @@ export class PptWorkbench {
       if (!BRAND_KEYS.has(key)) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
       if (item === undefined) continue
       if (['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'coverBg'].includes(key)) {
-        if (item === '' || item === null) continue
+        if (item === '' || item === null) { out[key] = null; continue }
         if (typeof item !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(item.trim())) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item.trim().toUpperCase()
       } else if (key === 'fontFamily' || key === 'headingFont') {
-        if (item === '' || item === null) continue
-        if (typeof item !== 'string' || !/^[A-Za-z0-9\u4e00-\u9fff ,.'_-]{1,80}$/.test(item.trim())) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
+        if (item === '' || item === null) { out[key] = null; continue }
+        if (typeof item !== 'string' || !/^[\p{L}\p{N} _-]{1,80}$/u.test(item.trim())) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item.trim()
       } else if (key === 'coverMode') {
-        if (item === '' || item === null) continue
+        if (item === '' || item === null) { out.coverMode = null; continue }
         if (item !== 'standard' && item !== 'inverted-accent') throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out.coverMode = item
       } else if (key === 'name' || key === 'footer') {
-        if (typeof item !== 'string' || item.length > 200 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(item)) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
+        const limit = key === 'footer' ? 100 : 200
+        if (typeof item !== 'string' || item.length > limit || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(item)) throw new Error('品牌设置无效：请检查 #RRGGBB 颜色、安全字体名称、页脚长度或面板上传的 PNG/JPEG Logo')
         out[key] = item
       } else if (key === 'watermark') {
         if (item === null || item === '') { out.watermark = ''; continue }
@@ -1042,6 +1068,7 @@ export class PptWorkbench {
           throw new Error('智能配图需求格式无效')
         }
       } else if (key === 'image') {
+        if (item === null) { result.image = null; continue }
         if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('请选择 PNG 或 JPEG 图片')
         const image = item as Record<string, unknown>
         if (Object.keys(image).some(k => !['src', 'assetId', 'alt', 'fit', 'focalPoint', 'caption'].includes(k))) throw new Error('图片必须从面板上传，不能读取其他本地文件')
@@ -1095,7 +1122,7 @@ export class PptWorkbench {
     const slides: Array<Record<string, unknown>> = [
       {
         layout: 'cover',
-        kicker: en ? 'FLAGSHIP SHOWCASE · 0.36' : '旗舰功能全景示例 · 0.36',
+        kicker: en ? 'FLAGSHIP SHOWCASE · 1.0' : '旗舰功能全景示例 · 1.0',
         title: en ? 'Enterprise AI Delivery & Financial Telemetry' : '企业级智能交付平台：效能跃迁与经营全景',
         subtitle: en ? 'Native PPTX + Interactive HTML + Verified Data & Diagrams' : '同源构建可编辑 PPTX · 交互放映 · 原生公式与专业图示',
         notes: en
@@ -1139,7 +1166,7 @@ export class PptWorkbench {
           { tag: en ? 'Core' : '核心底座', title: en ? 'Native charts & 24 curated themes' : '原生可编辑图表与 24 套大师主题', start: 0, span: 1.5, status: 'accent' },
           { tag: en ? 'Import' : '文档翻新', title: en ? 'Round-trip .pptx & Excel/Word ingestion' : 'PPTX 双向导回与 Excel/Word 直吞', start: 1, span: 1.5, status: 'positive' },
           { tag: en ? 'Ecosystem' : '生态协同', title: en ? 'dsh-cite bibliography & Remotion video pack' : 'dsh-cite 学术文献与 Remotion 视频分镜', start: 2, span: 1.5, status: 'accent' },
-          { tag: en ? 'GA' : '全量验收', title: en ? 'v0.36 Enterprise Flagship Release' : 'v0.36 旗舰版全面验收发布', start: 3, span: 0, milestone: true, status: 'warning' },
+          { tag: en ? 'GA' : '全量验收', title: en ? 'v1.0 Enterprise Flagship Release' : 'v1.0 旗舰版全面验收发布', start: 3, span: 0, milestone: true, status: 'warning' },
         ],
         notes: en ? 'On the timeline, Q1 and Q2 established native charts and Office ingestion, while Q3 and Q4 completed ecosystem bridges.' : '从推进节奏看，上半年夯实了原生图表与文档解析能力，下半年打通了文献与视频分镜全生态。',
       },
@@ -1898,7 +1925,7 @@ export class PptWorkbench {
         const add = (name: string, content: Uint8Array) => { total += total >= 0 ? content.byteLength : 0; if (total > BUNDLE_LIMIT) return false; entries[name] = content; return true }
         for (const path of selected) {
           if (!existsSync(path)) return fail(400, '成品文件不完整，请先保存一次再下载成品包')
-          const content = ordinaryFile(path), exported = kind === 'share' && path === files.html ? shareHtml(content) : content
+          const content = ordinaryFile(path), exported = path === files.html ? packageZipHtml(content, kind === 'share') : content
           if (!add(basename(path), exported)) return fail(413, '成品包超过 128 MiB，请分别下载文件')
         }
         // An allowlist of registered sibling files; never walk project directories.

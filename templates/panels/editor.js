@@ -63,7 +63,7 @@ function PptWorkflowGuide({ defaultOpen = false, onOpenCreate, onCopied }) {
         onOpenCreate ? h(W.Button, { size: 'sm', variant: 'primary', icon: 'plus', onClick: onOpenCreate }, pptText('直接新建演示文稿', 'Create in workbench')) : null)));
 }
 
-function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate, onCreateDemo, onImport, onImportOffice, onError }) {
+function PptCreateDialog({ open, busy, initialMode = 'create', error = '', onClearError, onClose, onCreate, onCreateDemo, onImport, onImportOffice, onError }) {
   const fieldId = React.useId();
   const [meta, setMeta] = React.useState({ themes: [], templates: [], exemplars: [] });
   const [dialogMode, setDialogMode] = React.useState(initialMode);
@@ -80,9 +80,68 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
   const [targetMinutes, setTargetMinutes] = React.useState('');
   const [preserveSourceTheme, setPreserveSourceTheme] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [fileReading, setFileReading] = React.useState(false);
+  const readerRef = React.useRef(null);
+
+  function cancelPendingRead() {
+    const active = readerRef.current;
+    readerRef.current = null;
+    if (active && active.readyState === 1) {
+      try { active.abort(); } catch {}
+    }
+    setFileReading(false);
+  }
+
+  function readFileDataUrl(file, onLoaded, errMsg) {
+    cancelPendingRead();
+    onClearError?.();
+    const reader = new FileReader();
+    readerRef.current = reader;
+    setFileReading(true);
+    reader.onload = () => {
+      if (readerRef.current !== reader) return;
+      readerRef.current = null;
+      setFileReading(false);
+      onLoaded(String(reader.result || ''));
+    };
+    reader.onerror = () => {
+      if (readerRef.current !== reader) return;
+      readerRef.current = null;
+      setFileReading(false);
+      onError?.(errMsg);
+    };
+    reader.onabort = () => {
+      if (readerRef.current === reader) {
+        readerRef.current = null;
+        setFileReading(false);
+      }
+    };
+    try {
+      reader.readAsDataURL(file);
+    } catch {
+      readerRef.current = null;
+      setFileReading(false);
+      onError?.(errMsg);
+    }
+  }
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      cancelPendingRead();
+      setTitle('');
+      setTemplate('');
+      setExemplar('');
+      setAlignOrder(false);
+      setTheme('auto');
+      setContent('');
+      setRefFile(null);
+      setCloneStructure(true);
+      setImportFile(null);
+      setOfficeFile(null);
+      setTargetMinutes('');
+      setPreserveSourceTheme(false);
+      return;
+    }
     setDialogMode(initialMode || 'create');
     let cancelled = false;
     action({ operation: 'catalog-meta', lang: languageOf() }).then(res => {
@@ -97,8 +156,16 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
     return () => { cancelled = true; };
   }, [open, initialMode]);
 
+  React.useEffect(() => () => cancelPendingRead(), []);
+
   if (!open) return null;
-  const disabled = busy || submitting;
+  const disabled = busy || submitting || fileReading;
+
+  function switchDialogMode(next) {
+    cancelPendingRead();
+    onClearError?.();
+    setDialogMode(next);
+  }
 
   function fillSampleOutline() {
     if (!title.trim()) setTitle(pptText('Q4 核心业务进展与下阶段规划', 'Q4 Business Progress & Next-Quarter Plan'));
@@ -113,12 +180,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
       onError?.(pptText('请选择 24 MiB 以内的 .pptx 参考文件。', 'Choose a reference .pptx file up to 24 MiB.'));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setRefFile({ name: file.name, data: String(reader.result || '') });
-    };
-    reader.onerror = () => onError?.(pptText('无法读取参考 PPTX，请重试。', 'Could not read the reference PPTX.'));
-    reader.readAsDataURL(file);
+    readFileDataUrl(file, data => setRefFile({ name: file.name, data }), pptText('无法读取参考 PPTX，请重试。', 'Could not read the reference PPTX.'));
   }
 
   function handleImportSelect(file) {
@@ -127,12 +189,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
       onError?.(pptText('请选择 24 MiB 以内的 .pptx 文件。', 'Choose a .pptx file up to 24 MiB.'));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImportFile({ name: file.name, data: String(reader.result || '') });
-    };
-    reader.onerror = () => onError?.(pptText('无法读取 PPTX 文件，请重试。', 'Could not read the PPTX file.'));
-    reader.readAsDataURL(file);
+    readFileDataUrl(file, data => setImportFile({ name: file.name, data }), pptText('无法读取 PPTX 文件，请重试。', 'Could not read the PPTX file.'));
   }
 
   function handleOfficeSelect(file) {
@@ -141,12 +198,7 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
       onError?.(pptText('请选择 24 MiB 以内的 .xlsx、.csv、.tsv、.docx 或 .pdf 文件。', 'Choose an .xlsx, .csv, .tsv, .docx, or .pdf file up to 24 MiB.'));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setOfficeFile({ name: file.name, data: String(reader.result || '') });
-    };
-    reader.onerror = () => onError?.(pptText('无法读取 Office 文档，请重试。', 'Could not read the Office document.'));
-    reader.readAsDataURL(file);
+    readFileDataUrl(file, data => setOfficeFile({ name: file.name, data }), pptText('无法读取 Office 文档，请重试。', 'Could not read the Office document.'));
   }
 
   async function submitOffice() {
@@ -213,9 +265,11 @@ function PptCreateDialog({ open, busy, initialMode = 'create', onClose, onCreate
   },
     h('div', { className: 'ppt-create-wizard' },
       h('div', { className: 'ppt-archetype-pills', role: 'tablist', 'aria-label': pptText('创建方式', 'Creation mode') },
-        h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'create' ? 'true' : 'false', 'aria-pressed': dialogMode === 'create' ? 'true' : 'false', disabled, onClick: () => setDialogMode('create') }, pptText('从蓝图 / 大纲新建', 'New from blueprint / notes')),
-        onImportOffice ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'office' ? 'true' : 'false', 'aria-pressed': dialogMode === 'office' ? 'true' : 'false', disabled, onClick: () => setDialogMode('office') }, pptText('导入 Excel / Word / PDF', 'Import Excel / Word / PDF')) : null,
-        onImport ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'import' ? 'true' : 'false', 'aria-pressed': dialogMode === 'import' ? 'true' : 'false', disabled, onClick: () => setDialogMode('import') }, pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')) : null),
+        h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'create' ? 'true' : 'false', 'aria-pressed': dialogMode === 'create' ? 'true' : 'false', disabled, onClick: () => switchDialogMode('create') }, pptText('从蓝图 / 大纲新建', 'New from blueprint / notes')),
+        onImportOffice ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'office' ? 'true' : 'false', 'aria-pressed': dialogMode === 'office' ? 'true' : 'false', disabled, onClick: () => switchDialogMode('office') }, pptText('导入 Excel / Word / PDF', 'Import Excel / Word / PDF')) : null,
+        onImport ? h('button', { type: 'button', role: 'tab', className: 'ppt-pill', 'aria-selected': dialogMode === 'import' ? 'true' : 'false', 'aria-pressed': dialogMode === 'import' ? 'true' : 'false', disabled, onClick: () => switchDialogMode('import') }, pptText('导入 PPTX 翻新', 'Import & Modernize .pptx')) : null),
+      error ? h(W.Status, { tone: 'error' }, error) : null,
+      fileReading ? h(W.Status, null, pptText('正在读取所选文件…', 'Reading selected file…')) : null,
       dialogMode === 'office' ? h(React.Fragment, null,
         h('p', { className: 'muted' }, pptText('拖拽或上传 .xlsx / .csv / .tsv 数据表、.docx 报告或 .pdf 文档（≤24 MiB），自动识别流向、进度、市场份额与章节结构并生成多页演示文稿。', 'Drop or upload an .xlsx / .csv / .tsv workbook, .docx report, or .pdf document (≤24 MiB) to auto-profile charts, Sankey, Gantt, tables, and narrative slides.')),
         h('div', {
@@ -389,7 +443,7 @@ function pptSlideAddOptions() {
   ];
 }
 
-function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, onOpenSlide, onMoveSlide, onReorderSlide, onDuplicateSlide, onAppend }) {
+function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, onOpenSlide, onMoveSlide, onReorderSlide, onDuplicateSlide, onAppend, onSaveDirty, onReturnStudio }) {
   const lightboxId = React.useId();
   const [archetype, setArchetype] = React.useState('cards');
   const [dragIdx, setDragIdx] = React.useState(-1);
@@ -402,6 +456,9 @@ function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, 
     const items = Array.isArray(row.items) ? row.items : Array.isArray(row.cards) ? row.cards : [];
     const bullets = Array.isArray(row.bullets) ? row.bullets : [];
     const imgData = row.image?.assetId && project.assets?.[row.image.assetId]?.data;
+    const mermaidPreview = row.mermaid
+      ? (String(row.mermaid).split('\n').map(l => l.trim()).find(l => l && !/^(flowchart|graph|sequenceDiagram|stateDiagram|classDiagram|erDiagram|gantt|mindmap)\b/i.test(l)) || String(row.mermaid).split('\n')[0] || 'mermaid')
+      : '';
     return h('div', { className: 'ppt-film-inner', 'data-layout': row.layout || 'bullets' },
       h('div', { className: 'ppt-film-head' },
         row.kicker ? h('span', { className: 'ppt-film-kicker' }, row.kicker) : null,
@@ -421,7 +478,7 @@ function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, 
         : row.text ? h('p', { className: 'ppt-film-text' }, row.text)
         : row.formula ? h('code', { className: 'ppt-film-formula' }, row.formula)
         : row.code ? h('code', { className: 'ppt-film-formula' }, String(row.code).split('\n')[0] || '')
-        : row.mermaid ? h('code', { className: 'ppt-film-formula' }, String(row.mermaid).split('\n')[0] || 'mermaid')
+        : mermaidPreview ? h('code', { className: 'ppt-film-formula' }, mermaidPreview)
         : null),
       row.takeaway ? h('div', { className: 'ppt-film-takeaway' }, row.takeaway) : null);
   }
@@ -432,6 +489,11 @@ function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, 
     'data-tour': 'ppt-lightbox',
     'aria-label': pptText('实体胶片灯箱总览', 'Physical Slide Lightbox'),
   },
+    dirty ? h('div', { className: 'ppt-lightbox-dirty-bar', role: 'status' },
+      h('span', null, pptText('当前有未保存的单页修改，调序、复制和新增页面已暂时锁定。', 'You have unsaved slide edits. Reordering, duplicating, and inserting slides are paused until saved.')),
+      h('div', { className: 'w-toolbar' },
+        onSaveDirty ? h(W.Button, { size: 'sm', variant: 'primary', icon: 'check', disabled: busy || imagePending || dataDirty, onClick: onSaveDirty }, pptText('立即保存', 'Save now')) : null,
+        onReturnStudio ? h(W.Button, { size: 'sm', variant: 'ghost', disabled: busy, onClick: onReturnStudio }, pptText('返回单页精修', 'Return to Slide Studio')) : null)) : null,
     h('div', { className: 'ppt-lightbox-grid' },
       project.slides.map((row, index) => {
         const slideIssues = issues.filter(item => item.slide === index + 1 || (item.slideId && item.slideId === row.id));
@@ -635,26 +697,22 @@ function PptPages({ project, selected, busy, imagePending, onChoose, onMoveSlide
 const PPT_WORKBENCH_CSS = `
 .ppt-workbench.pptw{--fg:var(--w-text);--fg-muted:var(--w-muted);--bg:var(--w-canvas);--bg-surface:var(--w-bg);--border:var(--w-border);max-width:none;margin:0}
 .ppt-workbench .ppt-loading-skeleton{display:flex;flex-direction:column;gap:12px;max-width:900px;padding:18px 0}
-.ppt-workbench.ppt-in-project .dsh-header{gap:8px;padding-inline:10px}
-.ppt-workbench.ppt-in-project .dsh-header-leading{gap:6px}
-.ppt-workbench.ppt-in-project .dsh-header-title{max-width:104px;overflow:hidden;text-overflow:ellipsis}
-.ppt-workbench.ppt-in-project .w-tabs>button{padding:4px 7px;font-size:12px;gap:4px}
-.ppt-workbench.ppt-in-project .w-header-actions{gap:4px}
-.ppt-workbench.ppt-in-project .w-header-actions .w-button:not(.w-icon-button){padding:4px 8px;font-size:12px;gap:4px}
 .ppt-workbench .ppt-header-meta{font-variant-numeric:tabular-nums;font-weight:600}
 .ppt-workbench .ppt-editor{--ppt-rail-width:204px;--ppt-inspector:360px;display:flex;align-items:stretch;flex:1 1 auto;min-height:480px;min-width:0}
+.ppt-workbench .ppt-editor[hidden]{display:none!important}
 .ppt-workbench .ppt-page-rail{flex:none;width:var(--ppt-rail-width,204px);padding:14px 10px 14px 0;min-width:0;display:flex;flex-direction:column;gap:12px}
 .ppt-workbench .ppt-page-rail h3{margin:0;font-size:14px;color:var(--w-muted);font-weight:600}
-.ppt-workbench .ppt-page-buttons{display:flex;flex-direction:column;gap:6px;max-height:calc(100dvh - 280px);overflow:auto;overscroll-behavior:contain;min-width:0;padding:2px}
+.ppt-workbench .ppt-page-buttons{display:flex;flex-direction:column;gap:6px;max-height:calc(100dvh - 280px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;min-width:0;padding:2px}
 .ppt-workbench .ppt-slide-row{display:flex;align-items:stretch;gap:4px;border-block-end:0;border-inline-start:0;padding:0;min-width:0;position:relative}
 .ppt-workbench .ppt-slide-row[draggable=true]{cursor:grab}
 .ppt-workbench .ppt-slide-row[data-dragging=true]{opacity:.45}
 .ppt-workbench .ppt-slide-row[data-drag-over=true]{box-shadow:0 -2px 0 0 var(--w-accent);border-radius:var(--dsw-radius-sm,8px)}
-.ppt-workbench .ppt-slide-card{flex:1 1 auto;border:var(--dsh-control-border-width,1px) solid transparent;border-inline-start:3px solid transparent;border-radius:var(--dsw-radius-sm,8px);padding:9px 10px;display:flex;align-items:flex-start;gap:8px;background:var(--dsw-alias-settings-card-fill,var(--w-canvas));min-width:0;font-size:13px;line-height:1.45;text-align:start;overflow-wrap:anywhere;cursor:pointer}
+.ppt-workbench .ppt-slide-card{flex:1 1 auto;width:100%;border:var(--dsh-control-border-width,1px) solid transparent;border-inline-start:3px solid transparent;border-radius:var(--dsw-radius-sm,8px);padding:9px 10px;display:flex;align-items:flex-start;gap:8px;background:var(--dsw-alias-settings-card-fill,var(--w-canvas));min-width:0;font-size:13px;line-height:1.4;text-align:start;overflow-wrap:break-word;word-break:normal;cursor:pointer}
 .ppt-workbench .ppt-slide-card:hover:not(:disabled){background:var(--dsh-surface-spotlight,var(--w-bg));border-color:var(--w-border)}
 .ppt-workbench .ppt-slide-card[aria-current=true]{border-color:var(--w-border);border-inline-start-color:var(--w-accent);background:var(--w-selected);color:var(--w-text);font-weight:550}
-.ppt-workbench .ppt-slide-actions{padding-inline-end:2px;gap:2px}
-.ppt-workbench .ppt-slide-actions .w-icon-button{width:24px;min-width:24px;min-height:24px;padding:0}
+.ppt-workbench .ppt-slide-actions{position:absolute;inset-inline-end:4px;bottom:4px;top:auto;z-index:2;padding:2px;gap:2px;border-radius:var(--dsw-radius-xs,6px);background:var(--dsw-alias-bg-overlay,var(--w-canvas));border:var(--dsh-control-border-width,1px) solid var(--w-border);box-shadow:0 2px 6px rgba(15,23,42,0.1);opacity:0;pointer-events:none;transition:opacity 120ms ease}
+.ppt-workbench .ppt-slide-row:hover .ppt-slide-actions,.ppt-workbench .ppt-slide-row:focus-within .ppt-slide-actions{opacity:1;pointer-events:auto}
+.ppt-workbench .ppt-slide-actions .w-icon-button{width:22px;min-width:22px;min-height:22px;padding:0}
 .ppt-workbench .ppt-page-number{font-variant-numeric:tabular-nums;color:var(--w-muted);font-size:11.5px;font-weight:600;flex-shrink:0;padding-top:1px}
 .ppt-workbench .ppt-slide-card[aria-current=true] .ppt-page-number{color:var(--w-accent)}
 .ppt-workbench .ppt-page-body{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
@@ -732,9 +790,17 @@ const PPT_WORKBENCH_CSS = `
 :is(.ppt-workbench,.ppt-dialog) .notice{border:var(--dsh-control-border-width,1px) solid var(--w-border);border-radius:var(--dsw-radius-sm,8px);background:var(--w-bg);color:var(--w-text)}
 :is(.ppt-workbench,.ppt-dialog) .notice.error{color:var(--dsw-alias-state-error-primary,#ad3636);background:var(--dsw-alias-interactive-bg-hover-danger,var(--w-bg))}
 .ppt-workbench .ppt-data-warning{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-:is(.ppt-workbench,.ppt-dialog) .ppt-downloads{display:flex;flex-direction:column;gap:14px}
+:is(.ppt-workbench,.ppt-dialog) .ppt-downloads{display:flex;flex-direction:column;gap:12px}
+:is(.ppt-workbench,.ppt-dialog) .ppt-download-group{display:flex;flex-direction:column;gap:6px}
+:is(.ppt-workbench,.ppt-dialog) .ppt-download-group h4{margin:0;font-size:12px;font-weight:650;color:var(--w-muted)}
+:is(.ppt-workbench,.ppt-dialog) .ppt-downloads-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 :is(.ppt-workbench,.ppt-dialog) .ppt-downloads .tools{display:flex;flex-direction:column;align-items:stretch;gap:8px}
-:is(.ppt-workbench,.ppt-dialog) .ppt-downloads .w-button,:is(.ppt-workbench,.ppt-dialog) .ppt-downloads button{font-size:13.5px;min-height:36px;justify-content:flex-start}
+:is(.ppt-workbench,.ppt-dialog) .ppt-downloads .w-button,:is(.ppt-workbench,.ppt-dialog) .ppt-downloads button{font-size:13px;min-height:34px;justify-content:flex-start;width:100%}
+.w-dialog-modal.ppt-download-dialog,.dsh-fallback-modal-dialog.ppt-download-dialog{width:min(660px,calc(100dvw - 32px))}
+.ppt-workbench .ppt-pace-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}
+.ppt-workbench .ppt-pace-summary::-webkit-details-marker{display:none}
+.ppt-workbench .ppt-lightbox-dirty-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 12px;margin-bottom:12px;border-radius:var(--dsw-radius-sm,8px);border:1px solid color-mix(in oklab,var(--dsw-alias-state-warn-primary,#b45309) 35%,var(--w-border));background:color-mix(in oklab,var(--dsw-alias-state-warn-primary,#b45309) 10%,var(--w-canvas));color:var(--w-text);font-size:12.5px}
+@media(max-width:560px){:is(.ppt-workbench,.ppt-dialog) .ppt-downloads-grid{grid-template-columns:1fr}}
 .ppt-workbench .ppt-image-section{border-block:var(--dsh-control-border-width,0.5px) solid var(--w-border);margin:16px 0;padding:14px 0}
 .ppt-workbench .ppt-image-section>summary{font-size:13.5px}
 .ppt-workbench .ppt-image-section input,.ppt-workbench .ppt-image-section select{width:100%;margin-bottom:12px}
@@ -764,17 +830,18 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench .ppt-lightbox-mount-top .ppt-page-dot{margin-inline-start:auto}
 .ppt-workbench .ppt-lightbox-film{width:100%;aspect-ratio:16/9;padding:0!important;border:1px solid color-mix(in oklab,var(--w-border) 85%,var(--w-accent))!important;border-radius:var(--dsw-radius-sm,8px)!important;background:linear-gradient(160deg,var(--w-canvas) 0%,color-mix(in oklab,var(--w-accent) 5%,var(--w-bg)) 100%)!important;box-shadow:inset 0 0 18px color-mix(in oklab,var(--w-accent) 7%,transparent);overflow:hidden;cursor:pointer;display:block!important;text-align:start!important}
 .ppt-workbench .ppt-lightbox-film:hover:not(:disabled){border-color:var(--w-accent)!important;box-shadow:inset 0 0 22px color-mix(in oklab,var(--w-accent) 13%,transparent),0 4px 12px rgba(15,23,42,0.1)}
-.ppt-workbench .ppt-film-inner{height:100%;display:flex;flex-direction:column;justify-content:space-between;gap:5px;padding:10px 11px;min-width:0;overflow:hidden}
-.ppt-workbench .ppt-film-head{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ppt-workbench .ppt-film-inner{height:100%;display:flex;flex-direction:column;gap:4px;padding:7px 9px;min-width:0;overflow:hidden}
+.ppt-workbench .ppt-film-head{flex:none;display:flex;flex-direction:column;gap:2px;min-width:0}
 .ppt-workbench .ppt-film-kicker{font-family:var(--dsh-font-mono,ui-monospace,monospace);font-size:9px;font-weight:700;text-transform:uppercase;color:var(--w-accent);letter-spacing:0.06em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ppt-workbench .ppt-film-title{font-size:12.5px;font-weight:700;line-height:1.25;color:var(--w-text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ppt-workbench .ppt-film-title{font-size:12px;font-weight:700;line-height:1.25;color:var(--w-text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ppt-workbench .ppt-film-sub{margin:0;font-size:10px;color:var(--w-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ppt-workbench .ppt-film-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden}
+.ppt-workbench .ppt-film-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:3px;overflow:hidden}
 .ppt-workbench .ppt-film-media{height:44px;border-radius:4px;overflow:hidden;background:var(--w-soft);display:flex;justify-content:center}
 .ppt-workbench .ppt-film-media img{height:100%;width:100%;object-fit:cover}
-.ppt-workbench .ppt-film-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
-.ppt-workbench .ppt-film-chip{padding:3px 5px;border-radius:4px;background:color-mix(in oklab,var(--w-bg) 85%,var(--w-accent) 5%);border:0.5px solid var(--w-border);font-size:9.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;flex-direction:column}
-.ppt-workbench .ppt-film-chip strong{font-size:11px;color:var(--w-accent)}
+.ppt-workbench .ppt-film-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
+.ppt-workbench .ppt-film-chip{padding:2px 5px;border-radius:4px;background:color-mix(in oklab,var(--w-bg) 85%,var(--w-accent) 5%);border:0.5px solid var(--w-border);font-size:9.5px;line-height:1.25;display:flex;flex-direction:row;align-items:baseline;gap:4px;min-width:0;overflow:hidden}
+.ppt-workbench .ppt-film-chip strong{flex:none;font-size:10.5px;color:var(--w-accent)}
+.ppt-workbench .ppt-film-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .ppt-workbench .ppt-film-bullets{margin:0;padding-inline-start:13px;font-size:9.5px;line-height:1.35;color:var(--w-muted)}
 .ppt-workbench .ppt-film-bullets li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ppt-workbench .ppt-film-table{display:grid;gap:2px;font-size:9px;color:var(--w-muted)}
@@ -782,7 +849,7 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench .ppt-film-table-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ppt-workbench .ppt-film-text{margin:0;font-size:10px;line-height:1.35;color:var(--w-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .ppt-workbench .ppt-film-formula{font-size:9.5px;padding:3px 6px;border-radius:4px;background:var(--w-bg);border:0.5px solid var(--w-border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ppt-workbench .ppt-film-takeaway{font-size:9px;font-weight:600;color:var(--w-text);padding:2px 5px;border-radius:4px;background:color-mix(in oklab,var(--w-accent) 10%,var(--w-bg));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppt-workbench .ppt-film-takeaway{flex:none;margin-top:auto;font-size:9px;font-weight:600;line-height:1.35;color:var(--w-text);padding:2px 5px;border-radius:4px;background:color-mix(in oklab,var(--w-accent) 10%,var(--w-bg));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ppt-workbench .ppt-lightbox-mount-bottom{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .ppt-workbench .ppt-lightbox-move-group{display:inline-flex;align-items:center;gap:4px}
 .ppt-workbench .ppt-lightbox-mini-btn{padding:2px 7px!important;font-size:11px!important;min-height:24px;border-radius:6px!important}
@@ -796,7 +863,7 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench.ppt-in-project>.dsh-header .dsh-header-title{max-width:118px;overflow:hidden;text-overflow:ellipsis}
 .ppt-workbench.ppt-in-project>.dsh-header .w-tabs>button{padding:4px 7px;gap:4px;font-size:12px;flex:none}
 .ppt-workbench.ppt-in-project>.dsh-header .w-header-actions{gap:4px}
-.ppt-workbench.ppt-in-project>.dsh-header .w-header-actions .w-button{padding-inline:8px}
-@container dsh-workbench (max-width:1090px){.ppt-workbench.ppt-in-project>.dsh-header{flex-wrap:wrap;height:auto;min-height:48px;padding-block:6px;row-gap:6px;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header>.dsh-header-leading{flex:0 1 auto;max-width:100%;overflow:visible;flex-wrap:wrap;gap:6px 8px}.ppt-workbench.ppt-in-project>.dsh-header .dsh-header-tabs{flex:0 1 auto;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header .w-tabs{flex-wrap:wrap;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header>.w-header-actions{margin-inline-start:auto;flex-wrap:wrap;gap:4px}}
+.ppt-workbench.ppt-in-project>.dsh-header .w-header-actions .w-button:not(.w-icon-button){padding:4px 8px;font-size:12px;gap:4px}
+@container dsh-workbench (max-width:1260px){.ppt-workbench.ppt-in-project>.dsh-header{flex-wrap:wrap;height:auto;min-height:48px;padding-block:6px;row-gap:6px;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header>.dsh-header-leading{flex:0 1 auto;max-width:100%;overflow:visible;flex-wrap:wrap;gap:6px 8px}.ppt-workbench.ppt-in-project>.dsh-header .dsh-header-tabs{flex:0 1 auto;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header .w-tabs{flex-wrap:wrap;overflow:visible}.ppt-workbench.ppt-in-project>.dsh-header>.w-header-actions{margin-inline-start:auto;flex-wrap:wrap;gap:4px}}
 @container dsh-workbench (max-width:560px){.ppt-workbench .ppt-lightbox-grid{grid-template-columns:1fr}}
 `;
