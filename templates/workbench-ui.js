@@ -23,11 +23,11 @@ function createWorkbenchUI(React, requireFn) {
 
   const DSH_FONT_STORAGE_KEY = 'dsh-stardust:ui-font';
   const DSH_FONT_EVENT = 'dsh-stardust-font';
-  const DSH_DEFAULT_FONT = 'arcade';
+  const DSH_DEFAULT_FONT = 'auto';
 
   const DSH_FONTS = Object.freeze([
-    Object.freeze({ id: 'arcade', zh: '幼圆等宽（默认）', zhShort: '幼圆', en: 'YouYuan Mono (Default)', enShort: 'YouYuan' }),
-    Object.freeze({ id: 'auto', zh: '跟随风格专属字', zhShort: '专属字', en: 'Match Style Font', enShort: 'Style Font' }),
+    Object.freeze({ id: 'arcade', zh: '幼圆等宽', zhShort: '幼圆', en: 'YouYuan Mono', enShort: 'YouYuan' }),
+    Object.freeze({ id: 'auto', zh: '跟随风格专属字（默认）', zhShort: '专属字', en: 'Match Style Font (Default)', enShort: 'Style Font' }),
     Object.freeze({ id: 'songkai', zh: '中宋+楷书', zhShort: '中宋楷', en: 'Song + Kai', enShort: 'Song+Kai' }),
     Object.freeze({ id: 'fangsong', zh: '工程仿宋', zhShort: '仿宋', en: 'Blueprint FangSong', enShort: 'FangSong' }),
     Object.freeze({ id: 'poster', zh: '重磅画报黑', zhShort: '画报黑', en: 'Poster Sans', enShort: 'Poster' }),
@@ -41,14 +41,14 @@ function createWorkbenchUI(React, requireFn) {
     Object.freeze({ id: 'cream', zh: '米白纸感', zhShort: '米白色', en: 'Warm Cream', enShort: 'Cream', swatch: '#9e5829', surface: '#faf7f0' }),
     Object.freeze({ id: 'claude', zh: 'Claude 暖书卷', zhShort: 'Claude风', en: 'Claude Warmth', enShort: 'Claude', swatch: '#c96442', surface: '#f5f4ed' }),
     Object.freeze({ id: 'pixel8bit', zh: '8-Bit 掌机', zhShort: '8-Bit', en: 'Bright 8-Bit', enShort: '8-Bit', swatch: '#2e7d5b', surface: '#f4f6e8' }),
-    Object.freeze({ id: 'mint', zh: '晴空薄荷', zhShort: '薄荷', en: 'Airy Mint', enShort: 'Mint', swatch: '#0f766e', surface: '#f5fafb' }),
-    Object.freeze({ id: 'glass', zh: '晴昼琉璃', zhShort: '琉璃', en: 'Daylight Glass', enShort: 'Glass', swatch: '#4f6df5', surface: '#f3f7ff' }),
+    Object.freeze({ id: 'mint', zh: '晴空薄荷', zhShort: '薄荷', en: 'Airy Mint', enShort: 'Mint', swatch: '#0f8f6a', surface: '#f6fbf9' }),
+    Object.freeze({ id: 'glass', zh: '晴昼琉璃', zhShort: '琉璃', en: 'Daylight Glass', enShort: 'Glass', swatch: '#5b5bd6', surface: '#eef1fb' }),
     Object.freeze({ id: 'eink', zh: '护眼墨水屏', zhShort: '墨水屏', en: 'E-Ink Paper', enShort: 'E-Ink', swatch: '#171716', surface: '#f2f1ec' }),
     Object.freeze({ id: 'blueprint', zh: '工程晒图', zhShort: '晒图', en: 'Blueprint', enShort: 'Blueprint', swatch: '#0d3b66', surface: '#eaf3fb' }),
     Object.freeze({ id: 'risograph', zh: '波普孔版', zhShort: '孔版', en: 'Riso Zine', enShort: 'Riso', swatch: '#ff3e7f', surface: '#faf6ee' }),
-    Object.freeze({ id: 'win98', zh: '千禧复古', zhShort: '复古98', en: 'Retro 98', enShort: 'Retro 98', swatch: '#1b4f9c', surface: '#dcdcdc' }),
+    Object.freeze({ id: 'win98', zh: '云母流光', zhShort: '云母', en: 'Mica Fluent', enShort: 'Mica', swatch: '#005fb8', surface: '#eff1f5' }),
     Object.freeze({ id: 'songhui', zh: '宋韵朱砂', zhShort: '宋韵', en: 'Song Xuan', enShort: 'Song', swatch: '#b83b2a', surface: '#f7f3e8' }),
-    Object.freeze({ id: 'frutiger', zh: '晴空水晶', zhShort: '水晶', en: 'Aqua Gloss', enShort: 'Aqua', swatch: '#0ea5e9', surface: '#eaf7ff' }),
+    Object.freeze({ id: 'frutiger', zh: '晴空水晶', zhShort: '水晶', en: 'Aqua Crystal', enShort: 'Aqua', swatch: '#0ea5e9', surface: '#e4f4ff' }),
     Object.freeze({ id: 'gazette', zh: '铅字晨报', zhShort: '晨报', en: 'Gazette', enShort: 'Gazette', swatch: '#9b1c1c', surface: '#f6f3ec' }),
   ]);
 
@@ -1837,14 +1837,14 @@ function createWorkbenchUI(React, requireFn) {
  *    - \`cream\`     (米白纸感 / Warm Cream — stacked paper, dashed rows, bookmark tab)
  *    - \`claude\`    (Claude 暖书卷 / Claude Warmth — editorial serif, paper grain, borderless cards)
  *    - \`pixel8bit\` (8-Bit 掌机 / Bright 8-Bit — dot-matrix header, 2px borders, ▶ cursor, pixel progress)
- *    - \`mint\`      (晴空薄荷 / Airy Mint)
- *    - \`glass\`     (晴昼琉璃 / Daylight Glass — pastel aurora mesh, frosted blur, specular inner rim)
+ *    - \`mint\`      (晴空薄荷 / Airy Mint — mint daylight wash, white cards, emerald gradient primary)
+ *    - \`glass\`     (晴昼琉璃 / Daylight Glass — visionOS-style vivid aurora mesh, deep frosted panes, indigo glow primary)
  *    - \`eink\`      (护眼墨水屏 / E-Ink Paper — matte warm paper, #171716 ink, 60ms snappy transitions)
  *    - \`blueprint\` (工程晒图 / Blueprint — cyanotype grid, Prussian #0d3b66 ink, safety-orange #e05a2b, \`+\` ticks)
  *    - \`risograph\` (波普孔版 / Riso Zine — halftone header, 2px #18181b outlines, #ff3e7f/#2563eb offset shadows)
- *    - \`win98\`     (千禧复古 / Retro 98 — Platinum silver 3D raised/sunken bevels, royal-blue titlebar accent)
+ *    - \`win98\`     (云母流光 / Mica Fluent — Windows 11 Mica backdrop, 4px/8px Fluent radii, #005fb8 accent; id kept for saved prefs)
  *    - \`songhui\`   (宋韵朱砂 / Song Xuan — gold-flecked Xuan paper, 3px double #b83b2a masthead, seal stamps)
- *    - \`frutiger\`  (晴空水晶 / Aqua Gloss — sky-aqua gradient, glossy specular 999px aqua pills)
+ *    - \`frutiger\`  (晴空水晶 / Aqua Crystal — liquid-crystal panes with edge refraction, aqua pills)
  *    - \`gazette\`   (铅字晨报 / Gazette — warm newsprint, 4px double #161514 masthead, 1px column rules, #9b1c1c seal)
  *    - Dual-layer Chinese + Latin typography per preset + independent \`[data-dsh-font]\` overrides
  *      (\`auto\`, \`songkai\`, \`fangsong\`, \`poster\`, \`retro98\`, \`serif\`, \`arcade\`, \`modern\`)
@@ -1876,11 +1876,11 @@ function createWorkbenchUI(React, requireFn) {
   --dsh-button-hover-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
   --dsh-card-shadow: none;
   --dsh-card-hover-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-  --dsh-font-display: "Cascadia Code SemiBold", "Cascadia Code", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-body: "Cascadia Code", "Cascadia Mono", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-mono: "Cascadia Mono", "Cascadia Code", "YouYuan", "幼圆", Consolas, monospace;
-  --dsh-display-weight: 700;
-  --dsh-display-tracking: 0.015em;
+  --dsh-font-display: "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-body: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace;
+  --dsh-display-weight: 650;
+  --dsh-display-tracking: -0.01em;
   --dsh-body-tracking: normal;
   --dsh-serif-font: "Palatino Linotype", Georgia, "Noto Serif SC", "STZhongsong", "华文中宋", "STSong", "华文宋体", serif;
   --dsw-font-family: var(--dsh-font-body);
@@ -1910,11 +1910,11 @@ function createWorkbenchUI(React, requireFn) {
  * -------------------------------------------------------------------------- */
 [data-dsh-style="harness"],
 :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="harness"], :has([data-dsh-style="harness"])) {
-  --dsh-font-display: "Cascadia Code SemiBold", "Cascadia Code", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-body: "Cascadia Code", "Cascadia Mono", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-mono: "Cascadia Mono", "Cascadia Code", "YouYuan", "幼圆", Consolas, monospace;
-  --dsh-display-weight: 700;
-  --dsh-display-tracking: 0.015em;
+  --dsh-font-display: "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-body: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace;
+  --dsh-display-weight: 650;
+  --dsh-display-tracking: -0.01em;
   --dsh-body-tracking: normal;
   --dsw-font-family: var(--dsh-font-body);
   --dsw-font-markdown-base: var(--dsh-font-body);
@@ -2325,148 +2325,222 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
 }
 
 /* --------------------------------------------------------------------------
- * 6. Preset 5: \`mint\` — 晴空薄荷 / Airy Mint
+ * 6. Preset 5: \`mint\` — 晴空薄荷 / Airy Mint (v4 refresh)
+ *    - Fresh mint daylight wash with soft sky corner glow
+ *    - Crisp white cards on pale mint layers, emerald gradient primary
+ *    - Modern Segoe UI Variable + YaHei UI typography (no monospace)
  * -------------------------------------------------------------------------- */
 [data-dsh-style="mint"],
 :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="mint"], :has([data-dsh-style="mint"])) {
   color-scheme: light;
-  accent-color: #0f766e;
-  --dsw-alias-bg-base: #f5fafb;
-  --dsw-alias-bg-layer-1: #eaf3f6;
-  --dsw-alias-bg-layer-2: #dcebf0;
-  --dsw-alias-bg-layer-3: #cce1e8;
-  --dsw-alias-bg-overlay: #fafdff;
-  --dsw-alias-bg-module-platform: #e3eff3;
-  --dsw-alias-settings-card-fill: #eef6f8;
-  --dsw-alias-settings-card-stroke: #c7dde5;
-  --dsw-specific-menu: rgba(250, 253, 255, 0.97);
-  --dsw-alias-border-l1: #d5e6ec;
-  --dsw-alias-border-l2: #bdd5de;
-  --dsw-alias-border-l3: #9ec0cd;
-  --dsw-alias-border-l4: #7faab9;
-  --dsw-alias-label-primary: #132a2e;
-  --dsw-alias-label-secondary: #426067;
-  --dsw-alias-label-tertiary: #628088;
-  --dsw-alias-label-dimmed: #7c98a0;
-  --dsw-alias-brand-primary: #0f766e;
-  --dsw-alias-brand-text: #132a2e;
-  --dsw-alias-state-business-primary: #0f766e;
-  --dsw-alias-state-business-tertiary: rgba(15, 118, 110, 0.13);
-  --dsw-alias-link: #0284c7;
-  --dsw-alias-button-primary-fill: #0f766e;
-  --dsw-alias-button-primary-hover: #0d635c;
-  --dsw-alias-button-primary-ink: #f5fafb;
-  --dsw-alias-interactive-bg-hover: rgba(15, 118, 110, 0.07);
-  --dsw-alias-interactive-bg-active: rgba(15, 118, 110, 0.13);
-  --dsw-alias-interactive-bg-hover-accent: rgba(2, 132, 199, 0.11);
-  --dsw-alias-interactive-bg-hover-danger: rgba(200, 50, 64, 0.11);
-  --dsw-alias-state-error-primary: #c83240;
-  --dsw-alias-state-warn-primary: #b4690e;
-  --dsw-alias-state-warn-label: #864c07;
-  --dsw-alias-state-warn-tertiary: #fdf1d6;
-  --dsw-alias-state-success-primary: #0f766e;
-  --dsh-mint-sky-accent: #0284c7;
-  --dsw-radius-xs: 6px;
-  --dsw-radius-sm: 9px;
-  --dsw-radius-md: 12px;
-  --dsw-radius-lg: 16px;
-  --dsw-radius-xl: 20px;
-  --dsw-elevation-panel: 0 3px 12px rgba(15, 76, 92, 0.07), 0 0 0 1px rgba(127, 170, 185, 0.28);
-  --dsw-elevation-prominent: 0 14px 34px rgba(15, 76, 92, 0.13), 0 2px 6px rgba(15, 76, 92, 0.05), 0 0 0 1px rgba(127, 170, 185, 0.34);
+  accent-color: #0f8f6a;
+  --dsw-alias-bg-base: #f6fbf9;
+  --dsw-alias-bg-layer-1: #eef7f3;
+  --dsw-alias-bg-layer-2: #e1f0e9;
+  --dsw-alias-bg-layer-3: #d0e7dd;
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-bg-module-platform: #e9f5f0;
+  --dsw-alias-settings-card-fill: #ffffff;
+  --dsw-alias-settings-card-stroke: #d5eae1;
+  --dsw-specific-menu: rgba(255, 255, 255, 0.96);
+  --dsw-alias-border-l1: #ddeee7;
+  --dsw-alias-border-l2: #c9e2d7;
+  --dsw-alias-border-l3: #a9cfbf;
+  --dsw-alias-border-l4: #86b9a5;
+  --dsw-alias-label-primary: #0e2a23;
+  --dsw-alias-label-secondary: #44625a;
+  --dsw-alias-label-tertiary: #62807a;
+  --dsw-alias-label-dimmed: #85a097;
+  --dsw-alias-brand-primary: #0f8f6a;
+  --dsw-alias-brand-text: #0e2a23;
+  --dsw-alias-state-business-primary: #0f8f6a;
+  --dsw-alias-state-business-tertiary: rgba(16, 185, 129, 0.14);
+  --dsw-alias-link: #0a7ea4;
+  --dsw-alias-button-primary-fill: #0f8f6a;
+  --dsw-alias-button-primary-hover: #0b7a5a;
+  --dsw-alias-button-primary-ink: #ffffff;
+  --dsw-alias-interactive-bg-hover: rgba(15, 143, 106, 0.06);
+  --dsw-alias-interactive-bg-active: rgba(16, 185, 129, 0.14);
+  --dsw-alias-interactive-bg-hover-accent: rgba(16, 185, 129, 0.12);
+  --dsw-alias-interactive-bg-hover-danger: rgba(225, 29, 72, 0.10);
+  --dsw-alias-state-error-primary: #e11d48;
+  --dsw-alias-state-warn-primary: #c2700c;
+  --dsw-alias-state-warn-label: #8a4f06;
+  --dsw-alias-state-warn-tertiary: #fdf3dc;
+  --dsw-alias-state-success-primary: #0f8f6a;
+  --dsh-mint-sky-accent: #0a7ea4;
+  --dsw-radius-xs: 7px;
+  --dsw-radius-sm: 10px;
+  --dsw-radius-md: 14px;
+  --dsw-radius-lg: 18px;
+  --dsw-radius-xl: 22px;
+  --dsw-elevation-panel: 0 1px 2px rgba(14, 60, 46, 0.05), 0 6px 20px rgba(14, 60, 46, 0.07), 0 0 0 1px rgba(15, 143, 106, 0.10);
+  --dsw-elevation-prominent: 0 2px 6px rgba(14, 60, 46, 0.06), 0 18px 44px rgba(14, 60, 46, 0.14), 0 0 0 1px rgba(15, 143, 106, 0.12);
   --dsh-control-border-width: 1px;
-  --dsh-button-hover-shadow: 0 2px 7px rgba(15, 118, 110, 0.11);
-  --dsh-card-hover-shadow: 0 8px 22px rgba(2, 132, 199, 0.10);
-  --dsh-surface-spotlight: rgba(2, 132, 199, 0.08);
-  --dsh-font-display: "Cascadia Code SemiBold", "Cascadia Code", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-body: "Cascadia Code", "Cascadia Mono", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-mono: "Cascadia Mono", "Cascadia Code", "YouYuan", "幼圆", Consolas, monospace;
-  --dsh-display-weight: 700;
-  --dsh-display-tracking: 0.015em;
+  --dsh-button-shadow: 0 1px 1.5px rgba(14, 60, 46, 0.06);
+  --dsh-button-hover-shadow: 0 2px 8px rgba(15, 143, 106, 0.14);
+  --dsh-card-shadow: 0 1px 2px rgba(14, 60, 46, 0.04), 0 4px 14px rgba(14, 60, 46, 0.05);
+  --dsh-card-hover-shadow: 0 2px 4px rgba(14, 60, 46, 0.05), 0 12px 28px rgba(15, 143, 106, 0.12);
+  --dsh-surface-spotlight: rgba(16, 185, 129, 0.07);
+  --dsh-font-display: "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-body: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace;
+  --dsh-display-weight: 650;
+  --dsh-display-tracking: -0.01em;
   --dsh-body-tracking: normal;
   --dsw-font-family: var(--dsh-font-body);
   --dsw-font-markdown-base: var(--dsh-font-body);
 }
 
+[data-dsh-style="mint"] {
+  background-color: #f6fbf9;
+  background-image:
+    radial-gradient(70% 55% at 100% 0%, rgba(167, 243, 208, 0.38) 0%, transparent 62%),
+    radial-gradient(55% 50% at 0% 100%, rgba(186, 230, 253, 0.32) 0%, transparent 66%);
+}
+
+[data-dsh-style="mint"] :where(.dsh-header, [data-dsh-header], .dsh-wb-header) {
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  border-block-end-color: #d5eae1;
+}
+
+[data-dsh-style="mint"] :where([data-dsh-card], .dsh-card) {
+  background: #ffffff;
+  border-color: #ddeee7;
+  box-shadow: var(--dsh-card-shadow);
+}
+
+[data-dsh-style="mint"] :where(.dsh-wb-btn-primary, .dsh-btn-primary, .dsh-header-badge) {
+  background: linear-gradient(135deg, #14b083 0%, #0f8f6a 55%, #0b7a63 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 8px rgba(15, 143, 106, 0.28);
+}
+
+[data-dsh-style="mint"] :where([data-dsh-row], .dsh-row):where([data-active="true"], [data-selected="true"], [aria-selected="true"]) {
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(14, 60, 46, 0.06), 0 0 0 1px rgba(15, 143, 106, 0.16), inset 3px 0 0 #10b981;
+}
+
+[data-dsh-style="mint"] .dsh-progress-bar {
+  background: linear-gradient(90deg, #34d399 0%, #0f8f6a 100%);
+}
+
 /* --------------------------------------------------------------------------
- * 7. Preset 6: \`glass\` — 晴昼琉璃 / Daylight Glass (NEW!)
- *    - Pastel aurora daylight mesh background over \`#f3f7ff\`
- *    - Frosted translucent glass surfaces (\`rgba(255,255,255,0.70)\`, blur(14px) saturate(140%))
- *    - Crisp white specular inner border (\`inset 0 1px 0 rgba(255,255,255,0.9)\`)
+ * 7. Preset 6: \`glass\` — 晴昼琉璃 / Daylight Glass (v4 refresh)
+ *    - visionOS-style daylight: vivid indigo / rose / teal / amber aurora mesh
+ *    - Deep frosted panes (\`blur(24px) saturate(180%)\`) with white specular rims
+ *    - Indigo-violet gradient primary with soft glow, modern sans typography
  * -------------------------------------------------------------------------- */
 [data-dsh-style="glass"],
 :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="glass"], :has([data-dsh-style="glass"])) {
   color-scheme: light;
-  accent-color: #4f6df5;
-  --dsw-alias-bg-base: #f3f7ff;
-  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.70);
-  --dsw-alias-bg-layer-2: rgba(240, 245, 255, 0.78);
-  --dsw-alias-bg-layer-3: rgba(226, 236, 255, 0.84);
-  --dsw-alias-bg-overlay: rgba(255, 255, 255, 0.84);
-  --dsw-alias-bg-module-platform: rgba(244, 248, 255, 0.76);
-  --dsw-alias-settings-card-fill: rgba(255, 255, 255, 0.70);
-  --dsw-alias-settings-card-stroke: rgba(255, 255, 255, 0.82);
-  --dsw-specific-menu: rgba(255, 255, 255, 0.86);
-  --dsw-alias-border-l1: rgba(148, 173, 219, 0.24);
-  --dsw-alias-border-l2: rgba(132, 159, 212, 0.34);
-  --dsw-alias-border-l3: rgba(114, 144, 204, 0.46);
-  --dsw-alias-border-l4: rgba(96, 128, 196, 0.56);
-  --dsw-alias-label-primary: #172033;
-  --dsw-alias-label-secondary: #4b5973;
-  --dsw-alias-label-tertiary: #6b7994;
-  --dsw-alias-label-dimmed: #8895ae;
-  --dsw-alias-brand-primary: #4f6df5;
-  --dsw-alias-brand-text: #172033;
-  --dsw-alias-state-business-primary: #4f6df5;
-  --dsw-alias-state-business-tertiary: rgba(79, 109, 245, 0.14);
-  --dsw-alias-link: #3b59e2;
-  --dsw-alias-button-primary-fill: #4f6df5;
-  --dsw-alias-button-primary-hover: #3f5de3;
+  accent-color: #5b5bd6;
+  --dsw-alias-bg-base: #eef1fb;
+  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.50);
+  --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.62);
+  --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.74);
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-bg-module-platform: rgba(255, 255, 255, 0.46);
+  --dsw-alias-settings-card-fill: rgba(255, 255, 255, 0.58);
+  --dsw-alias-settings-card-stroke: rgba(255, 255, 255, 0.85);
+  --dsw-specific-menu: rgba(255, 255, 255, 0.88);
+  --dsw-alias-border-l1: rgba(99, 102, 241, 0.10);
+  --dsw-alias-border-l2: rgba(99, 102, 241, 0.17);
+  --dsw-alias-border-l3: rgba(79, 70, 229, 0.27);
+  --dsw-alias-border-l4: rgba(67, 56, 202, 0.40);
+  --dsw-alias-label-primary: #151a33;
+  --dsw-alias-label-secondary: #464d6e;
+  --dsw-alias-label-tertiary: #646b8b;
+  --dsw-alias-label-dimmed: #878dab;
+  --dsw-alias-brand-primary: #5b5bd6;
+  --dsw-alias-brand-text: #151a33;
+  --dsw-alias-state-business-primary: #5b5bd6;
+  --dsw-alias-state-business-tertiary: rgba(99, 102, 241, 0.14);
+  --dsw-alias-link: #4f46e5;
+  --dsw-alias-button-primary-fill: #5b5bd6;
+  --dsw-alias-button-primary-hover: #4c4ac7;
   --dsw-alias-button-primary-ink: #ffffff;
-  --dsw-alias-interactive-bg-hover: rgba(79, 109, 245, 0.08);
-  --dsw-alias-interactive-bg-active: rgba(79, 109, 245, 0.14);
-  --dsw-alias-interactive-bg-hover-accent: rgba(14, 165, 233, 0.12);
-  --dsw-alias-interactive-bg-hover-danger: rgba(220, 56, 82, 0.12);
-  --dsw-alias-state-error-primary: #d13850;
-  --dsw-alias-state-warn-primary: #c06a12;
-  --dsw-alias-state-warn-label: #8a4a09;
-  --dsw-alias-state-warn-tertiary: rgba(251, 191, 36, 0.18);
-  --dsw-alias-state-success-primary: #15805d;
-  --dsw-radius-xs: 8px;
-  --dsw-radius-sm: 11px;
-  --dsw-radius-md: 15px;
-  --dsw-radius-lg: 18px;
-  --dsw-radius-xl: 22px;
-  --dsw-elevation-panel: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 18px rgba(59, 92, 168, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.72);
-  --dsw-elevation-prominent: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 16px 40px rgba(59, 92, 168, 0.16), 0 0 0 1px rgba(255, 255, 255, 0.80);
+  --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.55);
+  --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.82);
+  --dsw-alias-interactive-bg-hover-accent: rgba(99, 102, 241, 0.10);
+  --dsw-alias-interactive-bg-hover-danger: rgba(225, 29, 72, 0.10);
+  --dsw-alias-state-error-primary: #e11d48;
+  --dsw-alias-state-warn-primary: #c2610c;
+  --dsw-alias-state-warn-label: #8a4306;
+  --dsw-alias-state-warn-tertiary: rgba(251, 191, 36, 0.22);
+  --dsw-alias-state-success-primary: #059669;
+  --dsw-radius-xs: 10px;
+  --dsw-radius-sm: 12px;
+  --dsw-radius-md: 16px;
+  --dsw-radius-lg: 20px;
+  --dsw-radius-xl: 24px;
+  --dsw-elevation-panel: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 32px rgba(49, 46, 129, 0.10), 0 0 0 1px rgba(255, 255, 255, 0.6);
+  --dsw-elevation-prominent: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 24px 60px rgba(49, 46, 129, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.7);
   --dsh-control-border-width: 1px;
-  --dsh-button-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 3px 10px rgba(79, 109, 245, 0.12);
-  --dsh-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 16px rgba(59, 92, 168, 0.07);
-  --dsh-card-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 10px 26px rgba(59, 92, 168, 0.12);
-  --dsh-surface-spotlight: rgba(79, 109, 245, 0.08);
-  --dsh-font-display: "Cascadia Code SemiBold", "Cascadia Code", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-body: "Cascadia Code", "Cascadia Mono", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-mono: "Cascadia Mono", "Cascadia Code", "YouYuan", "幼圆", Consolas, monospace;
-  --dsh-display-weight: 700;
-  --dsh-display-tracking: 0.015em;
+  --dsh-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 3px rgba(49, 46, 129, 0.08);
+  --dsh-button-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 14px rgba(79, 70, 229, 0.16);
+  --dsh-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 30px rgba(49, 46, 129, 0.08);
+  --dsh-card-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 16px 40px rgba(49, 46, 129, 0.14);
+  --dsh-surface-spotlight: rgba(255, 255, 255, 0.5);
+  --dsh-font-display: "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-body: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace;
+  --dsh-display-weight: 650;
+  --dsh-display-tracking: -0.012em;
   --dsh-body-tracking: normal;
   --dsw-font-family: var(--dsh-font-body);
   --dsw-font-markdown-base: var(--dsh-font-body);
 }
 
 [data-dsh-style="glass"] {
-  background-color: #f3f7ff;
+  background-color: #eef1fb;
   background-image:
-    radial-gradient(64% 58% at 12% 8%, rgba(125, 211, 252, 0.30) 0%, transparent 65%),
-    radial-gradient(58% 52% at 88% 14%, rgba(196, 181, 253, 0.28) 0%, transparent 65%),
-    radial-gradient(60% 55% at 52% 96%, rgba(153, 246, 228, 0.24) 0%, transparent 68%);
+    radial-gradient(42% 55% at 6% 10%, rgba(129, 140, 248, 0.45) 0%, transparent 70%),
+    radial-gradient(38% 48% at 94% 4%, rgba(244, 114, 182, 0.32) 0%, transparent 70%),
+    radial-gradient(48% 52% at 80% 96%, rgba(45, 212, 191, 0.32) 0%, transparent 70%),
+    radial-gradient(40% 44% at 24% 100%, rgba(251, 191, 36, 0.20) 0%, transparent 70%);
 }
 
-[data-dsh-style="glass"] :where([data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel, .dsh-header, [data-dsh-header]),
+[data-dsh-style="glass"] :where([data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel),
 :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="glass"], :has([data-dsh-style="glass"])) {
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--dsh-card-shadow);
+}
+
+[data-dsh-style="glass"] :where(.dsh-header, [data-dsh-header], .dsh-wb-header) {
+  background: rgba(255, 255, 255, 0.42);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-block-end-color: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px 0 rgba(99, 102, 241, 0.06);
+}
+
+[data-dsh-style="glass"] :where(.dsh-wb-btn-primary, .dsh-btn-primary, .dsh-header-badge) {
+  background: linear-gradient(135deg, #6d6ff0 0%, #5b5bd6 50%, #7c4ddb 100%);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px rgba(91, 91, 214, 0.32);
+}
+
+[data-dsh-style="glass"] :where([data-dsh-row], .dsh-row):where([data-active="true"], [data-selected="true"], [aria-selected="true"]) {
+  background-color: rgba(255, 255, 255, 0.80);
+  box-shadow: inset 0 1px 0 #ffffff, 0 4px 16px rgba(49, 46, 129, 0.09);
+}
+
+[data-dsh-style="glass"] [role="tab"][aria-selected="true"] {
   background: rgba(255, 255, 255, 0.70);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  backdrop-filter: blur(14px) saturate(140%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 16px rgba(59, 92, 168, 0.07);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: inset 0 1px 0 #ffffff, 0 2px 8px rgba(49, 46, 129, 0.08);
+}
+
+[data-dsh-style="glass"] .dsh-progress-bar {
+  background: linear-gradient(90deg, #818cf8 0%, #5b5bd6 55%, #c084fc 100%);
 }
 
 @supports not (backdrop-filter: blur(1px)) {
@@ -2771,133 +2845,139 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
 }
 
 /* --------------------------------------------------------------------------
- * 11. Preset 10: \`win98\` — 千禧复古 / Retro 98 (NEW!)
- *     - Classic bright Platinum/Win98 silver-gray (\`#dcdcdc\` / \`#e4e4e4\`, \`#ffffff\` wells)
- *     - Authentic 3D beveled raised borders flipping to sunken bevels on \`:active\` / \`[aria-selected="true"]\`
- *     - \`0px\` sharp corners + royal-blue (\`#1b4f9c\` -> \`#3b82c4\`) header accent
+ * 11. Preset 10: \`win98\` — 云母流光 / Mica Fluent (v4: replaces Retro 98)
+ *     The \`win98\` id is kept so saved preferences keep working.
+ *     - Windows 11 Fluent "Mica": softly tinted desktop backdrop, translucent layers
+ *     - 4px controls / 8px cards & flyouts, bottom-stroke control elevation
+ *     - Fluent accent \`#005fb8\`, pill nav indicator, acrylic menus & dialogs
  * -------------------------------------------------------------------------- */
 [data-dsh-style="win98"],
 :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) {
   color-scheme: light;
-  accent-color: #1b4f9c;
-  --dsw-alias-bg-base: #dcdcdc;
-  --dsw-alias-bg-layer-1: #e4e4e4;
-  --dsw-alias-bg-layer-2: #d0d0d0;
-  --dsw-alias-bg-layer-3: #c0c0c0;
-  --dsw-alias-bg-overlay: #e4e4e4;
-  --dsw-alias-bg-module-platform: #d4d4d4;
-  --dsw-alias-settings-card-fill: #ffffff;
-  --dsw-alias-settings-card-stroke: #808080;
-  --dsw-specific-menu: #dcdcdc;
-  --dsw-alias-border-l1: #b8b8b8;
-  --dsw-alias-border-l2: #808080;
-  --dsw-alias-border-l3: #5a5a5a;
-  --dsw-alias-border-l4: #222222;
-  --dsw-alias-label-primary: #111111;
-  --dsw-alias-label-secondary: #333333;
-  --dsw-alias-label-tertiary: #555555;
-  --dsw-alias-label-dimmed: #767676;
-  --dsw-alias-brand-primary: #1b4f9c;
-  --dsw-alias-brand-text: #111111;
-  --dsw-alias-state-business-primary: #1b4f9c;
-  --dsw-alias-state-business-tertiary: rgba(27, 79, 156, 0.14);
-  --dsw-alias-link: #0b3c88;
-  --dsw-alias-button-primary-fill: #1b4f9c;
-  --dsw-alias-button-primary-hover: #245cb0;
+  accent-color: #005fb8;
+  --dsw-alias-bg-base: #eff1f5;
+  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.50);
+  --dsw-alias-bg-layer-2: #e8eaee;
+  --dsw-alias-bg-layer-3: #dde0e6;
+  --dsw-alias-bg-overlay: #ffffff;
+  --dsw-alias-bg-module-platform: rgba(255, 255, 255, 0.40);
+  --dsw-alias-settings-card-fill: rgba(255, 255, 255, 0.72);
+  --dsw-alias-settings-card-stroke: rgba(0, 0, 0, 0.06);
+  --dsw-specific-menu: rgba(252, 252, 252, 0.88);
+  --dsw-alias-border-l1: rgba(0, 0, 0, 0.06);
+  --dsw-alias-border-l2: rgba(0, 0, 0, 0.10);
+  --dsw-alias-border-l3: rgba(0, 0, 0, 0.16);
+  --dsw-alias-border-l4: rgba(0, 0, 0, 0.45);
+  --dsw-alias-label-primary: #1a1a1a;
+  --dsw-alias-label-secondary: #5c5c5c;
+  --dsw-alias-label-tertiary: #6f6f6f;
+  --dsw-alias-label-dimmed: #8a8a8a;
+  --dsw-alias-brand-primary: #005fb8;
+  --dsw-alias-brand-text: #1a1a1a;
+  --dsw-alias-state-business-primary: #005fb8;
+  --dsw-alias-state-business-tertiary: rgba(0, 95, 184, 0.10);
+  --dsw-alias-link: #005fb8;
+  --dsw-alias-button-primary-fill: #005fb8;
+  --dsw-alias-button-primary-hover: #196ebf;
   --dsw-alias-button-primary-ink: #ffffff;
-  --dsw-alias-interactive-bg-hover: rgba(27, 79, 156, 0.09);
-  --dsw-alias-interactive-bg-active: rgba(27, 79, 156, 0.16);
-  --dsw-alias-interactive-bg-hover-accent: rgba(59, 130, 196, 0.15);
-  --dsw-alias-interactive-bg-hover-danger: rgba(185, 28, 28, 0.13);
-  --dsw-alias-state-error-primary: #b91c1c;
-  --dsw-alias-state-warn-primary: #9a5b08;
-  --dsw-alias-state-warn-label: #6e3f04;
-  --dsw-alias-state-warn-tertiary: #fef3c7;
-  --dsw-alias-state-success-primary: #166534;
-  --dsw-radius-xs: 0px;
-  --dsw-radius-sm: 0px;
-  --dsw-radius-md: 0px;
-  --dsw-radius-lg: 0px;
-  --dsw-radius-xl: 0px;
-  --dsw-corner-shape: square;
-  --dsw-elevation-panel: inset 1.5px 1.5px 0 #ffffff, inset -1.5px -1.5px 0 #5a5a5a, inset 2.5px 2.5px 0 #f4f4f4, inset -2.5px -2.5px 0 #9a9a9a;
-  --dsw-elevation-prominent: inset 1.5px 1.5px 0 #ffffff, inset -1.5px -1.5px 0 #5a5a5a, inset 2.5px 2.5px 0 #f4f4f4, inset -2.5px -2.5px 0 #9a9a9a, 4px 4px 12px rgba(0, 0, 0, 0.18);
+  --dsw-alias-interactive-bg-hover: rgba(0, 0, 0, 0.037);
+  --dsw-alias-interactive-bg-active: rgba(0, 0, 0, 0.06);
+  --dsw-alias-interactive-bg-hover-accent: rgba(0, 95, 184, 0.08);
+  --dsw-alias-interactive-bg-hover-danger: rgba(196, 43, 28, 0.08);
+  --dsw-alias-state-error-primary: #c42b1c;
+  --dsw-alias-state-warn-primary: #9d5d00;
+  --dsw-alias-state-warn-label: #6b3f00;
+  --dsw-alias-state-warn-tertiary: #fff4ce;
+  --dsw-alias-state-success-primary: #0f7b0f;
+  --dsw-radius-xs: 4px;
+  --dsw-radius-sm: 4px;
+  --dsw-radius-md: 8px;
+  --dsw-radius-lg: 8px;
+  --dsw-radius-xl: 8px;
+  --dsw-elevation-panel: 0 2px 4px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --dsw-elevation-prominent: 0 8px 16px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.06);
   --dsh-control-border-width: 1px;
-  --dsh-button-shadow: inset 1.5px 1.5px 0 #ffffff, inset -1.5px -1.5px 0 #5a5a5a, inset 2.5px 2.5px 0 #f4f4f4, inset -2.5px -2.5px 0 #9a9a9a;
-  --dsh-button-hover-shadow: inset 1.5px 1.5px 0 #ffffff, inset -1.5px -1.5px 0 #5a5a5a, inset 2.5px 2.5px 0 #f4f4f4, inset -2.5px -2.5px 0 #9a9a9a;
-  --dsh-card-shadow: inset 1.5px 1.5px 0 #808080, inset -1.5px -1.5px 0 #ffffff, inset 2.5px 2.5px 0 #5a5a5a, inset -2.5px -2.5px 0 #dcdcdc;
-  --dsh-card-hover-shadow: inset 1.5px 1.5px 0 #808080, inset -1.5px -1.5px 0 #ffffff, inset 2.5px 2.5px 0 #5a5a5a, inset -2.5px -2.5px 0 #dcdcdc;
-  --dsh-surface-spotlight: rgba(27, 79, 156, 0.10);
-  --dsh-font-display: Tahoma, "SimSun", "NSimSun", "宋体", "新宋体", sans-serif;
-  --dsh-font-body: Tahoma, "SimSun", "NSimSun", "宋体", "新宋体", sans-serif;
-  --dsh-font-mono: "Fixedsys", Consolas, "Courier New", "SimSun", "宋体", monospace;
-  --dsh-display-weight: 700;
+  --dsh-button-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  --dsh-button-hover-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  --dsh-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --dsh-card-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --dsh-surface-spotlight: rgba(0, 0, 0, 0.03);
+  --dsh-font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-body: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", monospace;
+  --dsh-display-weight: 600;
   --dsh-display-tracking: normal;
   --dsh-body-tracking: normal;
   --dsw-font-family: var(--dsh-font-body);
   --dsw-font-markdown-base: var(--dsh-font-body);
 }
 
-[data-dsh-style="win98"] :where(button, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="menuitemradio"], [data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel),
-:where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])),
-:where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) :where(button, input, select, textarea, [role="menuitem"], [role="menuitemradio"]) {
-  border-radius: 0px !important;
-  corner-shape: square;
+/* Mica: softly wallpaper-tinted backdrop */
+[data-dsh-style="win98"] {
+  background-color: #eff1f5;
+  background-image: linear-gradient(135deg, #e6ecf6 0%, #f3f1f0 55%, #eeedf4 100%);
 }
 
-/* Raised 3D bevel buttons */
-[data-dsh-style="win98"] :where(button:not([role="tab"]), .dsh-btn),
-:where([role="dialog"], [role="alertdialog"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) :where(button:not([role="tab"]), .dsh-btn) {
-  border: 0;
-  background-color: #dcdcdc;
-  box-shadow: inset 1.5px 1.5px 0 #ffffff, inset -1.5px -1.5px 0 #5a5a5a, inset 2.5px 2.5px 0 #f4f4f4, inset -2.5px -2.5px 0 #9a9a9a;
+[data-dsh-style="win98"] :where(.dsh-header, [data-dsh-header], .dsh-wb-header) {
+  background: rgba(255, 255, 255, 0.45);
+  border-block-end: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-/* Keep primary buttons royal blue with 3D bevel */
+[data-dsh-style="win98"] :where([data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel) {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: var(--dsh-card-shadow);
+}
+
+/* Fluent accent button: solid accent + subtle darker bottom stroke */
 [data-dsh-style="win98"] :where(.dsh-wb-btn-primary, .dsh-btn-primary) {
-  background-color: #1b4f9c;
+  background: #005fb8;
   color: #ffffff;
-  box-shadow: inset 1.5px 1.5px 0 #6ca0e8, inset -1.5px -1.5px 0 #0d2b57, inset 2.5px 2.5px 0 #4a82d1, inset -2.5px -2.5px 0 #143c78;
-}
-
-/* Sunken 3D bevel on active / pressed / selected controls */
-[data-dsh-style="win98"] :where(button, [role="button"]):is(:active, [aria-pressed="true"], [aria-expanded="true"]):not(:disabled):not([aria-disabled="true"]),
-[data-dsh-style="win98"] [role="tab"][aria-selected="true"],
-:where([role="dialog"], [role="alertdialog"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) :where(button, [role="button"]):is(:active, [aria-pressed="true"]):not(:disabled):not([aria-disabled="true"]) {
-  translate: 0px 0px !important;
-  scale: 1 !important;
-  background-color: #e4e4e4;
-  box-shadow: inset 1.5px 1.5px 0 #5a5a5a, inset -1.5px -1.5px 0 #ffffff, inset 2.5px 2.5px 0 #9a9a9a, inset -2.5px -2.5px 0 #f4f4f4 !important;
-}
-
-/* Sunken white list/card/input wells */
-[data-dsh-style="win98"] :where([data-dsh-card], .dsh-card, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
-  border: 0;
-  background: #ffffff;
-  box-shadow: inset 1.5px 1.5px 0 #808080, inset -1.5px -1.5px 0 #ffffff, inset 2.5px 2.5px 0 #5a5a5a, inset -2.5px -2.5px 0 #dcdcdc;
-}
-
-/* Bright Win98 Platinum raised toolbar header with iconic royal-blue titlebar stripe */
-[data-dsh-style="win98"] :where(.dsh-header, [data-dsh-header], .pageHeader, .dsh-wb-header, .topbar) {
-  background: linear-gradient(180deg, #ececec 0%, #dcdcdc 100%) !important;
-  color: #111111;
-  border-block-start: 3px solid #1b4f9c !important;
-  border-block-end: 2px solid #808080;
-  box-shadow: inset 0 1px 0 #ffffff, inset 0 -1px 0 #808080;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.28);
 }
 
 [data-dsh-style="win98"] .dsh-header-badge {
-  background: linear-gradient(90deg, #1b4f9c 0%, #3b82c4 100%);
+  background: linear-gradient(135deg, #0a7fd9 0%, #005fb8 100%);
   color: #ffffff;
+  border-radius: 6px;
 }
 
-:where([role="dialog"], [role="alertdialog"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) header {
-  background: linear-gradient(90deg, #1b4f9c 0%, #3b82c4 100%);
-  color: #ffffff;
+/* NavigationView-style pill selection indicator */
+[data-dsh-style="win98"] :where([data-dsh-row], .dsh-row):where([data-active="true"], [data-selected="true"], [aria-selected="true"]) {
+  background:
+    linear-gradient(#005fb8, #005fb8) 1px 50% / 3px 16px no-repeat,
+    rgba(0, 0, 0, 0.05);
 }
 
-:where([role="dialog"], [role="alertdialog"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) header h2 {
-  color: #ffffff;
+[data-dsh-style="win98"] [role="tab"][aria-selected="true"]::after {
+  inset-inline: calc(50% - 8px);
+  border-block-end-width: 3px;
+  border-block-end-color: #005fb8;
+  border-radius: 3px;
+}
+
+/* Fluent text box: bottom stroke that turns accent on focus */
+[data-dsh-style="win98"] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  background-color: rgba(255, 255, 255, 0.78);
+  border-block-end-color: rgba(0, 0, 0, 0.42);
+}
+
+[data-dsh-style="win98"] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea):focus {
+  background-color: #ffffff;
+  border-block-end-color: #005fb8;
+  box-shadow: inset 0 -1px 0 #005fb8;
+}
+
+/* Acrylic flyouts & dialogs */
+:where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="win98"], :has([data-dsh-style="win98"])) {
+  background: rgba(252, 252, 252, 0.86);
+  -webkit-backdrop-filter: blur(30px) saturate(125%);
+  backdrop-filter: blur(30px) saturate(125%);
+}
+
+[data-dsh-style="win98"] .dsh-progress-bar {
+  background: #005fb8;
 }
 
 /* --------------------------------------------------------------------------
@@ -2993,100 +3073,138 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
 }
 
 /* --------------------------------------------------------------------------
- * 13. Preset 12: \`frutiger\` — 晴空水晶 / Aqua Gloss (NEW!)
- *     - Bright Frutiger Aero sky-aqua gradient (\`#eaf7ff\` -> \`#f4fbff\`)
- *     - Glossy upper-half specular aqua pill buttons (\`linear-gradient\` + \`inset 0 1.5px 0\`)
- *     - Pill \`999px\` control radius + luminous translucent cards
+ * 13. Preset 12: \`frutiger\` — 晴空水晶 / Aqua Crystal (v4 refresh)
+ *     - Clear sky-aqua daylight with a white sun bloom
+ *     - "Liquid crystal" panes: light blur, high saturation, bright edge refraction
+ *       (top-left specular + bottom-right rim) instead of the old split gloss
+ *     - Pill controls, smooth aqua primary with inner depth & glow
  * -------------------------------------------------------------------------- */
 [data-dsh-style="frutiger"],
 :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="frutiger"], :has([data-dsh-style="frutiger"])) {
   color-scheme: light;
   accent-color: #0284c7;
-  --dsw-alias-bg-base: #eaf7ff;
-  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.78);
-  --dsw-alias-bg-layer-2: rgba(232, 246, 255, 0.86);
-  --dsw-alias-bg-layer-3: rgba(209, 236, 255, 0.90);
-  --dsw-alias-bg-overlay: rgba(248, 253, 255, 0.93);
-  --dsw-alias-bg-module-platform: rgba(232, 246, 255, 0.84);
-  --dsw-alias-settings-card-fill: rgba(255, 255, 255, 0.82);
-  --dsw-alias-settings-card-stroke: rgba(56, 189, 248, 0.44);
-  --dsw-specific-menu: rgba(248, 253, 255, 0.95);
-  --dsw-alias-border-l1: rgba(56, 189, 248, 0.26);
-  --dsw-alias-border-l2: rgba(14, 165, 233, 0.36);
-  --dsw-alias-border-l3: rgba(2, 132, 199, 0.48);
-  --dsw-alias-border-l4: rgba(3, 105, 161, 0.58);
-  --dsw-alias-label-primary: #0c2b45;
-  --dsw-alias-label-secondary: #275373;
-  --dsw-alias-label-tertiary: #487596;
-  --dsw-alias-label-dimmed: #6c96b5;
+  --dsw-alias-bg-base: #e4f4ff;
+  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.40);
+  --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.55);
+  --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.70);
+  --dsw-alias-bg-overlay: #fbfdff;
+  --dsw-alias-bg-module-platform: rgba(255, 255, 255, 0.36);
+  --dsw-alias-settings-card-fill: rgba(255, 255, 255, 0.42);
+  --dsw-alias-settings-card-stroke: rgba(255, 255, 255, 0.90);
+  --dsw-specific-menu: rgba(244, 251, 255, 0.90);
+  --dsw-alias-border-l1: rgba(14, 165, 233, 0.14);
+  --dsw-alias-border-l2: rgba(14, 165, 233, 0.24);
+  --dsw-alias-border-l3: rgba(2, 132, 199, 0.36);
+  --dsw-alias-border-l4: rgba(3, 105, 161, 0.50);
+  --dsw-alias-label-primary: #072a44;
+  --dsw-alias-label-secondary: #2b5675;
+  --dsw-alias-label-tertiary: #4b7593;
+  --dsw-alias-label-dimmed: #6f94ae;
   --dsw-alias-brand-primary: #0284c7;
-  --dsw-alias-brand-text: #0c2b45;
+  --dsw-alias-brand-text: #072a44;
   --dsw-alias-state-business-primary: #0284c7;
   --dsw-alias-state-business-tertiary: rgba(14, 165, 233, 0.16);
   --dsw-alias-link: #0369a1;
   --dsw-alias-button-primary-fill: #0284c7;
   --dsw-alias-button-primary-hover: #0369a1;
   --dsw-alias-button-primary-ink: #ffffff;
-  --dsw-alias-interactive-bg-hover: rgba(14, 165, 233, 0.10);
-  --dsw-alias-interactive-bg-active: rgba(14, 165, 233, 0.18);
+  --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.50);
+  --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.78);
   --dsw-alias-interactive-bg-hover-accent: rgba(56, 189, 248, 0.16);
-  --dsw-alias-interactive-bg-hover-danger: rgba(220, 56, 82, 0.13);
-  --dsw-alias-state-error-primary: #c83244;
-  --dsw-alias-state-warn-primary: #c06a12;
-  --dsw-alias-state-warn-label: #8a4a09;
-  --dsw-alias-state-warn-tertiary: #fef0d6;
-  --dsw-alias-state-success-primary: #0f766e;
-  --dsw-radius-xs: 10px;
+  --dsw-alias-interactive-bg-hover-danger: rgba(225, 29, 72, 0.10);
+  --dsw-alias-state-error-primary: #e11d48;
+  --dsw-alias-state-warn-primary: #c2610c;
+  --dsw-alias-state-warn-label: #8a4306;
+  --dsw-alias-state-warn-tertiary: rgba(253, 224, 71, 0.30);
+  --dsw-alias-state-success-primary: #0d9488;
+  --dsw-radius-xs: 12px;
   --dsw-radius-sm: 999px;
-  --dsw-radius-md: 18px;
-  --dsw-radius-lg: 22px;
-  --dsw-radius-xl: 26px;
-  --dsw-elevation-panel: inset 0 1.5px 0 rgba(255, 255, 255, 0.92), 0 6px 20px rgba(14, 165, 233, 0.12), 0 0 0 1px rgba(56, 189, 248, 0.36);
-  --dsw-elevation-prominent: inset 0 1.5px 0 rgba(255, 255, 255, 0.95), 0 16px 38px rgba(14, 165, 233, 0.18), 0 0 0 1px rgba(56, 189, 248, 0.44);
+  --dsw-radius-md: 20px;
+  --dsw-radius-lg: 24px;
+  --dsw-radius-xl: 28px;
+  --dsw-elevation-panel: inset 1px 1px 0 rgba(255, 255, 255, 0.95), inset -1px -1px 0 rgba(255, 255, 255, 0.45), 0 10px 30px rgba(2, 132, 199, 0.12);
+  --dsw-elevation-prominent: inset 1px 1px 0 rgba(255, 255, 255, 0.98), inset -1px -1px 0 rgba(255, 255, 255, 0.5), 0 24px 56px rgba(2, 132, 199, 0.20);
   --dsh-control-border-width: 1px;
-  --dsh-button-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.92), 0 2px 6px rgba(14, 165, 233, 0.12);
-  --dsh-button-hover-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.96), 0 4px 12px rgba(2, 132, 199, 0.22);
-  --dsh-card-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.92), 0 6px 20px rgba(14, 165, 233, 0.10);
-  --dsh-card-hover-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.98), 0 10px 26px rgba(2, 132, 199, 0.16);
-  --dsh-surface-spotlight: rgba(14, 165, 233, 0.10);
-  --dsh-font-display: "Cascadia Code SemiBold", "Cascadia Code", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-body: "Cascadia Code", "Cascadia Mono", "YouYuan", "幼圆", "Noto Sans SC", monospace;
-  --dsh-font-mono: "Cascadia Mono", "Cascadia Code", "YouYuan", "幼圆", Consolas, monospace;
-  --dsh-display-weight: 700;
-  --dsh-display-tracking: 0.015em;
+  --dsh-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.35), 0 2px 8px rgba(2, 132, 199, 0.10);
+  --dsh-button-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px rgba(2, 132, 199, 0.18);
+  --dsh-card-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.95), inset -1px -1px 0 rgba(255, 255, 255, 0.4), 0 10px 30px rgba(2, 132, 199, 0.10);
+  --dsh-card-hover-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.98), inset -1px -1px 0 rgba(255, 255, 255, 0.45), 0 18px 40px rgba(2, 132, 199, 0.16);
+  --dsh-surface-spotlight: rgba(255, 255, 255, 0.45);
+  --dsh-font-display: "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-body: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --dsh-font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace;
+  --dsh-display-weight: 650;
+  --dsh-display-tracking: -0.01em;
   --dsh-body-tracking: normal;
   --dsw-font-family: var(--dsh-font-body);
   --dsw-font-markdown-base: var(--dsh-font-body);
 }
 
 [data-dsh-style="frutiger"] {
-  background-color: #eaf7ff;
+  background-color: #e4f4ff;
   background-image:
-    radial-gradient(60% 48% at 15% 6%, rgba(125, 211, 252, 0.34) 0%, transparent 65%),
-    linear-gradient(180deg, #eaf7ff 0%, #f4fbff 55%, #e5f5fe 100%);
+    radial-gradient(50% 42% at 16% 0%, rgba(255, 255, 255, 0.95) 0%, transparent 70%),
+    radial-gradient(45% 55% at 100% 30%, rgba(56, 189, 248, 0.30) 0%, transparent 70%),
+    radial-gradient(55% 50% at 0% 100%, rgba(34, 211, 238, 0.26) 0%, transparent 70%),
+    linear-gradient(180deg, #dff2ff 0%, #eef9ff 50%, #e2f5ff 100%);
+}
+
+[data-dsh-style="frutiger"] :where([data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel, .dsh-header, [data-dsh-header]),
+:where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="frutiger"], :has([data-dsh-style="frutiger"])) {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.64) 0%, rgba(255, 255, 255, 0.32) 100%);
+  -webkit-backdrop-filter: blur(16px) saturate(210%) brightness(1.04);
+  backdrop-filter: blur(16px) saturate(210%) brightness(1.04);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: var(--dsh-card-shadow);
+}
+
+[data-dsh-style="frutiger"] :where(.dsh-header, [data-dsh-header]) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 0 rgba(14, 165, 233, 0.10);
 }
 
 [data-dsh-style="frutiger"] :where(button:not([role="tab"]), .dsh-btn),
 :where([role="dialog"], [role="alertdialog"], dialog):where([data-dsh-style="frutiger"], :has([data-dsh-style="frutiger"])) :where(button:not([role="tab"]), .dsh-btn) {
   border-radius: 999px;
-  border: 1px solid rgba(14, 165, 233, 0.42);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(224, 244, 255, 0.88) 49%, rgba(204, 236, 255, 0.92) 51%, rgba(235, 249, 255, 0.96) 100%);
-  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.92), 0 2px 6px rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.46) 100%);
+  box-shadow: var(--dsh-button-shadow);
 }
 
 [data-dsh-style="frutiger"] :where(.dsh-wb-btn-primary, .dsh-btn-primary, .dsh-header-badge) {
   border-radius: 999px;
-  border: 1px solid #0284c7;
+  border: 1px solid rgba(255, 255, 255, 0.45);
   color: #ffffff;
-  background: linear-gradient(180deg, #7dd3fc 0%, #0ea5e9 48%, #0284c7 52%, #38bdf8 100%);
-  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.88), 0 3px 10px rgba(2, 132, 199, 0.24);
+  background: linear-gradient(180deg, #4cc3fa 0%, #0ea5e9 45%, #0284c7 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 6px rgba(3, 105, 161, 0.35), 0 6px 18px rgba(14, 165, 233, 0.35);
 }
 
-[data-dsh-style="frutiger"] :where([data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel, .dsh-header, [data-dsh-header]) {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(240, 250, 255, 0.78) 100%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
-  backdrop-filter: blur(10px) saturate(130%);
-  box-shadow: var(--dsh-card-shadow);
+[data-dsh-style="frutiger"] :where([data-dsh-row], .dsh-row):where([data-active="true"], [data-selected="true"], [aria-selected="true"]) {
+  background-color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 1px 1px 0 #ffffff, 0 4px 14px rgba(2, 132, 199, 0.10);
+}
+
+[data-dsh-style="frutiger"] [role="tab"][aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.66);
+  border-radius: 999px;
+  color: var(--dsw-alias-label-primary);
+  box-shadow: inset 0 1px 0 #ffffff, 0 2px 8px rgba(2, 132, 199, 0.12);
+}
+
+[data-dsh-style="frutiger"] [role="tab"][aria-selected="true"]::after {
+  inset-inline: 40%;
+  border-radius: 3px;
+}
+
+[data-dsh-style="frutiger"] .dsh-progress-bar {
+  background: linear-gradient(90deg, #67e8f9 0%, #0ea5e9 55%, #0284c7 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  [data-dsh-style="frutiger"] :where([data-dsh-card], .dsh-card, [data-dsh-panel], .dsh-panel, .dsh-header, [data-dsh-header]),
+  :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):where([data-dsh-style="frutiger"], :has([data-dsh-style="frutiger"])) {
+    background: rgba(255, 255, 255, 0.92);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -3389,8 +3507,8 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
 
 @media (prefers-reduced-motion: no-preference) {
   @media (hover: hover) {
-    :where([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="win98"]):not([data-dsh-style="risograph"])) :where(button:not([role="tab"]):not([role="menuitem"]):not([role="menuitemradio"]):not([role="switch"]), .dsh-btn):hover:not(:disabled):not([aria-disabled="true"]),
-    :where([role="dialog"], [role="alertdialog"], dialog):has([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="win98"]):not([data-dsh-style="risograph"])) :where(button:not([role="tab"]):not([role="menuitem"]):not([role="menuitemradio"]):not([role="switch"]), .dsh-btn):hover:not(:disabled):not([aria-disabled="true"]) {
+    :where([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="risograph"])) :where(button:not([role="tab"]):not([role="menuitem"]):not([role="menuitemradio"]):not([role="switch"]), .dsh-btn):hover:not(:disabled):not([aria-disabled="true"]),
+    :where([role="dialog"], [role="alertdialog"], dialog):has([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="risograph"])) :where(button:not([role="tab"]):not([role="menuitem"]):not([role="menuitemradio"]):not([role="switch"]), .dsh-btn):hover:not(:disabled):not([aria-disabled="true"]) {
       translate: 0px -0.5px;
     }
 
@@ -3410,8 +3528,8 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
   }
 
   /* Tactile spring press on standard themes */
-  :where([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="win98"]):not([data-dsh-style="risograph"])) :where(button:not([role="switch"]), [role="button"]):active:not(:disabled):not([aria-disabled="true"]),
-  :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):has([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="win98"]):not([data-dsh-style="risograph"])) :where(button:not([role="switch"]), [role="button"]):active:not(:disabled):not([aria-disabled="true"]) {
+  :where([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="risograph"])) :where(button:not([role="switch"]), [role="button"]):active:not(:disabled):not([aria-disabled="true"]),
+  :where([role="dialog"], [role="alertdialog"], [role="menu"], dialog):has([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="risograph"])) :where(button:not([role="switch"]), [role="button"]):active:not(:disabled):not([aria-disabled="true"]) {
     scale: 0.965;
     translate: 0px 0.5px;
     transition-duration: 80ms;
@@ -4039,7 +4157,7 @@ body[data-ds-dark-theme] :where([role="dialog"], [role="alertdialog"], [role="me
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  :where([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="win98"]):not([data-dsh-style="risograph"])) :where([data-dsh-card], .dsh-card):hover {
+  :where([data-dsh-style]:not([data-dsh-style="pixel8bit"]):not([data-dsh-style="eink"]):not([data-dsh-style="risograph"])) :where([data-dsh-card], .dsh-card):hover {
     translate: 0px -1.5px;
     box-shadow: var(--dsh-card-hover-shadow);
   }
@@ -4446,7 +4564,8 @@ dialog[open]::backdrop {
 .w-page {
   display: flex; flex-direction: column; position: relative;
   padding: 0; min-height: 540px; gap: 0;
-  background: var(--w-canvas);
+  /* background-color only, so each skin's backdrop (aurora mesh, mica tint, paper grain, grid) stays visible */
+  background-color: var(--w-canvas);
 }
 .w-page[data-main="true"] {
   height: 100%; min-height: 0;
