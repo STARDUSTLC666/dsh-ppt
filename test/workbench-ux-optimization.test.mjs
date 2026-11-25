@@ -352,4 +352,8 @@ test('[P0-1 / P1-1 / P1-2 / P1-3 / P2-1] client & panel structural guards stay i
   assert.ok(CLIENT_SRC.includes("kind === 'pdf' || kind === 'png-zip'"))
   assert.ok(CLIENT_SRC.includes('ppt-downloads-grid'))
   assert.ok(BUNDLE.includes('ppt-downloads-grid'))
+  // Integrated verifier checks: download dialog widens inner .w-dialog + allows clean wrap, and .preview uses margin:0
+  assert.ok(EDITOR_SRC.includes('.ppt-dialog.w-dialog.ppt-download-dialog{width:min(760px,calc(100dvw - 32px));max-width:min(760px,calc(100dvw - 32px))}'))
+  assert.ok(EDITOR_SRC.includes('white-space:normal;text-align:start;line-height:1.3'))
+  assert.ok(EDITOR_SRC.includes('overflow:clip;min-height:0;margin:0;position:relative'))
 })

@@ -730,7 +730,7 @@ const PPT_WORKBENCH_CSS = `
 .ppt-workbench .ppt-preview-tools .w-button{font-size:12.5px;min-height:30px;padding:5px 10px}
 .ppt-workbench .ppt-preview-tools [aria-pressed=true]{background:var(--w-selected);border-color:var(--w-accent);color:var(--w-accent);font-weight:600}
 .ppt-workbench .ppt-preview-tools .w-icon-button{margin-inline-start:auto}
-.ppt-workbench .preview{width:100%;aspect-ratio:16/9;border:var(--dsh-control-border-width,1px) solid var(--w-border);border-radius:var(--dsw-radius-md,10px);background:var(--w-soft,#f0f4fa);box-shadow:var(--dsw-elevation-panel,0 6px 20px rgba(15,23,42,0.06));overflow:clip;min-height:0;margin:auto 0;position:relative;display:flex;align-items:center;justify-content:center}
+.ppt-workbench .preview{width:100%;aspect-ratio:16/9;border:var(--dsh-control-border-width,1px) solid var(--w-border);border-radius:var(--dsw-radius-md,10px);background:var(--w-soft,#f0f4fa);box-shadow:var(--dsw-elevation-panel,0 6px 20px rgba(15,23,42,0.06));overflow:clip;min-height:0;margin:0;position:relative;display:flex;align-items:center;justify-content:center}
 .ppt-workbench .ppt-split-preview,.ppt-workbench .ppt-canvas-visual-diff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}
 .ppt-workbench .ppt-split-pane{display:flex;flex-direction:column;gap:6px;min-width:0}
 .ppt-workbench .ppt-split-pane figcaption{font-size:12px;font-weight:600;color:var(--w-muted)}
@@ -795,8 +795,8 @@ const PPT_WORKBENCH_CSS = `
 :is(.ppt-workbench,.ppt-dialog) .ppt-download-group h4{margin:0;font-size:12px;font-weight:650;color:var(--w-muted)}
 :is(.ppt-workbench,.ppt-dialog) .ppt-downloads-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 :is(.ppt-workbench,.ppt-dialog) .ppt-downloads .tools{display:flex;flex-direction:column;align-items:stretch;gap:8px}
-:is(.ppt-workbench,.ppt-dialog) .ppt-downloads .w-button,:is(.ppt-workbench,.ppt-dialog) .ppt-downloads button{font-size:13px;min-height:34px;justify-content:flex-start;width:100%}
-.w-dialog-modal.ppt-download-dialog,.dsh-fallback-modal-dialog.ppt-download-dialog{width:min(660px,calc(100dvw - 32px))}
+:is(.ppt-workbench,.ppt-dialog) .ppt-downloads .w-button,:is(.ppt-workbench,.ppt-dialog) .ppt-downloads button{font-size:13px;min-height:34px;justify-content:flex-start;width:100%;white-space:normal;text-align:start;line-height:1.3}
+.w-dialog-modal.ppt-download-dialog,.dsh-fallback-modal-dialog.ppt-download-dialog,.ppt-dialog.w-dialog.ppt-download-dialog{width:min(760px,calc(100dvw - 32px));max-width:min(760px,calc(100dvw - 32px))}
 .ppt-workbench .ppt-pace-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}
 .ppt-workbench .ppt-pace-summary::-webkit-details-marker{display:none}
 .ppt-workbench .ppt-lightbox-dirty-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 12px;margin-bottom:12px;border-radius:var(--dsw-radius-sm,8px);border:1px solid color-mix(in oklab,var(--dsw-alias-state-warn-primary,#b45309) 35%,var(--w-border));background:color-mix(in oklab,var(--dsw-alias-state-warn-primary,#b45309) 10%,var(--w-canvas));color:var(--w-text);font-size:12.5px}
