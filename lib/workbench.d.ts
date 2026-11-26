@@ -44,6 +44,7 @@ export declare class PptWorkbench {
     private revision;
     private themeId;
     private brandPatch;
+    private templateMasterAssetsPatch;
     private itemsPatch;
     private patch;
     private pptxBytes;

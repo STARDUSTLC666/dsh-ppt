@@ -65,6 +65,15 @@ import {
   applyBrandKitToSlidesAndBrand,
   auditBrandCompliance,
 } from './deck-brand-kit.mjs'
+import {
+  TEMPLATE_MASTER_MODES,
+  normalizeTemplateMaster,
+  collectTemplateMasterAssetIds,
+  resolveTemplateMasterForSlide,
+  adaptThemeForMasterSurface,
+  mapBoxToSafeZone,
+  validateNativePackageXml,
+} from './deck-template-master.mjs'
 export { readRenderReceipt } from './deck-render.mjs'
 export { dataNotes, dataReport } from './deck-data.mjs'
 export { buildDeck, resolveLanguage } from './deck-core.mjs'
@@ -118,6 +127,7 @@ export {
   applyBrandKitToSlidesAndBrand,
   auditBrandCompliance,
 } from './deck-brand-kit.mjs'
+export { TEMPLATE_MASTER_MODES, normalizeTemplateMaster } from './deck-template-master.mjs'
 
 export async function ingestExemplarCorpus(options = {}) {
   return ingestExemplarDirectory({
@@ -276,7 +286,26 @@ function normalizeBrand(input, assets, cwd) {
     if (!assets[input.logoAssetId]) fail('品牌 Logo 嵌入资产不存在')
     brand.logoAssetId = input.logoAssetId
   }
+  if (input.templateMaster !== undefined && input.templateMaster !== null) {
+    brand.templateMaster = normalizeTemplateMaster(input.templateMaster, assets)
+  }
   return brand
+}
+
+function mergeValidatedTemplateMasterAssets(targetAssets, rawMap) {
+  if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return
+  for (const [id, asset] of Object.entries(rawMap)) {
+    if (!/^img-[a-f0-9]{64}$/.test(id) || !asset || typeof asset !== 'object') continue
+    if (targetAssets[id]) continue
+    const data = String(asset.data ?? '')
+    const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(data)
+    if (!match || data.length > MAX_IMAGE * 1.4) continue
+    const bytes = Buffer.from(match[2], 'base64')
+    if (bytes.length > MAX_IMAGE) continue
+    if ('img-' + hash(bytes) !== id) continue
+    const info = imageInfo(bytes, '企业模板母版图片')
+    targetAssets[id] = { ...info, data }
+  }
 }
 
 function brandedTheme(manifest) {
@@ -336,6 +365,7 @@ function collectAssets(manifest) {
   const ids = new Set()
   for (const state of [manifest, ...(manifest.history ?? [])]) {
     if (state.brand?.logoAssetId) ids.add(state.brand.logoAssetId)
+    if (state.brand?.templateMaster) collectTemplateMasterAssetIds(state.brand.templateMaster, ids)
     for (const slide of state.slides) {
       if (slide.image?.assetId) ids.add(slide.image.assetId)
       if (Array.isArray(slide.images)) {
@@ -437,6 +467,12 @@ export function checkManifest(manifest) {
   })
   if (manifest.brand?.logoAssetId && !manifest.assets?.[manifest.brand.logoAssetId]) issue(0, 'missing-logo', '品牌 Logo 资产不存在', '重新提供 Logo', 'error')
   else if (manifest.brand?.logoAssetId && assetError(manifest.brand.logoAssetId)) issue(0, 'invalid-logo', assetError(manifest.brand.logoAssetId), '重新提供 Logo', 'error')
+  if (manifest.brand?.templateMaster) {
+    for (const tmAssetId of collectTemplateMasterAssetIds(manifest.brand.templateMaster)) {
+      if (!manifest.assets?.[tmAssetId]) issue(0, 'missing-template-master-asset', `企业模板母版资产缺失：${tmAssetId}`, '请重新吸收企业模板或关闭母版开关', 'error')
+      else if (assetError(tmAssetId)) issue(0, 'invalid-template-master-asset', assetError(tmAssetId), '请重新吸收企业模板或切换至 overlay 模式', 'error')
+    }
+  }
 
   // 追加 SLOP-01..12 审美反模式静态诊断
   for (const aestheticIssue of auditSlideAesthetics(manifest, theme, textWidth)) {
@@ -658,19 +694,68 @@ async function dedupePptxMedia(pptxBuffer, allowedHashes = null) {
   }
 }
 
-async function exportPptx(manifest, theme, language, signal) {
-  const base = buildPptx({ ...manifest, slides: manifest.slides.map(s => ({ ...s, notes: dataNotes(manifest, s) })) }, theme, language)
+async function exportPptx(manifest, theme, language, signal, allowNativeFallback = true) {
+  const tm = manifest.brand?.templateMaster
+  const isNativeMaster = Boolean(tm?.enabled === true && tm.mode === 'native-master' && tm.nativePackage?.layouts?.length)
+  const fallbackToOverlay = (reason) => {
+    const warnMsg = `原生 slideMaster 异常，已自动无感回退至同构底图模式（overlay）：${reason}`
+    const prevWarnings = Array.isArray(tm?.warnings) ? tm.warnings : []
+    const nextWarnings = prevWarnings.includes(warnMsg) ? prevWarnings : [...prevWarnings, warnMsg]
+    if (manifest.brand?.templateMaster) {
+      manifest.brand.templateMaster.mode = 'overlay'
+      manifest.brand.templateMaster.warnings = nextWarnings
+    }
+    return exportPptx(manifest, theme, language, signal, false)
+  }
+
+  let base
+  try {
+    if (isNativeMaster) {
+      // Strict pre-flight OOXML validation of ALL transplanted masters, layouts, themes (incl. theme2+), and .rels
+      validateNativePackageXml(tm.nativePackage)
+    }
+    base = buildPptx({ ...manifest, slides: manifest.slides.map(s => ({ ...s, notes: dataNotes(manifest, s) })) }, theme, language)
+  } catch (buildErr) {
+    if (isNativeMaster && allowNativeFallback) return fallbackToOverlay(buildErr?.message || String(buildErr))
+    throw buildErr
+  }
   const hasWaterfall = manifest.slides.some(s => s.chart?.kind === 'waterfall')
   const waterfallMissingInBase = hasWaterfall && !base.includes(Buffer.from('Waterfall Bar 1'))
   const hasOfficeKitChart = manifest.slides.some(s => s.chart && s.chart.kind !== 'waterfall')
   const hasImages = manifest.slides.some(s => s.image || (Array.isArray(s.images) && s.images.length > 0))
-  if (!manifest.brand?.logoAssetId && !manifest.brand?.footer && !hasImages && !hasOfficeKitChart && !waterfallMissingInBase) return base
+  if (!manifest.brand?.logoAssetId && !manifest.brand?.footer && !hasImages && !hasOfficeKitChart && !waterfallMissingInBase && !isNativeMaster) return base
 
   abort(signal)
   let lib
   try { lib = await import('@office-kit/pptx') } catch (error) { fail('图片、图表和品牌导出需要 @office-kit/pptx@0.21.0。插件请重新安装；独立技能请在技能目录运行 npm install --ignore-scripts。' + error.message) }
   abort(signal)
-  const presentation = await lib.loadPresentation(base), slides = lib.getSlides(presentation)
+  let presentation
+  try {
+    presentation = await lib.loadPresentation(base)
+    if (isNativeMaster) {
+      // @office-kit/pptx lazily parses slideMaster/slideLayout/theme XML; force eager parse of every transplanted native part
+      // so malformed corporate master XML is guaranteed to be caught and safely fall back to Plan A (overlay).
+      lib.getPresentationTheme(presentation)
+      const nativeLayouts = lib.getSlideLayouts(presentation)
+      if (!Array.isArray(nativeLayouts) || nativeLayouts.length === 0) {
+        throw new Error('原生母版缺少可用的 slideLayout')
+      }
+      for (const lay of nativeLayouts) {
+        lib.getSlideLayoutName(lay)
+        lib.getSlideLayoutShapes(presentation, lay)
+        lib.getSlideLayoutBackground(lay)
+        lib.getSlideMasterShapes(presentation, lay)
+        lib.getSlideMasterBackground(presentation, lay)
+      }
+      for (const s of lib.getSlides(presentation)) {
+        lib.getSlideLayout(s)
+      }
+    }
+  } catch (loadErr) {
+    if (isNativeMaster && allowNativeFallback) return fallbackToOverlay(loadErr?.message || String(loadErr))
+    throw loadErr
+  }
+  const slides = lib.getSlides(presentation)
   const emu = box => Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v * 914400)]))
   const putImage = (slide, id, box, fit, name, alt, focalPoint = 'center', sendToBack = false) => {
     const asset = manifest.assets[id]
@@ -702,11 +787,14 @@ async function exportPptx(manifest, theme, language, signal) {
   manifest.slides.forEach((source, index) => {
     abort(signal)
     const slide = slides[index]
+    const tmSlide = resolveTemplateMasterForSlide(manifest, source)
+    const slideTheme = tmSlide ? adaptThemeForMasterSurface(theme, tmSlide.roleSpec) : theme
+    const mapBox = (b) => (tmSlide ? mapBoxToSafeZone(b, tmSlide.safeInsets) : b)
     const boxes = MEDIA_LAYOUTS.has(source.layout) ? mediaBoxes(source.layout, source.variant, source, manifest) : mediaBoxes('image')
     if (Array.isArray(boxes.gallery) && Array.isArray(source.images) && source.images.length > 1) {
       boxes.gallery.forEach((gBox, gIdx) => {
         const img = source.images[gIdx]
-        if (img?.assetId) putImage(slide, img.assetId, gBox, img.fit || 'cover', `Gallery image ${gIdx + 1}`, img.alt, img.focalPoint)
+        if (img?.assetId) putImage(slide, img.assetId, mapBox(gBox), img.fit || 'cover', `Gallery image ${gIdx + 1}`, img.alt, img.focalPoint)
       })
     } else if (source.image) {
       let targetBox = boxes.image
@@ -716,41 +804,57 @@ async function exportPptx(manifest, theme, language, signal) {
         targetBox = { x: 6.65, y: 0, w: 6.6833, h: 7.5 }
         targetFit = source.image.fit || 'cover'
       } else if (source.layout === 'mockup') {
-        const chromeStyle = resolveChromeStyle(theme, source, manifest.brand)
-        const chromeCfg = getChromeConfig(chromeStyle, theme)
+        const chromeStyle = resolveChromeStyle(slideTheme, source, manifest.brand)
+        const chromeCfg = getChromeConfig(chromeStyle, slideTheme)
         const hasTakeaway = typeof source.takeaway === 'string' && source.takeaway.trim() !== ''
         const bodyH = (hasTakeaway ? 6.08 : 6.72) - chromeCfg.bodyTopY
         targetBox = computeMockupGeometry(source, chromeCfg.bodyTopY, bodyH).screenBox
         targetFit = source.image.fit || 'cover'
       }
-      putImage(slide, source.image.assetId, targetBox, targetFit, 'Slide image', source.image.alt, source.image.focalPoint, isFullBleed)
+      const mappedTargetBox = isFullBleed ? targetBox : mapBox(targetBox)
+      putImage(slide, source.image.assetId, mappedTargetBox, targetFit, 'Slide image', source.image.alt, source.image.focalPoint, isFullBleed)
     }
     if (source.chart && source.layout !== 'radar') {
+      const chartBox = mapBox(boxes.chart)
       if (source.chart.kind === 'waterfall') {
         if (!lib.findShapeByName(slide, 'Waterfall Bar 1')) {
-          drawNativeWaterfallWithKit(lib, slide, source.chart, boxes.chart, theme)
+          drawNativeWaterfallWithKit(lib, slide, source.chart, chartBox, slideTheme)
         }
       } else {
-        const font = pptxEastAsianFont(theme.fonts.body)
+        const font = pptxEastAsianFont(slideTheme.fonts.body)
         const activeTaste = resolveActiveTaste(manifest, source)
         const chartForSpec = activeTaste.chartSpotlight && source.chart.highlight === undefined && source.chart.spotlight === undefined
           ? { ...source.chart, spotlight: true }
           : source.chart
-        const spec = buildOfficeKitChartSpec(chartForSpec, theme, source.visual, font)
-        lib.addSlideChart(slide, { ...emu(boxes.chart), name: 'Editable data chart', spec })
+        const spec = buildOfficeKitChartSpec(chartForSpec, slideTheme, source.visual, font)
+        lib.addSlideChart(slide, { ...emu(chartBox), name: 'Editable data chart', spec })
       }
     }
-    if (manifest.brand?.logoAssetId) putImage(slide, manifest.brand.logoAssetId, LOGO_BOX, 'contain', 'Brand logo', manifest.brand.name)
-    if (manifest.brand?.footer && source.layout !== 'cover' && source.layout !== 'closing' && source.layout !== 'section' && !lib.findShapeByName(slide, 'Beamer footer band')) {
+    if (manifest.brand?.logoAssetId && !tmSlide?.yieldLogo) {
+      putImage(slide, manifest.brand.logoAssetId, LOGO_BOX, 'contain', 'Brand logo', manifest.brand.name)
+    }
+    if (manifest.brand?.footer && !tmSlide?.yieldFooter && source.layout !== 'cover' && source.layout !== 'closing' && source.layout !== 'section' && !lib.findShapeByName(slide, 'Beamer footer band')) {
       const hasSourceShape = Boolean(lib.findShapeByName(slide, 'Footer source') || lib.findShapeByName(slide, 'Source'))
-      const footerBox = hasSourceShape ? { x: FOOTER_BOX.x, y: 6.95, w: 4.55, h: 0.32 } : FOOTER_BOX
+      const rawFooterBox = hasSourceShape ? { x: FOOTER_BOX.x, y: 6.95, w: 4.55, h: 0.32 } : FOOTER_BOX
+      const footerBox = mapBox(rawFooterBox)
       const footer = lib.addSlideTextBox(slide, { ...emu(footerBox), text: manifest.brand.footer, name: 'Brand footer' })
-      lib.setShapeTextFormat(footer, { size: 9.5, font: pptxEastAsianFont(theme.fonts.body), color: theme.palette.muted })
+      lib.setShapeTextFormat(footer, { size: 9.5, font: pptxEastAsianFont(slideTheme.fonts.body), color: slideTheme.palette.muted })
     }
   })
   const invalid = lib.validatePresentation(presentation).filter(i => i.severity === 'error')
-  if (invalid.length) fail('PPTX 结构校验失败：' + invalid.map(i => i.message).join('；'))
-  const bytes = await lib.savePresentation(presentation)
+  if (invalid.length) {
+    if (isNativeMaster && allowNativeFallback) {
+      return fallbackToOverlay(invalid.map(i => i.message).join('；'))
+    }
+    fail('PPTX 结构校验失败：' + invalid.map(i => i.message).join('；'))
+  }
+  let bytes
+  try {
+    bytes = await lib.savePresentation(presentation)
+  } catch (saveErr) {
+    if (isNativeMaster && allowNativeFallback) return fallbackToOverlay(saveErr?.message || String(saveErr))
+    throw saveErr
+  }
   abort(signal)
   const logoDedupHashes = new Set()
   if (manifest.brand?.logoAssetId && manifest.assets?.[manifest.brand.logoAssetId]) {
@@ -817,6 +921,21 @@ function result(manifest, paths, writeHandout = false, writeOnePager = false, ex
     files: paths, htmlPath: paths.html, pptxPath: paths.pptx, jsonPath: paths.json,
     ...(manifest.exemplar ? { exemplar: manifest.exemplar } : {}),
     ...(manifest.brandKit?.name ? { brandKit: manifest.brandKit.name } : {}),
+    ...(manifest.brand?.templateMaster?.enabled ? {
+      templateMaster: {
+        enabled: true,
+        mode: manifest.brand.templateMaster.mode,
+        sourceFile: manifest.brand.templateMaster.sourceFile,
+        adaptedAspect: Boolean(manifest.brand.templateMaster.adaptedAspect),
+        safeInsets: manifest.brand.templateMaster.safeInsets,
+        yieldLogo: Boolean(manifest.brand.templateMaster.yieldLogo),
+        yieldFooter: Boolean(manifest.brand.templateMaster.yieldFooter),
+        yieldSlideNumber: Boolean(manifest.brand.templateMaster.mode === 'native-master' && manifest.brand.templateMaster.yieldSlideNumber),
+        ...(Array.isArray(manifest.brand.templateMaster.warnings) && manifest.brand.templateMaster.warnings.length > 0
+          ? { warnings: manifest.brand.templateMaster.warnings }
+          : {}),
+      },
+    } : {}),
     ...(Array.isArray(manifest.evidence) && manifest.evidence.length > 0 ? { evidenceCount: manifest.evidence.length } : {}),
     ...(writeHandout ? { handoutPath } : {}),
     ...(writeOnePager ? { onePagerPath } : {}),
@@ -1009,8 +1128,21 @@ export async function buildDeckAsync(options = {}) {
   if (options.template && !scenario) fail('未知 template，请使用 ' + SCENARIO_TEMPLATES.map(s => s.id).join(' / '))
 
   let absorbed = null
+  const wantRefMaster = options.useTemplateMaster === true
+  const rawTmMode = typeof options.templateMasterMode === 'string' ? options.templateMasterMode.trim().toLowerCase() : undefined
+  if (rawTmMode !== undefined && !TEMPLATE_MASTER_MODES.includes(rawTmMode)) {
+    fail('templateMasterMode 仅支持 ' + TEMPLATE_MASTER_MODES.join(' / '))
+  }
   if (options.referencePptx !== undefined && options.referencePptx !== null && String(options.referencePptx).trim() !== '') {
-    absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
+    absorbed = await absorbPptx({
+      pptxPath: String(options.referencePptx).trim(),
+      cwd,
+      extractLogo: true,
+      extractMaster: wantRefMaster,
+      ...(options.referenceSourceFile ? { sourceFile: options.referenceSourceFile } : {}),
+      ...(rawTmMode ? { templateMasterMode: rawTmMode } : {}),
+      signal: options.signal,
+    })
   }
 
   const workspaceExemplars = loadWorkspaceExemplars(cwd)
@@ -1133,6 +1265,9 @@ export async function buildDeckAsync(options = {}) {
   }
 
   const assets = {}
+  if (options.templateMasterAssets) {
+    mergeValidatedTemplateMasterAssets(assets, options.templateMasterAssets)
+  }
   let brandInput = options.brand
   if (resolvedTaste && options.brand !== null) {
     const tasteBrandBase = {
@@ -1146,9 +1281,13 @@ export async function buildDeckAsync(options = {}) {
     brandInput = { ...tasteBrandBase, ...(brandInput || {}) }
   }
   if (absorbed) {
+    if (wantRefMaster && absorbed.templateMasterAssets) {
+      mergeValidatedTemplateMasterAssets(assets, absorbed.templateMasterAssets)
+    }
     const baseAbsorbedBrand = {
       ...absorbed.sanitizedBrand,
       ...(options.cloneStructure === true && absorbed.recommendedChrome ? { chromeStyle: absorbed.recommendedChrome } : {}),
+      ...(wantRefMaster && absorbed.templateMaster ? { templateMaster: absorbed.templateMaster } : {}),
     }
     const targetTheme = resolveTheme(normalized.theme.id)
     if (
@@ -1161,13 +1300,25 @@ export async function buildDeckAsync(options = {}) {
     brandInput = options.brand === null ? null : { ...baseAbsorbedBrand, ...(brandInput || {}) }
   }
   if (activeBrandKit) {
-    const appliedKit = applyBrandKitToSlidesAndBrand(normalized.deck.slides, brandInput, activeBrandKit)
+    const appliedKit = applyBrandKitToSlidesAndBrand(normalized.deck.slides, brandInput, activeBrandKit, {
+      useTemplateMaster: options.useTemplateMaster,
+    })
     if (appliedKit.slides !== normalized.deck.slides) {
       const last = appliedKit.slides[appliedKit.slides.length - 1]
       const normalizedLast = normalizeSlides([last], 120, langId)[0]
       normalized.deck.slides = [...appliedKit.slides.slice(0, -1), normalizedLast]
     }
+    if (appliedKit.templateMasterAssets) {
+      mergeValidatedTemplateMasterAssets(assets, appliedKit.templateMasterAssets)
+    }
     brandInput = appliedKit.brandInput
+  }
+  if (brandInput && typeof brandInput === 'object') {
+    if (options.useTemplateMaster === false && brandInput.templateMaster) {
+      brandInput = { ...brandInput, templateMaster: { ...brandInput.templateMaster, enabled: false } }
+    } else if (rawTmMode && brandInput.templateMaster) {
+      brandInput = { ...brandInput, templateMaster: { ...brandInput.templateMaster, mode: rawTmMode } }
+    }
   }
   const brand = normalizeBrand(brandInput, assets, cwd)
   const manifestBrandKit = activeBrandKit
@@ -1335,6 +1486,8 @@ export async function editDeck(options = {}) {
       options.theme === undefined &&
       options.taste === undefined &&
       options.referencePptx === undefined &&
+      options.useTemplateMaster === undefined &&
+      options.templateMasterMode === undefined &&
       options.order === undefined &&
       options.duplicate === undefined &&
       options.remove === undefined &&
@@ -1441,12 +1594,35 @@ export async function editDeck(options = {}) {
       : resolveTheme(requestedTheme).id
   }
 
+  if (options.templateMasterAssets) {
+    mergeValidatedTemplateMasterAssets(next.assets, options.templateMasterAssets)
+  }
+  const editTmMode = typeof options.templateMasterMode === 'string' && options.templateMasterMode.trim() !== ''
+    ? options.templateMasterMode.trim().toLowerCase()
+    : undefined
+  if (editTmMode !== undefined && !TEMPLATE_MASTER_MODES.includes(editTmMode)) {
+    fail('templateMasterMode 仅支持 ' + TEMPLATE_MASTER_MODES.join(' / '))
+  }
+
   if (options.referencePptx !== undefined && options.referencePptx !== null && String(options.referencePptx).trim() !== '') {
-    const absorbed = await absorbPptx({ pptxPath: String(options.referencePptx).trim(), cwd, extractLogo: true, signal: options.signal })
+    const extractMaster = options.useTemplateMaster === true
+    const absorbed = await absorbPptx({
+      pptxPath: String(options.referencePptx).trim(),
+      cwd,
+      extractLogo: true,
+      extractMaster,
+      ...(options.referenceSourceFile ? { sourceFile: options.referenceSourceFile } : {}),
+      ...(editTmMode ? { templateMasterMode: editTmMode } : {}),
+      signal: options.signal,
+    })
     if (options.theme === undefined) next.theme = absorbed.recommendedTheme
+    if (extractMaster && absorbed.templateMasterAssets) {
+      mergeValidatedTemplateMasterAssets(next.assets, absorbed.templateMasterAssets)
+    }
     const absorbedBrand = {
       ...absorbed.sanitizedBrand,
       ...(absorbed.recommendedChrome && !next.brand?.chromeStyle && !options.brand?.chromeStyle ? { chromeStyle: absorbed.recommendedChrome } : {}),
+      ...(extractMaster && absorbed.templateMaster ? { templateMaster: absorbed.templateMaster } : {}),
     }
     if (
       absorbed.sanitizedTokens?.coverMode === 'inverted-accent' &&
@@ -1456,6 +1632,31 @@ export async function editDeck(options = {}) {
       delete absorbedBrand.backgroundColor
     }
     next.brand = normalizeBrand({ ...next.brand, ...absorbedBrand }, next.assets, cwd)
+  } else if (options.useTemplateMaster === true) {
+    if (next.brand?.templateMaster) {
+      next.brand = normalizeBrand({
+        ...next.brand,
+        templateMaster: { ...next.brand.templateMaster, enabled: true, ...(editTmMode ? { mode: editTmMode } : {}) },
+      }, next.assets, cwd)
+    } else {
+      const wsKit = loadWorkspaceBrandKit(cwd)
+      if (!wsKit?.templateMaster) fail('当前工程与工作区品牌宪章均未配置企业模板母版，请先提供 referencePptx + useTemplateMaster:true 或在 ppt_absorb 中开启 extractMaster')
+      if (wsKit.templateMasterAssets) mergeValidatedTemplateMasterAssets(next.assets, wsKit.templateMasterAssets)
+      next.brand = normalizeBrand({
+        ...(next.brand || {}),
+        templateMaster: { ...wsKit.templateMaster, enabled: true, ...(editTmMode ? { mode: editTmMode } : {}) },
+      }, next.assets, cwd)
+    }
+  } else if (options.useTemplateMaster === false && next.brand?.templateMaster) {
+    next.brand = normalizeBrand({
+      ...next.brand,
+      templateMaster: { ...next.brand.templateMaster, enabled: false },
+    }, next.assets, cwd)
+  } else if (editTmMode && next.brand?.templateMaster) {
+    next.brand = normalizeBrand({
+      ...next.brand,
+      templateMaster: { ...next.brand.templateMaster, mode: editTmMode },
+    }, next.assets, cwd)
   }
 
   if (options.taste !== undefined) {

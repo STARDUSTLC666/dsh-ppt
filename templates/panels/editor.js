@@ -75,6 +75,8 @@ function PptCreateDialog({ open, busy, initialMode = 'create', error = '', onCle
   const [content, setContent] = React.useState('');
   const [refFile, setRefFile] = React.useState(null);
   const [cloneStructure, setCloneStructure] = React.useState(true);
+  const [useTemplateMaster, setUseTemplateMaster] = React.useState(false);
+  const [templateMasterMode, setTemplateMasterMode] = React.useState('native-master');
   const [importFile, setImportFile] = React.useState(null);
   const [officeFile, setOfficeFile] = React.useState(null);
   const [targetMinutes, setTargetMinutes] = React.useState('');
@@ -136,6 +138,8 @@ function PptCreateDialog({ open, busy, initialMode = 'create', error = '', onCle
       setContent('');
       setRefFile(null);
       setCloneStructure(true);
+      setUseTemplateMaster(false);
+      setTemplateMasterMode('native-master');
       setImportFile(null);
       setOfficeFile(null);
       setTargetMinutes('');
@@ -245,7 +249,12 @@ function PptCreateDialog({ open, busy, initialMode = 'create', error = '', onCle
         theme: theme || 'auto',
         lang: languageOf(),
         ...(content.trim() ? { content } : {}),
-        ...(refFile?.data ? { referencePptxData: refFile.data, cloneStructure } : {}),
+        ...(refFile?.data ? {
+          referencePptxData: refFile.data,
+          ...(refFile.name ? { referenceFileName: refFile.name } : {}),
+          cloneStructure,
+          ...(useTemplateMaster ? { useTemplateMaster: true, templateMasterMode } : {}),
+        } : {}),
       });
     } finally {
       setSubmitting(false);
@@ -396,6 +405,20 @@ function PptCreateDialog({ open, busy, initialMode = 'create', error = '', onCle
             onChange: next => setCloneStructure(next),
             label: pptText('同时复刻该 PPTX 的逐页版式序列与母版骨架', 'Also clone per-slide layout sequence & master skeleton'),
           }),
+          h(W.Checkbox, {
+            checked: useTemplateMaster,
+            disabled,
+            onChange: next => setUseTemplateMaster(next),
+            label: pptText('保留并套用公司原模板母版（原生 slideMaster 直出，默认关闭）', 'Apply Corporate Template Master (native slideMaster export, default OFF)'),
+          }),
+          useTemplateMaster ? h('select', {
+            'aria-label': pptText('企业模板母版模式', 'Template master mode'),
+            value: templateMasterMode,
+            disabled,
+            onChange: e => setTemplateMasterMode(e.target.value),
+          },
+            h('option', { value: 'native-master' }, pptText('原生母版直出（推荐 · PowerPoint 母版视图可编辑）', 'Native slideMaster (Recommended · Editable in PowerPoint)')),
+            h('option', { value: 'overlay' }, pptText('同构底图模式（轻量稳健 · HTML/PPTX 双端 1:1）', 'Isomorphic Overlay (Lightweight · 1:1 HTML/PPTX Parity)'))) : null,
           h(W.Button, { size: 'sm', variant: 'ghost', icon: 'close', disabled, onClick: () => setRefFile(null) }, pptText('移除参考文件', 'Clear'))) : null),
       h('div', { className: 'w-toolbar' },
         h(W.Button, { variant: 'primary', icon: 'plus', disabled, onClick: submitCreate }, submitting ? pptText('正在生成三件套…', 'Generating HTML & PPTX…') : pptText('立即生成演示文稿', 'Create presentation')),
@@ -456,10 +479,31 @@ function PptLightbox({ project, selected, busy, imagePending, dirty, dataDirty, 
     const items = Array.isArray(row.items) ? row.items : Array.isArray(row.cards) ? row.cards : [];
     const bullets = Array.isArray(row.bullets) ? row.bullets : [];
     const imgData = row.image?.assetId && project.assets?.[row.image.assetId]?.data;
+    const tm = project.brand?.templateMaster?.enabled === true ? project.brand.templateMaster : null;
+    const roleKey = row.layout === 'cover' ? 'cover' : row.layout === 'section' ? 'section' : row.layout === 'closing' ? 'closing' : 'content';
+    const roleSpec = tm?.roles?.[roleKey] || tm?.roles?.content || null;
+    const roleBgData = roleSpec?.bgAssetId && project.assets?.[roleSpec.bgAssetId]?.data;
+    const roleGradCss = (!roleBgData && roleSpec?.bgGradient?.stops?.length >= 2)
+      ? `linear-gradient(${Math.round((Number(roleSpec.bgGradient.angle) || 0) + 90)}deg, ${roleSpec.bgGradient.stops.map(st => `${st.color} ${Math.round((Number(st.pos) > 1 ? Number(st.pos) : Number(st.pos) * 100))}%`).join(', ')})`
+      : '';
+    const filmStyle = roleSpec
+      ? {
+          backgroundColor: roleSpec.bgColor || undefined,
+          color: roleSpec.dark ? '#F8FAFC' : '#0F172A',
+          '--w-text': roleSpec.dark ? '#F8FAFC' : '#0F172A',
+          '--w-muted': roleSpec.dark ? '#CBD5E1' : '#475569',
+          '--w-accent': roleSpec.dark ? '#93C5FD' : '#1D4ED8',
+          '--w-border': roleSpec.dark ? 'rgba(248,250,252,0.22)' : 'rgba(15,23,42,0.14)',
+          '--w-bg': roleSpec.dark ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.78)',
+          ...(roleBgData
+            ? { backgroundImage: `url(${roleBgData})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : (roleGradCss ? { backgroundImage: roleGradCss } : {})),
+        }
+      : undefined;
     const mermaidPreview = row.mermaid
       ? (String(row.mermaid).split('\n').map(l => l.trim()).find(l => l && !/^(flowchart|graph|sequenceDiagram|stateDiagram|classDiagram|erDiagram|gantt|mindmap)\b/i.test(l)) || String(row.mermaid).split('\n')[0] || 'mermaid')
       : '';
-    return h('div', { className: 'ppt-film-inner', 'data-layout': row.layout || 'bullets' },
+    return h('div', { className: 'ppt-film-inner', 'data-layout': row.layout || 'bullets', 'data-has-master': roleSpec ? 'true' : undefined, style: filmStyle },
       h('div', { className: 'ppt-film-head' },
         row.kicker ? h('span', { className: 'ppt-film-kicker' }, row.kicker) : null,
         h('div', { className: 'ppt-film-title', 'data-dsh-serif': '' }, row.title || t('未命名页')),

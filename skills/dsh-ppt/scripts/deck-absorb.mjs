@@ -20,6 +20,7 @@ import { sanitizeAbsorbedTheme, normalizeHex, hexToHsl, relativeLuminance } from
 import { sanitizeCustomTasteRecipe, saveWorkspaceTasteRecipe } from './deck-taste.mjs'
 import { extractExemplarFromAbsorbed, saveWorkspaceExemplar } from './deck-exemplars.mjs'
 import { buildBrandKitFromAbsorbed, saveWorkspaceBrandKit } from './deck-brand-kit.mjs'
+import { extractTemplateMasterFromPresentation } from './deck-template-master.mjs'
 
 const MAX_PPTX_BYTES = 64 * 1024 * 1024
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -1486,6 +1487,21 @@ export async function absorbPptx(options = {}) {
     savedTastePath = saved.path
   }
 
+  let extractedTemplateMaster = null
+  let extractedTemplateMasterAssets = null
+  const combinedWarnings = [...sanitized.warnings]
+  if (options.extractMaster === true) {
+    const tmOut = extractTemplateMasterFromPresentation(lib, pres, {
+      templateMasterMode: options.templateMasterMode,
+      sourceFile: resolvedPath ? basename(resolvedPath) : (options.sourceFile || 'corporate-template.pptx'),
+    })
+    extractedTemplateMaster = tmOut.templateMaster
+    extractedTemplateMasterAssets = tmOut.templateMasterAssets
+    if (Array.isArray(tmOut.warnings) && tmOut.warnings.length > 0) {
+      combinedWarnings.push(...tmOut.warnings)
+    }
+  }
+
   const baseResult = {
     ok: true,
     ...(resolvedPath ? { pptxPath: resolvedPath, sourceFile: basename(resolvedPath) } : {}),
@@ -1502,7 +1518,7 @@ export async function absorbPptx(options = {}) {
     styleRecipe,
     ...(savedTastePath ? { savedTastePath } : {}),
     dark: sanitized.dark,
-    warnings: sanitized.warnings,
+    warnings: combinedWarnings,
     layoutSummary,
     extractedSkeleton,
     slideSkeleton: slideSkeleton.map((entry) => (
@@ -1510,6 +1526,8 @@ export async function absorbPptx(options = {}) {
         ? { ...entry, hidden: true }
         : entry
     )),
+    ...(extractedTemplateMaster ? { templateMaster: extractedTemplateMaster } : {}),
+    ...(extractedTemplateMasterAssets && Object.keys(extractedTemplateMasterAssets).length > 0 ? { templateMasterAssets: extractedTemplateMasterAssets } : {}),
   }
 
   let savedExemplarPath

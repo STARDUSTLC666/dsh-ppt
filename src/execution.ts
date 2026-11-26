@@ -112,6 +112,8 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
           : (args.taste && !args.theme && !args.dataModel ? { autoUpgrade: true } : {})),
         persona: typeof args.persona === 'string' && args.persona.trim() !== '' ? args.persona.trim() : undefined,
         referencePptx: typeof args.referencePptx === 'string' && args.referencePptx.trim() !== '' ? args.referencePptx.trim() : undefined,
+        ...(typeof args.useTemplateMaster === 'boolean' ? { useTemplateMaster: args.useTemplateMaster } : {}),
+        ...(typeof args.templateMasterMode === 'string' && args.templateMasterMode.trim() !== '' ? { templateMasterMode: args.templateMasterMode.trim() } : {}),
         cloneStructure: typeof args.cloneStructure === 'boolean' ? args.cloneStructure : undefined,
         smartLayout: typeof args.smartLayout === 'boolean'
           ? args.smartLayout
@@ -167,6 +169,8 @@ export function createPptExecutors(config: ResolvedPptConfig, loadEngine: () => 
       return engine.absorbPptx({
         pptxPath,
         extractLogo: args.extractLogo !== false,
+        ...(args.extractMaster === true ? { extractMaster: true } : {}),
+        ...(typeof args.templateMasterMode === 'string' && args.templateMasterMode.trim() ? { templateMasterMode: args.templateMasterMode.trim() } : {}),
         ...(typeof args.saveTasteAs === 'string' && args.saveTasteAs.trim() ? { saveTasteAs: args.saveTasteAs.trim() } : {}),
         ...(typeof args.tasteName === 'string' && args.tasteName.trim() ? { tasteName: args.tasteName.trim() } : {}),
         ...(typeof args.saveExemplarAs === 'string' && args.saveExemplarAs.trim() ? { saveExemplarAs: args.saveExemplarAs.trim() } : {}),

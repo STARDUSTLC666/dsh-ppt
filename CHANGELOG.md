@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.1.0 (2026-11-27)
+
+- **1:1 公司固定模板原生母版模式（`deck-template-master.mjs`，显式开启、默认关闭零冲突）**：
+  - **4 角色原生 `slideMaster` 直出（`native-master`）与同构底图（`overlay`）双模式**：通过 `ppt_absorb({ extractMaster: true })` / `ppt_create({ referencePptx, useTemplateMaster: true })` / CLI `--use-template-master` 或工作台「新建 / 风格与母版」勾选开关，按 **封面 / 章节 / 正文 / 封底** 4 角色完整提取公司 `.pptx` 模板母版与示例页底图；`native-master` 将清洗校验后的原生 OOXML `slideMaster` / `slideLayout` / 主题色表直接写入导出 `.pptx`（可在 PowerPoint「幻灯片母版视图」继续编辑），遇到损坏或极端畸形母版 XML 时自动预检降级为 `overlay` 同构底图模式，零崩溃。
+  - **双端 1:1 所见即所得、安全留白与自动让位**：自动解析原母版占位符边界计算 `safeInsets` 安全内边距（适配 4:3 → 16:9 并保留出血负坐标），按页型独立采样底图/渐变明暗度（含 `clrMapOvr` 极性覆盖）确保深底反白与浅底深字 WCAG 对比度，自动为公司母版自带的装饰、Logo、页脚与原生页码让位防叠影，SHA-256 全局去重母版媒体不撑爆历史快照；HTML 放映、16:9 胶片灯箱（含深色反白与渐变预览）与 PPTX 严格同构（已修复每页独立 SVG 渐变 ID、`vh`/`px` 纵向安全内边距与媒体页脚避让）。
+  - **企业品牌宪章锁与工作台全链路集成**：支持在「风格与母版」实时预览 4 角色母版极性与安全区、一键切换母版开关或导出模式、一键 **「保存为企业品牌宪章锁」** 持久化到 `.dsh-ppt/brand-kit.json`（保留原 Logo 与 revision 并发保护），仍严格保持 13 个注册工具。
+- **工作台皮肤焕新、默认风格字体与仓库文档升级**：
+  - 随本版本发布同步包含 `晴空薄荷 (mint)`、`晴昼琉璃 (glass)`、`晴空水晶 (frutiger)` 与 `云母流光 (win98)` 皮肤焕新及默认 **「跟随风格专属字」** 字体策略、88.8s 1080p 官方有声宣传片、9 张原生可编辑 3×3 高密度画廊预览，以及全面刷新的中英文 `README`、`SKILL.md` 与 `REFERENCE` 文档。
+- **Opt-In 1:1 Corporate Template Master Mode (`deck-template-master.mjs`, Default OFF / Zero-Conflict)**:
+  - **Native Editable `slideMaster` (`native-master`) & Isomorphic `overlay` Dual Modes**: Opt in via `ppt_absorb({ extractMaster: true })`, `ppt_create({ referencePptx, useTemplateMaster: true })`, CLI `--use-template-master`, or the Workbench toggle to extract 4 slide-role masters (**cover / section / content / closing**) from any company `.pptx`. `native-master` embeds strictly sanitized & pre-flight-validated native OOXML `slideMaster`/`slideLayout` parts directly into the exported `.pptx` (editable in PowerPoint Slide Master View), automatically falling back to `overlay` on malformed source XML.
+  - **1:1 HTML/Lightbox/PPTX Parity, Auto `safeInsets` & Chrome Yielding**: Computes placeholder-driven `safeInsets` (with 4:3→16:9 adaptation), resolves per-role dark/light WCAG polarity (including `clrMapOvr` and multi-stop gradients), yields conflicting built-in decorative chrome/duplicate logo/footer, deduplicates media via SHA-256, and adds Workbench 4-role previews, pause/mode toggles, and persistent `.dsh-ppt/brand-kit.json` locking while keeping strictly 13 registered tools.
+- **Refreshed Workbench Skins, Style-Matched Default Font & Overhauled Repo Showcase**:
+  - Ships redesigned `mint`, `glass`, `frutiger`, and Mica Fluent (`win98`) skins with style-matched default typography, 1080p launch promo video, 3×3 LibreOffice-rendered native gallery, and refreshed bilingual `README`, `SKILL.md`, and reference documentation.
+
 ## 1.0.5 (2026-11-26)
 
 - **视觉工艺、HTML/PPTX 同构与图表精度**：修复跨主题 WCAG 对比度（深浅色标签与 Mermaid 节点反白可读性）、瀑布图基线对齐与标签避让、中国 7 枢纽地图标注防碰撞、Mermaid 六边形/平行四边形原样渲染、英文版 `gauge` 达标仪本地化、封面/母版 Logo 去重以及 `reveal: 'step'` 分步点击显现编组精度。

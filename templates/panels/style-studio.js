@@ -793,7 +793,11 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
   const [absorbing, setAbsorbing] = React.useState(false);
   const [absorbed, setAbsorbed] = React.useState(null);
   const [absorbedName, setAbsorbedName] = React.useState('');
+  const [extractMasterOpt, setExtractMasterOpt] = React.useState(false);
+  const [masterModeOpt, setMasterModeOpt] = React.useState('native-master');
+  const [savingKit, setSavingKit] = React.useState(false);
   const [savedVault, setSavedVault] = React.useState(() => readSavedBrands());
+  const activeTm = savedBrand.templateMaster && typeof savedBrand.templateMaster === 'object' ? savedBrand.templateMaster : null;
 
   React.useEffect(() => {
     const next = project?.brand || {};
@@ -813,7 +817,54 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
     });
   }, [project?.id, project?.revision]);
 
-  const disabled = busy || blocked || absorbing;
+  const disabled = busy || blocked || absorbing || savingKit;
+
+  async function saveActiveBrandKit() {
+    if (savingKit || busy || blocked) return;
+    setSavingKit(true);
+    onError('');
+    try {
+      const res = await action({
+        operation: 'save-brand-kit',
+        id: project.id,
+        expectedRevision: project.revision,
+        name: savedBrand.name || project.title || L('企业品牌宪章', 'Corporate Brand Kit'),
+      });
+      if (res?.ok) {
+        onMessage(res.hasTemplateMaster
+          ? L('已保存为工作区企业品牌宪章锁（含 4 角色企业母版），后续新建文稿可自动沿用。', 'Saved workspace Corporate Brand Kit (with 4-role template master) for future decks.')
+          : L('已保存为工作区企业品牌宪章锁（.dsh-ppt/brand-kit.json）。', 'Saved workspace Corporate Brand Kit (.dsh-ppt/brand-kit.json).'));
+      }
+    } catch (err) {
+      onError(err.message || L('保存企业品牌宪章失败。', 'Could not save corporate brand kit.'));
+    } finally {
+      setSavingKit(false);
+    }
+  }
+
+  function renderMasterRoleStrip(tm) {
+    if (!tm || !tm.roles) return null;
+    const roleDefs = [
+      ['cover', L('封面', 'Cover')],
+      ['section', L('章节', 'Section')],
+      ['content', L('正文', 'Content')],
+      ['closing', L('封底', 'Closing')],
+    ];
+    return h('div', { className: 'ppt-master-role-grid', role: 'list', 'aria-label': L('4 角色企业母版预览', '4-role corporate master preview') },
+      roleDefs.map(([key, label]) => {
+        const spec = tm.roles[key] || tm.roles.content || {};
+        const bg = spec.bgColor || '#FFFFFF';
+        const fg = spec.dark ? '#F8FAFC' : '#0F172A';
+        return h('div', {
+          key,
+          role: 'listitem',
+          className: 'ppt-master-role-chip',
+          style: { backgroundColor: bg, color: fg },
+        },
+          h('strong', null, label),
+          h('span', null, (spec.dark ? L('深底浅字', 'Dark') : L('浅底深字', 'Light')) + (spec.promotedFromSlide ? ' · ' + L('示例底图', 'Slide BG') : '')));
+      }));
+  }
 
   function saveCurrentAbsorbedToVault() {
     if (!absorbed) return;
@@ -887,12 +938,16 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
           expectedRevision: project.revision,
           data: String(reader.result || ''),
           extractLogo: true,
+          extractMaster: extractMasterOpt,
+          ...(extractMasterOpt ? { templateMasterMode: masterModeOpt, sourceFile: file.name } : {}),
           saveExemplarAs: cleanSlug,
           exemplarName: file.name.replace(/\.pptx$/i, ''),
         });
         setAbsorbed(response.absorbed);
         setAbsorbedName(file.name);
-        onMessage(L('已解析参考 PPTX 配色、字体与对比度净化方案，并同步沉淀为可复用标杆范本（' + cleanSlug + '）。', 'Extracted palette, fonts & contrast-sanitized recipe, and saved as reusable Exemplar (' + cleanSlug + ').'));
+        onMessage(extractMasterOpt && response.absorbed?.templateMaster
+          ? L('已提取企业固定模板母版（4 角色 + 原生 slideMaster + 安全留白区），点击下方“套用企业模板母版”即可生效。', 'Extracted 4-role Corporate Template Master (native slideMaster + safeInsets). Click Apply Corporate Template Master below.')
+          : L('已解析参考 PPTX 配色、字体与对比度净化方案，并同步沉淀为可复用标杆范本（' + cleanSlug + '）。', 'Extracted palette, fonts & contrast-sanitized recipe, and saved as reusable Exemplar (' + cleanSlug + ').'));
       } catch (err) {
         onError(err.message || L('解析参考 PPTX 失败。', 'Could not extract style from this PPTX.'));
       } finally {
@@ -1092,9 +1147,56 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
             h('span', { className: 'ppt-theme-meta' }, L(sk.descZh, sk.descEn)));
         }))),
 
+    activeTm ? h('div', { className: 'ppt-absorbed-card ppt-master-active-card', 'data-dsh-card': '', 'data-template-master-panel': 'active' },
+      h('div', { className: 'ppt-theme-card-top' },
+        h('strong', null, L('企业固定模板母版', 'Corporate Template Master') + ' · ' + (activeTm.sourceFile || 'template.pptx')),
+        h('span', { className: 'w-tag' }, activeTm.enabled !== false ? (activeTm.mode === 'native-master' ? L('原生母版直出', 'Native slideMaster') : L('同构底图', 'Isomorphic Overlay')) : L('已暂停', 'Paused'))),
+      renderMasterRoleStrip(activeTm),
+      activeTm.safeInsets ? h('p', { className: 'muted' },
+        L('自动安全区 (in)：', 'Auto safeInsets (in): ') +
+        `T ${activeTm.safeInsets.top} · R ${activeTm.safeInsets.right} · B ${activeTm.safeInsets.bottom} · L ${activeTm.safeInsets.left}` +
+        (activeTm.yieldLogo ? L(' · 已避让重复 Logo', ' · Logo yield') : '') +
+        (activeTm.yieldFooter ? L(' · 已避让重复页脚', ' · Footer yield') : '') +
+        (activeTm.yieldSlideNumber ? L(' · 原生页码', ' · Native page#') : '')) : null,
+      h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('企业模板母版控制', 'Corporate template master controls') },
+        h('button', {
+          type: 'button',
+          className: 'ppt-pill',
+          'aria-pressed': activeTm.enabled !== false ? 'true' : 'false',
+          disabled,
+          onClick: () => onApplyAbsorbed({ useTemplateMaster: activeTm.enabled === false }),
+        }, activeTm.enabled !== false ? L('母版开关：已开启（点击暂停）', 'Master: ON (click to pause)') : L('母版开关：已暂停（点击开启）', 'Master: OFF (click to enable)')),
+        activeTm.nativePackage ? h('button', {
+          type: 'button',
+          className: 'ppt-pill',
+          'aria-pressed': activeTm.mode === 'native-master' ? 'true' : 'false',
+          disabled,
+          onClick: () => onApplyAbsorbed({ templateMasterMode: 'native-master', useTemplateMaster: true }),
+        }, L('原生母版直出（PPT 可改母版）', 'Native slideMaster (Editable)')) : null,
+        h('button', {
+          type: 'button',
+          className: 'ppt-pill',
+          'aria-pressed': activeTm.mode === 'overlay' ? 'true' : 'false',
+          disabled,
+          onClick: () => onApplyAbsorbed({ templateMasterMode: 'overlay', useTemplateMaster: true }),
+        }, L('同构底图模式（轻量 1:1）', 'Isomorphic Overlay (Lightweight)'))),
+      h('div', { className: 'tools' },
+        h('button', { type: 'button', disabled, onClick: saveActiveBrandKit }, savingKit ? L('正在保存宪章…', 'Saving Brand Kit…') : L('保存为企业品牌宪章锁', 'Save to Brand Kit')),
+        h('button', { type: 'button', disabled, onClick: () => onApplyBrand({ templateMaster: null }) }, L('移除企业母版', 'Remove master')))) : null,
+
     h('details', { className: 'ppt-structured-section', open: true },
-      h('summary', null, L('吸收外部优质 PPTX 风格（零本地路径暴露）', 'Absorb style from reference .pptx')),
-      h('p', { className: 'muted' }, L('上传公司模板或喜欢的参考 .pptx（≤24 MiB）：深度解析母版主辅色、中英文标题/正文字体配对、封面深底反白、母版 Logo 与逐页版式序列，自动完成 WCAG ≥4.5:1 对比度净化。', 'Upload a corporate template or reference .pptx (≤24 MiB) to extract dual brand colours, heading/body fonts, cover polarity, logo, and slide archetypes with WCAG ≥4.5:1 clamping.')),
+      h('summary', null, L('吸收外部优质 PPTX 风格 / 套用企业固定模板母版', 'Absorb reference .pptx / Corporate Template Master')),
+      h('p', { className: 'muted' }, L('上传公司模板或参考 .pptx（≤24 MiB）：默认仅提取净化色板、双字体与骨架；勾选下方开关后可直出公司 4 角色原生 slideMaster 母版，自动适配安全留白与深浅对比度，零冲突可随时开关。', 'Upload a corporate template .pptx (≤24 MiB). By default extracts sanitized palette/fonts only; opt in below to extract & apply the 4-role native slideMaster template with auto safeInsets & contrast adaptation.')),
+      h('div', { className: 'ppt-master-opt-row' },
+        h(W.Checkbox, {
+          checked: extractMasterOpt,
+          disabled,
+          onChange: next => setExtractMasterOpt(next),
+          label: L('同时提取公司固定模板母版（4 角色原生 slideMaster 直出，默认关闭）', 'Also extract 4-role Corporate Template Master (native slideMaster, default OFF)'),
+        }),
+        extractMasterOpt ? h('div', { className: 'ppt-archetype-pills', role: 'group', 'aria-label': L('企业母版模式', 'Template master mode') },
+          h('button', { type: 'button', className: 'ppt-pill', 'aria-pressed': masterModeOpt === 'native-master' ? 'true' : 'false', disabled, onClick: () => setMasterModeOpt('native-master') }, L('原生母版直出（推荐 · PowerPoint 母版视图可编辑）', 'Native slideMaster (Recommended · Editable in PowerPoint)')),
+          h('button', { type: 'button', className: 'ppt-pill', 'aria-pressed': masterModeOpt === 'overlay' ? 'true' : 'false', disabled, onClick: () => setMasterModeOpt('overlay') }, L('同构底图模式（轻量稳健 · 双端 1:1）', 'Isomorphic Overlay (Lightweight · 1:1 Parity)'))) : null),
       h('div', {
         className: 'ppt-dropzone',
         onDragOver: e => { e.preventDefault(); },
@@ -1135,10 +1237,31 @@ function StyleStudioPanel({ project, busy, blocked, onApplyTheme, onApplyBrand, 
           L('安全字体映射：', 'Safe font pairing: ') + [absorbed.sanitizedBrand.headingFont ? L('标题 ', 'Heading ') + absorbed.sanitizedBrand.headingFont : '', absorbed.sanitizedBrand.fontFamily ? L('正文 ', 'Body ') + absorbed.sanitizedBrand.fontFamily : ''].filter(Boolean).join(' · ')) : null,
         Array.isArray(absorbed.warnings) && absorbed.warnings.length > 0 ? h('p', { className: 'muted' }, absorbed.warnings.join(' ')) : null,
         absorbed.sanitizedBrand?.logo ? h('img', { className: 'image-preview', src: absorbed.sanitizedBrand.logo, alt: L('提取的母版 Logo', 'Extracted master logo') }) : null,
+        absorbed.templateMaster ? h('div', { className: 'ppt-master-preview-box' },
+          h('strong', null, L('已提取 4 角色企业固定模板母版（', 'Extracted 4-role Corporate Master (') + (absorbed.templateMaster.mode === 'native-master' ? L('原生 slideMaster 直出', 'Native slideMaster') : L('同构底图', 'Overlay')) + '）'),
+          renderMasterRoleStrip(absorbed.templateMaster),
+          absorbed.templateMaster.safeInsets ? h('p', { className: 'muted' },
+            L('安全区 (in)：', 'Safe insets (in): ') +
+            `T ${absorbed.templateMaster.safeInsets.top} · R ${absorbed.templateMaster.safeInsets.right} · B ${absorbed.templateMaster.safeInsets.bottom} · L ${absorbed.templateMaster.safeInsets.left}` +
+            (absorbed.templateMaster.adaptedAspect ? L(' · 已适配 16:9', ' · Adapted to 16:9') : '')) : null) : null,
         h('div', { className: 'tools' },
-          absorbed.styleRecipe ? h('button', {
+          absorbed.templateMaster ? h('button', {
             type: 'button',
             className: 'primary',
+            disabled,
+            onClick: () => onApplyAbsorbed({
+              theme: absorbed.recommendedTheme || project.theme,
+              brand: {
+                ...(absorbed.sanitizedBrand || {}),
+                ...(!absorbed.sanitizedBrand?.chromeStyle && absorbed.recommendedChrome ? { chromeStyle: absorbed.recommendedChrome } : {}),
+                templateMaster: absorbed.templateMaster,
+              },
+              ...(absorbed.templateMasterAssets ? { templateMasterAssets: absorbed.templateMasterAssets } : {}),
+            }),
+          }, L('套用企业固定模板母版（HTML+PPTX 同步）', 'Apply Corporate Template Master (HTML + PPTX)')) : null,
+          absorbed.styleRecipe ? h('button', {
+            type: 'button',
+            className: absorbed.templateMaster ? '' : 'primary',
             disabled,
             onClick: () => onApplyAbsorbed({ taste: absorbed.styleRecipe }),
           }, L('套用完整品味配方（含材质与节奏）', 'Apply full absorbed Taste Recipe')) : null,
@@ -1248,6 +1371,11 @@ const PPT_STYLE_STUDIO_CSS = `
 .ppt-workbench .ppt-swatch-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border:1px solid var(--w-border);border-radius:999px;background:var(--w-bg);font-size:11px}
 .ppt-workbench .ppt-dropzone{border:1px dashed var(--w-border);border-radius:10px;padding:12px;margin-top:8px;background:var(--w-soft)}
 .ppt-workbench .ppt-absorbed-card{border:1px solid var(--w-border);border-radius:10px;padding:12px;margin-top:10px;background:var(--w-bg);display:flex;flex-direction:column;gap:8px}
+.ppt-workbench .ppt-master-opt-row{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ppt-workbench .ppt-master-preview-box{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--w-border);border-radius:8px;background:var(--w-soft)}
+.ppt-workbench .ppt-master-role-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:6px}
+.ppt-workbench .ppt-master-role-chip{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:6px;border:1px solid var(--w-border);font-size:11px;line-height:1.25}
+.ppt-workbench .ppt-master-role-chip span{opacity:.82;font-size:10px}
 .ppt-workbench .ppt-color-pair{display:grid;grid-template-columns:34px minmax(0,1fr);gap:6px;align-items:center}
 .ppt-workbench.pptw .ppt-color-pair input[type=color]{width:34px;height:34px;padding:2px!important;border:1px solid var(--w-border);border-radius:8px;background:var(--w-bg);cursor:pointer}
 @container dsh-workbench (max-width:760px){.ppt-workbench .ppt-theme-grid,.ppt-workbench .ppt-archetype-subgrid{grid-template-columns:1fr}}

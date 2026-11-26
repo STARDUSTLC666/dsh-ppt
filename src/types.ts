@@ -230,6 +230,17 @@ export interface PptChartSpec {
   showValues?: boolean
   totalIndices?: number[]
 }
+export type PptTemplateMasterMode = 'native-master' | 'overlay'
+export interface PptTemplateMasterSummary {
+  enabled: boolean
+  mode: PptTemplateMasterMode
+  sourceFile?: string
+  adaptedAspect?: boolean
+  safeInsets?: { top: number; right: number; bottom: number; left: number }
+  yieldLogo?: boolean
+  yieldFooter?: boolean
+  yieldSlideNumber?: boolean
+}
 export interface PptBrand {
   name?: string
   primaryColor?: string
@@ -248,6 +259,7 @@ export interface PptBrand {
   iconMode?: PptIconMode | null
   taste?: PptTasteRecipeId | string | null
   tasteRecipe?: PptTasteRecipe | null
+  templateMaster?: Record<string, unknown> | null
 }
 export interface PptQualityIssue { slide: number; slideId?: string; severity: 'warning' | 'error'; code: string; message: string; suggestion: string }
 export interface PptQualityResult { ok: boolean; slideCount: number; errorCount: number; warningCount: number; issues: PptQualityIssue[]; note: string }
@@ -270,6 +282,8 @@ export interface PptEditArgs {
   theme?: string
   taste?: PptTasteRecipeId | string | PptTasteRecipe | null
   referencePptx?: string
+  useTemplateMaster?: boolean
+  templateMasterMode?: PptTemplateMasterMode
   brand?: PptBrand | null
   targetMinutes?: number | null
   remixPreset?: 'exec-5min' | 'board-brief' | 'sales-pitch'
@@ -368,6 +382,8 @@ export interface PptCreateArgs {
   autoUpgrade?: boolean
   persona?: PptPersonaId | string
   referencePptx?: string
+  useTemplateMaster?: boolean
+  templateMasterMode?: PptTemplateMasterMode
   cloneStructure?: boolean
   smartLayout?: boolean
   lang?: string
@@ -431,6 +447,8 @@ export interface PptAbsorbArgs {
   bytes?: Uint8Array | Buffer
   cwd?: string
   extractLogo?: boolean
+  extractMaster?: boolean
+  templateMasterMode?: PptTemplateMasterMode
   saveTasteAs?: string
   tasteName?: string
   saveExemplarAs?: string
@@ -506,6 +524,8 @@ export interface PptAbsorbResult {
   exemplar?: PptExemplarSummary
   slideSkeleton?: PptAbsorbSlideSkeleton[]
   layoutSummary?: Record<string, unknown>
+  templateMaster?: Record<string, unknown>
+  templateMasterAssets?: Record<string, unknown>
 }
 
 export interface PptImportArgs {
@@ -613,6 +633,7 @@ export interface PptCreateResult {
   importedFrom?: string
   syncedProject?: boolean
   exemplar?: string
+  templateMaster?: PptTemplateMasterSummary
   evidenceCount?: number
   upgradeReport?: Record<string, unknown>
   quality?: PptQualityResult

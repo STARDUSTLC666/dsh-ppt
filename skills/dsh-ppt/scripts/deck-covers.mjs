@@ -849,7 +849,7 @@ export function resolveSectionAgendaChapters(slide, index, manifest) {
 }
 
 export function renderSectionAgendaPptx(slide, ctx) {
-  const { index, total, title, subtitle, kicker, theme, langAttr, manifest, chromeCfg, idBase, nextId } = ctx
+  const { index, total, title, subtitle, kicker, theme, langAttr, manifest, chromeCfg, idBase, nextId, yieldChrome = false } = ctx
   const agendaChapters = resolveSectionAgendaChapters(slide, index, manifest)
   if (agendaChapters.length < 2) return null
 
@@ -858,10 +858,12 @@ export function renderSectionAgendaPptx(slide, ctx) {
   const activeChapter = agendaChapters.find((c) => c.active) || agendaChapters[0]
   const chapNum = activeChapter.num
 
-  shapes.push(ooxmlShape(nextId(), 'Section side band', { x: 0, y: 0, w: 0.14, h: CANVAS_IN.h }, {
-    preset: 'rect',
-    fill: tk.accentPrimary,
-  }))
+  if (!yieldChrome) {
+    shapes.push(ooxmlShape(nextId(), 'Section side band', { x: 0, y: 0, w: 0.14, h: CANVAS_IN.h }, {
+      preset: 'rect',
+      fill: tk.accentPrimary,
+    }))
+  }
   shapes.push(ooxmlShape(nextId(), 'Section Watermark', { x: 0.68, y: 1.05, w: 3.4, h: 1.65 }, {
     txBox: true,
     anchor: 'b',

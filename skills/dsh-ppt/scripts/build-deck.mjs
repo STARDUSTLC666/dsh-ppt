@@ -31,6 +31,9 @@ const HELP = `dsh-ppt —— 一句话 / 一篇文档 → HTML 放映 + PPTX 导
   --template <id>         20 套行业结构蓝图 ID（可用 --list-templates 查看全部）
   --persona <id>          auto / consulting / tech-pitch / academic / gov-exec / education / editorial
   --reference-pptx <path> 只读吸收本地参考 .pptx 的净化双色板、双字体、封面反白、母版 Logo 与骨架
+  --use-template-master   配合 --reference-pptx 使用：显式套用企业固定模板母版（默认关闭；配合 --no-template-master 可显式禁用）
+  --template-master-mode <native-master|overlay> 企业母版渲染模式：native-master（默认，直出原生可编辑 slideMaster）或 overlay（双端同构底图）
+  --extract-master        配合 --absorb 提取 4 角色企业固定模板母版（cover/section/content/closing）与原生 slideMaster 包
   --clone-structure       配合 --reference-pptx 使用，克隆参考文稿的逐页版式骨架与母版 chrome
   --chrome <style>        母版骨架风格：${CHROME_STYLE_IDS.join(' / ')}
   --taste <id>            大师审美配方 ID（mckinsey-partner / apple-keynote-dark / apple-keynote-light / swiss-editorial / linear-craft / ft-data-journal / nature-academic / oriental-zen 或已吸收自定义 ID）
@@ -143,6 +146,10 @@ export function parseArgv(argv) {
     else if (key === '--template') args.template = nextValue()
     else if (key === '--persona') args.persona = nextValue()
     else if (key === '--reference-pptx') args.referencePptx = nextValue()
+    else if (key === '--use-template-master') args.useTemplateMaster = true
+    else if (key === '--no-template-master') args.useTemplateMaster = false
+    else if (key === '--extract-master') args.extractMaster = true
+    else if (key === '--template-master-mode') args.templateMasterMode = nextValue()
     else if (key === '--absorb') args.absorb = nextValue()
     else if (key === '--import-pptx') args.importPptx = nextValue()
     else if (key === '--from-office') args.fromOffice = nextValue()
@@ -345,6 +352,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       : (typeof args.saveBrandKit === 'string' && args.saveBrandKit !== 'true' ? readJson(args.saveBrandKit) : (args.saveBrandKit === 'true' ? true : undefined))
     const absorbed = await absorbPptx({
       pptxPath: args.absorb,
+      ...(args.extractMaster ? { extractMaster: true } : {}),
+      ...(args.templateMasterMode ? { templateMasterMode: args.templateMasterMode } : {}),
       ...(args.saveTaste ? { saveTasteAs: args.saveTaste } : {}),
       ...(args.saveExemplar ? { saveExemplarAs: args.saveExemplar } : {}),
       ...(saveBk !== undefined ? { saveBrandKit: saveBk } : {}),
@@ -375,6 +384,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
           theme: args.theme,
           ...(args.taste ? { taste: args.taste } : {}),
           referencePptx: args.referencePptx,
+          ...(typeof args.useTemplateMaster === 'boolean' ? { useTemplateMaster: args.useTemplateMaster } : {}),
+          ...(args.templateMasterMode ? { templateMasterMode: args.templateMasterMode } : {}),
           brand: effectiveBrand,
           ...(args.motionProfile ? { motionProfile: args.motionProfile } : {}),
           ...(bankSlideRef !== undefined ? { saveToBank: { slide: bankSlideRef } } : {}),
@@ -412,6 +423,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     ...(args.selfRepair !== undefined ? { selfRepair: args.selfRepair } : {}),
     persona: args.persona,
     referencePptx: args.referencePptx,
+    ...(typeof args.useTemplateMaster === 'boolean' ? { useTemplateMaster: args.useTemplateMaster } : {}),
+    ...(args.templateMasterMode ? { templateMasterMode: args.templateMasterMode } : {}),
     cloneStructure: args.cloneStructure,
     smartLayout: args.smartLayout,
     lang: args.lang,

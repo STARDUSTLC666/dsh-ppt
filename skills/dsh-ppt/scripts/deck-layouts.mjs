@@ -18,6 +18,7 @@ import {
   renderIconBadgeHtml,
 } from './deck-icons.mjs'
 import { resolveActiveTaste } from './deck-taste.mjs'
+import { resolveTemplateMasterForSlide } from './deck-template-master.mjs'
 import {
   POSTER_COVER_VARIANTS,
   renderPosterCoverPptx,
@@ -460,6 +461,8 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   const layout = slide.layout || 'bullets'
   const variant = slide.variant || ''
+  const tmSlide = resolveTemplateMasterForSlide(manifest, slide)
+  const yieldChrome = Boolean(tmSlide?.yieldChrome)
   const taste = resolveActiveTaste(manifest, slide)
   const cardMaterial = variant === 'frameless' ? 'frameless' : taste.cardMaterial
   const resolveItemIcon = (it, idx) => {
@@ -482,25 +485,27 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
   if (layout === 'cover') {
     const coverVariant = variant || taste.recipe?.coverVariant || ''
-    const metaParts = [slide.text, slide.source, manifest.brand?.footer].filter(Boolean)
+    const metaParts = [slide.text, slide.source, !tmSlide?.yieldFooter ? manifest.brand?.footer : ''].filter(Boolean)
     const metaText = metaParts.join('  ·  ')
 
-    const posterCover = renderPosterCoverPptx(slide, {
-      coverVariant,
-      title,
-      subtitle,
-      kicker,
-      metaText,
-      total,
-      theme,
-      langAttr,
-      manifest,
-      idBase,
-      nextId,
-    })
-    if (posterCover !== null) return posterCover
+    if (!yieldChrome) {
+      const posterCover = renderPosterCoverPptx(slide, {
+        coverVariant,
+        title,
+        subtitle,
+        kicker,
+        metaText,
+        total,
+        theme,
+        langAttr,
+        manifest,
+        idBase,
+        nextId,
+      })
+      if (posterCover !== null) return posterCover
+    }
 
-    const inverted = coverVariant === 'inverted' || (!coverVariant && tk.coverMode === 'inverted-accent')
+    const inverted = !yieldChrome && (coverVariant === 'inverted' || (!coverVariant && tk.coverMode === 'inverted-accent'))
     const coverFill = inverted ? tk.coverBg : tk.canvas
     const coverDark = relativeLuminance(coverFill) < 0.36
     const fg = inverted ? (coverDark ? '#F8FAFC' : '#0F172A') : tk.inkPrimary
@@ -513,12 +518,12 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         preset: 'rect',
         fill: coverFill,
       }))
-    } else if (coverVariant === 'monolith') {
+    } else if (!yieldChrome && coverVariant === 'monolith') {
       shapes.push(ooxmlShape(nextId(), 'Cover monolith band', { x: 0, y: 0, w: 0.42, h: CANVAS_IN.h }, {
         preset: 'rect',
         fill: tk.accentPrimary,
       }))
-    } else {
+    } else if (!yieldChrome) {
       shapes.push(renderEditorialCoverArtPptx(theme, nextId, { coverPattern: slide.coverPattern, total, langAttr }))
     }
 
@@ -611,7 +616,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
   }
 
   if (layout === 'closing') {
-    const inverted = variant === 'inverted' || (!variant && tk.coverMode === 'inverted-accent')
+    const inverted = !yieldChrome && (variant === 'inverted' || (!variant && tk.coverMode === 'inverted-accent'))
     const closeFill = inverted ? tk.coverBg : tk.canvas
     const closeDark = relativeLuminance(closeFill) < 0.36
     const fg = inverted ? (closeDark ? '#F8FAFC' : '#0F172A') : tk.inkPrimary
@@ -621,7 +626,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         preset: 'rect',
         fill: closeFill,
       }))
-    } else {
+    } else if (!yieldChrome) {
       shapes.push(ooxmlShape(nextId(), 'Closing top bar', { x: 0, y: 0, w: CANVAS_IN.w, h: 0.08 }, {
         preset: 'rect',
         fill: tk.accentPrimary,
@@ -715,14 +720,17 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
         chromeCfg,
         idBase,
         nextId,
+        yieldChrome,
       })
       if (agendaPptx !== null) return agendaPptx
     }
 
-    shapes.push(ooxmlShape(nextId(), 'Section side band', { x: 0, y: 0, w: 0.16, h: CANVAS_IN.h }, {
-      preset: 'rect',
-      fill: tk.accentPrimary,
-    }))
+    if (!yieldChrome) {
+      shapes.push(ooxmlShape(nextId(), 'Section side band', { x: 0, y: 0, w: 0.16, h: CANVAS_IN.h }, {
+        preset: 'rect',
+        fill: tk.accentPrimary,
+      }))
+    }
     const sectionNum = /^\d+$/.test(kicker.trim()) ? kicker.trim().padStart(2, '0') : kicker
     if (sectionNum !== '' && sectionNum !== title) {
       shapes.push(ooxmlShape(idBase + 1, 'Kicker', { x: 1.05, y: 1.85, w: 10.5, h: 0.75 }, {
@@ -939,7 +947,7 @@ export function renderCoreSlidePptx(slide, index, total, theme, langAttr, manife
 
 
   // 所有常规内容版式共享 6 套母版骨架页眉
-  shapes.push(renderStandardHeaderPptx(slide, idBase, nextId, theme, langAttr, chromeCfg))
+  shapes.push(renderStandardHeaderPptx(slide, idBase, nextId, theme, langAttr, chromeCfg, { yieldChrome }))
 
   if (layout === 'mermaid') {
     shapes.push(renderMermaidPptx(slide, { x: 0.62, y: bodyTopY + 0.04, w: 12.09, h: bodyH - 0.10 }, nextId, chromeCfg, theme, langAttr))
@@ -2130,6 +2138,8 @@ function computeCardGridBoxes(count, variant, area, gap) {
 export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = {}, theme) {
   const layout = slide.layout || 'bullets'
   const variant = slide.variant || ''
+  const tmSlide = resolveTemplateMasterForSlide(manifest, slide)
+  const yieldChrome = Boolean(tmSlide?.yieldChrome)
   const taste = resolveActiveTaste(manifest, slide)
   const cardMaterial = variant === 'frameless' ? 'frameless' : taste.cardMaterial
   const matClass = cardMaterial && cardMaterial !== 'solid' ? ' mat-' + cardMaterial : ''
@@ -2145,7 +2155,7 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
   const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
   const isFraming = layout === 'cover' || layout === 'closing'
   const coverVariant = layout === 'cover' ? (variant || taste.recipe?.coverVariant || '') : variant
-  const inverted = isFraming && (coverVariant === 'inverted' || (!coverVariant && theme.tokens.coverMode === 'inverted-accent'))
+  const inverted = !yieldChrome && isFraming && (coverVariant === 'inverted' || (!coverVariant && theme.tokens.coverMode === 'inverted-accent'))
   const chromeStyle = resolveChromeStyle(theme, slide, manifest.brand)
   const folioText = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
   const renderHeader = (fallbackKicker = '') =>
@@ -2159,8 +2169,8 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
   const diagramHtml = renderDiagramSlideBodyHtml(slide, { theme, langId, chromeStyle })
 
   if (layout === 'cover') {
-    const meta = [slide.text, slide.source, !manifest.brand?.footer ? ui.generatedBy : ''].filter(Boolean)[0] || ''
-    const posterHtml = renderPosterCoverHtml(slide, {
+    const meta = [slide.text, slide.source, !manifest.brand?.footer && !tmSlide?.yieldFooter ? ui.generatedBy : ''].filter(Boolean)[0] || ''
+    const posterHtml = yieldChrome ? null : renderPosterCoverHtml(slide, {
       coverVariant,
       title,
       subtitle,
@@ -2174,9 +2184,9 @@ export function renderCoreSlideHtml(slide, index, total, ui, langId, manifest = 
     if (posterHtml !== null) {
       inner = posterHtml
     } else {
-      const defPatKey = String(slide?.coverPattern || '').trim().toLowerCase()
+      const defPatKey = yieldChrome ? '' : String(slide?.coverPattern || '').trim().toLowerCase()
       const defPatClass = ['grid', 'dots', 'rings'].includes(defPatKey) ? ' cover-pat-' + defPatKey : ''
-      const defPatSvg = renderCoverPatternSvgHtml(slide?.coverPattern, theme)
+      const defPatSvg = yieldChrome ? '' : renderCoverPatternSvgHtml(slide?.coverPattern, theme)
       inner =
         '<div class="cover-shell' + (inverted ? ' is-inverted' : '') + defPatClass + '">' +
         defPatSvg +

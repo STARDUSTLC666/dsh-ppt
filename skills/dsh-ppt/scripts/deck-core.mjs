@@ -22,6 +22,18 @@ import { renderDelivery, renderHandoutMarkdown, renderOnePagerHtml } from './dec
 import { renderDataView } from './deck-data-view.mjs'
 import { normalizeVisual, visualHtmlStyle, visualShapeXml, VISUAL_CSS } from './deck-visual.mjs'
 import {
+  resolveTemplateMasterForSlide,
+  adaptThemeForMasterSurface,
+  roleThemeCssVarsInline,
+  remapShapesXmlToSafeZone,
+  renderMasterLayerHtml,
+  safeInsetsHtmlPaddingStyle,
+  TEMPLATE_MASTER_CSS,
+  buildNativeMasterPptxSupport,
+  buildOverlayMasterPptxSupport,
+  buildPptxScrimShapeXml,
+} from './deck-template-master.mjs'
+import {
   containsLatexMath,
   looksLikeRawLatex,
   unwrapOuterMathDelimiters,
@@ -1486,6 +1498,7 @@ body.motion .slide[data-reveal="step"] [data-reveal-step].is-revealed,body.overv
     manifest.brand?.watermark ||
     manifest.slides.some((s) => deckMedia.MEDIA_LAYOUTS.has(s.layout) || s.image || (Array.isArray(s.images) && s.images.length > 0) || s.chart)
   )
+  const hasTemplateMaster = manifest.brand?.templateMaster?.enabled === true
   const treeShakenLayoutCss = buildLayoutCss(manifest.slides)
   const slides = manifest.slides.map((slide, index) => {
     const label = slide.title || slide.kicker || (ui.slide + ' ' + (index + 1))
@@ -1560,6 +1573,7 @@ ${motionCss}
 ${treeShakenLayoutCss}
 ${needsMediaCss ? deckMedia.MEDIA_CSS : ''}
 ${VISUAL_CSS}
+${hasTemplateMaster ? TEMPLATE_MASTER_CSS : ''}
 .kicker{
   color:var(--accent-text);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
   font-size:clamp(12px,1.15vw,16px);margin-bottom:14px;
@@ -2235,10 +2249,12 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
   const layout = slide.layout || 'bullets'
   const total = manifest.slides?.length ?? 1
   const number = String(index + 1).padStart(2, '0')
-  const chromeStyle = resolveChromeStyle(theme, slide, manifest.brand)
+  const tmSlide = resolveTemplateMasterForSlide(manifest, slide)
+  const slideTheme = tmSlide ? adaptThemeForMasterSurface(theme, tmSlide.roleSpec) : theme
+  const chromeStyle = resolveChromeStyle(slideTheme, slide, manifest.brand)
   let inner = deckMedia.MEDIA_LAYOUTS.has(layout)
-    ? deckMedia.renderMediaHtml(slide, manifest, theme)
-    : renderCoreSlideHtml(slide, index, total, ui, langId, manifest, theme)
+    ? deckMedia.renderMediaHtml(slide, manifest, slideTheme)
+    : renderCoreSlideHtml(slide, index, total, ui, langId, manifest, slideTheme)
 
   const isStepReveal = slide.reveal === 'step'
   if (isStepReveal && inner.includes('data-item-index="')) {
@@ -2259,24 +2275,33 @@ function renderHtmlSlide(slide, index, ui, langId, manifest = {}, theme) {
     ? ' data-density="' + escapeHtml(slide.visual.density) + '"'
     : ''
   const tableStyleAttr = (layout === 'table' || layout === 'harvey')
-    ? ' data-table-style="' + escapeHtml(slide.tableStyle || slide.visual?.tableStyle || theme.defaultTableStyle || 'consulting') + '"'
+    ? ' data-table-style="' + escapeHtml(slide.tableStyle || slide.visual?.tableStyle || slideTheme.defaultTableStyle || 'consulting') + '"'
     : ''
   const chromeAttr = ' data-chrome="' + escapeHtml(chromeStyle) + '"'
   const visualStyle = visualHtmlStyle(slide.visual)
-  const hasLogo = Boolean(manifest.brand?.logoAssetId)
+  const tmVarsStyle = tmSlide ? roleThemeCssVarsInline(slideTheme, tmSlide.roleSpec) : ''
+  const tmPadStyle = tmSlide ? safeInsetsHtmlPaddingStyle(tmSlide.safeInsets, deckMedia.MEDIA_LAYOUTS.has(layout)) : ''
+  const combinedStyle = [visualStyle, tmVarsStyle, tmPadStyle].filter(Boolean).join(';')
+  const hasLogo = Boolean(manifest.brand?.logoAssetId) && !tmSlide?.yieldLogo
   const isFramingSlide = layout === 'cover' || layout === 'closing' || layout === 'section'
-  const slideClasses = 'slide slide--' + escapeHtml(layout) + (layout === 'bullets' ? ' bullets' : '') + (hasLogo ? ' has-brand-logo' : '')
+  const slideClasses = 'slide slide--' + escapeHtml(layout) +
+    (layout === 'bullets' ? ' bullets' : '') +
+    (hasLogo ? ' has-brand-logo' : '') +
+    (tmSlide ? ' has-template-master' + (tmSlide.yieldChrome ? ' tm-yield-chrome' : '') + (tmPadStyle ? ' has-tm-insets' : '') : '')
   const watermarkHtml = (!isFramingSlide && typeof manifest.brand?.watermark === 'string' && manifest.brand.watermark.trim())
     ? '<div class="brand-watermark" aria-label="Watermark">' + escapeHtml(manifest.brand.watermark.trim()) + '</div>'
     : ''
+  const masterLayerHtml = tmSlide ? renderMasterLayerHtml(tmSlide, manifest.assets, index) : ''
 
   const showStandaloneBrandFooter = Boolean(
     manifest.brand?.footer &&
+    !tmSlide?.yieldFooter &&
     !isFramingSlide &&
     chromeStyle !== 'academic-minimal' &&
     !inner.includes('class="brand-footer"')
   )
-  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + revealAttr + transitionAttr + notesAttr + densityAttr + tableStyleAttr + (visualStyle ? ' style="' + escapeHtml(visualStyle) + '"' : '') + '>' +
+  return '<section class="' + slideClasses + '" data-index="' + number + '"' + chromeAttr + revealAttr + transitionAttr + notesAttr + densityAttr + tableStyleAttr + (combinedStyle ? ' style="' + escapeHtml(combinedStyle) + '"' : '') + '>' +
+    masterLayerHtml +
     '<div class="slide-inner">' + inner + '</div>' +
     watermarkHtml +
     (hasLogo ? '<img class="brand-logo" src="' + escapeHtml(manifest.assets?.[manifest.brand.logoAssetId]?.data ?? '') + '" alt="' + escapeHtml(manifest.brand.name || 'Logo') + '"/>' : '') +
@@ -2294,19 +2319,21 @@ function hex(value) {
 function slideShapeList(slide, index, total, theme, langId, manifest = {}) {
   const lang = langId || 'zh-CN'
   const idBase = (index + 1) * 10
+  const tmSlide = resolveTemplateMasterForSlide(manifest, slide)
+  const slideTheme = tmSlide ? adaptThemeForMasterSurface(theme, tmSlide.roleSpec) : theme
   let xml = ''
 
   if (deckMedia.MEDIA_LAYOUTS.has(slide.layout)) {
     const fontHelpers = {
-      latinHeading: pptxFontName(theme.fonts.heading),
-      eaHeading: pptxEastAsianFont(theme.fonts.heading),
-      latinBody: pptxFontName(theme.fonts.body),
-      eaBody: pptxEastAsianFont(theme.fonts.body),
+      latinHeading: pptxFontName(slideTheme.fonts.heading),
+      eaHeading: pptxEastAsianFont(slideTheme.fonts.heading),
+      latinBody: pptxFontName(slideTheme.fonts.body),
+      eaBody: pptxEastAsianFont(slideTheme.fonts.body),
     }
     const mediaShapes = typeof deckMedia.renderMediaPptxShapes === 'function'
-      ? deckMedia.renderMediaPptxShapes(slide, index, theme, lang, fontHelpers, total, manifest)
+      ? deckMedia.renderMediaPptxShapes(slide, index, slideTheme, lang, fontHelpers, total, manifest)
       : ''
-    if (mediaShapes.includes('name="Page number"')) {
+    if (mediaShapes.includes('name="Page number"') || tmSlide?.yieldSlideNumber) {
       xml = mediaShapes
     } else {
       const folio = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
@@ -2317,10 +2344,10 @@ function slideShapeList(slide, index, total, theme, langId, manifest = {}) {
         paragraphs: [
           ooxmlRichParagraph(folio, {
             sizePt: 9.5,
-            color: theme.tokens.inkMuted,
+            color: slideTheme.tokens.inkMuted,
             lang,
             align: 'r',
-            font: theme.fonts.body,
+            font: slideTheme.fonts.body,
             lineHeight: 1.15,
           }),
         ],
@@ -2328,10 +2355,17 @@ function slideShapeList(slide, index, total, theme, langId, manifest = {}) {
       xml = mediaShapes + folioShape
     }
   } else {
-    xml = renderCoreSlidePptx(slide, index, total, theme, lang, manifest)
+    xml = renderCoreSlidePptx(slide, index, total, slideTheme, lang, manifest)
   }
 
-  return visualShapeXml(xml, slide.visual)
+  let outXml = visualShapeXml(xml, slide.visual)
+  if (tmSlide) {
+    outXml = remapShapesXmlToSafeZone(outXml, tmSlide.safeInsets)
+    if (tmSlide.roleSpec?.needsScrim) {
+      outXml = buildPptxScrimShapeXml(tmSlide.safeInsets, Boolean(tmSlide.roleSpec.dark), (index + 1) * 1000 + 980) + outXml
+    }
+  }
+  return outXml
 }
 
 /**
@@ -2483,7 +2517,7 @@ function transitionXmlFor(motionProfile, slide) {
   return '<p:transition spd="' + spd + '"><p:fade/></p:transition>'
 }
 
-function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
+function slideXml(slide, index, total, theme, langId, motion, manifest = {}, masterCtx = null) {
   const p = theme.palette
   const shapesXml = slideShapeList(slide, index, total, theme, langId, manifest)
   let motionXml = ''
@@ -2515,42 +2549,60 @@ function slideXml(slide, index, total, theme, langId, motion, manifest = {}) {
       }
     }
   }
+  const isNativeMaster = masterCtx?.mode === 'native-master'
+  const isOverlayMaster = masterCtx?.mode === 'overlay'
+  const bgXml = isNativeMaster
+    ? ''
+    : (isOverlayMaster && masterCtx.overlay?.bgXml
+        ? masterCtx.overlay.bgXml
+        : '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + hex(p.bg) + '"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>')
+  const backShapesXml = isOverlayMaster && masterCtx.overlay?.backShapesXml ? masterCtx.overlay.backShapesXml : ''
+  const clrMapOvrXml = isNativeMaster
+    ? '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>'
+    : '<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>'
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
     'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
-    '<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + hex(p.bg) + '"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>' +
+    '<p:cSld>' + bgXml +
     '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
     '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
-    shapesXml +
+    backShapesXml + shapesXml +
     '</p:spTree></p:cSld>' +
-    '<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>' +
+    clrMapOvrXml +
     motionXml +
     '</p:sld>'
 }
 
-function slideRelXml(hasNotes, slideIndex) {
+function slideRelXml(hasNotes, slideIndex, layoutIndex = 1, extraRels = []) {
   const notesRel = hasNotes
     ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide' + slideIndex + '.xml"/>'
     : ''
+  const extra = Array.isArray(extraRels) && extraRels.length > 0 ? extraRels.join('') : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout' + layoutIndex + '.xml"/>' +
     notesRel +
+    extra +
     '</Relationships>'
 }
 
-function presentationXml(slideCount, hasNotesMaster) {
+function presentationXml(slideCount, hasNotesMaster, masterList = null) {
+  const masters = Array.isArray(masterList) && masterList.length > 0 ? masterList : [{ index: 1 }]
+  const masterCount = masters.length
+  const masterIds = masters.map((m, idx) =>
+    '<p:sldMasterId id="' + (2147483648 + idx) + '" r:id="rId' + (idx + 1) + '"/>').join('')
   const slideIds = Array.from({ length: slideCount }, (_, i) =>
-    '<p:sldId id="' + (256 + i) + '" r:id="rId' + (i + 2) + '"/>').join('')
+    '<p:sldId id="' + (256 + i) + '" r:id="rId' + (masterCount + 1 + i) + '"/>').join('')
+  const notesMasterIdNum = Array.isArray(masterList) && masterList.length > 0 ? 2147483660 : 2147483649
   const notesMasterId = hasNotesMaster
-    ? '<p:notesMasterIdLst><p:notesMasterId id="2147483649" r:id="rId' + (slideCount + 2) + '"/></p:notesMasterIdLst>'
+    ? '<p:notesMasterIdLst><p:notesMasterId id="' + notesMasterIdNum + '" r:id="rId' + (masterCount + slideCount + 1) + '"/></p:notesMasterIdLst>'
     : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
     'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
-    '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
+    '<p:sldMasterIdLst>' + masterIds + '</p:sldMasterIdLst>' +
     '<p:sldIdLst>' + slideIds + '</p:sldIdLst>' +
     notesMasterId +
     '<p:sldSz cx="' + EMU_W + '" cy="' + EMU_H + '" type="screen16x9"/>' +
@@ -2558,15 +2610,19 @@ function presentationXml(slideCount, hasNotesMaster) {
     '</p:presentation>'
 }
 
-function presentationRelXml(slideCount, hasNotesMaster) {
+function presentationRelXml(slideCount, hasNotesMaster, masterList = null) {
+  const masters = Array.isArray(masterList) && masterList.length > 0 ? masterList : [{ index: 1 }]
+  const masterCount = masters.length
+  const masterRels = masters.map((m, idx) =>
+    '<Relationship Id="rId' + (idx + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster' + m.index + '.xml"/>').join('')
   const slideRels = Array.from({ length: slideCount }, (_, i) =>
-    '<Relationship Id="rId' + (i + 2) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide' + (i + 1) + '.xml"/>').join('')
+    '<Relationship Id="rId' + (masterCount + 1 + i) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide' + (i + 1) + '.xml"/>').join('')
   const notesMasterRel = hasNotesMaster
-    ? '<Relationship Id="rId' + (slideCount + 2) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>'
+    ? '<Relationship Id="rId' + (masterCount + slideCount + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>'
     : ''
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>' +
+    masterRels +
     slideRels +
     notesMasterRel +
     '</Relationships>'
@@ -2699,7 +2755,7 @@ export function themeXml(theme) {
     '</a:theme>'
 }
 
-function contentTypesXml(slideCount, noteIndexes) {
+function contentTypesXml(slideCount, noteIndexes, extra = null) {
   const overrides = Array.from({ length: slideCount }, (_, i) =>
     '<Override PartName="/ppt/slides/slide' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>').join('')
   const notesOverrides = noteIndexes.map((index) =>
@@ -2707,14 +2763,19 @@ function contentTypesXml(slideCount, noteIndexes) {
   const notesMasterOverride = noteIndexes.length > 0
     ? '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>'
     : ''
+  const defaultExts = extra?.defaultExtXml || ''
+  const masterLayoutThemeOverrides = extra?.overridesXml || (
+    '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
+    '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
+    '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
+  )
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
     '<Default Extension="xml" ContentType="application/xml"/>' +
+    defaultExts +
     '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' +
-    '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
-    '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
-    '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
+    masterLayoutThemeOverrides +
     '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
     '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
     notesMasterOverride +
@@ -2844,27 +2905,52 @@ export function buildPptx(manifest, themeInput, languageInput) {
     if (typeof slide.notes === 'string' && slide.notes.trim() !== '') noteIndexes.push(index)
   })
   const hasNotesMaster = noteIndexes.length > 0
+  const tm = manifest.brand?.templateMaster
+  const nativeSupport = buildNativeMasterPptxSupport(tm, manifest.assets)
+  const overlaySupport = !nativeSupport ? buildOverlayMasterPptxSupport(tm, manifest.assets) : null
+
   const entries = [
-    { name: '[Content_Types].xml', data: contentTypesXml(slides.length, noteIndexes) },
+    {
+      name: '[Content_Types].xml',
+      data: contentTypesXml(slides.length, noteIndexes, nativeSupport
+        ? { defaultExtXml: nativeSupport.defaultExtXml, overridesXml: nativeSupport.overridesXml }
+        : (overlaySupport ? { defaultExtXml: overlaySupport.defaultExtXml } : null)),
+    },
     { name: '_rels/.rels', data: rootRelXml() },
     { name: 'docProps/app.xml', data: appXml(slides.length, noteIndexes.length) },
     { name: 'docProps/core.xml', data: coreXml(manifest.title) },
-    { name: 'ppt/presentation.xml', data: presentationXml(slides.length, hasNotesMaster) },
-    { name: 'ppt/_rels/presentation.xml.rels', data: presentationRelXml(slides.length, hasNotesMaster) },
-    { name: 'ppt/slideMasters/slideMaster1.xml', data: slideMasterXml(theme) },
-    { name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: slideMasterRelXml() },
-    { name: 'ppt/slideLayouts/slideLayout1.xml', data: slideLayoutXml(theme) },
-    { name: 'ppt/slideLayouts/_rels/slideLayout1.xml.rels', data: slideLayoutRelXml() },
-    { name: 'ppt/theme/theme1.xml', data: themeXml(theme) },
+    { name: 'ppt/presentation.xml', data: presentationXml(slides.length, hasNotesMaster, nativeSupport?.masterList || null) },
+    { name: 'ppt/_rels/presentation.xml.rels', data: presentationRelXml(slides.length, hasNotesMaster, nativeSupport?.masterList || null) },
   ]
+
+  if (nativeSupport) {
+    entries.push(...nativeSupport.extraEntries)
+  } else {
+    entries.push(
+      { name: 'ppt/slideMasters/slideMaster1.xml', data: slideMasterXml(theme) },
+      { name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: slideMasterRelXml() },
+      { name: 'ppt/slideLayouts/slideLayout1.xml', data: slideLayoutXml(theme) },
+      { name: 'ppt/slideLayouts/_rels/slideLayout1.xml.rels', data: slideLayoutRelXml() },
+      { name: 'ppt/theme/theme1.xml', data: themeXml(theme) },
+    )
+    if (overlaySupport?.extraEntries?.length) {
+      entries.push(...overlaySupport.extraEntries)
+    }
+  }
+
   if (hasNotesMaster) {
     entries.push({ name: 'ppt/notesMasters/notesMaster1.xml', data: notesMasterXml() })
     entries.push({ name: 'ppt/notesMasters/_rels/notesMaster1.xml.rels', data: notesMasterRelXml() })
   }
   slides.forEach((slide, index) => {
     const hasNotes = noteIndexes.includes(index)
-    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.attr, motion, manifest) })
-    entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml(hasNotes, index + 1) })
+    const layoutIdx = nativeSupport ? nativeSupport.layoutIndexForSlide(slide) : 1
+    const overlay = overlaySupport ? overlaySupport.compileSlideOverlay(slide, index) : null
+    const masterCtx = nativeSupport
+      ? { mode: 'native-master' }
+      : (overlaySupport ? { mode: 'overlay', overlay } : null)
+    entries.push({ name: 'ppt/slides/slide' + (index + 1) + '.xml', data: slideXml(slide, index, slides.length, theme, language.attr, motion, manifest, masterCtx) })
+    entries.push({ name: 'ppt/slides/_rels/slide' + (index + 1) + '.xml.rels', data: slideRelXml(hasNotes, index + 1, layoutIdx, overlay?.extraRels || []) })
     if (hasNotes) {
       entries.push({ name: 'ppt/notesSlides/notesSlide' + (index + 1) + '.xml', data: notesSlideXml(slide.notes, language.attr) })
       entries.push({ name: 'ppt/notesSlides/_rels/notesSlide' + (index + 1) + '.xml.rels', data: notesSlideRelXml(index + 1) })

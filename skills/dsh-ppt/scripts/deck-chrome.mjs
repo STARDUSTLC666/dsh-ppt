@@ -1321,19 +1321,27 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
   }
 
   if (!isFraming) {
+    const tm = manifest?.brand?.templateMaster?.enabled === true ? manifest.brand.templateMaster : null
+    const tmRole = slide?.layout === 'cover' ? 'cover' : slide?.layout === 'section' ? 'section' : slide?.layout === 'closing' ? 'closing' : 'content'
+    const tmRoleSpec = tm?.roles?.[tmRole] || tm?.roles?.content || null
+    const tmYieldChrome = Boolean(tm && tm.yieldChrome !== false)
+    const tmYieldFooter = Boolean(tm && (tm.yieldFooter || tmRoleSpec?.hasFooter))
+    const tmYieldSlideNum = Boolean(tm && tm.mode === 'native-master' && tm.nativePackage?.layouts?.length && (tm.yieldSlideNumber || tmRoleSpec?.hasSlideNumber))
     const folio = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
     if (chromeCfg.folioPos === 'beamer-bar') {
-      shapes.push(ooxmlShape(nextIdFn(), 'Beamer footer band', { x: 0, y: 7.04, w: CANVAS_IN.w, h: 0.46 }, {
-        preset: 'rect',
-        fill: tk.surface1,
-      }))
-      shapes.push(ooxmlLine(nextIdFn(), 'Beamer footer rule', { x: 0, y: 7.04 }, { x: CANVAS_IN.w, y: 7.04 }, {
-        color: tk.hairline,
-        widthPt: 0.5,
-      }))
+      if (!tmYieldChrome) {
+        shapes.push(ooxmlShape(nextIdFn(), 'Beamer footer band', { x: 0, y: 7.04, w: CANVAS_IN.w, h: 0.46 }, {
+          preset: 'rect',
+          fill: tk.surface1,
+        }))
+        shapes.push(ooxmlLine(nextIdFn(), 'Beamer footer rule', { x: 0, y: 7.04 }, { x: CANVAS_IN.w, y: 7.04 }, {
+          color: tk.hairline,
+          widthPt: 0.5,
+        }))
+      }
       const leftText = slide.source
         ? formatSourceLine(slide.source, langAttr)
-        : (manifest.brand?.footer || manifest.title || '')
+        : (tmYieldFooter ? '' : (manifest.brand?.footer || manifest.title || ''))
       if (leftText) {
         shapes.push(ooxmlShape(nextIdFn(), slide.source ? 'Footer source' : 'Beamer zone left', { x: 0.62, y: 7.10, w: 4.4, h: 0.32 }, {
           txBox: true,
@@ -1351,7 +1359,7 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
           ],
         }))
       }
-      const centerText = (slide.kicker || slide.title || '').trim()
+      const centerText = !tmYieldChrome ? (slide.kicker || slide.title || '').trim() : ''
       if (centerText) {
         shapes.push(ooxmlShape(nextIdFn(), 'Beamer zone chapter', { x: 5.1, y: 7.10, w: 3.13, h: 0.32 }, {
           txBox: true,
@@ -1370,25 +1378,27 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
           ],
         }))
       }
-      shapes.push(ooxmlShape(idBase + 9, 'Page number', { x: 10.65, y: 7.10, w: 2.06, h: 0.32 }, {
-        txBox: true,
-        anchor: 'ctr',
-        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
-        paragraphs: [
-          ooxmlRichParagraph(folio, {
-            sizePt: 9.5,
-            color: tk.accentText,
-            bold: true,
-            lang: langAttr,
-            align: 'r',
-            font: theme.fonts.body,
-            lineHeight: 1.15,
-          }),
-        ],
-      }))
+      if (!tmYieldSlideNum) {
+        shapes.push(ooxmlShape(idBase + 9, 'Page number', { x: 10.65, y: 7.10, w: 2.06, h: 0.32 }, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+          paragraphs: [
+            ooxmlRichParagraph(folio, {
+              sizePt: 9.5,
+              color: tk.accentText,
+              bold: true,
+              lang: langAttr,
+              align: 'r',
+              font: theme.fonts.body,
+              lineHeight: 1.15,
+            }),
+          ],
+        }))
+      }
     } else {
       if (slide.source) {
-        const hasBrandFooter = Boolean(manifest.brand?.footer)
+        const hasBrandFooter = Boolean(manifest.brand?.footer) && !tmYieldFooter
         const sourceBox = hasBrandFooter
           ? { x: 5.4, y: 6.95, w: 5.0, h: 0.32 }
           : { x: 0.62, y: 6.95, w: 9.2, h: 0.32 }
@@ -1409,24 +1419,26 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
         }))
       }
 
-      const folioBox = chromeCfg.folioPos === 'top-right'
-        ? { x: 10.65, y: 0.24, w: 2.06, h: 0.28 }
-        : { x: 10.65, y: 6.95, w: 2.06, h: 0.32 }
-      shapes.push(ooxmlShape(idBase + 9, 'Page number', folioBox, {
-        txBox: true,
-        anchor: 'ctr',
-        marginsIn: { l: 0, r: 0, t: 0, b: 0 },
-        paragraphs: [
-          ooxmlRichParagraph(folio, {
-            sizePt: chromeCfg.folioPos === 'top-right' ? 10 : 9.5,
-            color: tk.inkMuted,
-            lang: langAttr,
-            align: 'r',
-            font: theme.fonts.body,
-            lineHeight: 1.15,
-          }),
-        ],
-      }))
+      if (!tmYieldSlideNum) {
+        const folioBox = chromeCfg.folioPos === 'top-right'
+          ? { x: 10.65, y: 0.24, w: 2.06, h: 0.28 }
+          : { x: 10.65, y: 6.95, w: 2.06, h: 0.32 }
+        shapes.push(ooxmlShape(idBase + 9, 'Page number', folioBox, {
+          txBox: true,
+          anchor: 'ctr',
+          marginsIn: { l: 0, r: 0, t: 0, b: 0 },
+          paragraphs: [
+            ooxmlRichParagraph(folio, {
+              sizePt: chromeCfg.folioPos === 'top-right' ? 10 : 9.5,
+              color: tk.inkMuted,
+              lang: langAttr,
+              align: 'r',
+              font: theme.fonts.body,
+              lineHeight: 1.15,
+            }),
+          ],
+        }))
+      }
     }
 
     const watermarkText = typeof manifest?.brand?.watermark === 'string' ? manifest.brand.watermark.trim() : ''
@@ -1466,22 +1478,25 @@ export function renderSlideChromePptx(slide, index, total, theme, langAttr, mani
   return shapes.join('')
 }
 
-export function renderStandardHeaderPptx(slide, idBase, nextIdFn, theme, langAttr, chromeCfg) {
+export function renderStandardHeaderPptx(slide, idBase, nextIdFn, theme, langAttr, chromeCfg, opts = {}) {
   const tk = theme.tokens
   const kicker = (slide.kicker ?? '').trim()
   const title = (slide.title ?? '').trim()
   const showKicker = kicker !== '' && kicker !== title
   const shapes = []
   const style = chromeCfg?.headerStyle || 'standard'
+  const yieldBeamerBand = Boolean(opts?.yieldChrome)
 
   if (style === 'beamer-band') {
-    shapes.push(ooxmlShape(nextIdFn(), 'Beamer header band', { x: 0, y: 0, w: CANVAS_IN.w, h: 1.28 }, {
-      preset: 'rect',
-      fill: tk.surface1,
-    }))
-    shapes.push(ooxmlLine(nextIdFn(), 'Beamer header rule', { x: 0, y: 1.28 }, { x: CANVAS_IN.w, y: 1.28 }, {
-      color: tk.accentPrimary,
-      widthPt: 1.5,
+    if (!yieldBeamerBand) {
+      shapes.push(ooxmlShape(nextIdFn(), 'Beamer header band', { x: 0, y: 0, w: CANVAS_IN.w, h: 1.28 }, {
+        preset: 'rect',
+        fill: tk.surface1,
+      }))
+    }
+    shapes.push(ooxmlLine(nextIdFn(), 'Beamer header rule', { x: yieldBeamerBand ? 0.62 : 0, y: 1.28 }, { x: yieldBeamerBand ? 12.71 : CANVAS_IN.w, y: 1.28 }, {
+      color: yieldBeamerBand ? tk.hairline : tk.accentPrimary,
+      widthPt: yieldBeamerBand ? 0.75 : 1.5,
     }))
     if (showKicker) {
       shapes.push(ooxmlShape(idBase + 1, 'Kicker', { x: 0.62, y: 0.14, w: 12.09, h: 0.24 }, {
@@ -1828,12 +1843,15 @@ export function renderSlideChromeHtml(slide, chromeStyle, folioText, langId, man
 
   let footerStrip = ''
   if (!isFraming) {
+    const tm = manifest?.brand?.templateMaster?.enabled === true ? manifest.brand.templateMaster : null
+    const tmRole = slide?.layout === 'cover' ? 'cover' : slide?.layout === 'section' ? 'section' : slide?.layout === 'closing' ? 'closing' : 'content'
+    const tmYieldFooter = Boolean(tm && (tm.yieldFooter || tm.roles?.[tmRole]?.hasFooter))
     const sourceText = slide.source ? formatSourceLine(slide.source, langId) : ''
-    const brandFooterText = typeof manifest.brand?.footer === 'string' ? manifest.brand.footer.trim() : ''
+    const brandFooterText = !tmYieldFooter && typeof manifest.brand?.footer === 'string' ? manifest.brand.footer.trim() : ''
     const brandHtml = brandFooterText ? '<span class="brand-footer">' + escapeHtml(brandFooterText) + '</span>' : ''
     if (chromeStyle === 'academic-minimal') {
-      const zLeft = sourceText || brandFooterText || manifest.title || ''
-      const zMid = (slide.kicker || slide.title || '').trim()
+      const zLeft = sourceText || brandFooterText || (tmYieldFooter ? '' : (manifest.title || ''))
+      const zMid = tm?.yieldChrome !== false && tm ? '' : (slide.kicker || slide.title || '').trim()
       footerStrip =
         '<footer class="beamer-status-bar">' +
         '<span class="slide-source beamer-zone-left">' + escapeHtml(zLeft) + '</span>' +

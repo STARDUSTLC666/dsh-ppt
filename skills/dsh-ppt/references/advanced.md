@@ -74,9 +74,11 @@ Agent 先提炼真实内容与数据结论，再通过结构化参数生成可�
    - 自动解析每页真实内容：标题、Kicker、副标题、正文与要点（保留粗体引导词为 `**bold**`）、原生表格（`<a:tbl>`）、原生图表（`ppt/charts/chart*.xml` `<c:cat>/<c:val>` 保留为可编辑图表）、嵌入位图（PNG/JPEG/WebP 安全导出至 `assets/imported-sN-M.<ext>`）及演讲者备注（自动剥离页码占位符），并智能映射为 `dsh-ppt` 原生版式，输出完整可放映 HTML（含按 `P` 启动的双屏演讲者提词台、按 `L` 激光笔与讲义下载）、可编辑 PPTX 与 JSON 工程。
 3. **Office 改稿双向回导同步（`ppt_import` + `projectId` / `--sync-pptx`）**：
    - 在 PowerPoint / WPS 微调 `.pptx` 后，传 `projectId`（CLI：`--sync-pptx edited.pptx --edit dist/deck.json` 或 `--target-project dist`）即可将最新文字、表格、图表、图片与备注导回工程；同步前自动把原 `project.json` 快照写入 `.history/` 并压入撤回栈（`ppt_undo` 可完整恢复），同时保留原主题、品牌与匹配的数据溯源。
-4. **一键套用参考 `.pptx` 与结构克隆（`referencePptx` & `cloneStructure`）**：
-   - 在 `ppt_create` 或 `ppt_edit` 中直接传 `referencePptx: "corp-template.pptx"`（CLI：`--reference-pptx corp.pptx`），自动将该模板净化后的色板、字体与母版 Logo 应用到整套文稿。
-   - 若同时传 `cloneStructure: true`（CLI：`--clone-structure`），将把 `recommendedChrome` 写入 `brand.chromeStyle`，并把 Markdown 正文页面直接映射到吸收出的 `slideSkeleton` 版式序列！
+4. **一键套用参考 `.pptx`、结构克隆与 1:1 公司固定模板原生母版直出（`referencePptx` / `useTemplateMaster` / `cloneStructure`）**：
+   - **默认风格吸收（零入侵）**：在 `ppt_create` 或 `ppt_edit` 中传 `referencePptx: "corp-template.pptx"`（CLI：`--reference-pptx corp.pptx`），自动将该模板净化后的色板、字体与母版 Logo 应用到整套文稿。加传 `cloneStructure: true`（CLI：`--clone-structure`）同步复刻 `recommendedChrome` 与逐页 `slideSkeleton` 版式序列。
+   - **1:1 公司固定模板原样母版模式（显式开启，默认关闭）**：
+     - 吸收提取：`ppt_absorb { pptxPath: "corp-template.pptx", extractMaster: true, templateMasterMode: "native-master", saveBrandKit: true }`（CLI：`--absorb corp-template.pptx --extract-master --save-brand-kit`），自动解析 4 角色母版（`cover / section / content / closing`）、占位符安全留白区（`safeInsets`）、深浅背景极性（含 `clrMapOvr` 与渐变角度/多色标）以及母版自带 Logo / 页脚 / 页码，并将去重后的原生 `slideMaster` / `slideLayout` 包持久化进 `.dsh-ppt/brand-kit.json`。
+     - 直出套用：`ppt_create { ..., referencePptx: "corp-template.pptx", useTemplateMaster: true, templateMasterMode: "native-master" }`（CLI：`--reference-pptx corp-template.pptx --use-template-master`）。默认 `native-master` 将公司原生 `slideMaster` / `slideLayout` 矢量母版直接写入导出 `.pptx`（PowerPoint 幻灯片母版视图可继续编辑），异常畸形母版自动降级为 `overlay` 同构底图模式；HTML 预览与 16:9 灯箱 1:1 同步展示底图、矢量饰条、自动反白与安全区避让，并自动让位冲突的内置装饰环、重复 Logo 与页脚；随时可通过 `ppt_edit({ useTemplateMaster: false })` 或工作台开关暂停/移除。
 5. **显式共享品牌（`brand`）**：
    - `brand: { name: "星尘科技", primaryColor: "#0057B8", backgroundColor: "#FFFFFF", textColor: "#0F172A", chromeStyle: "consulting-classic", fontFamily: "Microsoft YaHei", logo: "assets/logo.png", footer: "战略规划部 · 内部资料" }`。
    - 引擎通过 `deriveBrandedTheme()` 自动重算表面层级、淡网格线与次级墨色，杜绝浅底黑网格线冲突。

@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { stripInlineMarkdown } from './deck-layouts.mjs'
 import { writeWorkspaceJson } from './deck-store.mjs'
+import { normalizeTemplateMaster, collectTemplateMasterAssetIds } from './deck-template-master.mjs'
 
 const BRAND_KIT_REL_PATH = join('.dsh-ppt', 'brand-kit.json')
 const MAX_FORBIDDEN_TERMS = 40
@@ -79,6 +80,33 @@ export function normalizeBrandKit(raw) {
     }
   }
 
+  let templateMasterAssets
+  if (raw.templateMasterAssets && typeof raw.templateMasterAssets === 'object' && !Array.isArray(raw.templateMasterAssets)) {
+    const cleanedAssets = {}
+    for (const [id, asset] of Object.entries(raw.templateMasterAssets)) {
+      if (!/^img-[a-f0-9]{64}$/.test(id) || !asset || typeof asset !== 'object') continue
+      if (typeof asset.data !== 'string' || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(asset.data)) continue
+      if (!Number.isInteger(asset.width) || !Number.isInteger(asset.height) || asset.width <= 0 || asset.height <= 0) continue
+      cleanedAssets[id] = { width: asset.width, height: asset.height, mime: String(asset.mime || 'image/png'), data: asset.data }
+    }
+    if (Object.keys(cleanedAssets).length > 0) templateMasterAssets = cleanedAssets
+  }
+
+  let templateMaster
+  const rawTm = raw.templateMaster || rawBrand.templateMaster
+  if (rawTm && typeof rawTm === 'object' && !Array.isArray(rawTm)) {
+    templateMaster = normalizeTemplateMaster(rawTm, templateMasterAssets || null)
+    // Trim unreferenced templateMasterAssets
+    if (templateMasterAssets && templateMaster) {
+      const used = collectTemplateMasterAssetIds(templateMaster)
+      const trimmed = {}
+      for (const id of used) {
+        if (templateMasterAssets[id]) trimmed[id] = templateMasterAssets[id]
+      }
+      templateMasterAssets = Object.keys(trimmed).length > 0 ? trimmed : undefined
+    }
+  }
+
   return {
     schemaVersion: 1,
     name,
@@ -90,6 +118,8 @@ export function normalizeBrandKit(raw) {
     ...(preferredSources.length > 0 ? { preferredSources } : {}),
     ...(blockedDomains.length > 0 ? { blockedDomains } : {}),
     ...(mandatoryClosing ? { mandatoryClosing } : {}),
+    ...(templateMaster ? { templateMaster } : {}),
+    ...(templateMasterAssets ? { templateMasterAssets } : {}),
     updatedAt: raw.updatedAt || new Date().toISOString(),
   }
 }
@@ -135,18 +165,28 @@ export function buildBrandKitFromAbsorbed(absorbed, options = {}) {
     ...(Array.isArray(options.preferredSources) ? { preferredSources: options.preferredSources } : {}),
     ...(Array.isArray(options.blockedDomains) ? { blockedDomains: options.blockedDomains } : {}),
     ...(options.mandatoryClosing ? { mandatoryClosing: options.mandatoryClosing } : {}),
+    ...(absorbed.templateMaster ? { templateMaster: absorbed.templateMaster } : {}),
+    ...(absorbed.templateMasterAssets ? { templateMasterAssets: absorbed.templateMasterAssets } : {}),
   })
 }
 
 /**
  * 将企业品牌宪章应用到建稿配置与幻灯片：
  * - 品牌字段与水印合并（`enforce: true` 时锁定企业主色、字体、页脚与水印）；
+ * - 若品牌宪章已开启 `templateMaster` 且本次未显式禁用（`useTemplateMaster !== false`），同步挂载企业母版与去重资产；
  * - 若配置了 `mandatoryClosing` 且文稿末尾缺少封底或仅为空洞致谢页，自动补齐官方封底。
  */
-export function applyBrandKitToSlidesAndBrand(slides, brandInput, kit) {
-  if (!kit) return { slides, brandInput }
+export function applyBrandKitToSlidesAndBrand(slides, brandInput, kit, options = {}) {
+  if (!kit) return { slides, brandInput, templateMasterAssets: null }
   const kitBrand = kit.brand && typeof kit.brand === 'object' ? { ...kit.brand } : {}
   if (kit.watermark && !kitBrand.watermark) kitBrand.watermark = kit.watermark
+
+  let attachedTmAssets = null
+  const allowTemplateMaster = options.useTemplateMaster !== false
+  if (allowTemplateMaster && kit.templateMaster?.enabled === true && !brandInput?.templateMaster) {
+    kitBrand.templateMaster = kit.templateMaster
+    if (kit.templateMasterAssets) attachedTmAssets = kit.templateMasterAssets
+  }
 
   let nextBrand = brandInput
   if (brandInput !== null) {
@@ -182,7 +222,7 @@ export function applyBrandKitToSlidesAndBrand(slides, brandInput, kit) {
     }
   }
 
-  return { slides: nextSlides, brandInput: nextBrand }
+  return { slides: nextSlides, brandInput: nextBrand, templateMasterAssets: attachedTmAssets }
 }
 
 function collectSlidePlainText(slide) {

@@ -43,8 +43,9 @@ const ALLOWED_ICON_MODES = new Set(['off', 'explicit', 'auto'])
 const ALLOWED_COVER_PATTERNS = new Set(['dots', 'grid', 'rings', 'waves', 'isometric-mesh', 'editorial-arcs'])
 const ALLOWED_FOCAL_POINTS = new Set(['center', 'top', 'bottom', 'left', 'right'])
 const ALLOWED_REMIX_PRESETS = new Set(['exec-5min', 'board-brief', 'sales-pitch'])
+const ALLOWED_TEMPLATE_MASTER_MODES = new Set(['native-master', 'overlay'])
 const ITEM_KEYS = new Set(['tag', 'badge', 'title', 'text', 'body', 'value', 'unit', 'delta', 'start', 'span', 'milestone', 'role', 'conversion', 'icon', 'avatar', 'x', 'y', 'size', 'before', 'after', 'actual', 'target', 'max', 'status', 'tone', 'bullets'])
-const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'watermark', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste'])
+const BRAND_KEYS = new Set(['name', 'primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'fontFamily', 'headingFont', 'coverMode', 'coverBg', 'logo', 'footer', 'watermark', 'chromeStyle', 'cardMaterial', 'iconMode', 'taste', 'templateMaster'])
 const VISUAL_KEYS = new Set(['titleSize', 'bodySize', 'chartLabelSize', 'density', 'tableStyle', 'chrome'])
 
 /** Sharing omits the project download control; ZIP packaging rewrites any missing sibling export links to inline Blob fallbacks. */
@@ -905,9 +906,47 @@ export class PptWorkbench {
         if (item === null || item === '') { out.taste = null; continue }
         if (typeof item !== 'string' || item.length > 64) throw new Error('品味配方 ID 无效')
         out.taste = item.trim()
+      } else if (key === 'templateMaster') {
+        if (item === null) { out.templateMaster = null; continue }
+        if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('企业模板母版参数无效')
+        const tm = item as Record<string, unknown>
+        if (['pptxPath', 'path', 'filePath', 'outputDir'].some(k => Object.hasOwn(tm, k))) {
+          throw new Error('图片必须从面板上传，不能读取其他本地文件')
+        }
+        if (tm.mode !== undefined && (typeof tm.mode !== 'string' || !ALLOWED_TEMPLATE_MASTER_MODES.has(tm.mode))) {
+          throw new Error('企业模板母版模式仅支持 native-master / overlay')
+        }
+        if (tm.enabled !== undefined && typeof tm.enabled !== 'boolean') {
+          throw new Error('企业模板母版 enabled 必须为布尔值')
+        }
+        out.templateMaster = {
+          ...tm,
+          ...(typeof tm.sourceFile === 'string' ? { sourceFile: basename(tm.sourceFile.replace(/[\\/]+/g, '/')).slice(0, 120) } : {}),
+        }
       }
     }
     return out
+  }
+  private templateMasterAssetsPatch(value: unknown): Record<string, unknown> | undefined {
+    if (value === undefined || value === null) return undefined
+    if (typeof value !== 'object' || Array.isArray(value)) throw new Error('企业模板母版资产格式无效')
+    const out: Record<string, unknown> = {}
+    for (const [id, rawAsset] of Object.entries(value as Record<string, unknown>)) {
+      if (!/^img-[0-9a-f]{64}$/.test(id) || !rawAsset || typeof rawAsset !== 'object' || Array.isArray(rawAsset)) {
+        throw new Error('企业模板母版资产格式无效')
+      }
+      const asset = rawAsset as Record<string, unknown>
+      if (typeof asset.data !== 'string' || asset.data.length > 7_000_000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(asset.data)) {
+        throw new Error('图片必须从面板上传，不能读取其他本地文件')
+      }
+      out[id] = {
+        width: Number(asset.width) || 0,
+        height: Number(asset.height) || 0,
+        mime: typeof asset.mime === 'string' ? asset.mime : 'image/png',
+        data: asset.data,
+      }
+    }
+    return Object.keys(out).length > 0 ? out : undefined
   }
   private itemsPatch(value: unknown): Array<Record<string, unknown>> {
     if (!Array.isArray(value) || value.length > 8) throw new Error('结构化卡片内容无效')
@@ -1358,18 +1397,31 @@ export class PptWorkbench {
       const alignOrder = body.alignOrder === true
       const brand = body.brand !== undefined ? this.brandPatch(body.brand) : undefined
       const cloneStructure = body.cloneStructure === true
+      const useTemplateMaster = typeof body.useTemplateMaster === 'boolean' ? body.useTemplateMaster : undefined
+      let templateMasterMode: string | undefined
+      if (body.templateMasterMode !== undefined && body.templateMasterMode !== null && body.templateMasterMode !== '') {
+        if (typeof body.templateMasterMode !== 'string' || !ALLOWED_TEMPLATE_MASTER_MODES.has(body.templateMasterMode)) {
+          throw new Error('企业模板母版模式仅支持 native-master / overlay')
+        }
+        templateMasterMode = body.templateMasterMode
+      }
       const engine = await this.loadEngine()
       signal?.throwIfAborted()
       const storeDir = dirname(this.catalogPath)
       const decksDir = join(storeDir, 'workbench-decks')
       mkdirSync(decksDir, { recursive: true })
       let tmpRefPath: string | undefined
+      let refSourceFile: string | undefined
       let skeletonSlides: Array<Record<string, unknown>> | undefined
       try {
         if (body.referencePptxData !== undefined && body.referencePptxData !== null && body.referencePptxData !== '') {
           if (typeof engine.absorbPptx !== 'function') throw new Error('当前引擎版本暂不支持参考 PPTX 吸收')
           const refBytes = this.pptxBytes(body.referencePptxData)
           tmpRefPath = join(decksDir, '.absorb-' + randomUUID() + '.pptx')
+          const rawRefName = typeof body.referenceFileName === 'string' && body.referenceFileName.trim()
+            ? basename(body.referenceFileName.trim().replace(/[\\/]+/g, '/')).slice(0, 120)
+            : ''
+          refSourceFile = rawRefName && !/^\.absorb-[0-9a-f-]+\.pptx$/i.test(rawRefName) ? rawRefName : 'corporate-template.pptx'
           writeFileSync(tmpRefPath, refBytes)
           if (cloneStructure && !content.trim() && !template) {
             const absorbed = await engine.absorbPptx({ bytes: refBytes, extractLogo: true, signal })
@@ -1407,7 +1459,13 @@ export class PptWorkbench {
           ...(autoUpgrade !== undefined ? { autoUpgrade } : {}),
           theme,
           lang,
-          ...(tmpRefPath ? { referencePptx: tmpRefPath, cloneStructure } : {}),
+          ...(tmpRefPath ? {
+            referencePptx: tmpRefPath,
+            ...(refSourceFile ? { referenceSourceFile: refSourceFile } : {}),
+            cloneStructure,
+          } : {}),
+          ...(typeof useTemplateMaster === 'boolean' ? { useTemplateMaster } : {}),
+          ...(templateMasterMode ? { templateMasterMode } : {}),
           ...(brand ? { brand } : {}),
           outputDir: decksDir,
           cwd: storeDir,
@@ -1590,10 +1648,26 @@ export class PptWorkbench {
         ? body.exemplarName.trim().slice(0, 80)
         : undefined
       const storeDir = dirname(this.catalogPath)
+      const extractMaster = body.extractMaster === true
+      let templateMasterMode: string | undefined
+      if (body.templateMasterMode !== undefined && body.templateMasterMode !== null && body.templateMasterMode !== '') {
+        if (typeof body.templateMasterMode !== 'string' || !ALLOWED_TEMPLATE_MASTER_MODES.has(body.templateMasterMode)) {
+          throw new Error('企业模板母版模式仅支持 native-master / overlay')
+        }
+        templateMasterMode = body.templateMasterMode
+      }
+      const sourceFile = typeof body.sourceFile === 'string' && body.sourceFile.trim()
+        ? basename(body.sourceFile.trim().replace(/[\\/]+/g, '/')).slice(0, 120)
+        : undefined
+      const saveBrandKit = body.saveBrandKit === true
       const absorbed = await engine.absorbPptx({
         bytes,
         extractLogo: body.extractLogo !== false,
+        ...(extractMaster ? { extractMaster: true } : {}),
+        ...(templateMasterMode ? { templateMasterMode } : {}),
+        ...(sourceFile ? { sourceFile } : {}),
         ...(saveExemplarAs ? { saveExemplarAs, ...(exemplarName ? { exemplarName } : {}), cwd: storeDir } : {}),
+        ...(saveBrandKit ? { saveBrandKit: true, cwd: storeDir } : {}),
         signal,
       })
       return {
@@ -1612,12 +1686,51 @@ export class PptWorkbench {
           narrativeProfile: absorbed?.narrativeProfile ?? null,
           styleRecipe: absorbed?.styleRecipe ?? null,
           savedExemplarPath: absorbed?.savedExemplarPath ?? null,
+          savedBrandKit: Boolean(absorbed?.savedBrandKitPath),
           exemplar: absorbed?.exemplar ?? null,
           warnings: absorbed?.warnings ?? [],
           slideSkeleton: absorbed?.slideSkeleton ?? null,
           layoutSummary: absorbed?.layoutSummary ?? null,
+          ...(absorbed?.templateMaster ? { templateMaster: absorbed.templateMaster } : {}),
+          ...(absorbed?.templateMasterAssets ? { templateMasterAssets: absorbed.templateMasterAssets } : {}),
         },
       }
+    }
+    if (body.operation === 'save-brand-kit') {
+      if (body.expectedRevision !== undefined) this.revision(body, manifest)
+      if (typeof engine.saveWorkspaceBrandKit !== 'function') throw new Error('当前引擎版本暂不支持保存企业品牌宪章')
+      const storeDir = dirname(this.catalogPath)
+      const activeBrand = manifest.brand && typeof manifest.brand === 'object' ? { ...manifest.brand } : {}
+      const tm = activeBrand.templateMaster && typeof activeBrand.templateMaster === 'object' ? activeBrand.templateMaster : undefined
+      if (typeof activeBrand.logoAssetId === 'string' && !activeBrand.logo) {
+        const logoData = manifest.assets?.[activeBrand.logoAssetId]?.data
+        if (typeof logoData === 'string' && /^data:image\/(png|jpeg);base64,/i.test(logoData)) {
+          activeBrand.logo = logoData
+        }
+      }
+      delete activeBrand.logoAssetId
+      delete activeBrand.templateMaster
+      const tmAssets: Record<string, unknown> = {}
+      if (tm && manifest.assets && typeof manifest.assets === 'object') {
+        for (const [id, asset] of Object.entries(manifest.assets)) {
+          if (/^img-[0-9a-f]{64}$/.test(id) && asset && typeof asset === 'object') {
+            tmAssets[id] = asset
+          }
+        }
+      }
+      const kitName = typeof body.name === 'string' && body.name.trim()
+        ? body.name.trim().slice(0, 80)
+        : (activeBrand.name || manifest.title || 'Corporate Brand Kit')
+      const saved = engine.saveWorkspaceBrandKit(storeDir, {
+        name: kitName,
+        enforce: body.enforce !== false,
+        theme: manifest.theme,
+        brand: activeBrand,
+        ...(activeBrand.watermark ? { watermark: activeBrand.watermark } : {}),
+        ...(tm ? { templateMaster: tm } : {}),
+        ...(Object.keys(tmAssets).length > 0 ? { templateMasterAssets: tmAssets } : {}),
+      })
+      return { ok: true, savedBrandKit: true, name: saved.brandKit?.name ?? kitName, hasTemplateMaster: Boolean(saved.brandKit?.templateMaster) }
     }
     if (body.operation === 'download') {
       if (!['html', 'pptx', 'json', 'handout', 'onepager', 'social-carousel', 'subtitles', 'remotion', 'xlsx', 'docx', 'qa-prep'].includes(String(body.kind))) throw new Error('不支持此文件类型')
@@ -1757,12 +1870,25 @@ export class PptWorkbench {
           throw new Error('品味配方参数无效')
         }
       }
+      let tmEditPatch: Record<string, unknown> = {}
+      if (typeof body.useTemplateMaster === 'boolean') {
+        tmEditPatch.useTemplateMaster = body.useTemplateMaster
+      }
+      if (body.templateMasterMode !== undefined && body.templateMasterMode !== null && body.templateMasterMode !== '') {
+        if (typeof body.templateMasterMode !== 'string' || !ALLOWED_TEMPLATE_MASTER_MODES.has(body.templateMasterMode)) {
+          throw new Error('企业模板母版模式仅支持 native-master / overlay')
+        }
+        tmEditPatch.templateMasterMode = body.templateMasterMode
+      }
+      const tmAssets = this.templateMasterAssetsPatch(body.templateMasterAssets)
+      if (tmAssets) tmEditPatch.templateMasterAssets = tmAssets
       const args = { deckPath: entry.path, expectedRevision: body.expectedRevision, signal,
         saveAs: body.saveAs === true,
         ...(body.slide === undefined ? {} : { edits: [{ slide: body.slide, patch: this.patch(body.patch) }] }),
         ...(body.order === undefined ? {} : { order: body.order }),
         ...(body.theme === undefined ? {} : { theme: this.themeId(body.theme) }),
         ...(body.brand === undefined ? {} : { brand: this.brandPatch(body.brand) }),
+        ...tmEditPatch,
         ...tastePatch,
         ...targetMinutesPatch }
       const result = await engine.editDeck(args)

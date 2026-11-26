@@ -3,6 +3,7 @@ import { resolveChromeStyle } from './deck-themes.mjs'
 import { getChromeConfig, computeBadgePillWidth, roundRectAdj } from './deck-layouts.mjs'
 import { resolveActiveTaste } from './deck-taste.mjs'
 import { renderImageBriefPlaceholderPptx, renderImageBriefPlaceholderHtml } from './deck-infographics.mjs'
+import { resolveTemplateMasterForSlide, mapBoxToSafeZone, computeSafeZoneTransform } from './deck-template-master.mjs'
 
 export const MEDIA_LAYOUTS = new Set(['image', 'image-left', 'image-right', 'chart', 'chart-split'])
 export const CHART_KINDS = Object.freeze([
@@ -867,34 +868,64 @@ function projectInsightCards(slide) {
 }
 
 export function renderMediaHtml(slide, manifest, theme) {
-  const boxes = mediaBoxes(slide.layout, slide.variant, slide, manifest)
+  const rawBoxes = mediaBoxes(slide.layout, slide.variant, slide, manifest)
   const variant = String(slide.variant ?? '').trim().toLowerCase()
   const chromeStyle = resolveChromeStyle(theme, slide, manifest?.brand)
+  const tmSlide = resolveTemplateMasterForSlide(manifest, slide)
+  const isBleed = variant === 'full-bleed' || variant === 'split-bleed'
+  const boxes = (tmSlide && !isBleed)
+    ? {
+        ...rawBoxes,
+        kicker: mapBoxToSafeZone(rawBoxes.kicker, tmSlide.safeInsets),
+        title: mapBoxToSafeZone(rawBoxes.title, tmSlide.safeInsets),
+        image: mapBoxToSafeZone(rawBoxes.image, tmSlide.safeInsets),
+        body: rawBoxes.body ? mapBoxToSafeZone(rawBoxes.body, tmSlide.safeInsets) : null,
+        chart: mapBoxToSafeZone(rawBoxes.chart, tmSlide.safeInsets),
+        caption: mapBoxToSafeZone(rawBoxes.caption, tmSlide.safeInsets),
+        takeaway: mapBoxToSafeZone(rawBoxes.takeaway, tmSlide.safeInsets),
+        gallery: Array.isArray(rawBoxes.gallery) ? rawBoxes.gallery.map((g) => mapBoxToSafeZone(g, tmSlide.safeInsets)) : null,
+      }
+    : rawBoxes
   const slidesArr = Array.isArray(manifest?.slides) ? manifest.slides : []
   const foundIdx = slidesArr.findIndex((s) => s === slide || (slide?.id && s?.id === slide.id))
   const slideIndex = foundIdx >= 0 ? foundIdx : 0
   const totalSlides = Math.max(1, slidesArr.length)
   const folioText = String(slideIndex + 1).padStart(2, '0') + ' / ' + String(totalSlides).padStart(2, '0')
   const langEn = manifest?.language === 'en'
-  const isBleed = variant === 'full-bleed' || variant === 'split-bleed'
+
+  const tmSafeTr = (tmSlide && !isBleed) ? computeSafeZoneTransform(tmSlide.safeInsets) : null
+  const tmInsetsActive = Boolean(tmSafeTr?.active)
+  const tmS = tmSafeTr?.safeInsets || null
+  const tmEdgeLeftPct = tmInsetsActive ? (tmS.left / CANVAS.w * 100).toFixed(2) : null
+  const tmEdgeRightPct = tmInsetsActive ? (tmS.right / CANVAS.w * 100).toFixed(2) : null
+  const tmEdgeTopPct = tmInsetsActive ? (tmS.top / CANVAS.h * 100).toFixed(2) : null
+  const tmEdgeBottomPct = tmInsetsActive ? Math.max(2.3, (tmS.bottom / CANVAS.h * 100) + 0.6).toFixed(2) : null
 
   let body = ''
   if (!isBleed && chromeStyle === 'academic-minimal') {
-    body += `<div class="media-beamer-band">` +
+    const bandStyle = tmInsetsActive
+      ? ` style="position:absolute !important;top:${tmEdgeTopPct}%;left:${tmEdgeLeftPct}%;right:${tmEdgeRightPct}%;width:auto"`
+      : ''
+    body += `<div class="media-beamer-band"${bandStyle}>` +
       (slide.kicker && slide.kicker !== slide.title ? `<div class="kicker media-kicker-band">${esc(slide.kicker)}</div>` : '') +
       `<h2 class="media-title-band">${esc(slide.title)}</h2>` +
       `</div>`
   } else if (!isBleed && chromeStyle === 'editorial-folio') {
-    body += `<div class="media-editorial-bar">` +
+    const edBarStyle = tmInsetsActive
+      ? ` style="top:${tmEdgeTopPct}%;left:${tmEdgeLeftPct}%;right:${tmEdgeRightPct}%"`
+      : ''
+    body += `<div class="media-editorial-bar"${edBarStyle}>` +
       (slide.kicker && slide.kicker !== slide.title ? `<span class="kicker media-kicker-inline">${esc(slide.kicker)}</span>` : '<span class="kicker media-kicker-inline"></span>') +
       `<span class="slide-folio">${folioText}</span>` +
       `</div>` +
       `<h2 class="media-title media-title--editorial" style="${position(boxes.title)}">${esc(slide.title)}</h2>`
   } else if (!isBleed && chromeStyle === 'consulting-classic') {
     if (slide.kicker && slide.kicker !== slide.title) {
-      body += `<div class="kicker media-consulting-tracker">${esc(slide.kicker)}</div>`
+      const trkStyle = tmInsetsActive ? ` style="top:${tmEdgeTopPct}%;right:${tmEdgeRightPct}%"` : ''
+      body += `<div class="kicker media-consulting-tracker"${trkStyle}>${esc(slide.kicker)}</div>`
     }
-    body += `<h2 class="media-title media-title--ruled" style="${position({ ...boxes.title, w: slide.kicker && slide.kicker !== slide.title ? 9.4 : boxes.title.w })}">${esc(slide.title)}</h2>`
+    const maxTitleW = tmInsetsActive ? Number((boxes.title.w * 0.78).toFixed(4)) : 9.4
+    body += `<h2 class="media-title media-title--ruled" style="${position({ ...boxes.title, w: slide.kicker && slide.kicker !== slide.title ? Math.min(boxes.title.w, maxTitleW) : boxes.title.w })}">${esc(slide.title)}</h2>`
   } else if (!isBleed && chromeStyle === 'gov-ceremonial') {
     if (slide.kicker && slide.kicker !== slide.title) {
       const gk = /^【/.test(slide.kicker.trim()) ? slide.kicker.trim() : '【' + slide.kicker.trim() + '】'
@@ -979,17 +1010,23 @@ export function renderMediaHtml(slide, manifest, theme) {
         ? rawSrc.trim()
         : (langEn ? 'Source: ' : '数据来源：') + rawSrc.trim())
     : ''
-  const brandFooter = typeof manifest?.brand?.footer === 'string' ? manifest.brand.footer.trim() : ''
+  const brandFooter = !tmSlide?.yieldFooter && typeof manifest?.brand?.footer === 'string' ? manifest.brand.footer.trim() : ''
+  const footerSafeStyle = tmInsetsActive
+    ? ` style="left:${tmEdgeLeftPct}%;right:${tmEdgeRightPct}%;bottom:${tmEdgeBottomPct}%"`
+    : ''
   if (chromeStyle === 'academic-minimal') {
-    const zLeft = formattedSrc || brandFooter || manifest?.title || ''
-    const zMid = (slide.kicker || slide.title || '').trim()
-    body += `<footer class="media-beamer-status"><span class="media-beamer-left">${esc(zLeft)}</span><span class="media-beamer-mid">${esc(zMid)}</span><span class="media-beamer-right">${folioText}</span></footer>`
+    const zLeft = formattedSrc || brandFooter || (tmSlide?.yieldFooter ? '' : (manifest?.title || ''))
+    const zMid = tmSlide?.yieldChrome ? '' : (slide.kicker || slide.title || '').trim()
+    const beamerSafeStyle = tmInsetsActive
+      ? ` style="left:${tmEdgeLeftPct}%;right:${tmEdgeRightPct}%;bottom:${tmEdgeBottomPct}%;padding:0"`
+      : ''
+    body += `<footer class="media-beamer-status"${beamerSafeStyle}><span class="media-beamer-left">${esc(zLeft)}</span><span class="media-beamer-mid">${esc(zMid)}</span><span class="media-beamer-right">${folioText}</span></footer>`
   } else {
     const brandSpan = brandFooter ? `<span class="brand-footer">${esc(brandFooter)}</span>` : ''
     const srcSpan = formattedSrc ? `<span class="media-source">${esc(formattedSrc)}</span>` : ''
     const folioSpan = chromeStyle !== 'editorial-folio' ? `<span class="slide-folio">${folioText}</span>` : ''
     if (brandSpan || srcSpan || folioSpan) {
-      body += `<footer class="media-footer-bar">${brandSpan}${srcSpan}${folioSpan}</footer>`
+      body += `<footer class="media-footer-bar"${footerSafeStyle}>${brandSpan}${srcSpan}${folioSpan}</footer>`
     }
   }
   return `<div class="media-canvas${variant === 'full-bleed' ? ' is-bleed' : ''}">${body}</div>`
@@ -1274,6 +1311,7 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
   const focalColor = t.chartFocal || accent
   const chromeStyle = resolveChromeStyle(theme, slide, manifest?.brand)
   const chromeCfg = getChromeConfig(chromeStyle, theme)
+  const tmSlide = resolveTemplateMasterForSlide(manifest, slide)
   const isEn = langId === 'en-US'
 
   const headingFont = fontHelpers.latinHeading || 'Segoe UI'
@@ -1350,8 +1388,10 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
 
   if (!isBleed && chromeStyle === 'academic-minimal') {
     // Beamer Metropolis full-width tinted header band + 1.5pt accent bottom rule
-    shapes.push(spRect('Beamer header band', boxEmu({ x: 0, y: 0, w: CANVAS.w, h: 1.28 }), surface1, null, 0, 0))
-    shapes.push(spLine('Beamer header rule', 0, toEmu(1.28), toEmu(CANVAS.w), toEmu(1.28), accent, 19050, 'solid'))
+    if (!tmSlide?.yieldChrome) {
+      shapes.push(spRect('Beamer header band', boxEmu({ x: 0, y: 0, w: CANVAS.w, h: 1.28 }), surface1, null, 0, 0))
+    }
+    shapes.push(spLine('Beamer header rule', tmSlide?.yieldChrome ? toEmu(0.65) : 0, toEmu(1.28), tmSlide?.yieldChrome ? toEmu(12.68) : toEmu(CANVAS.w), toEmu(1.28), tmSlide?.yieldChrome ? hairline : accent, tmSlide?.yieldChrome ? 9525 : 19050, 'solid'))
     if (hasKicker) {
       shapes.push(spText('Kicker', { x: 0.65, y: 0.14, w: 12.03, h: 0.24 }, [paraRich(slide.kicker.toUpperCase(), { size: 1000, color: accentText, bold: true, spc: 140 })], { ins: [0, 0, 0, 0] }))
     }
@@ -1629,27 +1669,34 @@ export function renderMediaPptxShapes(slide, index, theme, langId = 'zh-CN', fon
   const folio = String(index + 1).padStart(2, '0') + ' / ' + String(Math.max(1, total)).padStart(2, '0')
 
   if (chromeCfg.folioPos === 'beamer-bar') {
-    shapes.push(spRect('Beamer footer band', boxEmu({ x: 0, y: 7.04, w: CANVAS.w, h: 0.46 }), surface1, null, 0, 0))
-    shapes.push(spLine('Beamer footer rule', 0, toEmu(7.04), toEmu(CANVAS.w), toEmu(7.04), hairline, 6350, 'solid'))
-    const leftText = formattedSource || manifest?.brand?.footer || manifest?.title || ''
+    if (!tmSlide?.yieldChrome) {
+      shapes.push(spRect('Beamer footer band', boxEmu({ x: 0, y: 7.04, w: CANVAS.w, h: 0.46 }), surface1, null, 0, 0))
+      shapes.push(spLine('Beamer footer rule', 0, toEmu(7.04), toEmu(CANVAS.w), toEmu(7.04), hairline, 6350, 'solid'))
+    }
+    const leftText = formattedSource || (tmSlide?.yieldFooter ? '' : (manifest?.brand?.footer || manifest?.title || ''))
     if (leftText) {
       shapes.push(spText(formattedSource ? 'Source' : 'Beamer zone left', { x: 0.65, y: 7.10, w: 4.4, h: 0.32 }, [paraRich(leftText, { size: 950, color: muted })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
     }
-    const centerText = (slide.kicker || slide.title || '').trim()
+    const centerText = !tmSlide?.yieldChrome ? (slide.kicker || slide.title || '').trim() : ''
     if (centerText) {
       shapes.push(spText('Beamer zone chapter', { x: 5.1, y: 7.10, w: 3.13, h: 0.32 }, [paraRich(centerText, { size: 950, color: secondary, bold: true, align: 'ctr' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
     }
-    shapes.push(spText('Page number', { x: 10.65, y: 7.10, w: 2.03, h: 0.32 }, [paraRich(folio, { size: 950, color: accentText, bold: true, align: 'r' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+    if (!tmSlide?.yieldSlideNumber) {
+      shapes.push(spText('Page number', { x: 10.65, y: 7.10, w: 2.03, h: 0.32 }, [paraRich(folio, { size: 950, color: accentText, bold: true, align: 'r' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+    }
   } else {
-    if (formattedSource && !manifest?.brand?.footer) {
+    const showBrandFooter = Boolean(manifest?.brand?.footer) && !tmSlide?.yieldFooter
+    if (formattedSource && !showBrandFooter) {
       shapes.push(spText('Source', FOOTER_BOX, [paraRich(formattedSource, { size: 950, color: muted })], { ins: [0, 0, 0, 0] }))
-    } else if (formattedSource && manifest?.brand?.footer) {
+    } else if (formattedSource && showBrandFooter) {
       shapes.push(spText('Source', { x: 5.4, y: 6.95, w: 5.0, h: 0.32 }, [paraRich(formattedSource, { size: 950, color: muted, align: 'r' })], { ins: [0, 0, 0, 0] }))
     }
-    const folioBox = chromeCfg.folioPos === 'top-right'
-      ? { x: 10.65, y: 0.22, w: 2.03, h: 0.28 }
-      : { x: 10.65, y: 6.95, w: 2.03, h: 0.32 }
-    shapes.push(spText('Page number', folioBox, [paraRich(folio, { size: chromeCfg.folioPos === 'top-right' ? 1000 : 950, color: muted, align: 'r' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+    if (!tmSlide?.yieldSlideNumber) {
+      const folioBox = chromeCfg.folioPos === 'top-right'
+        ? { x: 10.65, y: 0.22, w: 2.03, h: 0.28 }
+        : { x: 10.65, y: 6.95, w: 2.03, h: 0.32 }
+      shapes.push(spText('Page number', folioBox, [paraRich(folio, { size: chromeCfg.folioPos === 'top-right' ? 1000 : 950, color: muted, align: 'r' })], { anchor: 'ctr', ins: [0, 0, 0, 0] }))
+    }
   }
 
   const watermarkText = typeof manifest?.brand?.watermark === 'string' ? manifest.brand.watermark.trim() : ''
