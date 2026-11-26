@@ -8,7 +8,7 @@ DeepSeek Harness（`>=0.2.2-rc.3`）大师级演示文稿引擎与 16:9 实体�
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
-**[核心能力](#核心能力) · [风格预览](#风格预览) · [安装](#安装) · [快速上手](#开始使用) · [完整说明](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)**
+**[宣传片](#宣传片) · [核心能力](#核心能力) · [风格预览](#风格预览) · [安装](#安装) · [快速上手](#开始使用) · [完整说明](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.zh.md)**
 
 <picture>
   <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-mobile-dark.svg?v=0.36.0">
@@ -16,6 +16,22 @@ DeepSeek Harness（`>=0.2.2-rc.3`）大师级演示文稿引擎与 16:9 实体�
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-dark.svg?v=0.36.0">
   <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-zh-light.svg?v=0.36.0" alt="从文档、表格、流程图或旧 PPTX 出发，经实体胶片灯箱编排与单页精修，一键交付全套产物。 · 流程示意" width="100%">
 </picture>
+
+## 宣传片
+
+<p align="center">
+  <a href="https://github.com/STARDUSTLC666/dsh-ppt/blob/master/assets/promo/dsh-ppt-v1.0.0-promo-1080p.mp4" title="点击观看完整 1080p 有声宣传片（88.8s）">
+    <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/promo/dsh-ppt-v1.0.0-teaser.webp" alt="dsh-ppt v1.0.0 官方宣传片高光动图预览：点击观看完整 1080p 有声版" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <strong><a href="https://github.com/STARDUSTLC666/dsh-ppt/blob/master/assets/promo/dsh-ppt-v1.0.0-promo-1080p.mp4">▶ 观看完整 1080p 有声宣传片（88.8s · MP4）</a></strong>
+  &nbsp;·&nbsp;
+  <a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/promo/dsh-ppt-v1.0.0-cover.webp">查看高清封面海报</a>
+  <br>
+  <sub>全片实景演示 16:9 实体胶片灯箱、24 套主题实时换肤、41 种原生矢量图谱、双端对照与六端逆向交付。BGM: <em>Lucid Dreaming</em> by e s c p (<a href="https://www.free-stock-music.com/">Free Stock Music</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, 经剪辑适配片长)</sub>
+</p>
 
 ## 核心能力
 
@@ -42,28 +58,38 @@ DeepSeek Harness（`>=0.2.2-rc.3`）大师级演示文稿引擎与 16:9 实体�
 
 ## 风格预览
 
-以下画面均由 `dsh-ppt` 生成的 **100% 原生可编辑 `.pptx`** 经 LibreOffice 零缺字直接渲染，点击查看大图。
+以下 9 页高密度结构化画面均由 `dsh-ppt` 生成的 **100% 原生可编辑 `.pptx`** 经 LibreOffice 零缺字直接渲染（覆盖 9 套原生图谱、9 套大师主题与 5 套母版骨架），点击查看大图。
 
 <table>
 <tr>
-  <th>发布会光晕海报封面（Keynote Glow）</th>
-  <th>玻璃拟态 Bento + 原生矢量图标</th>
-  <th>零依赖语法高亮代码窗（Code Split）</th>
+  <th>三层解耦系统架构 + 安全侧翼（Architecture）</th>
+  <th>2.5D 四层等轴测架构栈（Isometric Stack）</th>
+  <th>9 语言零依赖语法高亮代码窗（Dark Code Split）</th>
 </tr>
 <tr>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-cover-keynote-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-cover-keynote-zh.webp" alt="Apple Keynote 暗夜双色径向光晕封面与极简排印" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-bento-glass-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-bento-glass-zh.webp" alt="非对称反白主卡 Bento 搭配玻璃拟态高光表面与原生 OOXML 矢量图标" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-code-showcase-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-code-showcase-zh.webp" alt="macOS 暗色代码终端窗搭配多色可编辑 Consolas 语法高亮与右侧架构解析卡" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-arch-layered-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-arch-layered-zh.webp" alt="Consulting 蔚蓝战略主题三层解耦系统架构图，含 12 个分层子模块与零信任安全可观测侧翼" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-iso-stack-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-iso-stack-zh.webp" alt="Cobalt Cream 主题 2.5D 四层立体等轴测架构堆叠与右侧配色对齐技术解析卡" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-code-dark-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-code-dark-zh.webp" alt="Linear Dark 暗色主题 macOS 语法高亮代码终端窗，搭配可编辑 Consolas 多色流与玻璃拟态矢量图标解析卡" width="100%"></a></td>
 </tr>
 <tr>
-  <th>SaaS 浏览器原型展示（Device Mockup）</th>
-  <th>战略魔力象限（Magic Quadrant）</th>
-  <th>六维能力雷达评估（Multi-Series Radar）</th>
+  <th>FT 财报瀑布利润桥 + 归因卡（Waterfall Split）</th>
+  <th>麦肯锡不等宽市场份额图（Marimekko）</th>
+  <th>财报级多级损益桑基流向图（Sankey Flow）</th>
 </tr>
 <tr>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-mockup-browser-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-mockup-browser-zh.webp" alt="原生矢量浏览器窗口原型，内置地址栏、侧边栏与可编辑 SaaS 经营指标卡片" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-quadrant-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-quadrant-zh.webp" alt="Gartner 魔力象限战略气泡矩阵，含领航者高光象限与竖排坐标轴" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-radar-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-radar-zh.webp" alt="六维多系列能力对比雷达图，含四层同心蛛网、半透明叠加多边形与刻度标尺" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-waterfall-ft-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-waterfall-ft-zh.webp" alt="Financial Times 粉纸主题 6 柱 EBIT 营业利润瀑布桥搭配右侧三张核心归因指标卡" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-marimekko-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-marimekko-zh.webp" alt="BCG Emerald 翡翠战略主题不等宽 Marimekko 市场地图，20 个比例份额区块与加权总盘侧栏" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-sankey-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-sankey-zh.webp" alt="Economist 社论主题多级损益守恒桑基流向图，原生三次贝塞尔丝带呈现营收、毛利、研发与营业利润结构" width="100%"></a></td>
+</tr>
+<tr>
+  <th>中国区域枢纽点阵热力图（Dot-Matrix Map）</th>
+  <th>波特端到端价值链 + 利润池（Value Chain）</th>
+  <th>四季度多泳道甘特路线图（Gantt Roadmap）</th>
+</tr>
+<tr>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-geo-map-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-geo-map-zh.webp" alt="Venture Daylight 主题中国五大经济枢纽点阵地图，含脉冲圈、互联虚线与右侧排行进度条卡片" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-value-chain-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-value-chain-zh.webp" alt="霁蓝政务宣纸双线母版波特价值链，含 3 条顶部辅助横梁、5 级互锁五边形基本活动与右侧利润池楔形" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-gantt-roadmap-zh.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-gantt-roadmap-zh.webp" alt="Stripe Craft 主题 Q1–Q4 五泳道云原生迁移甘特排期图，含多色进度条、菱形里程碑与关键路径结论" width="100%"></a></td>
 </tr>
 </table>
 

@@ -8,7 +8,7 @@ Publication-grade presentation engine & illuminated 16:9 Physical Slide Lightbox
 
 [![npm](https://img.shields.io/npm/v/dsh-ppt)](https://www.npmjs.com/package/dsh-ppt) [![downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-downloads.svg)](https://www.npmjs.com/package/dsh-ppt) [![total downloads](https://raw.githubusercontent.com/STARDUSTLC666/dsh-suite/npm-downloads/assets/dsh-ppt-total-downloads.svg)](https://www.npmjs.com/package/dsh-ppt)
 
-**[Features](#features) · [Style previews](#style-previews) · [Install](#install) · [Workflow](#start-using-it) · [Full guide](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.en.md)**
+**[Launch Film](#launch-film) · [Features](#features) · [Style previews](#style-previews) · [Install](#install) · [Workflow](#start-using-it) · [Full guide](https://github.com/STARDUSTLC666/dsh-ppt/blob/master/docs/REFERENCE.en.md)**
 
 <picture>
   <source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-en-mobile-dark.svg?v=0.36.0">
@@ -16,6 +16,22 @@ Publication-grade presentation engine & illuminated 16:9 Physical Slide Lightbox
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-en-dark.svg?v=0.36.0">
   <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/docs/assets/intro/workflow-en-light.svg?v=0.36.0" alt="Turn docs, spreadsheets, Mermaid diagrams, or legacy decks into deliverables via the Physical Slide Lightbox & Slide Studio. · workflow illustration" width="100%">
 </picture>
+
+## Launch Film
+
+<p align="center">
+  <a href="https://github.com/STARDUSTLC666/dsh-ppt/blob/master/assets/promo/dsh-ppt-v1.0.0-promo-1080p.mp4" title="Watch the full 1080p launch film with audio (88.8s)">
+    <img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/promo/dsh-ppt-v1.0.0-teaser.webp" alt="dsh-ppt v1.0.0 animated launch teaser — click to watch the full 1080p promo video with audio" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <strong><a href="https://github.com/STARDUSTLC666/dsh-ppt/blob/master/assets/promo/dsh-ppt-v1.0.0-promo-1080p.mp4">▶ Watch Full 1080p Launch Film with Audio (88.8s · MP4)</a></strong>
+  &nbsp;·&nbsp;
+  <a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/promo/dsh-ppt-v1.0.0-cover.webp">View Poster Cover</a>
+  <br>
+  <sub>Highlights the 16:9 Physical Slide Lightbox, instant 24-theme skinning, 41 native vector layouts, HTML↔PPTX dual inspection & 6-format companion exports. BGM: <em>Lucid Dreaming</em> by e s c p (<a href="https://www.free-stock-music.com/">Free Stock Music</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, trimmed/edited for runtime)</sub>
+</p>
 
 ## Features
 
@@ -42,28 +58,38 @@ Publication-grade presentation engine & illuminated 16:9 Physical Slide Lightbox
 
 ## Style previews
 
-Every preview below is LibreOffice-rendered directly from **100% native editable `.pptx`** files built by `dsh-ppt` (`missingFonts: []`). Select any image to enlarge.
+All 9 high-density structured slides below are LibreOffice-rendered directly from **100% native editable `.pptx`** files built by `dsh-ppt` (`missingFonts: []`), spanning 9 native layouts, 9 themes, and 5 master chrome skeletons. Select any image to enlarge.
 
 <table>
 <tr>
-  <th>Keynote Glow Poster Cover</th>
-  <th>Glass Bento + Native Vector Icons</th>
-  <th>Syntax-Highlighted Code Terminal</th>
+  <th>3-Tier System Architecture + Sidecar</th>
+  <th>2.5D Isometric 4-Layer Stack</th>
+  <th>Dark Syntax-Highlighted Code Split</th>
 </tr>
 <tr>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-cover-keynote-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-cover-keynote-en.webp" alt="Apple Keynote Dark cover with radial ambient orbs, geometric dot pattern, and crisp typography" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-bento-glass-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-bento-glass-en.webp" alt="Asymmetric Hero Bento pairing translucent glass surfaces with native OOXML custom-geometry vector icons" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-code-showcase-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-code-showcase-en.webp" alt="macOS dark terminal frame with zero-dependency syntax-highlighted editable Consolas runs and split annotations" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-arch-layered-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-arch-layered-en.webp" alt="Strategy Navy three-tier decoupled system architecture with 12 nested module tiles and a zero-trust observability sidecar" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-iso-stack-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-iso-stack-en.webp" alt="Cobalt Cream 2.5D four-layer isometric architecture prism stack connected to color-keyed specification cards" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-code-dark-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-code-dark-en.webp" alt="Linear Dark macOS syntax-highlighted code terminal with native editable Consolas runs and glass vector-icon callout cards" width="100%"></a></td>
 </tr>
 <tr>
-  <th>SaaS Browser Device Mockup</th>
-  <th>Magic Quadrant Matrix</th>
-  <th>Six-Dimension Radar Benchmark</th>
+  <th>FT Salmon EBIT Waterfall + Callouts</th>
+  <th>Variable-Width Market Map (Marimekko)</th>
+  <th>Multi-Layer P&amp;L Sankey Flow</th>
 </tr>
 <tr>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-mockup-browser-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-mockup-browser-en.webp" alt="Native vector browser window frame featuring address bar, navigation rail, and editable SaaS KPI cards" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-quadrant-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-quadrant-en.webp" alt="Gartner-style Magic Quadrant bubble matrix with Leaders spotlight zone and vertical Y-axis title" width="100%"></a></td>
-  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-radar-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v28-radar-en.webp" alt="Multi-series hexagonal capability radar chart with concentric spider web rings and translucent series overlays" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-waterfall-ft-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-waterfall-ft-en.webp" alt="Financial Times salmon-paper six-bar EBIT profit bridge waterfall paired with three attribution KPI cards" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-marimekko-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-marimekko-en.webp" alt="BCG Emerald variable-width 100% stacked Marimekko market map with 20 proportional share tiles and weighted total summary" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-sankey-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-sankey-en.webp" alt="Economist editorial multi-layer P&amp;L Sankey diagram using native cubic-Bezier ribbons for revenue, gross margin, R&amp;D, and EBIT" width="100%"></a></td>
+</tr>
+<tr>
+  <th>Global Strategic Dot-Matrix Map</th>
+  <th>Porter Value Chain + Margin Wedge</th>
+  <th>4-Quarter Multi-Track Gantt Roadmap</th>
+</tr>
+<tr>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-geo-map-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-geo-map-en.webp" alt="Venture Daylight global dot-matrix footprint map with pulsing regional hubs, dashed links, and ranked progress cards" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-value-chain-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-value-chain-en.webp" alt="Imperial Slate Porter Value Chain featuring three support beams, five interlocking primary chevrons, detail cards, and margin wedge" width="100%"></a></td>
+  <td width="33%"><a href="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-gantt-roadmap-en.webp"><img src="https://raw.githubusercontent.com/STARDUSTLC666/dsh-ppt/master/assets/gallery/v100-gantt-roadmap-en.webp" alt="Stripe Craft four-quarter five-track cloud-native migration Gantt schedule with diamond milestones and critical-path takeaway" width="100%"></a></td>
 </tr>
 </table>
 
